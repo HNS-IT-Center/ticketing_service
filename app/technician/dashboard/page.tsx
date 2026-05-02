@@ -1,0 +1,152 @@
+import { requireRole } from "@/lib/session";
+import { db } from "@/lib/db";
+import Link from "next/link";
+import Badge from "@/components/ui/Badge";
+import TakeTicketButton from "./TakeTicketButton";
+import { Ticket, CheckCircle, AlertCircle, Star, TrendingUp } from "lucide-react";
+
+export const metadata = { title: "Technician Dashboard — TechServe" };
+
+function getTicketPoints(type: string) {
+  if (type === "pc_build") return 4;
+  if (type === "service") return 3;
+  return 2;
+}
+
+export default async function TechnicianDashboard() {
+  const session = await requireRole("Technician");
+
+  const [unassigned, myTickets, workload, performance] = await Promise.all([
+    db.ticket.findMany({
+      where: { technician_id: null, status: "waiting" },
+      orderBy: { created_at: "asc" },
+      take: 10,
+      include: { user: { select: { name: true } } },
+    }),
+    db.ticket.findMany({
+      where: { technician_id: session.userId, status: { in: ["waiting", "on_progress"] } },
+      orderBy: { updated_at: "desc" },
+      take: 10,
+      include: { user: { select: { name: true } } },
+    }),
+    db.technicianWorkload.findUnique({ where: { technician_id: session.userId } }),
+    db.technicianPerformance.findUnique({ where: { technician_id: session.userId } }),
+  ]);
+
+  const currentPoints = workload?.current_points ?? 0;
+  const maxPoints = workload?.max_points ?? 7;
+  const pct = Math.min((currentPoints / maxPoints) * 100, 100);
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
+      <div>
+        <h1>Technician Dashboard</h1>
+        <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>
+          Manage your assigned tickets and workload
+        </p>
+      </div>
+
+      {/* Workload + Performance row */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "1rem" }}>
+        {/* Workload */}
+        <div className="stat-card" style={{ gridColumn: "span 2" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
+            <h3 style={{ fontSize: "1rem" }}>Current Workload</h3>
+            <span style={{ fontWeight: 700, fontSize: "1.125rem", color: pct >= 100 ? "var(--accent)" : "var(--primary)" }}>
+              {currentPoints} / {maxPoints} pts
+            </span>
+          </div>
+          <div className="workload-bar">
+            <div className={`workload-fill ${pct >= 100 ? "danger" : ""}`} style={{ width: `${pct}%` }} />
+          </div>
+          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>
+            {pct >= 100 ? "⚠️ Workload full — complete tickets to take new ones" : `${maxPoints - currentPoints} pts remaining`}
+          </p>
+        </div>
+
+        {[
+          { label: "Handled", value: performance?.tickets_handled ?? 0, icon: <Ticket size={20} />, color: "var(--primary)" },
+          { label: "Success", value: performance?.success_count ?? 0, icon: <CheckCircle size={20} />, color: "#16a34a" },
+        ].map((s) => (
+          <div key={s.label} className="stat-card">
+            <div style={{ width: "2.25rem", height: "2.25rem", borderRadius: "0.75rem", background: `${s.color}18`, display: "flex", alignItems: "center", justifyContent: "center", color: s.color }}>
+              {s.icon}
+            </div>
+            <div>
+              <div style={{ fontSize: "1.75rem", fontWeight: 800, color: s.color }}>{s.value}</div>
+              <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{s.label}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* My Assigned Tickets */}
+      <div className="card">
+        <h3 style={{ marginBottom: "1rem" }}>My Active Tickets</h3>
+        {myTickets.length === 0 ? (
+          <div className="empty-state" style={{ padding: "2rem" }}>
+            <Ticket size={32} style={{ opacity: 0.3 }} />
+            <p>No active tickets assigned to you</p>
+          </div>
+        ) : (
+          <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
+            <table>
+              <thead><tr>
+                <th>Ticket Code</th><th>Type</th><th>Customer</th><th>Points</th><th>Status</th><th></th>
+              </tr></thead>
+              <tbody>
+                {myTickets.map((t) => (
+                  <tr key={t.id}>
+                    <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
+                    <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
+                    <td>{t.user.name}</td>
+                    <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
+                    <td><Badge variant={t.status} /></td>
+                    <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Unassigned Tickets */}
+      <div className="card">
+        <h3 style={{ marginBottom: "1rem" }}>Available Tickets <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 400 }}>({unassigned.length})</span></h3>
+        {unassigned.length === 0 ? (
+          <div className="empty-state" style={{ padding: "2rem" }}>
+            <CheckCircle size={32} style={{ opacity: 0.3 }} />
+            <p>No unassigned tickets at the moment</p>
+          </div>
+        ) : (
+          <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
+            <table>
+              <thead><tr>
+                <th>Ticket Code</th><th>Type</th><th>Customer</th><th>Device</th><th>Points</th><th></th>
+              </tr></thead>
+              <tbody>
+                {unassigned.map((t) => (
+                  <tr key={t.id}>
+                    <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
+                    <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
+                    <td>{t.user.name}</td>
+                    <td style={{ color: "var(--text-muted)" }}>{t.device_type.replace(/_/g, " ")}</td>
+                    <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
+                    <td>
+                      <TakeTicketButton
+                        ticketId={t.id}
+                        points={getTicketPoints(t.ticket_type)}
+                        canTake={currentPoints + getTicketPoints(t.ticket_type) <= maxPoints}
+                      />
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}

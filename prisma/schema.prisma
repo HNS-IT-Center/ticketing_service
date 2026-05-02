@@ -1,0 +1,299 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum Role {
+  Administrator
+  Technician
+  Sales
+  Customer
+}
+
+enum Shift {
+  morning
+  noon
+}
+
+enum TicketType {
+  service
+  warranty_claim
+  pc_build
+  cleaning
+  upgrade
+}
+
+enum TicketStatus {
+  waiting
+  on_progress
+  cancelled
+  rejected
+  done
+}
+
+enum DeviceType {
+  PC_Office
+  PC_Gaming
+  Laptop_Office
+  Laptop_Gaming
+}
+
+enum FileType {
+  image
+  video
+  pdf
+}
+
+enum NotificationType {
+  message
+  status_update
+}
+
+enum CleaningPackage {
+  Deep_Clean
+  Repaste
+}
+
+// ─────────────────────────────────────────────
+// USERS
+// ─────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phone_number String
+  address      String
+  role         Role     @default(Customer)
+  password     String
+
+  // Technician-specific
+  shift     Shift?
+  work_days Json?  // e.g. ["Mon","Tue","Wed"]
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  tickets_created    Ticket[]              @relation("TicketUser")
+  tickets_technician Ticket[]              @relation("TicketTechnician")
+  tickets_sales      Ticket[]              @relation("TicketSales")
+  messages_sent      TicketMessage[]
+  notifications      Notification[]
+  status_logs        TicketStatusLog[]
+  workload           TechnicianWorkload?
+  performance        TechnicianPerformance?
+  leaderboards       Leaderboard[]
+
+  @@index([email])
+}
+
+// ─────────────────────────────────────────────
+// TICKETS
+// ─────────────────────────────────────────────
+
+model Ticket {
+  id          String @id @default(cuid())
+  ticket_code String @unique
+
+  user_id String
+  user    User   @relation("TicketUser", fields: [user_id], references: [id])
+
+  ticket_type TicketType
+  status      TicketStatus @default(waiting)
+  device_type DeviceType
+
+  technician_id String?
+  technician    User?   @relation("TicketTechnician", fields: [technician_id], references: [id])
+
+  sales_id String?
+  sales    User?   @relation("TicketSales", fields: [sales_id], references: [id])
+
+  notes String? // Rich text (HTML)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  // Relations
+  attachments      TicketAttachment[]
+  messages         TicketMessage[]
+  status_logs      TicketStatusLog[]
+  notifications    Notification[]
+  service_detail   TicketServiceDetail?
+  warranty_detail  TicketWarrantyDetail?
+  cleaning_detail  TicketCleaningDetail?
+  upgrade_details  TicketUpgradeDetail[]
+  pc_build_detail  TicketPcBuildDetail?
+  pc_components    TicketPcBuildComponent[]
+
+  @@index([user_id])
+  @@index([technician_id])
+}
+
+// ─────────────────────────────────────────────
+// TICKET DETAIL TABLES
+// ─────────────────────────────────────────────
+
+model TicketServiceDetail {
+  id        String @id @default(cuid())
+  ticket_id String @unique
+  ticket    Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+}
+
+model TicketWarrantyDetail {
+  id            String   @id @default(cuid())
+  ticket_id     String   @unique
+  ticket        Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  purchase_date DateTime
+}
+
+model TicketCleaningDetail {
+  id              String          @id @default(cuid())
+  ticket_id       String          @unique
+  ticket          Ticket          @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  service_package CleaningPackage
+}
+
+model Upgrade {
+  id     String @id @default(cuid())
+  name   String @unique
+  points Int    @default(2)
+
+  upgrade_details TicketUpgradeDetail[]
+}
+
+model TicketUpgradeDetail {
+  id         String  @id @default(cuid())
+  ticket_id  String
+  ticket     Ticket  @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  upgrade_id String
+  upgrade    Upgrade @relation(fields: [upgrade_id], references: [id])
+}
+
+model TicketPcBuildDetail {
+  id        String @id @default(cuid())
+  ticket_id String @unique
+  ticket    Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+}
+
+model TicketPcBuildComponent {
+  id             String @id @default(cuid())
+  ticket_id      String
+  ticket         Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  component_name String
+}
+
+// ─────────────────────────────────────────────
+// ATTACHMENTS & MESSAGES
+// ─────────────────────────────────────────────
+
+model TicketAttachment {
+  id         String   @id @default(cuid())
+  ticket_id  String
+  ticket     Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  file_url   String
+  file_type  FileType
+  created_at DateTime @default(now())
+}
+
+model TicketMessage {
+  id        String @id @default(cuid())
+  ticket_id String
+  ticket    Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  sender_id String
+  sender    User   @relation(fields: [sender_id], references: [id])
+
+  message  String
+  is_read  Boolean @default(false)
+
+  created_at DateTime @default(now())
+
+  @@index([ticket_id])
+}
+
+// ─────────────────────────────────────────────
+// STATUS LOGS
+// ─────────────────────────────────────────────
+
+model TicketStatusLog {
+  id         String       @id @default(cuid())
+  ticket_id  String
+  ticket     Ticket       @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  old_status TicketStatus?
+  new_status TicketStatus
+  changed_by String
+  changer    User         @relation(fields: [changed_by], references: [id])
+  created_at DateTime     @default(now())
+}
+
+// ─────────────────────────────────────────────
+// WORKLOAD & PERFORMANCE
+// ─────────────────────────────────────────────
+
+model TechnicianWorkload {
+  id             String   @id @default(cuid())
+  technician_id  String   @unique
+  technician     User     @relation(fields: [technician_id], references: [id])
+  current_points Int      @default(0)
+  max_points     Int      @default(7)
+  updated_at     DateTime @updatedAt
+}
+
+model TechnicianPerformance {
+  id            String @id @default(cuid())
+  technician_id String @unique
+  technician    User   @relation(fields: [technician_id], references: [id])
+
+  tickets_handled        Int @default(0)
+  success_count          Int @default(0)
+  failed_count           Int @default(0)
+  total_points_completed Int @default(0)
+
+  updated_at DateTime @updatedAt
+}
+
+model Leaderboard {
+  id            String @id @default(cuid())
+  technician_id String
+  technician    User   @relation(fields: [technician_id], references: [id])
+
+  month Int
+  year  Int
+
+  total_points    Int
+  tickets_handled Int
+
+  created_at DateTime @default(now())
+}
+
+// ─────────────────────────────────────────────
+// NOTIFICATIONS
+// ─────────────────────────────────────────────
+
+model Notification {
+  id        String @id @default(cuid())
+  user_id   String
+  user      User   @relation(fields: [user_id], references: [id])
+  ticket_id String
+  ticket    Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  type         NotificationType
+  reference_id String? // e.g. message_id or status_log_id
+
+  is_read Boolean @default(false)
+
+  created_at DateTime @default(now())
+
+  @@index([user_id])
+}

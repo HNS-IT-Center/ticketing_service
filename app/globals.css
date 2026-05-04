@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 /* ─── Global Reset ──────────────────────────────────────────────────────── */
 /* ─── Design Tokens ─────────────────────────────────────────────────────── */
 :root {
@@ -386,6 +388,43 @@ tbody td {
   font-weight: 600;
 }
 .sidebar-link svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
+.sidebar-link.collapsed { justify-content: center; padding: 0.625rem 0; gap: 0; }
+.sidebar-link.collapsed span { display: none; }
+
+/* Sidebar collapse toggle button */
+.sidebar-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.15);
+  border: none;
+  color: rgba(255,255,255,0.8);
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: background 0.2s;
+}
+.sidebar-collapse-btn:hover { background: rgba(255,255,255,0.28); color: #fff; }
+
+/* Collapsed sidebar */
+.sidebar.collapsed {
+  width: 64px;
+  --sidebar-width: 64px;
+}
+.sidebar.collapsed .sidebar-logo {
+  padding: 1rem 0;
+  justify-content: center;
+}
+.sidebar.collapsed .sidebar-nav {
+  padding: 0.75rem 0.5rem;
+}
+.sidebar.collapsed .sidebar-link {
+  justify-content: center;
+  padding: 0.625rem 0;
+}
+.sidebar.collapsed .sidebar-link span { display: none; }
 
 .sidebar-section-label {
   font-size: 0.6875rem;
@@ -395,6 +434,7 @@ tbody td {
   padding: 0.5rem 0.875rem 0.25rem;
   font-weight: 600;
 }
+
 
 /* ─── Dashboard Layout ───────────────────────────────────────────────────── */
 .dashboard-layout {
@@ -408,6 +448,10 @@ tbody td {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  transition: margin-left 0.3s ease;
+}
+.dashboard-main.sidebar-collapsed {
+  margin-left: 64px;
 }
 
 .dashboard-topbar {
@@ -770,14 +814,16 @@ tbody td {
 }
 
 @media (max-width: 768px) {
-  :root { --sidebar-width: 240px; }
+  :root { --sidebar-width: 0px; }
 
   .sidebar {
+    width: 100vw;          /* B3: full-width on mobile */
     transform: translateX(-100%);
   }
   .sidebar.open {
     transform: translateX(0);
   }
+  .sidebar-collapse-btn { display: none; } /* hide collapse btn on mobile */
   .sidebar-overlay.open {
     display: block;
   }
@@ -801,4 +847,43 @@ tbody td {
   .dashboard-topbar { padding: 0 1rem; }
   table { font-size: 0.875rem; }
   thead th, tbody td { padding: 0.625rem 0.75rem; }
+}
+
+/* ─── Mobile menu button ─────────────────────────────────────────────────── */
+.mobile-menu-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border: none;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  color: var(--text-secondary);
+}
+@media (max-width: 768px) {
+  .mobile-menu-btn { display: flex !important; }
+}
+
+/* ─── Profile dropdown hover ────────────────────────────────────────────── */
+.dropdown-item:hover {
+  background: var(--cream) !important;
+  color: var(--text-primary) !important;
+}
+.dropdown-item-danger:hover {
+  background: #fee2e2 !important;
+}
+
+/* ─── Ticket detail — 2-col → 1-col on mobile ──────────────────────────── */
+.ticket-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 1.5rem;
+  align-items: start;
+}
+@media (max-width: 768px) {
+  .ticket-detail-grid {
+    grid-template-columns: 1fr;
+  }
 }

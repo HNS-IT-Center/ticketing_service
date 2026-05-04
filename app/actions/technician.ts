@@ -66,6 +66,16 @@ export async function takeTicketAction(ticketId: string) {
     },
   });
 
+  // Notify the technician that they have been assigned
+  await db.notification.create({
+    data: {
+      user_id: session.userId,
+      ticket_id: ticketId,
+      type: "assigned",
+      message: `You have been assigned ticket #${ticket.ticket_code}`,
+    },
+  });
+
   revalidatePath("/technician/dashboard");
   revalidatePath(`/technician/tickets/${ticketId}`);
   return { success: true };
@@ -142,7 +152,7 @@ export async function updateTicketStatusAction(
     });
   }
 
-  // Notify customer
+  // Notify customer of status change
   await db.notification.create({
     data: {
       user_id: ticket.user_id,
@@ -151,6 +161,25 @@ export async function updateTicketStatusAction(
       reference_id: log.id,
     },
   });
+
+  // When done: notify the technician with points earned
+  if (newStatus === "done") {
+    const points = getTicketPoints(ticket.ticket_type);
+    // Fetch updated total to show current total
+    const perf = await db.technicianPerformance.findUnique({
+      where: { technician_id: session.userId },
+      select: { total_points_completed: true },
+    });
+    const currentTotal = perf?.total_points_completed ?? points;
+    await db.notification.create({
+      data: {
+        user_id: session.userId,
+        ticket_id: ticketId,
+        type: "completed",
+        message: `🎉 Congratulations! You earned ${points} pts for ticket #${ticket.ticket_code}. Current total: ${currentTotal} pts`,
+      },
+    });
+  }
 
   revalidatePath(`/technician/tickets/${ticketId}`);
   revalidatePath(`/customer/tickets/${ticketId}`);

@@ -49,7 +49,7 @@ export default function EditUserForm({
     formData.append("work_days", JSON.stringify(workDays));
     startTransition(async () => {
       const result = await updateUserAction(user.id, formData);
-      if (result?.error) toast.error(result.error);
+      if ((result as any)?.error) toast.error((result as any).error);
       else { toast.success("User updated!"); router.push("/admin/users"); }
     });
   };

@@ -32,7 +32,7 @@ export default function CreateTicketForm({ upgrades, technicians, sales }: Creat
 
   // Step 1 — Personal info
   const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(""); // stores digits only after +62
   const [email, setEmail] = useState("");
   const [address, setAddress] = useState("");
 
@@ -60,7 +60,7 @@ export default function CreateTicketForm({ upgrades, technicians, sales }: Creat
     const errs: Record<string, string> = {};
     if (step === 1) {
       if (!name.trim()) errs.name = "Name is required";
-      if (!phone.match(/^\+62\d{9,13}$/)) errs.phone = "Phone must start with +62";
+      if (!phone.match(/^\d{9,13}$/)) errs.phone = "Enter digits after +62 (9–13 digits)";
       if (!email.includes("@")) errs.email = "Valid email required";
       if (!address.trim()) errs.address = "Address is required";
     }
@@ -109,6 +109,7 @@ export default function CreateTicketForm({ upgrades, technicians, sales }: Creat
       if (ticketType === "pc_build") fd.append("components", JSON.stringify(components));
       if (selectedTechnician) fd.append("technician_id", selectedTechnician);
       if (selectedSales) fd.append("sales_id", selectedSales);
+      fd.append("phone", `+62${phone}`); // prepend +62 prefix
 
       const result = await createTicketAction(fd);
       if (result?.error) toast.error(result.error);
@@ -159,8 +160,33 @@ export default function CreateTicketForm({ upgrades, technicians, sales }: Creat
               {errors.name && <span className="form-error"><AlertCircle size={12} />{errors.name}</span>}
             </div>
             <div className="form-group">
-              <label className="form-label">Phone Number (+62) *</label>
-              <input className={`form-input ${errors.phone ? "error" : ""}`} value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="+6281234567890" />
+              <label className="form-label">Phone Number *</label>
+              <div style={{ display: "flex", alignItems: "center", gap: "0" }}>
+                <span style={{
+                  padding: "0.625rem 0.75rem",
+                  background: "var(--cream-dark)",
+                  border: "1.5px solid var(--border)",
+                  borderRight: "none",
+                  borderRadius: "var(--radius-md) 0 0 var(--radius-md)",
+                  fontSize: "0.9375rem",
+                  color: "var(--text-secondary)",
+                  fontWeight: 600,
+                  flexShrink: 0,
+                  lineHeight: "1.5",
+                }}>+62</span>
+                <input
+                  className={`form-input ${errors.phone ? "error" : ""}`}
+                  value={phone}
+                  onChange={(e) => {
+                    // Only allow digits
+                    setPhone(e.target.value.replace(/\D/g, ""));
+                  }}
+                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                  inputMode="numeric"
+                  placeholder="81234567890"
+                  style={{ borderRadius: "0 var(--radius-md) var(--radius-md) 0" }}
+                />
+              </div>
               {errors.phone && <span className="form-error"><AlertCircle size={12} />{errors.phone}</span>}
             </div>
             <div className="form-group">
@@ -299,7 +325,7 @@ export default function CreateTicketForm({ upgrades, technicians, sales }: Creat
                         onChange={(e) => setSelectedUpgrades(e.target.checked ? [...selectedUpgrades, u.id] : selectedUpgrades.filter((id) => id !== u.id))}
                       />
                       <span style={{ fontWeight: 500 }}>{u.name}</span>
-                      <span style={{ marginLeft: "auto", fontSize: "0.8125rem", color: "var(--text-muted)" }}>{u.points} pts</span>
+                      {/* Points intentionally hidden from customer view */}
                     </label>
                   ))}
                 </div>

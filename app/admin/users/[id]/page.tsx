@@ -19,7 +19,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
   return (
     <div style={{ maxWidth: "600px" }}>
       <h1 style={{ marginBottom: "1.5rem" }}>Edit User</h1>
-      <EditUserForm user={{ ...user, created_at: user.created_at.toISOString(), updated_at: user.updated_at.toISOString() }} workload={workload} />
+      <EditUserForm user={user as any} workload={workload} />
     </div>
   );
 }

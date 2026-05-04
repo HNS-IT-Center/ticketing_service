@@ -2,9 +2,10 @@
 
 import { useActionState } from "react";
 import { registerAction, type FormState } from "@/app/actions/auth";
-import { AlertCircle, Eye, EyeOff, Wrench } from "lucide-react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function RegisterPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(
@@ -18,26 +19,21 @@ export default function RegisterPage() {
       <div className="auth-card" style={{ maxWidth: "520px" }}>
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
-          <div
-            style={{
-              width: "3.5rem",
-              height: "3.5rem",
-              background: "linear-gradient(135deg, var(--primary), var(--primary-dark))",
-              borderRadius: "1rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 1rem",
-              boxShadow: "0 4px 16px rgba(22,70,157,0.3)",
-            }}
-          >
-            <Wrench size={24} color="white" />
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.25rem" }}>
+            <Image
+              src="/Logo HNS IT Center.jpg"
+              alt="HNS IT Center"
+              width={160}
+              height={80}
+              style={{ objectFit: "contain", borderRadius: "0.5rem" }}
+              priority
+            />
           </div>
           <h1 style={{ fontSize: "1.5rem", marginBottom: "0.375rem" }}>
             Create your account
           </h1>
           <p style={{ color: "var(--text-muted)", fontSize: "0.9375rem" }}>
-            Join TechServe to manage your service tickets
+            Join HNS IT Center to manage your service tickets
           </p>
         </div>
 

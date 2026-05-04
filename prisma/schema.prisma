@@ -57,6 +57,8 @@ enum FileType {
 enum NotificationType {
   message
   status_update
+  assigned    // Technician was assigned a ticket
+  completed   // Technician completed a ticket (includes points earned)
 }
 
 enum CleaningPackage {
@@ -290,6 +292,7 @@ model Notification {
 
   type         NotificationType
   reference_id String? // e.g. message_id or status_log_id
+  message      String? // Optional human-readable detail (e.g. points earned message)
 
   is_read Boolean @default(false)
 

@@ -4,9 +4,9 @@ import { notFound } from "next/navigation";
 import Badge from "@/components/ui/Badge";
 import TicketChat from "./TicketChat";
 import { markMessagesReadAction } from "@/app/actions/tickets";
-import { Calendar, Device, Tag, Wrench, User, FileText } from "lucide-react";
+import { FileText, Film, ImageIcon, File } from "lucide-react";
 
-export const metadata = { title: "Ticket Detail — TechServe" };
+export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
 export default async function TicketDetailPage({
   params,
@@ -67,7 +67,7 @@ export default async function TicketDetailPage({
         </div>
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "1.5rem", alignItems: "start" }}>
+      <div className="ticket-detail-grid">
         {/* Left column */}
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           {/* Ticket Info */}
@@ -144,32 +144,57 @@ export default async function TicketDetailPage({
             <div className="card">
               <h3 style={{ marginBottom: "1rem" }}>Attachments ({ticket.attachments.length})</h3>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
-                {ticket.attachments.map((a) => (
-                  <a
-                    key={a.id}
-                    href={a.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    style={{
-                      display: "block",
-                      width: "80px",
-                      height: "80px",
-                      borderRadius: "0.5rem",
-                      overflow: "hidden",
-                      border: "1px solid var(--border)",
-                      background: "var(--cream)",
-                    }}
-                  >
-                    {a.file_type === "image" ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={a.file_url} alt="attachment" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    ) : (
-                      <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase" }}>
-                        {a.file_type}
+                {ticket.attachments.map((a) => {
+                  const filename = a.file_url.split("/").pop()?.split("?")[0] ?? "file";
+                  const isImage = a.file_type === "image";
+                  const isVideo = a.file_type === "video";
+                  const isPdf   = a.file_type === "pdf";
+
+                  return (
+                    <a
+                      key={a.id}
+                      href={a.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={filename}
+                      style={{
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        gap: "0.375rem",
+                        width: isImage ? "80px" : "100px",
+                        textDecoration: "none",
+                      }}
+                    >
+                      <div style={{
+                        width: isImage ? "80px" : "100px",
+                        height: "80px",
+                        borderRadius: "0.5rem",
+                        overflow: "hidden",
+                        border: "1px solid var(--border)",
+                        background: "var(--cream)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        flexShrink: 0,
+                      }}>
+                        {isImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={a.file_url} alt={filename} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : isVideo ? (
+                          <Film size={28} style={{ color: "var(--primary)" }} />
+                        ) : isPdf ? (
+                          <FileText size={28} style={{ color: "var(--accent)" }} />
+                        ) : (
+                          <File size={28} style={{ color: "var(--text-muted)" }} />
+                        )}
                       </div>
-                    )}
-                  </a>
-                ))}
+                      <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textAlign: "center", wordBreak: "break-all", maxWidth: "100px", lineHeight: 1.3 }}>
+                        {filename.length > 20 ? filename.slice(0, 17) + "..." : filename}
+                      </span>
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}

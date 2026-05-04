@@ -31,7 +31,7 @@ export default function AdminAssignPanel({
         techId || null,
         saleId || null
       );
-      if (result?.error) toast.error(result.error as string);
+      if ((result as any)?.error) toast.error((result as any).error as string);
       else toast.success("Assignment updated!");
     });
   };

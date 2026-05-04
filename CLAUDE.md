@@ -269,30 +269,104 @@ waiting ──→ on_progress ──→ done
 
 ## 📋 Remaining / Suggested Work
 
-- [ ] **Register page UI** — exists at `/register` but UI needs styling review
-- [ ] **Customer profile page** — `/customer/profile` not yet created
 - [ ] **Admin user delete** — button exists in user list but needs confirmation modal
 - [ ] **Real-time notifications** — upgrade from polling to Supabase Realtime channels
-- [ ] **Mobile responsive** — DashboardShell sidebar collapses needed for small screens
-- [ ] **Ticket point totals** — the `total_points` field on Ticket model is not auto-calculated (left as 0); should be set on creation
-- [ ] **Supabase Storage bucket** — bucket named `attachments` must be created in Supabase dashboard with **public** read access enabled (user confirmed "coverage" feature turned on, meaning the bucket is public)
-- [ ] **Production deployment** — `sslmode=no-verify` is fine for dev; for production use Supabase's direct DB URL or configure proper certificates
+- [ ] **Ticket point totals** — `total_points` on Ticket is not auto-calculated; set on creation
+- [ ] **Supabase Storage bucket** — bucket named `attachments` must be created with **public** read access
+- [ ] **Production deployment** — switch to Supabase direct DB URL + proper certificates for prod
 
 ---
 
 ## 🚀 Running the Project
 
 ```bash
-# Install dependencies
 npm install
-
-# Sync schema to Supabase
 npx prisma db push
-
-# Seed the database
 $env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed
-
-# Start dev server
 npm run dev
 # → http://localhost:3000
 ```
+
+---
+
+## 🏗️ ACTIVE SPRINT — HNS IT Center Feature Upgrade
+
+> **Styling strategy:** Tailwind v4 (`@import "tailwindcss"` in globals.css) is now ACTIVE.
+> Use Tailwind classes for ALL NEW components/pages. Existing vanilla CSS components are left as-is.
+> Both systems coexist — do NOT remove existing CSS classes like `.card`, `.btn`, `.form-input` etc.
+
+### Legend
+- ✅ Done
+- 🔄 In Progress  
+- ⬜ Not Started
+
+---
+
+### SETUP
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| S1 | Install / enable Tailwind v4 | ✅ | Added `@import "tailwindcss"` to globals.css — already had `tailwindcss@^4` + `@tailwindcss/postcss` in package.json |
+| S2 | Schema: add `assigned` + `completed` to `NotificationType` enum | ✅ | Done — `prisma/schema.prisma` updated, `db push` + `generate` run |
+
+---
+
+### SYSTEM / SECURITY
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| SY1 | Session cookie → session-only (destroy on browser close) | ✅ | Done — `lib/session.ts` `createSession` has no `expires`, JWT still has 7d expiry as guard |
+| SY2 | Move file upload to server-side API route | ✅ | Already done — `uploadAttachmentsAction` in `app/actions/tickets.ts` is a `"use server"` action using `createServerSupabaseClient()` with `SUPABASE_SERVICE_ROLE_KEY`. Key never sent to browser. |
+
+---
+
+### BRANDING / UI SHELL
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| B1 | Replace app name "TechServe" → "HNS IT Center" logo | ✅ | login, register, DashboardShell all updated. Logo from `public/Logo HNS IT Center.jpg`. |
+| B2 | Sidebar: collapsible icon-only mode (desktop) | ✅ | DashboardShell.tsx rewritten with `collapsed` state, `localStorage` persistence, 64px icon-only mode. |
+| B3 | Sidebar: mobile full-width fix | ✅ | `globals.css` — sidebar is `width: 100vw` on mobile. |
+| B4 | Profile badge → dropdown with Sign Out / Profile / My Tickets | ✅ | DashboardShell.tsx — avatar pill opens popover dropdown with click-outside close. |
+
+---
+
+### CUSTOMER SIDE
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| C1 | Customer profile page | ✅ | Created `app/customer/profile/page.tsx` + `CustomerProfileForm.tsx` + `app/actions/customer.ts#updateProfileAction`. |
+| C2 | Phone input: +62 prefix, number only, no scroll | ✅ | `CreateTicketForm.tsx` Step 1 — static +62 prefix badge, `inputMode="numeric"`, `onWheel` blur, stores as `+62XXX`. |
+| C3 | Hardware Upgrade: remove points display | ✅ | `CreateTicketForm.tsx` — removed `{u.points} pts` span from upgrade checkbox labels. |
+| C4 | Ticket view: mobile single-column layout | ✅ | `app/customer/tickets/[id]/page.tsx` — uses `.ticket-detail-grid` CSS class (collapses to 1-col at ≤768px). |
+| C5 | Ticket view: better attachment display | ✅ | Shows filename, thumbnail for images, icons for PDF/Video/Other using Lucide icons. |
+
+---
+
+### TECHNICIAN SIDE
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| T1 | Confirmation dialog before Done/Cancel | ✅ | `StatusUpdater.tsx` rewritten — shows modal with action description before calling `updateTicketStatusAction`. |
+| T2 | Leaderboard: game-style podium + bar chart | ✅ | `app/technician/leaderboard/page.tsx` rewritten with podium (2nd/1st/3rd), crown icons, glowing 1st place avatar, relative bars for the rest. |
+| T3 | Technician notifications (assignment + completion) | ✅ | `app/actions/technician.ts` — `takeTicketAction` sends `assigned` notif; `updateTicketStatusAction` done sends `completed` notif with points. `NotificationBell` routes by role. |
+
+---
+
+### ADMIN SIDE
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| A1 | Admin leaderboard page (missing) | ✅ | Created `app/admin/leaderboard/page.tsx` — same game-style podium design as technician leaderboard. |
+| A2 | Admin performance: period filter | ✅ | `app/admin/performance/page.tsx` rewritten — month/year search params; period mode aggregates from `TicketStatusLog`; default shows all-time `TechnicianPerformance`. |
+
+---
+
+### HOW TO RESUME IN A NEW SESSION
+
+1. Read this file (`CLAUDE.md`) and the `implementation_plan.md` artifact for full context
+2. Check the table above — find the first ⬜ item
+3. Before coding, verify the relevant source file still matches what's described in the Notes column
+4. Mark items 🔄 when starting, ✅ when done
+5. Commit after each logical group (e.g., after all BRANDING items done)
+
+**Key constraint reminders:**
+- Next.js 16: routing guard is `proxy.ts` (not `middleware.ts`), exported function name is `proxy`
+- Prisma 7: never use `datasources` option — use `@prisma/adapter-pg` pattern in `lib/db.ts`  
+- Tiptap: always pass `immediatelyRender: false` to `useEditor()`
+- No `@import` inside CSS rules — put `@import "tailwindcss"` at the very top of globals.css ✅ done
+- Tailwind v4 uses `@import "tailwindcss"` NOT the old `@tailwind base/components/utilities` directives

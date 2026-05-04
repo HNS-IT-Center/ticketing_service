@@ -2,9 +2,10 @@
 
 import { useActionState } from "react";
 import { loginAction, type FormState } from "@/app/actions/auth";
-import { AlertCircle, Eye, EyeOff, Wrench } from "lucide-react";
+import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import { useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(
@@ -18,26 +19,21 @@ export default function LoginPage() {
       <div className="auth-card">
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-          <div
-            style={{
-              width: "3.5rem",
-              height: "3.5rem",
-              background: "linear-gradient(135deg, var(--primary), var(--primary-dark))",
-              borderRadius: "1rem",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              margin: "0 auto 1rem",
-              boxShadow: "0 4px 16px rgba(22,70,157,0.3)",
-            }}
-          >
-            <Wrench size={24} color="white" />
+          <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.25rem" }}>
+            <Image
+              src="/Logo HNS IT Center.jpg"
+              alt="HNS IT Center"
+              width={160}
+              height={80}
+              style={{ objectFit: "contain", borderRadius: "0.5rem" }}
+              priority
+            />
           </div>
           <h1 style={{ fontSize: "1.5rem", marginBottom: "0.375rem" }}>
             Welcome back
           </h1>
           <p style={{ color: "var(--text-muted)", fontSize: "0.9375rem" }}>
-            Sign in to your TechServe account
+            Sign in to your HNS IT Center account
           </p>
         </div>
 

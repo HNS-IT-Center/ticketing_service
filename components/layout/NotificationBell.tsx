@@ -11,10 +11,11 @@ interface Notification {
   reference_id: string | null;
   is_read: boolean;
   created_at: string;
+  message?: string | null;
   ticket?: { ticket_code: string };
 }
 
-export default function NotificationBell({ userId }: { userId: string }) {
+export default function NotificationBell({ userId, role }: { userId: string; role: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -125,10 +126,27 @@ export default function NotificationBell({ userId }: { userId: string }) {
                 No notifications
               </div>
             ) : (
-              notifications.slice(0, 10).map((n) => (
-                <Link
-                  key={n.id}
-                  href={`/customer/tickets/${n.ticket_id}`}
+            notifications.slice(0, 10).map((n) => {
+                const ticketLink =
+                  role === "technician"
+                    ? `/technician/tickets/${n.ticket_id}`
+                    : role === "admin"
+                    ? `/admin/tickets/${n.ticket_id}`
+                    : `/customer/tickets/${n.ticket_id}`;
+
+                const notifLabel =
+                  n.type === "message"
+                    ? "💬 New message on your ticket"
+                    : n.type === "assigned"
+                    ? "📋 You have been assigned a ticket"
+                    : n.type === "completed"
+                    ? "🎉 Ticket completed — points earned!"
+                    : "📋 Ticket status updated";
+
+                return (
+                  <Link
+                    key={n.id}
+                    href={ticketLink}
                   style={{
                     display: "block",
                     padding: "0.75rem 1rem",
@@ -141,22 +159,20 @@ export default function NotificationBell({ userId }: { userId: string }) {
                   }}
                   onClick={() => setOpen(false)}
                 >
-                  <div style={{ fontWeight: n.is_read ? 400 : 600 }}>
-                    {n.type === "message"
-                      ? "💬 New message on your ticket"
-                      : "📋 Ticket status updated"}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "0.8125rem",
-                      color: "var(--text-muted)",
-                      marginTop: "0.2rem",
-                    }}
-                  >
-                    {new Date(n.created_at).toLocaleString()}
-                  </div>
-                </Link>
-              ))
+                    <div style={{ fontWeight: n.is_read ? 400 : 600 }}>
+                      {notifLabel}
+                    </div>
+                    {n.message && (
+                      <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+                        {n.message}
+                      </div>
+                    )}
+                    <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                      {new Date(n.created_at).toLocaleString()}
+                    </div>
+                  </Link>
+                );
+              })
             )}
           </div>
         </div>

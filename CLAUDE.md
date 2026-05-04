@@ -323,7 +323,7 @@ npm run dev
 |---|------|--------|-------|
 | B1 | Replace app name "TechServe" → "HNS IT Center" logo | ✅ | login, register, DashboardShell all updated. Logo from `public/Logo HNS IT Center.jpg`. |
 | B2 | Sidebar: collapsible icon-only mode (desktop) | ✅ | DashboardShell.tsx rewritten with `collapsed` state, `localStorage` persistence, 64px icon-only mode. |
-| B3 | Sidebar: mobile full-width fix | ✅ | `globals.css` — sidebar is `width: 100vw` on mobile. |
+| B3 | Sidebar: mobile 3/4 width (not full-screen) | ✅ | `globals.css` — sidebar is `75vw` max 300px on mobile so the exposed edge is tappable to close. Overlay `onClick` closes it. |
 | B4 | Profile badge → dropdown with Sign Out / Profile / My Tickets | ✅ | DashboardShell.tsx — avatar pill opens popover dropdown with click-outside close. |
 
 ---
@@ -353,6 +353,17 @@ npm run dev
 |---|------|--------|-------|
 | A1 | Admin leaderboard page (missing) | ✅ | Created `app/admin/leaderboard/page.tsx` — same game-style podium design as technician leaderboard. |
 | A2 | Admin performance: period filter | ✅ | `app/admin/performance/page.tsx` rewritten — month/year search params; period mode aggregates from `TicketStatusLog`; default shows all-time `TechnicianPerformance`. |
+| A3 | Admin dashboard: vertical 1-column layout | ✅ | `app/admin/dashboard/page.tsx` — fully vertical flex layout, no side-by-side grids. Stats use `.admin-stats-grid` (auto-fill 150px, 2-col on mobile). |
+
+---
+
+### BUG FIXES (Session 2026-05-04)
+| # | Bug | Status | Notes |
+|---|-----|--------|-------|
+| BF1 | TypeScript errors (phone_number, changed_at, workload include) | ✅ | Fixed: `phone` → `phone_number` in `actions/customer.ts` + `customer/profile/page.tsx`; `changed_at` → `created_at` in performance page; removed invalid Prisma `include` fields. |
+| BF2 | Technician self-assign error | ✅ | `takeTicketAction` + `updateTicketStatusAction` in `actions/technician.ts` — skip customer notification when `ticket.user_id === session.userId` to prevent duplicate notifications on self-created tickets. |
+| BF3 | Horizontal scroll on mobile list pages | ✅ | All list pages now toggle table (desktop) / card (mobile) using `.admin-ticket-table` / `.admin-ticket-cards` CSS classes. Affected: admin tickets, admin users, customer tickets, technician dashboard (both tables). |
+| BF4 | Logo image error: `/Logo HNS IT Center.jpg` received null | ✅ | Renamed `public/Logo HNS IT Center.jpg` → `public/logo-hns.jpg`. Updated `src` in `DashboardShell.tsx`, `app/login/page.tsx`, `app/register/page.tsx`. |
 
 ---
 

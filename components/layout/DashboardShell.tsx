@@ -125,7 +125,7 @@ export default function DashboardShell({ children, role, userName, userId }: Das
             // Icon-only: show a small logo thumbnail
             <div style={{ width: "2rem", height: "2rem", borderRadius: "0.375rem", overflow: "hidden", flexShrink: 0 }}>
               <Image
-                src="/Logo HNS IT Center.jpg"
+                src="/logo-hns.jpg"
                 alt="HNS IT Center"
                 width={32}
                 height={32}
@@ -136,7 +136,7 @@ export default function DashboardShell({ children, role, userName, userId }: Das
             <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", minWidth: 0 }}>
               <div style={{ width: "2rem", height: "2rem", borderRadius: "0.375rem", overflow: "hidden", flexShrink: 0 }}>
                 <Image
-                  src="/Logo HNS IT Center.jpg"
+                  src="/logo-hns.jpg"
                   alt="HNS IT Center"
                   width={32}
                   height={32}

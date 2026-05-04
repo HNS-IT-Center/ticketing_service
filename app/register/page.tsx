@@ -21,7 +21,7 @@ export default function RegisterPage() {
         <div style={{ textAlign: "center", marginBottom: "1.75rem" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.25rem" }}>
             <Image
-              src="/Logo HNS IT Center.jpg"
+              src="/logo-hns.jpg"
               alt="HNS IT Center"
               width={160}
               height={80}

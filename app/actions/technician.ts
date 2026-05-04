@@ -14,7 +14,10 @@ function getTicketPoints(type: string): number {
 export async function takeTicketAction(ticketId: string) {
   const session = await requireRole("Technician");
 
-  const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
+  const ticket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    select: { id: true, user_id: true, technician_id: true, status: true, ticket_type: true, ticket_code: true },
+  });
   if (!ticket) return { error: "Ticket not found" };
   if (ticket.technician_id) return { error: "Ticket already assigned" };
   if (ticket.status !== "waiting") return { error: "Ticket is not in waiting status" };
@@ -57,14 +60,16 @@ export async function takeTicketAction(ticketId: string) {
     },
   });
 
-  // Notify customer
-  await db.notification.create({
-    data: {
-      user_id: ticket.user_id,
-      ticket_id: ticketId,
-      type: "status_update",
-    },
-  });
+  // Notify customer — only if the customer is NOT the same person as the technician
+  if (ticket.user_id !== session.userId) {
+    await db.notification.create({
+      data: {
+        user_id: ticket.user_id,
+        ticket_id: ticketId,
+        type: "status_update",
+      },
+    });
+  }
 
   // Notify the technician that they have been assigned
   await db.notification.create({
@@ -152,15 +157,17 @@ export async function updateTicketStatusAction(
     });
   }
 
-  // Notify customer of status change
-  await db.notification.create({
-    data: {
-      user_id: ticket.user_id,
-      ticket_id: ticketId,
-      type: "status_update",
-      reference_id: log.id,
-    },
-  });
+  // Notify customer of status change (skip if technician is the ticket owner)
+  if (ticket.user_id !== session.userId) {
+    await db.notification.create({
+      data: {
+        user_id: ticket.user_id,
+        ticket_id: ticketId,
+        type: "status_update",
+        reference_id: log.id,
+      },
+    });
+  }
 
   // When done: notify the technician with points earned
   if (newStatus === "done") {

@@ -817,7 +817,6 @@ tbody td {
   :root { --sidebar-width: 0px; }
 
   .sidebar {
-    width: 100vw;          /* B3: full-width on mobile */
     transform: translateX(-100%);
   }
   .sidebar.open {
@@ -885,5 +884,93 @@ tbody td {
 @media (max-width: 768px) {
   .ticket-detail-grid {
     grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Mobile Sidebar: 3/4 width not full-screen ──────────────────────────── */
+@media (max-width: 768px) {
+  .sidebar {
+    width: 75vw !important;    /* 3/4 width — user can see edge to tap-close */
+    max-width: 300px;
+  }
+}
+
+/* ─── Table / Card toggle (responsive) ────────────────────────────────────── */
+/* Desktop: show table, hide cards */
+.admin-ticket-table { display: block; }
+.admin-ticket-cards { display: none; }
+
+/* Mobile: hide table, show cards */
+@media (max-width: 768px) {
+  .admin-ticket-table { display: none; }
+  .admin-ticket-cards { display: block; }
+}
+
+/* ─── Mobile ticket card ───────────────────────────────────────────────────── */
+.mobile-ticket-card {
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.625rem;
+  background: var(--white);
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+.mobile-ticket-card:hover {
+  box-shadow: var(--shadow-sm);
+  border-color: var(--border);
+}
+
+/* ─── Admin stats grid ─────────────────────────────────────────────────────── */
+.admin-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 1rem;
+}
+@media (max-width: 480px) {
+  .admin-stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 0.75rem;
+  }
+}
+
+/* ─── Technician stats grid ────────────────────────────────────────────────── */
+.tech-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 1rem;
+}
+.tech-workload-card {
+  grid-column: span 2;
+}
+@media (max-width: 768px) {
+  .tech-stats-grid {
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+  }
+  .tech-workload-card {
+    grid-column: span 2; /* still spans both cols on mobile */
+  }
+}
+@media (max-width: 480px) {
+  .tech-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  .tech-workload-card {
+    grid-column: span 1;
+  }
+}
+
+/* ─── Prevent horizontal overflow everywhere ─────────────────────────────── */
+@media (max-width: 768px) {
+  .table-wrapper {
+    overflow-x: hidden;
+  }
+  /* Only allow scroll on tables that are not inside card-toggle wrappers */
+  .admin-ticket-table .table-wrapper {
+    overflow-x: auto;
   }
 }

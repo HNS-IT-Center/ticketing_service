@@ -2,9 +2,9 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
-import { Users, Ticket, CheckCircle, Clock, AlertCircle, TrendingUp } from "lucide-react";
+import { Users, Ticket, CheckCircle, Clock, AlertCircle, TrendingUp, ArrowRight } from "lucide-react";
 
-export const metadata = { title: "Admin Dashboard — TechServe" };
+export const metadata = { title: "Admin Dashboard — HNS IT Center" };
 
 export default async function AdminDashboard() {
   await requireRole("Administrator");
@@ -32,9 +32,16 @@ export default async function AdminDashboard() {
     db.technicianPerformance.findMany({
       orderBy: { total_points_completed: "desc" },
       take: 5,
-      include: { technician: { select: { name: true } } },
     }),
   ]);
+
+  // Fetch technician names separately
+  const techIds = topTechnicians.map((t) => t.technician_id);
+  const techUsers = await db.user.findMany({
+    where: { id: { in: techIds } },
+    select: { id: true, name: true },
+  });
+  const techNameMap = new Map(techUsers.map((u) => [u.id, u.name]));
 
   const countByRole = Object.fromEntries(
     totalUsers.map((u) => [u.role, u._count.role])
@@ -51,14 +58,14 @@ export default async function AdminDashboard() {
   ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "2rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
       <div>
         <h1>Admin Dashboard</h1>
         <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>System overview and management</p>
       </div>
 
-      {/* Stats grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "1rem" }}>
+      {/* Stats grid — auto-fill, collapses to 2-col on mobile */}
+      <div className="admin-stats-grid">
         {statCards.map((s) => (
           <Link key={s.label} href={s.href} className="stat-card" style={{ textDecoration: "none" }}>
             <div style={{ width: "2.25rem", height: "2.25rem", borderRadius: "0.75rem", background: `${s.color}18`, display: "flex", alignItems: "center", justifyContent: "center", color: s.color }}>
@@ -72,13 +79,17 @@ export default async function AdminDashboard() {
         ))}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 340px", gap: "1.5rem" }}>
-        {/* Recent Tickets */}
-        <div className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <h3>Recent Tickets</h3>
-            <Link href="/admin/tickets" style={{ fontSize: "0.875rem", color: "var(--primary)", fontWeight: 500 }}>View all →</Link>
-          </div>
+      {/* Recent Tickets */}
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+          <h3>Recent Tickets</h3>
+          <Link href="/admin/tickets" style={{ fontSize: "0.875rem", color: "var(--primary)", fontWeight: 500, display: "flex", alignItems: "center", gap: "0.25rem" }}>
+            View all <ArrowRight size={14} />
+          </Link>
+        </div>
+
+        {/* Desktop table */}
+        <div className="admin-ticket-table">
           <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
             <table>
               <thead><tr><th>Code</th><th>Type</th><th>Customer</th><th>Status</th><th>Technician</th></tr></thead>
@@ -97,28 +108,67 @@ export default async function AdminDashboard() {
           </div>
         </div>
 
-        {/* Top Technicians */}
-        <div className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <h3>Top Technicians</h3>
-            <Link href="/admin/performance" style={{ fontSize: "0.875rem", color: "var(--primary)", fontWeight: 500 }}>All →</Link>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {topTechnicians.length === 0 ? (
-              <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "1rem" }}>No data yet</p>
-            ) : topTechnicians.map((t, i) => (
-              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <span style={{ fontWeight: 800, color: i === 0 ? "#ca8a04" : "var(--text-muted)", fontSize: "1rem", width: "1.5rem" }}>
-                  {i === 0 ? "🥇" : `#${i + 1}`}
-                </span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: 600, fontSize: "0.9rem" }}>{t.technician.name}</p>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{t.tickets_handled} tickets</p>
+        {/* Mobile card list */}
+        <div className="admin-ticket-cards">
+          {recentTickets.map((t) => (
+            <Link
+              key={t.id}
+              href={`/admin/tickets/${t.id}`}
+              style={{ textDecoration: "none" }}
+            >
+              <div style={{
+                padding: "0.875rem",
+                border: "1px solid var(--border-light)",
+                borderRadius: "var(--radius-md)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "0.5rem",
+                marginBottom: "0.5rem",
+                background: "var(--white)",
+                transition: "box-shadow 0.15s",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", fontSize: "0.9375rem" }}>
+                    {t.ticket_code}
+                  </span>
+                  <Badge variant={t.status} />
                 </div>
-                <span style={{ fontWeight: 700, color: "var(--primary)" }}>{t.total_points_completed} pts</span>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                  <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
+                  <span>{t.user.name}</span>
+                </div>
+                {t.technician && (
+                  <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
+                    🔧 {t.technician.name}
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            </Link>
+          ))}
+        </div>
+      </div>
+
+      {/* Top Technicians */}
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+          <h3>Top Technicians</h3>
+          <Link href="/admin/performance" style={{ fontSize: "0.875rem", color: "var(--primary)", fontWeight: 500 }}>All →</Link>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+          {topTechnicians.length === 0 ? (
+            <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "1rem" }}>No data yet</p>
+          ) : topTechnicians.map((t, i) => (
+            <div key={t.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <span style={{ fontWeight: 800, color: i === 0 ? "#ca8a04" : "var(--text-muted)", fontSize: "1rem", width: "1.5rem" }}>
+                {i === 0 ? "🥇" : `#${i + 1}`}
+              </span>
+              <div style={{ flex: 1 }}>
+                <p style={{ fontWeight: 600, fontSize: "0.9rem" }}>{techNameMap.get(t.technician_id) ?? "Unknown"}</p>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{t.tickets_handled} tickets</p>
+              </div>
+              <span style={{ fontWeight: 700, color: "var(--primary)" }}>{t.total_points_completed} pts</span>
+            </div>
+          ))}
         </div>
       </div>
     </div>

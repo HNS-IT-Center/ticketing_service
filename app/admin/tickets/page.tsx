@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 
-export const metadata = { title: "All Tickets — TechServe" };
+export const metadata = { title: "All Tickets — HNS IT Center" };
 
 const STATUS_FILTERS = ["all", "waiting", "on_progress", "done", "cancelled", "rejected"] as const;
 
@@ -73,25 +73,56 @@ export default async function AdminTicketsPage({
         ))}
       </div>
 
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr><th>Code</th><th>Type</th><th>Customer</th><th>Technician</th><th>Status</th><th>Date</th><th></th></tr>
-          </thead>
-          <tbody>
-            {tickets.map((t) => (
-              <tr key={t.id}>
-                <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
-                <td style={{ textTransform: "capitalize", fontSize: "0.875rem" }}>{t.ticket_type.replace("_", " ")}</td>
-                <td>{t.user.name}</td>
-                <td style={{ color: "var(--text-muted)" }}>{t.technician?.name ?? <span style={{ color: "var(--accent)", fontSize: "0.875rem" }}>Unassigned</span>}</td>
-                <td><Badge variant={t.status} /></td>
-                <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{new Date(t.created_at).toLocaleDateString("id-ID")}</td>
-                <td><Link href={`/admin/tickets/${t.id}`} className="btn btn-secondary btn-sm">View</Link></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Desktop table */}
+      <div className="admin-ticket-table">
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Code</th><th>Type</th><th>Customer</th><th>Technician</th><th>Status</th><th>Date</th><th></th></tr>
+            </thead>
+            <tbody>
+              {tickets.map((t) => (
+                <tr key={t.id}>
+                  <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
+                  <td style={{ textTransform: "capitalize", fontSize: "0.875rem" }}>{t.ticket_type.replace("_", " ")}</td>
+                  <td>{t.user.name}</td>
+                  <td style={{ color: "var(--text-muted)" }}>{t.technician?.name ?? <span style={{ color: "var(--accent)", fontSize: "0.875rem" }}>Unassigned</span>}</td>
+                  <td><Badge variant={t.status} /></td>
+                  <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{new Date(t.created_at).toLocaleDateString("id-ID")}</td>
+                  <td><Link href={`/admin/tickets/${t.id}`} className="btn btn-secondary btn-sm">View</Link></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="admin-ticket-cards">
+        {tickets.length === 0 ? (
+          <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>No tickets found</p>
+        ) : tickets.map((t) => (
+          <Link key={t.id} href={`/admin/tickets/${t.id}`} style={{ textDecoration: "none" }}>
+            <div className="mobile-ticket-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", fontSize: "0.9375rem" }}>
+                  {t.ticket_code}
+                </span>
+                <Badge variant={t.status} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
+                <span>{new Date(t.created_at).toLocaleDateString("id-ID")}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
+                <span style={{ color: "var(--text-secondary)" }}>👤 {t.user.name}</span>
+                <span style={{ color: t.technician ? "var(--text-secondary)" : "var(--accent)" }}>
+                  {t.technician ? `🔧 ${t.technician.name}` : "Unassigned"}
+                </span>
+              </div>
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

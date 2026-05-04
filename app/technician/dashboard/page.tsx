@@ -3,9 +3,9 @@ import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import TakeTicketButton from "./TakeTicketButton";
-import { Ticket, CheckCircle, AlertCircle, Star, TrendingUp } from "lucide-react";
+import { Ticket, CheckCircle } from "lucide-react";
 
-export const metadata = { title: "Technician Dashboard — TechServe" };
+export const metadata = { title: "Technician Dashboard — HNS IT Center" };
 
 function getTicketPoints(type: string) {
   if (type === "pc_build") return 4;
@@ -46,10 +46,10 @@ export default async function TechnicianDashboard() {
         </p>
       </div>
 
-      {/* Workload + Performance row */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "1rem" }}>
+      {/* Stats row */}
+      <div className="tech-stats-grid">
         {/* Workload */}
-        <div className="stat-card" style={{ gridColumn: "span 2" }}>
+        <div className="stat-card tech-workload-card">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
             <h3 style={{ fontSize: "1rem" }}>Current Workload</h3>
             <span style={{ fontWeight: 700, fontSize: "1.125rem", color: pct >= 100 ? "var(--accent)" : "var(--primary)" }}>
@@ -64,6 +64,7 @@ export default async function TechnicianDashboard() {
           </p>
         </div>
 
+        {/* Stat mini cards */}
         {[
           { label: "Handled", value: performance?.tickets_handled ?? 0, icon: <Ticket size={20} />, color: "var(--primary)" },
           { label: "Success", value: performance?.success_count ?? 0, icon: <CheckCircle size={20} />, color: "#16a34a" },
@@ -89,62 +90,123 @@ export default async function TechnicianDashboard() {
             <p>No active tickets assigned to you</p>
           </div>
         ) : (
-          <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
-            <table>
-              <thead><tr>
-                <th>Ticket Code</th><th>Type</th><th>Customer</th><th>Points</th><th>Status</th><th></th>
-              </tr></thead>
-              <tbody>
-                {myTickets.map((t) => (
-                  <tr key={t.id}>
-                    <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
-                    <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                    <td>{t.user.name}</td>
-                    <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
-                    <td><Badge variant={t.status} /></td>
-                    <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Desktop table */}
+            <div className="admin-ticket-table">
+              <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
+                <table>
+                  <thead><tr>
+                    <th>Ticket Code</th><th>Type</th><th>Customer</th><th>Points</th><th>Status</th><th></th>
+                  </tr></thead>
+                  <tbody>
+                    {myTickets.map((t) => (
+                      <tr key={t.id}>
+                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
+                        <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
+                        <td>{t.user.name}</td>
+                        <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
+                        <td><Badge variant={t.status} /></td>
+                        <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="admin-ticket-cards">
+              {myTickets.map((t) => (
+                <Link key={t.id} href={`/technician/tickets/${t.id}`} style={{ textDecoration: "none" }}>
+                  <div className="mobile-ticket-card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>{t.ticket_code}</span>
+                      <Badge variant={t.status} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                      <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
+                      <span>{t.user.name}</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span>
+                      <span style={{ fontSize: "0.8125rem", color: "var(--primary)", fontWeight: 500 }}>Manage →</span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </>
         )}
       </div>
 
       {/* Unassigned Tickets */}
       <div className="card">
-        <h3 style={{ marginBottom: "1rem" }}>Available Tickets <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 400 }}>({unassigned.length})</span></h3>
+        <h3 style={{ marginBottom: "1rem" }}>
+          Available Tickets <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 400 }}>({unassigned.length})</span>
+        </h3>
         {unassigned.length === 0 ? (
           <div className="empty-state" style={{ padding: "2rem" }}>
             <CheckCircle size={32} style={{ opacity: 0.3 }} />
             <p>No unassigned tickets at the moment</p>
           </div>
         ) : (
-          <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
-            <table>
-              <thead><tr>
-                <th>Ticket Code</th><th>Type</th><th>Customer</th><th>Device</th><th>Points</th><th></th>
-              </tr></thead>
-              <tbody>
-                {unassigned.map((t) => (
-                  <tr key={t.id}>
-                    <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
-                    <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                    <td>{t.user.name}</td>
-                    <td style={{ color: "var(--text-muted)" }}>{t.device_type.replace(/_/g, " ")}</td>
-                    <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
-                    <td>
-                      <TakeTicketButton
-                        ticketId={t.id}
-                        points={getTicketPoints(t.ticket_type)}
-                        canTake={currentPoints + getTicketPoints(t.ticket_type) <= maxPoints}
-                      />
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <>
+            {/* Desktop table */}
+            <div className="admin-ticket-table">
+              <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
+                <table>
+                  <thead><tr>
+                    <th>Ticket Code</th><th>Type</th><th>Customer</th><th>Device</th><th>Points</th><th></th>
+                  </tr></thead>
+                  <tbody>
+                    {unassigned.map((t) => (
+                      <tr key={t.id}>
+                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
+                        <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
+                        <td>{t.user.name}</td>
+                        <td style={{ color: "var(--text-muted)" }}>{t.device_type.replace(/_/g, " ")}</td>
+                        <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
+                        <td>
+                          <TakeTicketButton
+                            ticketId={t.id}
+                            points={getTicketPoints(t.ticket_type)}
+                            canTake={currentPoints + getTicketPoints(t.ticket_type) <= maxPoints}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile cards */}
+            <div className="admin-ticket-cards">
+              {unassigned.map((t) => {
+                const pts = getTicketPoints(t.ticket_type);
+                return (
+                  <div key={t.id} className="mobile-ticket-card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>{t.ticket_code}</span>
+                      <span className="badge badge-technician">{pts} pts</span>
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                      <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
+                      <span>{t.user.name}</span>
+                    </div>
+                    <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                      {t.device_type.replace(/_/g, " ")}
+                    </div>
+                    <TakeTicketButton
+                      ticketId={t.id}
+                      points={pts}
+                      canTake={currentPoints + pts <= maxPoints}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
     </div>

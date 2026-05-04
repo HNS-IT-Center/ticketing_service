@@ -64,67 +64,98 @@ export default async function CustomerTicketsPage({
         ))}
       </div>
 
-      {/* Table */}
-      <div className="table-wrapper">
+      {/* Desktop table */}
+      <div className="admin-ticket-table">
+        <div className="table-wrapper">
+          {tickets.length === 0 ? (
+            <div className="empty-state">
+              <Ticket size={40} style={{ opacity: 0.3 }} />
+              <p>No tickets found</p>
+              {statusFilter === "all" && (
+                <Link href="/customer/tickets/create" className="btn btn-primary btn-sm">
+                  Create your first ticket
+                </Link>
+              )}
+            </div>
+          ) : (
+            <table>
+              <thead>
+                <tr>
+                  <th>Ticket Code</th>
+                  <th>Type</th>
+                  <th>Device</th>
+                  <th>Status</th>
+                  <th>Technician</th>
+                  <th>Date</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {tickets.map((t) => (
+                  <tr key={t.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                        <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>
+                          {t.ticket_code}
+                        </span>
+                        {t.messages.length > 0 && (
+                          <span style={{ background: "var(--accent)", color: "#fff", borderRadius: "999px", fontSize: "0.7rem", padding: "0.1rem 0.45rem", fontWeight: 700 }}>
+                            {t.messages.length}
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
+                    <td style={{ color: "var(--text-muted)" }}>{t.device_type.replace("_", " ")}</td>
+                    <td><Badge variant={t.status} /></td>
+                    <td style={{ color: "var(--text-muted)" }}>{t.technician?.name ?? "—"}</td>
+                    <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>{new Date(t.created_at).toLocaleDateString("id-ID")}</td>
+                    <td><Link href={`/customer/tickets/${t.id}`} className="btn btn-secondary btn-sm">Open</Link></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="admin-ticket-cards">
         {tickets.length === 0 ? (
           <div className="empty-state">
             <Ticket size={40} style={{ opacity: 0.3 }} />
             <p>No tickets found</p>
             {statusFilter === "all" && (
-              <Link href="/customer/tickets/create" className="btn btn-primary btn-sm">
-                Create your first ticket
-              </Link>
+              <Link href="/customer/tickets/create" className="btn btn-primary btn-sm">Create your first ticket</Link>
             )}
           </div>
-        ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Ticket Code</th>
-                <th>Type</th>
-                <th>Device</th>
-                <th>Status</th>
-                <th>Technician</th>
-                <th>Date</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map((t) => (
-                <tr key={t.id}>
-                  <td>
-                    <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                      <span style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>
-                        {t.ticket_code}
-                      </span>
-                      {t.messages.length > 0 && (
-                        <span style={{
-                          background: "var(--accent)", color: "#fff",
-                          borderRadius: "999px", fontSize: "0.7rem",
-                          padding: "0.1rem 0.45rem", fontWeight: 700,
-                        }}>
-                          {t.messages.length}
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                  <td style={{ color: "var(--text-muted)" }}>{t.device_type.replace("_", " ")}</td>
-                  <td><Badge variant={t.status} /></td>
-                  <td style={{ color: "var(--text-muted)" }}>{t.technician?.name ?? "—"}</td>
-                  <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>
-                    {new Date(t.created_at).toLocaleDateString("id-ID")}
-                  </td>
-                  <td>
-                    <Link href={`/customer/tickets/${t.id}`} className="btn btn-secondary btn-sm">
-                      Open
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+        ) : tickets.map((t) => (
+          <Link key={t.id} href={`/customer/tickets/${t.id}`} style={{ textDecoration: "none" }}>
+            <div className="mobile-ticket-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>
+                    {t.ticket_code}
+                  </span>
+                  {t.messages.length > 0 && (
+                    <span style={{ background: "var(--accent)", color: "#fff", borderRadius: "999px", fontSize: "0.7rem", padding: "0.1rem 0.45rem", fontWeight: 700 }}>
+                      {t.messages.length}
+                    </span>
+                  )}
+                </div>
+                <Badge variant={t.status} />
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
+                <span>{t.device_type.replace("_", " ")}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
+                <span style={{ color: "var(--text-secondary)" }}>🔧 {t.technician?.name ?? "Unassigned"}</span>
+                <span style={{ color: "var(--text-muted)" }}>{new Date(t.created_at).toLocaleDateString("id-ID")}</span>
+              </div>
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

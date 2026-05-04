@@ -71,36 +71,64 @@ export default async function AdminUsersPage({
         </form>
       </div>
 
-      {/* Table */}
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Workload</th><th>Joined</th><th></th></tr>
-          </thead>
-          <tbody>
-            {users.map((u) => (
-              <tr key={u.id}>
-                <td style={{ fontWeight: 600 }}>{u.name}</td>
-                <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{u.email}</td>
-                <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{u.phone_number}</td>
-                <td><Badge variant={u.role} /></td>
-                <td>
-                  {u.workload ? (
-                    <span style={{ fontSize: "0.875rem" }}>
-                      {u.workload.current_points} / {u.workload.max_points} pts
-                    </span>
-                  ) : "—"}
-                </td>
-                <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                  {new Date(u.created_at).toLocaleDateString("id-ID")}
-                </td>
-                <td>
-                  <Link href={`/admin/users/${u.id}`} className="btn btn-secondary btn-sm">Edit</Link>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Desktop table */}
+      <div className="admin-ticket-table">
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Workload</th><th>Joined</th><th></th></tr>
+            </thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.id}>
+                  <td style={{ fontWeight: 600 }}>{u.name}</td>
+                  <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{u.email}</td>
+                  <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{u.phone_number}</td>
+                  <td><Badge variant={u.role} /></td>
+                  <td>
+                    {u.workload ? (
+                      <span style={{ fontSize: "0.875rem" }}>
+                        {u.workload.current_points} / {u.workload.max_points} pts
+                      </span>
+                    ) : "—"}
+                  </td>
+                  <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
+                    {new Date(u.created_at).toLocaleDateString("id-ID")}
+                  </td>
+                  <td>
+                    <Link href={`/admin/users/${u.id}`} className="btn btn-secondary btn-sm">Edit</Link>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Mobile card list */}
+      <div className="admin-ticket-cards">
+        {users.map((u) => (
+          <Link key={u.id} href={`/admin/users/${u.id}`} style={{ textDecoration: "none" }}>
+            <div className="mobile-ticket-card">
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{u.name}</span>
+                <Badge variant={u.role} />
+              </div>
+              <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{u.email}</div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
+                <span style={{ color: "var(--text-secondary)" }}>{u.phone_number}</span>
+                {u.workload && (
+                  <span style={{ color: "var(--primary)", fontWeight: 600 }}>
+                    {u.workload.current_points}/{u.workload.max_points} pts
+                  </span>
+                )}
+              </div>
+              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                Joined {new Date(u.created_at).toLocaleDateString("id-ID")}
+              </div>
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

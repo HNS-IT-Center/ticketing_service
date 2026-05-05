@@ -2,32 +2,49 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
-import { Ticket, PlusCircle } from "lucide-react";
+import { Ticket, PlusCircle, ChevronLeft, ChevronRight } from "lucide-react";
 
-export const metadata = { title: "My Tickets — TechServe" };
+export const metadata = { title: "My Tickets — HNS IT Center" };
 
 const STATUS_FILTERS = ["all", "waiting", "on_progress", "done", "cancelled", "rejected"] as const;
+const PAGE_SIZE = 10;
 
 export default async function CustomerTicketsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string }>;
+  searchParams: Promise<{ status?: string; page?: string }>;
 }) {
   const session = await requireRole("Customer", "Sales");
   const params = await searchParams;
   const statusFilter = params.status || "all";
+  const page = Math.max(1, parseInt(params.page || "1") || 1);
+  const skip = (page - 1) * PAGE_SIZE;
 
-  const tickets = await db.ticket.findMany({
-    where: {
-      user_id: session.userId,
-      ...(statusFilter !== "all" ? { status: statusFilter as any } : {}),
-    },
-    orderBy: { created_at: "desc" },
-    include: {
-      technician: { select: { name: true } },
-      messages: { where: { is_read: false, sender_id: { not: session.userId } }, select: { id: true } },
-    },
-  });
+  const where = {
+    user_id: session.userId,
+    ...(statusFilter !== "all" ? { status: statusFilter as any } : {}),
+  };
+
+  const [tickets, totalCount] = await Promise.all([
+    db.ticket.findMany({
+      where,
+      orderBy: { created_at: "desc" },
+      take: PAGE_SIZE,
+      skip,
+      include: {
+        technician: { select: { name: true } },
+        messages: { where: { is_read: false, sender_id: { not: session.userId } }, select: { id: true } },
+      },
+    }),
+    db.ticket.count({ where }),
+  ]);
+
+  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+
+  const buildHref = (p: number) => {
+    const base = statusFilter === "all" ? "/customer/tickets" : `/customer/tickets?status=${statusFilter}`;
+    return p === 1 ? (statusFilter === "all" ? "/customer/tickets" : base) : `${base}${statusFilter === "all" ? "?" : "&"}page=${p}`;
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -156,6 +173,32 @@ export default async function CustomerTicketsPage({
             </div>
           </Link>
         ))}
+      </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", paddingTop: "0.5rem" }}>
+          {page > 1 ? (
+            <Link href={buildHref(page - 1)} className="btn btn-secondary btn-sm">
+              <ChevronLeft size={14} /> Prev
+            </Link>
+          ) : (
+            <button className="btn btn-secondary btn-sm" disabled><ChevronLeft size={14} /> Prev</button>
+          )}
+          <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", padding: "0 0.5rem" }}>
+            Page {page} of {totalPages}
+          </span>
+          {page < totalPages ? (
+            <Link href={buildHref(page + 1)} className="btn btn-secondary btn-sm">
+              Next <ChevronRight size={14} />
+            </Link>
+          ) : (
+            <button className="btn btn-secondary btn-sm" disabled>Next <ChevronRight size={14} /></button>
+          )}
+        </div>
+      )}
+      <div style={{ textAlign: "center", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+        Showing {tickets.length > 0 ? skip + 1 : 0}–{Math.min(skip + tickets.length, totalCount)} of {totalCount} tickets
       </div>
     </div>
   );

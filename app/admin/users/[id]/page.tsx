@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import EditUserForm from "./EditUserForm";
 
-export const metadata = { title: "Edit User — TechServe" };
+export const metadata = { title: "Edit User — HNS IT Center" };
 
 export default async function EditUserPage({ params }: { params: Promise<{ id: string }> }) {
   await requireRole("Administrator");

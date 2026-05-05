@@ -1,11 +1,9 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { loginAction, type FormState } from "@/app/actions/auth";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
-import { useState } from "react";
 import Link from "next/link";
-import Image from "next/image";
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(
@@ -20,13 +18,11 @@ export default function LoginPage() {
         {/* Logo */}
         <div style={{ textAlign: "center", marginBottom: "2rem" }}>
           <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.25rem" }}>
-            <Image
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
               src="/logo-hns.jpg"
               alt="HNS IT Center"
-              width={160}
-              height={80}
-              style={{ objectFit: "contain", borderRadius: "0.5rem" }}
-              priority
+              style={{ width: "160px", height: "80px", objectFit: "contain", borderRadius: "0.5rem", display: "block" }}
             />
           </div>
           <h1 style={{ fontSize: "1.5rem", marginBottom: "0.375rem" }}>
@@ -57,7 +53,10 @@ export default function LoginPage() {
           </div>
         )}
 
-        <form action={action} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+        <form
+          action={action}
+          style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+        >
           <div className="form-group">
             <label htmlFor="email" className="form-label">Email address</label>
             <input
@@ -65,6 +64,7 @@ export default function LoginPage() {
               name="email"
               type="email"
               autoComplete="email"
+              required
               className={`form-input ${state?.errors?.email ? "error" : ""}`}
               placeholder="you@example.com"
             />
@@ -84,6 +84,8 @@ export default function LoginPage() {
                 name="password"
                 type={showPassword ? "text" : "password"}
                 autoComplete="current-password"
+                required
+                minLength={6}
                 className={`form-input ${state?.errors?.password ? "error" : ""}`}
                 placeholder="Your password"
                 style={{ paddingRight: "2.75rem" }}

@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/session";
 import CreateUserForm from "./CreateUserForm";
 
-export const metadata = { title: "Add User — TechServe" };
+export const metadata = { title: "Add User — HNS IT Center" };
 
 export default async function CreateUserPage() {
   await requireRole("Administrator");

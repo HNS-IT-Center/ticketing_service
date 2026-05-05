@@ -1,6 +1,6 @@
 @AGENTS.md
 
-# TechServe — Role-Based Ticketing System: Project Handoff
+# HNS IT Center — Role-Based Ticketing System: Project Handoff
 
 ## 🧭 Project Overview
 
@@ -38,7 +38,7 @@ To re-seed at any time: `$env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed`
 | File Storage  | Supabase Storage (bucket: `attachments`)                          |
 | Auth          | Custom JWT sessions via `jose` (cookie: `session`)                |
 | Rich Text     | Tiptap v3 (`@tiptap/react`, StarterKit, Image, Link, Placeholder) |
-| Styling       | Vanilla CSS (`app/globals.css`) — NO Tailwind classes used        |
+| Styling       | Vanilla CSS (`app/globals.css`) for existing components + Tailwind v4 for new pages |
 | UI Components | Lucide React icons, react-hot-toast                               |
 | Routing Guard | `proxy.ts` (Next.js 16 replacement for `middleware.ts`)           |
 
@@ -116,19 +116,23 @@ ticket-app-2/
 │   │   ├── admin.ts          # createUser, updateUser, deleteUser, assignTicket,
 │   │   │                     # updateTicketStatus, snapshotLeaderboard
 │   │   ├── auth.ts           # loginAction, registerAction, logoutAction
+│   │   ├── customer.ts       # updateProfileAction (customer)
+│   │   ├── profile.ts        # updateTechnicianProfileAction, updateAdminProfileAction
 │   │   ├── technician.ts     # takeTicketAction, updateTicketStatusAction
 │   │   └── tickets.ts        # createTicketAction, sendMessageAction,
 │   │                         # markMessagesReadAction, uploadAttachmentsAction
 │   ├── admin/
 │   │   ├── dashboard/page.tsx
+│   │   ├── leaderboard/page.tsx      # Live leaderboard (from TicketStatusLog)
+│   │   ├── profile/page.tsx          # Admin profile editor
 │   │   ├── tickets/
 │   │   │   ├── page.tsx               # All-tickets list with search/filter
 │   │   │   └── [id]/
-│   │   │       ├── page.tsx           # Full ticket detail
-│   │   │       ├── AdminAssignPanel.tsx   # Technician/Sales assignment dropdowns
-│   │   │       └── AdminStatusPanel.tsx   # Approve/Reject/Done/Cancel buttons
+│   │   │       ├── page.tsx           # Full ticket detail (.ticket-detail-grid)
+│   │   │       ├── AdminAssignPanel.tsx
+│   │   │       └── AdminStatusPanel.tsx
 │   │   ├── users/
-│   │   │   ├── page.tsx               # User list with role filter
+│   │   │   ├── page.tsx
 │   │   │   ├── create/
 │   │   │   │   ├── page.tsx
 │   │   │   │   └── CreateUserForm.tsx
@@ -136,54 +140,57 @@ ticket-app-2/
 │   │   │       ├── page.tsx
 │   │   │       └── EditUserForm.tsx
 │   │   └── performance/
-│   │       ├── page.tsx
+│   │       ├── page.tsx               # Month/year filter, period-aggregated stats
 │   │       └── LeaderboardSnapshot.tsx
 │   ├── customer/
-│   │   ├── dashboard/page.tsx
+│   │   ├── dashboard/page.tsx         # Stat cards + recent tickets (max 5)
+│   │   ├── profile/page.tsx           # Customer profile editor
 │   │   └── tickets/
-│   │       ├── page.tsx
+│   │       ├── page.tsx               # Paginated (10/page), table+card responsive
 │   │       ├── create/
 │   │       │   ├── page.tsx
-│   │       │   └── CreateTicketForm.tsx   # 4-step multi-form
+│   │       │   └── CreateTicketForm.tsx   # 4-step multi-form, +62 phone prefix
 │   │       └── [id]/
-│   │           ├── page.tsx
+│   │           ├── page.tsx               # .ticket-detail-grid, attachment viewer
 │   │           └── TicketChat.tsx
 │   ├── technician/
 │   │   ├── dashboard/
 │   │   │   ├── page.tsx
 │   │   │   └── TakeTicketButton.tsx
-│   │   ├── tickets/
-│   │   │   ├── page.tsx
-│   │   │   └── [id]/
-│   │   │       ├── page.tsx
-│   │   │       └── StatusUpdater.tsx
-│   │   └── leaderboard/page.tsx
+│   │   ├── leaderboard/page.tsx       # Live leaderboard (from TicketStatusLog)
+│   │   ├── profile/page.tsx           # Technician profile with perf stats
+│   │   └── tickets/
+│   │       ├── page.tsx               # Paginated (10/page), table+card responsive
+│   │       └── [id]/
+│   │           ├── page.tsx           # .ticket-detail-grid
+│   │           └── StatusUpdater.tsx  # Confirm modal before status change
 │   ├── api/
 │   │   └── notifications/route.ts
-│   ├── login/page.tsx
-│   ├── register/page.tsx
-│   ├── page.tsx              # Root redirect by role
-│   ├── layout.tsx            # Root layout (Inter font, Toaster)
-│   └── globals.css           # Full design system (vanilla CSS, ~800 lines)
+│   ├── login/page.tsx         # plain <img> logo, required attrs, native validation
+│   ├── register/page.tsx      # +62 prefix, terms checkbox, required attrs
+│   ├── page.tsx               # Root redirect by role
+│   ├── layout.tsx             # Root layout (Inter font, Toaster)
+│   └── globals.css            # Full design system (vanilla CSS, ~1076 lines)
 ├── components/
 │   ├── layout/
-│   │   ├── DashboardShell.tsx    # Sidebar + topbar for all portals
-│   │   └── NotificationBell.tsx
+│   │   ├── DashboardShell.tsx    # Sidebar + topbar, collapse, logo, profile dropdown
+│   │   └── NotificationBell.tsx  # Fixed-position popup (mobile-safe)
 │   └── ui/
-│       ├── Badge.tsx             # Status/role badges
-│       ├── FileUpload.tsx        # Drag-drop upload for Supabase Storage
+│       ├── Badge.tsx
+│       ├── FileUpload.tsx
 │       ├── Modal.tsx
-│       ├── RichTextEditor.tsx    # Tiptap editor
+│       ├── ProfileForm.tsx        # Shared profile form (name/email/phone/address)
+│       ├── RichTextEditor.tsx
 │       └── TagInput.tsx
 ├── lib/
-│   ├── db.ts             # Prisma client (adapter-based, singleton)
-│   ├── session.ts        # JWT helpers: encrypt, decrypt, requireRole, requireSession
-│   └── supabase.ts       # Supabase client helpers (anon + service role)
+│   ├── db.ts
+│   ├── session.ts
+│   └── supabase.ts
 ├── prisma/
 │   ├── schema.prisma
 │   ├── seed.ts
-│   └── prisma.config.ts  # Prisma 7 config file (datasource URL)
-├── proxy.ts              # Next.js 16 routing guard (replaces middleware.ts)
+│   └── prisma.config.ts
+├── proxy.ts
 └── package.json
 ```
 
@@ -321,7 +328,7 @@ npm run dev
 ### BRANDING / UI SHELL
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| B1 | Replace app name "TechServe" → "HNS IT Center" logo | ✅ | login, register, DashboardShell all updated. Logo from `public/Logo HNS IT Center.jpg`. |
+| B1 | Replace app name "TechServe" → "HNS IT Center" logo | ✅ | login, register, DashboardShell all updated. Logo from `public/logo-hns.jpg`. |
 | B2 | Sidebar: collapsible icon-only mode (desktop) | ✅ | DashboardShell.tsx rewritten with `collapsed` state, `localStorage` persistence, 64px icon-only mode. |
 | B3 | Sidebar: mobile 3/4 width (not full-screen) | ✅ | `globals.css` — sidebar is `75vw` max 300px on mobile so the exposed edge is tappable to close. Overlay `onClick` closes it. |
 | B4 | Profile badge → dropdown with Sign Out / Profile / My Tickets | ✅ | DashboardShell.tsx — avatar pill opens popover dropdown with click-outside close. |
@@ -333,7 +340,7 @@ npm run dev
 |---|------|--------|-------|
 | C1 | Customer profile page | ✅ | Created `app/customer/profile/page.tsx` + `CustomerProfileForm.tsx` + `app/actions/customer.ts#updateProfileAction`. |
 | C2 | Phone input: +62 prefix, number only, no scroll | ✅ | `CreateTicketForm.tsx` Step 1 — static +62 prefix badge, `inputMode="numeric"`, `onWheel` blur, stores as `+62XXX`. |
-| C3 | Hardware Upgrade: remove points display | ✅ | `CreateTicketForm.tsx` — removed `{u.points} pts` span from upgrade checkbox labels. |
+| C3 | Hardware Upgrade: remove points display | ✅ | All ticket detail pages — removed `{u.points} pts` span from upgrade badge display. |
 | C4 | Ticket view: mobile single-column layout | ✅ | `app/customer/tickets/[id]/page.tsx` — uses `.ticket-detail-grid` CSS class (collapses to 1-col at ≤768px). |
 | C5 | Ticket view: better attachment display | ✅ | Shows filename, thumbnail for images, icons for PDF/Video/Other using Lucide icons. |
 
@@ -360,24 +367,107 @@ npm run dev
 ### BUG FIXES (Session 2026-05-04)
 | # | Bug | Status | Notes |
 |---|-----|--------|-------|
-| BF1 | TypeScript errors (phone_number, changed_at, workload include) | ✅ | Fixed: `phone` → `phone_number` in `actions/customer.ts` + `customer/profile/page.tsx`; `changed_at` → `created_at` in performance page; removed invalid Prisma `include` fields. |
-| BF2 | Technician self-assign error | ✅ | `takeTicketAction` + `updateTicketStatusAction` in `actions/technician.ts` — skip customer notification when `ticket.user_id === session.userId` to prevent duplicate notifications on self-created tickets. |
-| BF3 | Horizontal scroll on mobile list pages | ✅ | All list pages now toggle table (desktop) / card (mobile) using `.admin-ticket-table` / `.admin-ticket-cards` CSS classes. Affected: admin tickets, admin users, customer tickets, technician dashboard (both tables). |
-| BF4 | Logo image error: `/Logo HNS IT Center.jpg` received null | ✅ | Renamed `public/Logo HNS IT Center.jpg` → `public/logo-hns.jpg`. Updated `src` in `DashboardShell.tsx`, `app/login/page.tsx`, `app/register/page.tsx`. |
+| BF1 | TypeScript errors (phone_number, changed_at, workload include) | ✅ | Fixed: `phone` → `phone_number` in `actions/customer.ts`; `changed_at` → `created_at` in performance page; removed invalid Prisma `include` fields. |
+| BF2 | Technician self-assign error | ✅ | Skip customer notification when `ticket.user_id === session.userId` in `takeTicketAction` + `updateTicketStatusAction`. |
+| BF3 | Horizontal scroll on mobile list pages | ✅ | Table/card toggle using `.admin-ticket-table` / `.admin-ticket-cards` CSS classes on all list pages. |
+| BF4 | Logo image error: `/Logo HNS IT Center.jpg` null | ✅ | Renamed to `public/logo-hns.jpg`. Updated all references. |
+
+---
+
+### SPRINT 2026-05-05 SESSION 2 — Mobile UX, Leaderboard & Profiles
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| S1 | Sidebar closed + mobile blank space bug | ✅ | `globals.css` — `.dashboard-main` on mobile now uses `margin-left: 0 !important` to override `.sidebar-collapsed` margin. |
+| S2 | Logo display fix | ✅ | `DashboardShell.tsx` — switched from `<Image>` to plain `<img>` for logo to avoid Next.js hydration/optimization issues. Always visible regardless of collapsed state. |
+| S3 | Sidebar toggle arrow outside sidebar | ✅ | `DashboardShell.tsx` — `.sidebar-collapse-btn` moved outside sidebar logo div, positioned as `absolute right: -12px` floating element. `sidebar` has `overflow: visible`. |
+| S4 | All "TechServe" → "HNS IT Center" branding | ✅ | Fixed in: `app/layout.tsx`, all metadata titles in admin/users, admin/users/create, admin/users/[id], customer/tickets/create pages. |
+| S5 | Stat card inline (icon + text horizontally) | ✅ | `globals.css` — `.stat-card` now `flex-direction: row`. Added `.stat-card-icon`, `.stat-card-body`, `.stat-card-value`, `.stat-card-label` classes. Customer dashboard uses `.customer-stats-grid` (2-col mobile, 4-col desktop). |
+| S6 | Recent Tickets mobile card view (Dashboard) | ✅ | `app/customer/dashboard/page.tsx` — uses `.admin-ticket-table` / `.admin-ticket-cards` toggle, max 5 tickets, card view on mobile. |
+| S7 | My Tickets pagination (per 10) | ✅ | `app/customer/tickets/page.tsx` — paginated with `take: 10, skip`, prev/next controls, total count display. |
+| S8 | Technician tickets: card view + pagination | ✅ | `app/technician/tickets/page.tsx` — same pattern as customer tickets (table/card toggle, 10 per page). |
+| S9 | Ticket detail upgrade: hide points | ✅ | Removed `({u.upgrade.points} pts)` from customer, technician, and admin ticket detail pages. |
+| S10 | Attachments: image display fix | ✅ | `file_type` is a Prisma `FileType` enum (`image\|video\|pdf`), so direct enum comparison works correctly. |
+| S11 | Technician/Admin ticket detail: 1-col mobile | ✅ | Both `app/technician/tickets/[id]/page.tsx` and `app/admin/tickets/[id]/page.tsx` now use `.ticket-detail-grid` class. |
+| S12 | Technician profile page | ✅ | Created `app/technician/profile/page.tsx` with stats (handled/success/fail/points), workload bar, editable form. `app/actions/profile.ts#updateTechnicianProfileAction`. |
+| S13 | Admin profile page | ✅ | Created `app/admin/profile/page.tsx` with total tickets/users stats, editable form. `app/actions/profile.ts#updateAdminProfileAction`. |
+| S14 | Leaderboard: live data (not snapshot) | ✅ | Both `technician/leaderboard/page.tsx` and `admin/leaderboard/page.tsx` now query `TicketStatusLog` for real-time data. No manual admin snapshot needed. |
+| S15 | Leaderboard: all technicians (including 0 pts) | ✅ | Fetches all `Technician` users, merges with activity map, shows 0 for those without completed tickets. |
+| S16 | Leaderboard: game-style UI + animated bars | ✅ | `growBar` keyframe animation, `countUp` animation, `leaderboard-layout` CSS (70/30 desktop, 1-col mobile). |
+
+---
+
+### SPRINT 2026-05-05 SESSION 3 — Auth, UX Polish & Leaderboard Enhancements
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| P1 | Logo broken on Login + Register pages | ✅ | Both pages: replaced `<Image>` component with plain `<img>` tag (same fix as DashboardShell). `/logo-hns.jpg` is in `/public`. |
+| P2 | Form validation: prevent submit if data invalid | ✅ | Added HTML5 `required`, `minLength`, `type="email"` attrs on all inputs. Browser blocks submission natively without JS. |
+| P3 | Register: +62 phone prefix | ✅ | `app/register/page.tsx` — same pattern as CreateTicketForm: `+62` badge span, number-only input (controlled), hidden `<input name="phone_number">` holds full `+62XXX` value. |
+| P4 | Register: Terms & Conditions checkbox | ✅ | Styled `<label>` with ShieldCheck icon, `required` on checkbox, submit button `disabled` while unchecked. |
+| P5 | Notification popup overflows left on mobile | ✅ | `NotificationBell.tsx` — changed from `position: absolute; right: 0` to `position: fixed; right: 0.5rem; top: topbar_height; width: min(320px, calc(100vw - 1rem))`. `zIndex: 200`. |
+| P6 | Sidebar logo position when collapsed is weird | ✅ | `DashboardShell.tsx` — `justifyContent: collapsed ? "center" : "flex-start"` on `.sidebar-logo` div. |
+| P7 | Stat card UI reverted to original vertical layout | ✅ | `globals.css` — `.stat-card` back to `flex-direction: column`, original font sizes, no `flex-shrink` / `overflow: hidden`. |
+| P8 | Leaderboard: "All months" filter option | ✅ | Both leaderboard pages: `month` param is now `null` when "all" is selected. Query uses full-year date range (`Jan 1 → Jan 1 next year`). |
+
+---
+
+### 🔒 SECURITY: RLS (Row Level Security)
+Supabase RLS has **not yet been enabled** on any tables. Here is what needs to be done manually in the Supabase SQL Editor:
+
+```sql
+-- Step 1: Enable RLS on all tables
+ALTER TABLE "User"                   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Ticket"                 ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketAttachment"       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketMessage"          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketStatusLog"        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TechnicianWorkload"     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TechnicianPerformance"  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Leaderboard"            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Notification"           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketServiceDetail"    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketWarrantyDetail"   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketCleaningDetail"   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketUpgradeDetail"    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketPcBuildDetail"    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketPcBuildComponent" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "Upgrade"                ENABLE ROW LEVEL SECURITY;
+
+-- Step 2: Block all anon/public access (service_role bypasses RLS automatically)
+DO $$
+DECLARE t text;
+BEGIN
+  FOR t IN SELECT tablename FROM pg_tables WHERE schemaname = 'public'
+  LOOP
+    EXECUTE format('CREATE POLICY "deny_anon_%s" ON %I FOR ALL TO anon USING (false)', t, t);
+  END LOOP;
+END $$;
+```
+
+**Why this is safe:** The app uses `SUPABASE_SERVICE_ROLE_KEY` in `lib/db.ts` (server-only). The service role bypasses RLS automatically, so no app code changes are needed. All writes go through server actions, never the anon key.
 
 ---
 
 ### HOW TO RESUME IN A NEW SESSION
 
-1. Read this file (`CLAUDE.md`) and the `implementation_plan.md` artifact for full context
-2. Check the table above — find the first ⬜ item
-3. Before coding, verify the relevant source file still matches what's described in the Notes column
+1. Read this file (`CLAUDE.md`) — it is the source of truth
+2. Check the sprint tables above — find any ⬜ or 🔄 items
+3. Before coding, **read the actual source file** to verify it matches the Notes column (they can drift)
 4. Mark items 🔄 when starting, ✅ when done
-5. Commit after each logical group (e.g., after all BRANDING items done)
+5. Always run `npx tsc --noEmit` before committing — TypeScript must compile clean
+6. Commit after each logical group
 
 **Key constraint reminders:**
-- Next.js 16: routing guard is `proxy.ts` (not `middleware.ts`), exported function name is `proxy`
-- Prisma 7: never use `datasources` option — use `@prisma/adapter-pg` pattern in `lib/db.ts`  
-- Tiptap: always pass `immediatelyRender: false` to `useEditor()`
-- No `@import` inside CSS rules — put `@import "tailwindcss"` at the very top of globals.css ✅ done
-- Tailwind v4 uses `@import "tailwindcss"` NOT the old `@tailwind base/components/utilities` directives
+- **Routing guard:** `proxy.ts` (not `middleware.ts`), exported function named `proxy` (not `middleware`)
+- **Prisma 7:** Never use `datasources` option — use `@prisma/adapter-pg` pattern in `lib/db.ts`
+- **Tiptap:** Always pass `immediatelyRender: false` to `useEditor()`
+- **CSS imports:** `@import "tailwindcss"` is line 1 of `globals.css`. Never add Google Fonts `@import` to CSS — put font `<link>` tags in `app/layout.tsx`
+- **Tailwind v4:** Uses `@import "tailwindcss"` directive — NOT the old `@tailwind base/components/utilities`
+- **Styling convention:** Existing components use vanilla CSS classes (`.card`, `.btn`, `.form-input`). New pages/components may use Tailwind utility classes
+- **Logo:** Always use plain `<img src="/logo-hns.jpg">` — NOT Next.js `<Image>` component (causes hydration issues in sidebar/auth pages)
+- **`session.ts`** has `import "server-only"` — never import it from client components
+- **Stat cards:** Use `.stat-card > .stat-card-icon + .stat-card-body > (.stat-card-value + .stat-card-label)` — vertical column layout
+- **Leaderboard data:** Comes from `TicketStatusLog` where `new_status = "done"`, NOT from the `Leaderboard` snapshot table (which is legacy)
+- **Point system:** `pc_build = 4pts, service = 3pts, all others = 2pts` — computed in page server component, not stored on `Ticket`
+- **Phone numbers:** Always stored as `+62XXXXXXXXX` format. The `+62` prefix widget is used in `CreateTicketForm` and `register/page.tsx`
+- **Notification bell:** Uses `position: fixed` (not `absolute`) to prevent mobile overflow
+

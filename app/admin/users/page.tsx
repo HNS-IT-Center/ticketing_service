@@ -4,7 +4,7 @@ import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import { UserPlus } from "lucide-react";
 
-export const metadata = { title: "User Management — TechServe" };
+export const metadata = { title: "User Management — HNS IT Center" };
 
 const ROLES = ["all", "Administrator", "Technician", "Sales", "Customer"] as const;
 

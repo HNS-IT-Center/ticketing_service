@@ -72,15 +72,15 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
       {open && (
         <div
           style={{
-            position: "absolute",
-            right: 0,
-            top: "calc(100% + 0.5rem)",
-            width: "320px",
+            position: "fixed",
+            right: "0.5rem",
+            top: "calc(var(--topbar-height, 56px) + 0.5rem)",
+            width: "min(320px, calc(100vw - 1rem))",
             background: "var(--white)",
             border: "1px solid var(--border)",
             borderRadius: "var(--radius-lg)",
             boxShadow: "var(--shadow-lg)",
-            zIndex: 50,
+            zIndex: 200,
             overflow: "hidden",
             animation: "fadeIn 0.2s ease",
           }}

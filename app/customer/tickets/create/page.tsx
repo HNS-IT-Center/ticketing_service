@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import CreateTicketForm from "./CreateTicketForm";
 
-export const metadata = { title: "Create Ticket — TechServe" };
+export const metadata = { title: "Create Ticket — HNS IT Center" };
 
 export default async function CreateTicketPage() {
   await requireRole("Customer", "Sales");

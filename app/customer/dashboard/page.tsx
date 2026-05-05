@@ -5,7 +5,7 @@ import Badge from "@/components/ui/Badge";
 import { Ticket, PlusCircle, Clock, CheckCircle, XCircle } from "lucide-react";
 
 export const metadata = {
-  title: "Dashboard — TechServe",
+  title: "Dashboard — HNS IT Center",
 };
 
 export default async function CustomerDashboard() {
@@ -37,10 +37,10 @@ export default async function CustomerDashboard() {
   const total = Object.values(countByStatus).reduce((a, b) => a + b, 0);
 
   const statCards = [
-    { label: "Total Tickets", value: total, icon: <Ticket size={22} />, color: "var(--primary)" },
-    { label: "Waiting", value: countByStatus.waiting ?? 0, icon: <Clock size={22} />, color: "#ca8a04" },
-    { label: "Completed", value: countByStatus.done ?? 0, icon: <CheckCircle size={22} />, color: "#16a34a" },
-    { label: "Cancelled", value: (countByStatus.cancelled ?? 0) + (countByStatus.rejected ?? 0), icon: <XCircle size={22} />, color: "var(--accent)" },
+    { label: "Total Tickets", value: total, icon: <Ticket size={20} />, color: "var(--primary)" },
+    { label: "Waiting", value: countByStatus.waiting ?? 0, icon: <Clock size={20} />, color: "#ca8a04" },
+    { label: "Completed", value: countByStatus.done ?? 0, icon: <CheckCircle size={20} />, color: "#16a34a" },
+    { label: "Cancelled", value: (countByStatus.cancelled ?? 0) + (countByStatus.rejected ?? 0), icon: <XCircle size={20} />, color: "var(--accent)" },
   ];
 
   return (
@@ -59,26 +59,21 @@ export default async function CustomerDashboard() {
         </Link>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "1rem" }}>
+      {/* Stats — 2×2 on mobile, 4-col on tablet+ */}
+      <div className="customer-stats-grid">
         {statCards.map((s) => (
           <div key={s.label} className="stat-card">
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-              <div style={{
-                width: "2.5rem", height: "2.5rem", borderRadius: "0.75rem",
-                background: `${s.color}18`, display: "flex",
-                alignItems: "center", justifyContent: "center", color: s.color,
-              }}>
-                {s.icon}
-              </div>
+            <div
+              className="stat-card-icon"
+              style={{ background: `${s.color}18`, color: s.color }}
+            >
+              {s.icon}
             </div>
-            <div>
-              <div style={{ fontSize: "1.875rem", fontWeight: 800, color: s.color, lineHeight: 1 }}>
+            <div className="stat-card-body">
+              <div className="stat-card-value" style={{ color: s.color }}>
                 {s.value}
               </div>
-              <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                {s.label}
-              </div>
+              <div className="stat-card-label">{s.label}</div>
             </div>
           </div>
         ))}
@@ -102,44 +97,72 @@ export default async function CustomerDashboard() {
             </Link>
           </div>
         ) : (
-          <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
-            <table>
-              <thead>
-                <tr>
-                  <th>Ticket Code</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Technician</th>
-                  <th>Date</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((t) => (
-                  <tr key={t.id}>
-                    <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>
-                      {t.ticket_code}
-                    </td>
-                    <td style={{ textTransform: "capitalize" }}>
-                      {t.ticket_type.replace("_", " ")}
-                    </td>
-                    <td><Badge variant={t.status} /></td>
-                    <td style={{ color: "var(--text-muted)" }}>
-                      {t.technician?.name ?? "—"}
-                    </td>
-                    <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+          <>
+            {/* Desktop table */}
+            <div className="admin-ticket-table">
+              <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
+                <table>
+                  <thead>
+                    <tr>
+                      <th>Ticket Code</th>
+                      <th>Type</th>
+                      <th>Status</th>
+                      <th>Technician</th>
+                      <th>Date</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {tickets.map((t) => (
+                      <tr key={t.id}>
+                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>
+                          {t.ticket_code}
+                        </td>
+                        <td style={{ textTransform: "capitalize" }}>
+                          {t.ticket_type.replace("_", " ")}
+                        </td>
+                        <td><Badge variant={t.status} /></td>
+                        <td style={{ color: "var(--text-muted)" }}>
+                          {t.technician?.name ?? "—"}
+                        </td>
+                        <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                          {new Date(t.created_at).toLocaleDateString("id-ID")}
+                        </td>
+                        <td>
+                          <Link href={`/customer/tickets/${t.id}`} className="btn btn-ghost btn-sm">
+                            View →
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Mobile card list */}
+            <div className="admin-ticket-cards">
+              {tickets.map((t) => (
+                <Link key={t.id} href={`/customer/tickets/${t.id}`} style={{ textDecoration: "none" }}>
+                  <div className="mobile-ticket-card">
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", fontSize: "0.875rem" }}>
+                        {t.ticket_code}
+                      </span>
+                      <Badge variant={t.status} />
+                    </div>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                      <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
+                      <span>🔧 {t.technician?.name ?? "Unassigned"}</span>
+                    </div>
+                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                       {new Date(t.created_at).toLocaleDateString("id-ID")}
-                    </td>
-                    <td>
-                      <Link href={`/customer/tickets/${t.id}`} className="btn btn-ghost btn-sm">
-                        View →
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </>
         )}
       </div>
     </div>

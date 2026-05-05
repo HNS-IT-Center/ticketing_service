@@ -71,7 +71,7 @@ export default async function AdminTicketDetailPage({
         <AdminStatusPanel ticketId={ticket.id} currentStatus={ticket.status} />
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "1.5rem" }}>
+      <div className="ticket-detail-grid">
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
 
           {/* Customer info */}
@@ -134,7 +134,7 @@ export default async function AdminTicketDetailPage({
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 {ticket.upgrade_details.map((u) => (
                   <span key={u.id} className="badge badge-technician">
-                    {u.upgrade.name} ({u.upgrade.points} pts)
+                    {u.upgrade.name}
                   </span>
                 ))}
               </div>

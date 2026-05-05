@@ -3,7 +3,7 @@ import "./globals.css";
 import { Toaster } from "react-hot-toast";
 
 export const metadata: Metadata = {
-  title: "TechServe — Service Ticket Management",
+  title: "HNS IT Center — Service Ticket Management",
   description:
     "Manage your computer service requests, warranty claims, upgrades, and PC builds with ease.",
 };

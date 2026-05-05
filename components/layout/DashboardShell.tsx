@@ -3,7 +3,6 @@
 import { usePathname } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   LayoutDashboard,
   Ticket,
@@ -48,6 +47,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
     { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
     { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
+    { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
   ],
 };
 
@@ -120,50 +120,38 @@ export default function DashboardShell({ children, role, userName, userId }: Das
       {/* ── Sidebar ──────────────────────────────────────────── */}
       <aside className={`sidebar ${sidebarOpen ? "open" : ""} ${collapsed ? "collapsed" : ""}`}>
         {/* Logo area */}
-        <div className="sidebar-logo" style={{ justifyContent: collapsed ? "center" : "space-between", gap: "0.5rem" }}>
-          {collapsed ? (
-            // Icon-only: show a small logo thumbnail
-            <div style={{ width: "2rem", height: "2rem", borderRadius: "0.375rem", overflow: "hidden", flexShrink: 0 }}>
-              <Image
-                src="/logo-hns.jpg"
-                alt="HNS IT Center"
-                width={32}
-                height={32}
-                style={{ objectFit: "cover", width: "100%", height: "100%" }}
-              />
-            </div>
-          ) : (
-            <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", minWidth: 0 }}>
-              <div style={{ width: "2rem", height: "2rem", borderRadius: "0.375rem", overflow: "hidden", flexShrink: 0 }}>
-                <Image
-                  src="/logo-hns.jpg"
-                  alt="HNS IT Center"
-                  width={32}
-                  height={32}
-                  style={{ objectFit: "cover", width: "100%", height: "100%" }}
-                />
+        <div className="sidebar-logo" style={{ justifyContent: collapsed ? "center" : "flex-start", gap: "0.5rem" }}>
+          {/* Logo icon (always shown) */}
+          <div style={{ width: "2rem", height: "2rem", borderRadius: "0.375rem", overflow: "hidden", flexShrink: 0 }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src="/logo-hns.jpg"
+              alt="HNS IT Center"
+              style={{ objectFit: "cover", width: "100%", height: "100%", display: "block" }}
+            />
+          </div>
+          {/* Full name — hidden when collapsed */}
+          {!collapsed && (
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div style={{ fontWeight: 700, fontSize: "0.875rem", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                HNS IT Center
               </div>
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontWeight: 700, fontSize: "0.875rem", lineHeight: 1.2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  HNS IT Center
-                </div>
-                <div style={{ fontSize: "0.6875rem", opacity: 0.6, marginTop: "2px" }}>
-                  {ROLE_LABELS[role]}
-                </div>
+              <div style={{ fontSize: "0.6875rem", opacity: 0.6, marginTop: "2px" }}>
+                {ROLE_LABELS[role]}
               </div>
             </div>
           )}
-
-          {/* Desktop collapse toggle */}
-          <button
-            onClick={toggleCollapse}
-            className="sidebar-collapse-btn"
-            aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
-          </button>
         </div>
+
+        {/* Desktop collapse toggle — floats outside the sidebar right edge */}
+        <button
+          onClick={toggleCollapse}
+          className="sidebar-collapse-btn"
+          aria-label={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <ChevronRight size={12} /> : <ChevronLeft size={12} />}
+        </button>
 
         {/* Nav links */}
         <nav className="sidebar-nav">

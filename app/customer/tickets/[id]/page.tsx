@@ -109,7 +109,7 @@ export default async function TicketDetailPage({
                 <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                   {ticket.upgrade_details.map((u) => (
                     <span key={u.id} className="badge" style={{ background: "var(--cream-dark)", color: "var(--text-primary)" }}>
-                      {u.upgrade.name} ({u.upgrade.points}pts)
+                      {u.upgrade.name}
                     </span>
                   ))}
                 </div>

@@ -6,7 +6,7 @@ import TicketChat from "@/app/customer/tickets/[id]/TicketChat";
 import StatusUpdater from "./StatusUpdater";
 import { markMessagesReadAction } from "@/app/actions/tickets";
 
-export const metadata = { title: "Ticket Detail — TechServe" };
+export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
 export default async function TechnicianTicketDetailPage({
   params,
@@ -60,7 +60,7 @@ export default async function TechnicianTicketDetailPage({
         )}
       </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: "1.5rem" }}>
+      <div className="ticket-detail-grid">
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           {/* Customer Info */}
           <div className="card">

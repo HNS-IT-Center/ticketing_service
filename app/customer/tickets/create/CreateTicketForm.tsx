@@ -14,6 +14,7 @@ interface CreateTicketFormProps {
   upgrades: { id: string; name: string; points: number }[];
   technicians: { id: string; name: string }[];
   sales: { id: string; name: string }[];
+  userProfile?: { name: string; email: string; phone_number: string; address: string | null };
 }
 
 const TICKET_TYPES = [
@@ -26,15 +27,36 @@ const TICKET_TYPES = [
 
 const DEVICE_TYPES = ["PC_Office", "PC_Gaming", "Laptop_Office", "Laptop_Gaming"];
 
-export default function CreateTicketForm({ upgrades, technicians, sales }: CreateTicketFormProps) {
+export default function CreateTicketForm({ upgrades, technicians, sales, userProfile }: CreateTicketFormProps) {
   const [step, setStep] = useState(1);
   const [isPending, startTransition] = useTransition();
 
+  // For self / for others toggle
+  const [isForSelf, setIsForSelf] = useState(true);
+
   // Step 1 — Personal info
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState(""); // stores digits only after +62
-  const [email, setEmail] = useState("");
-  const [address, setAddress] = useState("");
+  const [name, setName] = useState(userProfile?.name ?? "");
+  const [phone, setPhone] = useState(
+    userProfile?.phone_number?.replace(/^\+62/, "") ?? ""
+  );
+  const [email, setEmail] = useState(userProfile?.email ?? "");
+  const [address, setAddress] = useState(userProfile?.address ?? "");
+
+  // Handle toggle between self / others
+  const handleToggle = (forSelf: boolean) => {
+    setIsForSelf(forSelf);
+    if (forSelf && userProfile) {
+      setName(userProfile.name);
+      setEmail(userProfile.email);
+      setPhone(userProfile.phone_number?.replace(/^\+62/, "") ?? "");
+      setAddress(userProfile.address ?? "");
+    } else if (!forSelf) {
+      setName("");
+      setEmail("");
+      setPhone("");
+      setAddress("");
+    }
+  };
 
   // Step 2 — Category
   const [ticketType, setTicketType] = useState("");
@@ -103,6 +125,8 @@ export default function CreateTicketForm({ upgrades, technicians, sales }: Creat
       fd.append("ticket_type", ticketType);
       fd.append("device_type", deviceType);
       fd.append("notes", notes);
+      fd.append("is_for_self", isForSelf ? "1" : "0");
+      if (!isForSelf) fd.append("customer_name", name);
       if (purchaseDate) fd.append("purchase_date", purchaseDate);
       if (cleaningPackage) fd.append("service_package", cleaningPackage);
       selectedUpgrades.forEach((id) => fd.append("upgrade_ids", id));
@@ -120,6 +144,49 @@ export default function CreateTicketForm({ upgrades, technicians, sales }: Creat
 
   return (
     <div style={{ maxWidth: "680px", margin: "0 auto" }}>
+      {/* For Self / For Others Toggle */}
+      <div
+        style={{
+          display: "flex",
+          background: "var(--white)",
+          border: "1.5px solid var(--border)",
+          borderRadius: "var(--radius-lg)",
+          padding: "0.25rem",
+          marginBottom: "1.5rem",
+          gap: "0.25rem",
+        }}
+      >
+        {[
+          { val: true,  label: "🙋 For Myself",   desc: "Use my account details" },
+          { val: false, label: "👤 For Someone Else", desc: "Fill in their info manually" },
+        ].map(({ val, label, desc }) => (
+          <button
+            key={String(val)}
+            type="button"
+            onClick={() => handleToggle(val)}
+            style={{
+              flex: 1,
+              padding: "0.625rem 1rem",
+              borderRadius: "calc(var(--radius-lg) - 4px)",
+              border: "none",
+              cursor: "pointer",
+              background: isForSelf === val ? "var(--primary)" : "transparent",
+              color: isForSelf === val ? "#fff" : "var(--text-secondary)",
+              fontWeight: 600,
+              fontSize: "0.875rem",
+              transition: "all 0.2s",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "0.1rem",
+            }}
+          >
+            <span>{label}</span>
+            <span style={{ fontSize: "0.7rem", fontWeight: 400, opacity: 0.8 }}>{desc}</span>
+          </button>
+        ))}
+      </div>
+
       {/* Progress */}
       <div style={{ display: "flex", gap: "0", marginBottom: "2rem" }}>
         {STEPS.map((label, i) => {

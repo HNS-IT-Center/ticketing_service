@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { TrendingUp } from "lucide-react";
-import LeaderboardSnapshot from "./LeaderboardSnapshot";
+import ExportToPDF from "./ExportToPDF";
 
 export const metadata = { title: "Performance — HNS IT Center" };
 
@@ -45,53 +45,54 @@ export default async function AdminPerformancePage({
     const startDate = new Date(filterYear, filterMonth - 1, 1);
     const endDate   = new Date(filterYear, filterMonth, 1);
 
-    // Get tickets with done status in the period, with technician assigned
-    const doneTickets = await db.ticket.findMany({
-      where: {
-        status: "done",
-        technician_id: { not: null },
-        status_logs: {
-          some: {
-            new_status: "done",
-            created_at: { gte: startDate, lt: endDate },
+    // Fetch done + failed tickets in parallel, then batch-resolve users
+    // Collect all unique technician IDs from both done and failed tickets in parallel
+    const [doneTickets, failedTickets] = await Promise.all([
+      db.ticket.findMany({
+        where: {
+          status: "done",
+          technician_id: { not: null },
+          status_logs: {
+            some: {
+              new_status: "done",
+              created_at: { gte: startDate, lt: endDate },
+            },
           },
         },
-      },
-      select: {
-        id: true,
-        ticket_type: true,
-        technician_id: true,
-      },
-    });
+        select: { id: true, ticket_type: true, technician_id: true },
+      }),
+      db.ticket.findMany({
+        where: {
+          status: { in: ["cancelled", "rejected"] },
+          technician_id: { not: null },
+          status_logs: {
+            some: {
+              new_status: { in: ["cancelled", "rejected"] },
+              created_at: { gte: startDate, lt: endDate },
+            },
+          },
+        },
+        select: { technician_id: true },
+      }),
+    ]);
 
-    // Fetch the technician user data for those IDs
-    const doneTechIds = [...new Set(doneTickets.map((t) => t.technician_id!).filter(Boolean))];
-    const doneUsers = await db.user.findMany({
-      where: { id: { in: doneTechIds } },
+    // Batch-fetch all relevant users in ONE query (eliminates N+1)
+    const allTechIds = [...new Set([
+      ...doneTickets.map((t) => t.technician_id!),
+      ...failedTickets.map((t) => t.technician_id!),
+    ].filter(Boolean))];
+
+    const allUsers = await db.user.findMany({
+      where: { id: { in: allTechIds } },
       select: { id: true, name: true, shift: true, work_days: true },
     });
-    const doneUserMap = new Map(doneUsers.map((u) => [u.id, u]));
-
-    // Get cancelled tickets for the period
-    const failedTickets = await db.ticket.findMany({
-      where: {
-        status: { in: ["cancelled", "rejected"] },
-        technician_id: { not: null },
-        status_logs: {
-          some: {
-            new_status: { in: ["cancelled", "rejected"] },
-            created_at: { gte: startDate, lt: endDate },
-          },
-        },
-      },
-      select: { technician_id: true },
-    });
+    const allUserMap = new Map(allUsers.map((u) => [u.id, u]));
 
     const techMap = new Map<string, Row>();
 
     const getOrCreate = (techId: string): Row => {
       if (!techMap.has(techId)) {
-        const u = doneUserMap.get(techId);
+        const u = allUserMap.get(techId);
         techMap.set(techId, {
           id: techId,
           name: u?.name ?? "Unknown",
@@ -113,12 +114,7 @@ export default async function AdminPerformancePage({
     }
     for (const t of failedTickets) {
       if (!t.technician_id) continue;
-      const u = await db.user.findUnique({
-        where: { id: t.technician_id },
-        select: { id: true, name: true, shift: true, work_days: true },
-      });
       const row = getOrCreate(t.technician_id);
-      row.name = u?.name ?? row.name;
       row.tickets++;
       row.failed++;
     }
@@ -201,7 +197,12 @@ export default async function AdminPerformancePage({
               <a href="/admin/performance" className="btn btn-ghost btn-sm">Clear</a>
             )}
           </form>
-          <LeaderboardSnapshot />
+          <ExportToPDF
+            rows={rows}
+            filterMonth={filterMonth}
+            filterYear={filterYear}
+            monthLabel={filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time"}
+          />
         </div>
       </div>
 

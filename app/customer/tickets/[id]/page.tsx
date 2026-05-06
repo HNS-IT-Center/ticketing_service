@@ -78,7 +78,7 @@ export default async function TicketDetailPage({
                 { label: "Category", value: DETAIL_LABELS[ticket.ticket_type] },
                 { label: "Device", value: ticket.device_type.replace(/_/g, " ") },
                 { label: "Technician", value: ticket.technician?.name ?? "Not assigned" },
-                { label: "Sales", value: ticket.sales?.name ?? "—" },
+                { label: "Recipient", value: ticket.is_for_self ? session.name : ticket.customer_name },
                 { label: "Created", value: new Date(ticket.created_at).toLocaleString("id-ID") },
               ].map(({ label, value }) => (
                 <div key={label}>

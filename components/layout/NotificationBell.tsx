@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Bell } from "lucide-react";
 import Link from "next/link";
 
@@ -17,29 +17,54 @@ interface Notification {
 
 export default function NotificationBell({ userId, role }: { userId: string; role: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
+  const [listLoaded, setListLoaded] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const unreadCount = notifications.filter((n) => !n.is_read).length;
-
-  const fetchNotifications = async () => {
+  // ── Fast poll: only fetch unread count (cheap COUNT query, no joins) ──
+  const pollUnreadCount = useCallback(async () => {
     try {
-      const res = await fetch("/api/notifications");
+      const res = await fetch("/api/notifications?count=1", { cache: "no-store" });
       if (res.ok) {
         const data = await res.json();
-        setNotifications(data);
+        setUnreadCount(data.unreadCount ?? 0);
       }
     } catch {
       // silently fail
     }
-  };
-
-  useEffect(() => {
-    fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
   }, []);
 
+  // ── Load full notification list (only when bell is opened) ──
+  const fetchFullList = useCallback(async () => {
+    try {
+      const res = await fetch("/api/notifications", { cache: "no-store" });
+      if (res.ok) {
+        const data = await res.json();
+        setNotifications(data);
+        setUnreadCount(data.filter((n: Notification) => !n.is_read).length);
+        setListLoaded(true);
+      }
+    } catch {
+      // silently fail
+    }
+  }, []);
+
+  // Poll unread count every 30s (was polling full list — now much cheaper)
+  useEffect(() => {
+    pollUnreadCount();
+    const interval = setInterval(pollUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, [pollUnreadCount]);
+
+  // Load full list when bell opens
+  useEffect(() => {
+    if (open && !listLoaded) {
+      fetchFullList();
+    }
+  }, [open, listLoaded, fetchFullList]);
+
+  // Click-outside close
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
       if (ref.current && !ref.current.contains(e.target as Node)) {
@@ -53,16 +78,23 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
   const markAllRead = async () => {
     await fetch("/api/notifications", { method: "POST" });
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
+    setUnreadCount(0);
+  };
+
+  const handleBellClick = () => {
+    const nextOpen = !open;
+    setOpen(nextOpen);
+    if (nextOpen) {
+      // Refresh list on open, mark read if there are unreads
+      fetchFullList();
+    }
   };
 
   return (
     <div ref={ref} style={{ position: "relative" }}>
       <button
         className="notif-bell"
-        onClick={() => {
-          setOpen(!open);
-          if (!open && unreadCount > 0) markAllRead();
-        }}
+        onClick={handleBellClick}
         aria-label="Notifications"
       >
         <Bell size={18} />
@@ -98,7 +130,8 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
               Notifications
             </span>
             {unreadCount > 0 && (
-              <span
+              <button
+                onClick={markAllRead}
                 style={{
                   fontSize: "0.75rem",
                   background: "var(--accent)",
@@ -106,15 +139,21 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
                   padding: "0.125rem 0.5rem",
                   borderRadius: "999px",
                   fontWeight: 600,
+                  border: "none",
+                  cursor: "pointer",
                 }}
               >
-                {unreadCount} new
-              </span>
+                {unreadCount} new · Mark all read
+              </button>
             )}
           </div>
 
           <div style={{ maxHeight: "320px", overflowY: "auto" }}>
-            {notifications.length === 0 ? (
+            {!listLoaded ? (
+              <div style={{ padding: "1.5rem 1rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.875rem" }}>
+                Loading...
+              </div>
+            ) : notifications.length === 0 ? (
               <div
                 style={{
                   padding: "2rem 1rem",
@@ -126,7 +165,7 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
                 No notifications
               </div>
             ) : (
-            notifications.slice(0, 10).map((n) => {
+              notifications.slice(0, 10).map((n) => {
                 const ticketLink =
                   role === "technician"
                     ? `/technician/tickets/${n.ticket_id}`
@@ -147,18 +186,18 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
                   <Link
                     key={n.id}
                     href={ticketLink}
-                  style={{
-                    display: "block",
-                    padding: "0.75rem 1rem",
-                    borderBottom: "1px solid var(--border-light)",
-                    background: n.is_read ? "transparent" : "rgba(22,70,157,0.04)",
-                    textDecoration: "none",
-                    color: "var(--text-primary)",
-                    transition: "background 0.15s",
-                    fontSize: "0.875rem",
-                  }}
-                  onClick={() => setOpen(false)}
-                >
+                    style={{
+                      display: "block",
+                      padding: "0.75rem 1rem",
+                      borderBottom: "1px solid var(--border-light)",
+                      background: n.is_read ? "transparent" : "rgba(22,70,157,0.04)",
+                      textDecoration: "none",
+                      color: "var(--text-primary)",
+                      transition: "background 0.15s",
+                      fontSize: "0.875rem",
+                    }}
+                    onClick={() => setOpen(false)}
+                  >
                     <div style={{ fontWeight: n.is_read ? 400 : 600 }}>
                       {notifLabel}
                     </div>

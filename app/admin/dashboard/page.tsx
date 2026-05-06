@@ -32,16 +32,9 @@ export default async function AdminDashboard() {
     db.technicianPerformance.findMany({
       orderBy: { total_points_completed: "desc" },
       take: 5,
+      include: { technician: { select: { id: true, name: true } } },
     }),
   ]);
-
-  // Fetch technician names separately
-  const techIds = topTechnicians.map((t) => t.technician_id);
-  const techUsers = await db.user.findMany({
-    where: { id: { in: techIds } },
-    select: { id: true, name: true },
-  });
-  const techNameMap = new Map(techUsers.map((u) => [u.id, u.name]));
 
   const countByRole = Object.fromEntries(
     totalUsers.map((u) => [u.role, u._count.role])
@@ -163,7 +156,7 @@ export default async function AdminDashboard() {
                 {i === 0 ? "🥇" : `#${i + 1}`}
               </span>
               <div style={{ flex: 1 }}>
-                <p style={{ fontWeight: 600, fontSize: "0.9rem" }}>{techNameMap.get(t.technician_id) ?? "Unknown"}</p>
+                <p style={{ fontWeight: 600, fontSize: "0.9rem" }}>{t.technician?.name ?? "Unknown"}</p>
                 <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{t.tickets_handled} tickets</p>
               </div>
               <span style={{ fontWeight: 700, color: "var(--primary)" }}>{t.total_points_completed} pts</span>

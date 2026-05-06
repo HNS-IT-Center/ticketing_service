@@ -5,6 +5,7 @@ import Badge from "@/components/ui/Badge";
 import TicketChat from "@/app/customer/tickets/[id]/TicketChat";
 import StatusUpdater from "./StatusUpdater";
 import { markMessagesReadAction } from "@/app/actions/tickets";
+import { FileText, Film, ImageIcon, File } from "lucide-react";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -19,14 +20,16 @@ export default async function TechnicianTicketDetailPage({
   const ticket = await db.ticket.findUnique({
     where: { id },
     include: {
-      user: { select: { name: true, email: true, phone_number: true } },
+      user: { select: { name: true, email: true, phone_number: true, address: true } },
       technician: { select: { name: true } },
       messages: {
         orderBy: { created_at: "asc" },
         include: { sender: { select: { name: true, role: true } } },
       },
+      attachments: true,
       status_logs: {
         orderBy: { created_at: "desc" },
+        take: 20,
         include: { changer: { select: { name: true } } },
       },
       warranty_detail: true,
@@ -62,18 +65,28 @@ export default async function TechnicianTicketDetailPage({
 
       <div className="ticket-detail-grid">
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          {/* Customer Info */}
+          {/* Customer info */}
           <div className="card">
-            <h3 style={{ marginBottom: "1rem" }}>Customer Information</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.625rem" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
+              <h3 style={{ margin: 0 }}>Customer Information</h3>
+              {!ticket.is_for_self && (
+                <span style={{ fontSize: "0.75rem", background: "var(--cream-dark)", padding: "0.15rem 0.5rem", borderRadius: "4px", fontWeight: 600 }}>
+                  For Someone Else
+                </span>
+              )}
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.625rem 1.5rem" }}>
               {[
-                ["Name", ticket.user.name],
+                ["Name", ticket.is_for_self ? ticket.user.name : ticket.customer_name],
                 ["Email", ticket.user.email],
                 ["Phone", ticket.user.phone_number],
+                ["Address", ticket.user.address],
               ].map(([label, value]) => (
-                <div key={label} style={{ display: "flex", gap: "1rem" }}>
-                  <span style={{ width: "60px", flexShrink: 0, fontSize: "0.875rem", color: "var(--text-muted)" }}>{label}</span>
-                  <span style={{ fontWeight: 500 }}>{value}</span>
+                <div key={label}>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.15rem" }}>
+                    {label} {label === "Name" && !ticket.is_for_self ? "(Recipient)" : label === "Name" ? "" : "(Account)"}
+                  </p>
+                  <p style={{ fontWeight: 500 }}>{value}</p>
                 </div>
               ))}
             </div>
@@ -95,6 +108,47 @@ export default async function TechnicianTicketDetailPage({
                 {ticket.pc_components.map((c) => (
                   <span key={c.id} className="badge badge-technician">{c.component_name}</span>
                 ))}
+              </div>
+            </div>
+          )}
+
+          {/* Attachments */}
+          {ticket.attachments.length > 0 && (
+            <div className="card">
+              <h3 style={{ marginBottom: "1rem" }}>Attachments ({ticket.attachments.length})</h3>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+                {ticket.attachments.map((a) => {
+                  const filename = a.file_url.split("/").pop()?.split("?")[0] ?? "file";
+                  const isImage = a.file_type === "image";
+                  const isVideo = a.file_type === "video";
+                  const isPdf   = a.file_type === "pdf";
+                  return (
+                    <a
+                      key={a.id}
+                      href={a.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={filename}
+                      style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.375rem", width: isImage ? "80px" : "100px", textDecoration: "none" }}
+                    >
+                      <div style={{ width: isImage ? "80px" : "100px", height: "80px", borderRadius: "0.5rem", overflow: "hidden", border: "1px solid var(--border)", background: "var(--cream)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                        {isImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={a.file_url} alt={filename} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : isVideo ? (
+                          <Film size={28} style={{ color: "var(--primary)" }} />
+                        ) : isPdf ? (
+                          <FileText size={28} style={{ color: "var(--accent)" }} />
+                        ) : (
+                          <File size={28} style={{ color: "var(--text-muted)" }} />
+                        )}
+                      </div>
+                      <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textAlign: "center", wordBreak: "break-all", maxWidth: "100px", lineHeight: 1.3 }}>
+                        {filename.length > 20 ? filename.slice(0, 17) + "..." : filename}
+                      </span>
+                    </a>
+                  );
+                })}
               </div>
             </div>
           )}

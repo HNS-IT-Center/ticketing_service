@@ -420,6 +420,10 @@ npm run dev
 | F5 | Finish/Reject attachments & reason | ✅ | `StatusUpdater.tsx` UI and `updateTicketStatusAction` migrated to `FormData` to handle `reason` and file uploads. |
 | F6 | PC Build attachments | ✅ | `CreateTicketForm.tsx` & `createTicketAction` — added `FileUpload` to PC Build step and handled in server action via `FormData`. |
 | F7 | New Device & Upgrade Types | ✅ | Schema updated: `Company`, `Internet_Cafe` DeviceTypes. Upserted `Casing Upgrade`, `ARGB Configuration`. Added `reason String?` to `TicketStatusLog`. |
+| F8 | Customer Contact Buttons (WhatsApp/Email) | ✅ | Added WA/Email quick buttons for "For Someone Else" tickets. |
+| F9 | PDF Report Polish | ✅ | Fixed margins, page breaks, and dynamic titles ("Of the Month/Year"). |
+| F10 | Available Tickets Sorting | ✅ | New `AvailableTickets.tsx` client component with date sorting. |
+| F11 | Achievement System | ✅ | "Technician of the Month" trophy on profile and dashboard badge. |
 
 ---
 

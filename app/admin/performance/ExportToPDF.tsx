@@ -28,27 +28,25 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 
 export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel }: Props) {
   const [open, setOpen] = useState(false);
-  const [selMonth, setSelMonth] = useState<string>(filterMonth ? String(filterMonth) : "");
-  const [selYear, setSelYear] = useState<string>(filterYear ? String(filterYear) : String(new Date().getFullYear()));
 
   const handlePrint = () => {
-    const period = selMonth
-      ? `${MONTHS[parseInt(selMonth) - 1]} ${selYear}`
-      : `All Time — ${selYear}`;
+    const period = monthLabel === "All Time" ? "All Time" : monthLabel;
 
     const rankEmoji = (i: number) =>
       i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
 
     const topTech = rows[0];
+    const isYearly = monthLabel === "All Time";
+    
     const topTechCard = topTech ? `
       <div style="background: linear-gradient(135deg, #0f172a, #1e3a8a); color: white; border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between;">
         <div>
           <div style="color: #fbbf24; font-weight: 800; font-size: 1.25rem; margin-bottom: 0.25rem;">
-            👑 ${monthLabel === "All Time" ? "Technician of the Year" : "Technician of the Month"}
+            👑 ${isYearly ? "Technician of the Year" : "Technician of the Month"}
           </div>
           <div style="font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem;">${topTech.name}</div>
           <div style="color: #94a3b8; font-size: 0.9rem;">
-            ${topTech.success} Completed • ${topTech.points} Points Earned • ${Math.round((topTech.success / topTech.tickets) * 100 || 0)}% Win Rate
+            ${topTech.success} Completed • ${topTech.points} Points Earned • ${Math.round((topTech.success / topTech.tickets) * 100 || 0)}% Successful Rate
           </div>
         </div>
         <div style="background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); padding: 1rem 1.5rem; border-radius: 12px; text-align: center;">
@@ -228,7 +226,7 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
       </div>
     </div>
     <div class="report-meta">
-      <div class="report-title">${monthLabel === "All Time" ? "Technician of the Year Report" : `Technician of the Month Report`}</div>
+      <div class="report-title">${isYearly ? "Technician of the Year Report" : `Technician of the Month Report`}</div>
       <div class="report-period">${period}</div>
       <div class="report-date">Generated: ${new Date().toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" })}</div>
     </div>
@@ -310,41 +308,25 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
               <button className="modal-close" onClick={() => setOpen(false)}><X size={18}/></button>
             </div>
 
-            <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-              <div className="form-group">
-                <label className="form-label">Month</label>
-                <select
-                  className="form-input"
-                  value={selMonth}
-                  onChange={(e) => setSelMonth(e.target.value)}
-                >
-                  <option value="">All months</option>
-                  {MONTHS.map((m, i) => (
-                    <option key={m} value={i + 1}>{m}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Year</label>
-                <select
-                  className="form-input"
-                  value={selYear}
-                  onChange={(e) => setSelYear(e.target.value)}
-                >
-                  {[2024, 2025, 2026].map((y) => (
-                    <option key={y} value={y}>{y}</option>
-                  ))}
-                </select>
+            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+              <div style={{ padding: "1rem", background: "var(--bg-light)", borderRadius: "var(--radius-md)", border: "1px solid var(--border)" }}>
+                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>Current Selection</div>
+                <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--primary)" }}>
+                  {monthLabel === "All Time" ? "All Time Report" : `Report for ${monthLabel}`}
+                </div>
+                <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                  Includes {rows.length} technicians and {rows.reduce((a, r) => a + r.tickets, 0)} tickets.
+                </div>
               </div>
 
               <div style={{ padding: "0.75rem", background: "var(--cream)", borderRadius: "var(--radius-md)", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                💡 A new tab will open with a branded PDF ready to print/save. Uses your browser's built-in PDF engine — no file size overhead.
+                💡 The PDF will be generated exactly as shown on the performance dashboard. Ensure your filters are correct before exporting.
               </div>
 
               <div style={{ display: "flex", gap: "0.75rem" }}>
                 <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} style={{ flex: 1 }}>Cancel</button>
                 <button className="btn btn-primary btn-sm" onClick={handlePrint} style={{ flex: 2 }}>
-                  <Printer size={14} /> Open & Print
+                  <Printer size={14} /> Generate & Open PDF
                 </button>
               </div>
             </div>

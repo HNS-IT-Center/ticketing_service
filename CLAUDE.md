@@ -410,6 +410,19 @@ npm run dev
 
 ---
 
+### SPRINT 2026-05-07 SESSION 1 — Bug Fixes & Feature Expansions
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| F1 | Lock "For Myself" toggle | ✅ | `CreateTicketForm.tsx` — disabled buttons + opacity when `step > 1`. |
+| F2 | Sidebar mobile bug & UI | ✅ | `globals.css` — `.sidebar-collapse-btn` styled and `.sidebar.collapsed` constrained to desktop media query. |
+| F3 | Performance detailed report | ✅ | `app/admin/performance/page.tsx` — calculated avg duration from `on_progress` to `done` logs and displayed per category. |
+| F4 | Admin Logs tab | ✅ | `app/admin/logs/page.tsx` — new paginated table with filters for date, status, search by ticket code/user. Added to `DashboardShell.tsx`. |
+| F5 | Finish/Reject attachments & reason | ✅ | `StatusUpdater.tsx` UI and `updateTicketStatusAction` migrated to `FormData` to handle `reason` and file uploads. |
+| F6 | PC Build attachments | ✅ | `CreateTicketForm.tsx` & `createTicketAction` — added `FileUpload` to PC Build step and handled in server action via `FormData`. |
+| F7 | New Device & Upgrade Types | ✅ | Schema updated: `Company`, `Internet_Cafe` DeviceTypes. Upserted `Casing Upgrade`, `ARGB Configuration`. Added `reason String?` to `TicketStatusLog`. |
+
+---
+
 ### 🔒 SECURITY: RLS (Row Level Security)
 Supabase RLS has **not yet been enabled** on any tables. Here is what needs to be done manually in the Supabase SQL Editor:
 

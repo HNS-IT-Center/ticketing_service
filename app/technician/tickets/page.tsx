@@ -165,7 +165,7 @@ export default async function TechnicianTicketsPage({
                         <div style={{ fontWeight: 500 }}>{actualName}</div>
                         {!t.is_for_self && <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>(For Others)</div>}
                       </td>
-                      <td><Badge variant={t.status} /></td>
+                      <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                       <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{new Date(t.updated_at).toLocaleDateString("id-ID")}</td>
                       <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
                     </tr>
@@ -193,7 +193,7 @@ export default async function TechnicianTicketsPage({
                   <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>
                     {t.ticket_code}
                   </span>
-                  <Badge variant={t.status} />
+                  <Badge variant={t.status} technicianId={t.technician_id} />
                 </div>
                 <div style={{ fontWeight: 500, fontSize: "0.875rem", margin: "0.25rem 0", color: "var(--text-primary)" }}>
                   Customer: {actualName} {!t.is_for_self && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(For Others)</span>}

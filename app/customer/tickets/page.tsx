@@ -191,7 +191,7 @@ export default async function CustomerTicketsPage({
                       </td>
                       <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
                       <td style={{ color: "var(--text-muted)" }}>{t.device_type.replace("_", " ")}</td>
-                      <td><Badge variant={t.status} /></td>
+                      <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                       <td style={{ color: "var(--text-muted)" }}>{t.technician?.name ?? "—"}</td>
                       <td style={{ color: "var(--text-muted)", whiteSpace: "nowrap" }}>{new Date(t.created_at).toLocaleDateString("id-ID")}</td>
                       <td><Link href={`/customer/tickets/${t.id}`} className="btn btn-secondary btn-sm">Open</Link></td>
@@ -227,7 +227,7 @@ export default async function CustomerTicketsPage({
                       </span>
                     )}
                   </div>
-                  <Badge variant={t.status} />
+                  <Badge variant={t.status} technicianId={t.technician_id} />
                 </div>
                 <div style={{ fontWeight: 500, fontSize: "0.875rem", margin: "0.25rem 0", color: "var(--text-primary)" }}>
                   Recipient: {actualName} {!t.is_for_self && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(For Others)</span>}

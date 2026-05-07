@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { TrendingUp } from "lucide-react";
 import ExportToPDF from "./ExportToPDF";
+import SharePerformance from "./SharePerformance";
 
 export const metadata = { title: "Performance — HNS IT Center" };
 
@@ -12,6 +13,8 @@ function getTicketPoints(type: string): number {
   if (type === "service") return 3;
   return 2;
 }
+
+type TicketDetails = { count: number; totalHours: number; timedCount: number; };
 
 type Row = {
   id: string;
@@ -24,6 +27,7 @@ type Row = {
   points: number;
   currentLoad: number;
   maxLoad: number;
+  details?: Record<string, TicketDetails>;
 };
 
 export default async function AdminPerformancePage({
@@ -155,7 +159,7 @@ export default async function AdminPerformancePage({
       const u  = userMap.get(p.technician_id);
       const wl = loadMap.get(p.technician_id);
       return {
-        id: p.id,
+        id: p.technician_id,
         name: u?.name ?? "Unknown",
         shift: u?.shift ?? null,
         workDays: Array.isArray(u?.work_days) ? (u!.work_days as string[]) : [],
@@ -167,6 +171,55 @@ export default async function AdminPerformancePage({
         maxLoad: wl?.max_points ?? 7,
       };
     });
+  }
+
+  // Fetch detailed tickets for all displayed technicians to compute average times
+  const techIds = rows.map(r => r.id);
+  const startDate = filterMonth && filterYear ? new Date(filterYear, filterMonth - 1, 1) : null;
+  const endDate   = filterMonth && filterYear ? new Date(filterYear, filterMonth, 1) : null;
+
+  const completedTickets = await db.ticket.findMany({
+    where: {
+      technician_id: { in: techIds },
+      status: "done",
+      ...(startDate && endDate ? {
+        status_logs: {
+          some: {
+            new_status: "done",
+            created_at: { gte: startDate, lt: endDate },
+          }
+        }
+      } : {})
+    },
+    select: {
+      technician_id: true,
+      ticket_type: true,
+      status_logs: { select: { new_status: true, created_at: true } }
+    }
+  });
+
+  const rowMap = new Map(rows.map(r => [r.id, r]));
+
+  for (const t of completedTickets) {
+    if (!t.technician_id) continue;
+    const row = rowMap.get(t.technician_id);
+    if (!row) continue;
+
+    if (!row.details) row.details = {};
+    if (!row.details[t.ticket_type]) row.details[t.ticket_type] = { count: 0, totalHours: 0, timedCount: 0 };
+    
+    const det = row.details[t.ticket_type];
+    det.count++;
+
+    const onProgressLog = t.status_logs.find(l => l.new_status === "on_progress");
+    const doneLog = t.status_logs.find(l => l.new_status === "done");
+    if (onProgressLog && doneLog) {
+      const ms = doneLog.created_at.getTime() - onProgressLog.created_at.getTime();
+      if (ms > 0) {
+        det.totalHours += ms / (1000 * 60 * 60);
+        det.timedCount++;
+      }
+    }
   }
 
   return (
@@ -197,12 +250,20 @@ export default async function AdminPerformancePage({
               <a href="/admin/performance" className="btn btn-ghost btn-sm">Clear</a>
             )}
           </form>
-          <ExportToPDF
-            rows={rows}
-            filterMonth={filterMonth}
-            filterYear={filterYear}
-            monthLabel={filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time"}
-          />
+          <div style={{ display: "flex", gap: "0.5rem" }}>
+            {rows.length > 0 && (
+              <SharePerformance 
+                topTechnician={rows[0]} 
+                monthLabel={filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time"} 
+              />
+            )}
+            <ExportToPDF
+              rows={rows}
+              filterMonth={filterMonth}
+              filterYear={filterYear}
+              monthLabel={filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time"}
+            />
+          </div>
         </div>
       </div>
 
@@ -233,9 +294,22 @@ export default async function AdminPerformancePage({
                     </td>
                     <td>
                       <div style={{ fontWeight: 600 }}>{p.name}</div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                        {p.workDays.join(", ") || "—"}
-                      </div>
+                      {p.details && (
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.25rem", marginTop: "0.5rem", minWidth: "220px" }}>
+                          {Object.entries(p.details).map(([type, stats]) => {
+                            const avg = stats.timedCount > 0 ? (stats.totalHours / stats.timedCount).toFixed(1) : null;
+                            const typeLabel = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                            return (
+                              <div key={type} style={{ fontSize: "0.7rem", color: "var(--text-secondary)", background: "var(--bg-light)", padding: "0.35rem 0.5rem", borderRadius: "0.375rem", border: "1px solid var(--border-light)" }}>
+                                <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.1rem" }}>{typeLabel}: {stats.count}</div>
+                                <div style={{ opacity: 0.8, fontSize: "0.65rem" }}>
+                                  {avg ? `Avg: ${avg} H` : "No tracked time"}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
                     </td>
                     <td style={{ textTransform: "capitalize" }}>{p.shift ?? "—"}</td>
                     <td>

@@ -87,10 +87,12 @@ export async function takeTicketAction(ticketId: string) {
 }
 
 // ─── Update Ticket Status ──────────────────────────────────────────────────
-export async function updateTicketStatusAction(
-  ticketId: string,
-  newStatus: "on_progress" | "done" | "cancelled" | "rejected"
-) {
+export async function updateTicketStatusAction(formData: FormData) {
+  const ticketId = formData.get("ticketId") as string;
+  const newStatus = formData.get("newStatus") as "on_progress" | "done" | "cancelled" | "rejected";
+  const reason = formData.get("reason") as string | null;
+  const files = formData.getAll("files") as File[];
+
   const session = await requireRole("Technician");
 
   const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
@@ -122,9 +124,39 @@ export async function updateTicketStatusAction(
       ticket_id: ticketId,
       old_status: oldStatus,
       new_status: newStatus,
+      reason: reason || null,
       changed_by: session.userId,
     },
   });
+
+  // Handle Attachments
+  if (files && files.length > 0) {
+    const { createServerSupabaseClient } = await import("@/lib/supabase");
+    const supabase = createServerSupabaseClient();
+    const uploadOps = files.map(async (file) => {
+      const ext = file.name.split(".").pop();
+      const path = `${ticketId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+      const { data, error } = await supabase.storage
+        .from("attachments")
+        .upload(path, file, { contentType: file.type });
+
+      if (error) return;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("attachments").getPublicUrl(data.path);
+
+      let fileType: "image" | "video" | "pdf" = "pdf";
+      if (file.type.startsWith("image/")) fileType = "image";
+      if (file.type.startsWith("video/")) fileType = "video";
+
+      await db.ticketAttachment.create({
+        data: { ticket_id: ticketId, file_url: publicUrl, file_type: fileType },
+      });
+    });
+    await Promise.all(uploadOps);
+  }
 
   // Update workload + performance when terminal
   const isTerminal = ["done", "cancelled", "rejected"].includes(newStatus);

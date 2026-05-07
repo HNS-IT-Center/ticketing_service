@@ -166,7 +166,7 @@ export default async function AdminTicketsPage({
                         {!t.is_for_self && <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>(For Others)</div>}
                       </td>
                       <td style={{ color: "var(--text-muted)" }}>{t.technician?.name ?? <span style={{ color: "var(--accent)", fontSize: "0.875rem" }}>Unassigned</span>}</td>
-                      <td><Badge variant={t.status} /></td>
+                      <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                       <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{new Date(t.created_at).toLocaleDateString("id-ID")}</td>
                       <td><Link href={`/admin/tickets/${t.id}`} className="btn btn-secondary btn-sm">View</Link></td>
                     </tr>
@@ -189,7 +189,7 @@ export default async function AdminTicketsPage({
                 <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", fontSize: "0.9375rem" }}>
                   {t.ticket_code}
                 </span>
-                <Badge variant={t.status} />
+                <Badge variant={t.status} technicianId={t.technician_id} />
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                 <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>

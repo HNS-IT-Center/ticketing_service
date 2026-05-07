@@ -52,7 +52,7 @@ export default async function TechnicianTicketDetailPage({
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <h1 style={{ fontSize: "1.25rem" }}>{ticket.ticket_code}</h1>
-            <Badge variant={ticket.status} />
+            <Badge variant={ticket.status} technicianId={ticket.technician_id} />
           </div>
           <p style={{ color: "var(--text-muted)", marginTop: "0.25rem", textTransform: "capitalize" }}>
             {ticket.ticket_type.replace("_", " ")} • {ticket.device_type.replace(/_/g, " ")}
@@ -78,15 +78,27 @@ export default async function TechnicianTicketDetailPage({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.625rem 1.5rem" }}>
               {[
                 ["Name", ticket.is_for_self ? ticket.user.name : ticket.customer_name],
-                ["Email", ticket.user.email],
-                ["Phone", ticket.user.phone_number],
-                ["Address", ticket.user.address],
+                ["Email", ticket.is_for_self ? ticket.user.email : ticket.customer_email],
+                ["Phone", ticket.is_for_self ? ticket.user.phone_number : ticket.customer_phone],
+                ["Address", ticket.is_for_self ? ticket.user.address : ticket.customer_address],
               ].map(([label, value]) => (
                 <div key={label}>
                   <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.15rem" }}>
                     {label} {label === "Name" && !ticket.is_for_self ? "(Recipient)" : label === "Name" ? "" : "(Account)"}
                   </p>
-                  <p style={{ fontWeight: 500 }}>{value}</p>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                    <p style={{ fontWeight: 500 }}>{value}</p>
+                    {label === "Phone" && value && (
+                      <a href={`https://wa.me/${(value as string).replace(/\D/g, "")}`} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none", fontSize: "1rem" }} title="Chat on WhatsApp">
+                        📱
+                      </a>
+                    )}
+                    {label === "Email" && value && (
+                      <a href={`mailto:${value}`} style={{ textDecoration: "none", fontSize: "1rem" }} title="Send Email">
+                        📧
+                      </a>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
@@ -174,7 +186,7 @@ export default async function TechnicianTicketDetailPage({
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {ticket.status_logs.map((log) => (
               <div key={log.id} style={{ paddingBottom: "0.75rem", borderBottom: "1px solid var(--border-light)" }}>
-                <Badge variant={log.new_status} />
+                <Badge variant={log.new_status} technicianId={ticket.technician_id} />
                 <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
                   {log.changer.name} • {new Date(log.created_at).toLocaleString("id-ID")}
                 </p>

@@ -46,6 +46,8 @@ enum DeviceType {
   PC_Gaming
   Laptop_Office
   Laptop_Gaming
+  Company
+  Internet_Cafe
 }
 
 enum FileType {
@@ -123,8 +125,11 @@ model Ticket {
 
   notes String? // Rich text (HTML)
 
-  is_for_self   Boolean @default(true)  // false = ticket created on behalf of another person
-  customer_name String?                 // Name of the actual recipient (if is_for_self = false)
+  is_for_self      Boolean @default(true)  // false = ticket created on behalf of another person
+  customer_name    String?                 // Name of the actual recipient (if is_for_self = false)
+  customer_phone   String?
+  customer_email   String?
+  customer_address String?
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -237,6 +242,7 @@ model TicketStatusLog {
   ticket     Ticket       @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   old_status TicketStatus?
   new_status TicketStatus
+  reason     String?
   changed_by String
   changer    User         @relation(fields: [changed_by], references: [id])
   created_at DateTime     @default(now())

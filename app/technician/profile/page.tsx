@@ -1,8 +1,9 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
-import { User, Wrench, CheckCircle, XCircle } from "lucide-react";
+import { User, Wrench, CheckCircle, XCircle, Trophy } from "lucide-react";
 import ProfileForm from "@/components/ui/ProfileForm";
 import { updateTechnicianProfileAction } from "@/app/actions/profile";
+import { getTopTechnicianOfMonth } from "@/lib/performance";
 
 export const metadata = { title: "My Profile — HNS IT Center" };
 
@@ -46,6 +47,12 @@ export default async function TechnicianProfilePage() {
     { label: "Total Points", value: totalPoints, icon: <User size={20} />, color: "#7c3aed" },
   ];
 
+  const now = new Date();
+  const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+  const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const topTechLastMonth = await getTopTechnicianOfMonth(lastMonth, lastMonthYear);
+  const isTopTechLastMonth = topTechLastMonth === session.userId;
+
   return (
     <div className="flex flex-col gap-6 max-w-2xl">
       {/* Header */}
@@ -56,6 +63,25 @@ export default async function TechnicianProfilePage() {
         </h1>
         <p className="text-sm text-gray-500 mt-1">Manage your account information</p>
       </div>
+
+      {/* Achievements row */}
+      {isTopTechLastMonth && (
+        <div className="card" style={{ background: "linear-gradient(135deg, #fff7ed, #ffedd5)", border: "1px solid #fed7aa" }}>
+          <h2 style={{ fontSize: "1.1rem", color: "#c2410c", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.5rem" }}>
+            <Trophy size={20} />
+            Achievements
+          </h2>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+            <div style={{ fontSize: "2.5rem" }}>🏆</div>
+            <div>
+              <div style={{ fontWeight: 800, color: "#9a3412" }}>Technician of the Month</div>
+              <div style={{ fontSize: "0.85rem", color: "#c2410c", marginTop: "0.1rem" }}>
+                Awarded for outstanding performance in {new Date(lastMonthYear, lastMonth - 1).toLocaleString('default', { month: 'long', year: 'numeric' })}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats row */}
       <div className="customer-stats-grid">

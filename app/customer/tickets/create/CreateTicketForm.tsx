@@ -25,7 +25,7 @@ const TICKET_TYPES = [
   { value: "pc_build", label: "PC Build", desc: "Custom PC assembly" },
 ];
 
-const DEVICE_TYPES = ["PC_Office", "PC_Gaming", "Laptop_Office", "Laptop_Gaming"];
+const DEVICE_TYPES = ["PC_Office", "PC_Gaming", "Laptop_Office", "Laptop_Gaming", "Company", "Internet_Cafe"];
 
 export default function CreateTicketForm({ upgrades, technicians, sales, userProfile }: CreateTicketFormProps) {
   const [step, setStep] = useState(1);
@@ -126,7 +126,11 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
       fd.append("device_type", deviceType);
       fd.append("notes", notes);
       fd.append("is_for_self", isForSelf ? "1" : "0");
-      if (!isForSelf) fd.append("customer_name", name);
+      if (!isForSelf) {
+        fd.append("customer_name", name);
+        fd.append("customer_email", email);
+        fd.append("customer_address", address);
+      }
       if (purchaseDate) fd.append("purchase_date", purchaseDate);
       if (cleaningPackage) fd.append("service_package", cleaningPackage);
       selectedUpgrades.forEach((id) => fd.append("upgrade_ids", id));
@@ -134,6 +138,8 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
       if (selectedTechnician) fd.append("technician_id", selectedTechnician);
       if (selectedSales) fd.append("sales_id", selectedSales);
       fd.append("phone", `+62${phone}`); // prepend +62 prefix
+
+      files.forEach((file) => fd.append("files", file));
 
       const result = await createTicketAction(fd);
       if (result?.error) toast.error(result.error);
@@ -154,6 +160,8 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
           padding: "0.25rem",
           marginBottom: "1.5rem",
           gap: "0.25rem",
+          opacity: step > 1 ? 0.6 : 1,
+          pointerEvents: step > 1 ? "none" : "auto",
         }}
       >
         {[
@@ -164,12 +172,13 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
             key={String(val)}
             type="button"
             onClick={() => handleToggle(val)}
+            disabled={step > 1}
             style={{
               flex: 1,
               padding: "0.625rem 1rem",
               borderRadius: "calc(var(--radius-lg) - 4px)",
               border: "none",
-              cursor: "pointer",
+              cursor: step > 1 ? "not-allowed" : "pointer",
               background: isForSelf === val ? "var(--primary)" : "transparent",
               color: isForSelf === val ? "#fff" : "var(--text-secondary)",
               fontWeight: 600,
@@ -424,6 +433,10 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
                     <option value="">Auto-assign</option>
                     {technicians.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Attachments (optional)</label>
+                  <FileUpload onChange={setFiles} />
                 </div>
               </>
             )}

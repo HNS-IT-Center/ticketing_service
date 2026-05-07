@@ -26,6 +26,10 @@ export async function createTicketAction(formData: FormData) {
   const notes = formData.get("notes") as string | null;
   const is_for_self = formData.get("is_for_self") === "1";
   const customer_name = formData.get("customer_name") as string | null;
+  const customer_email = formData.get("customer_email") as string | null;
+  const customer_address = formData.get("customer_address") as string | null;
+  const phone = formData.get("phone") as string;
+  const customer_phone = is_for_self ? null : phone;
   const technician_id = (formData.get("technician_id") as string | null) || null;
   const sales_id = (formData.get("sales_id") as string | null) || null;
 
@@ -52,6 +56,9 @@ export async function createTicketAction(formData: FormData) {
       device_type: device_type as any,
       is_for_self,
       customer_name: is_for_self ? null : customer_name,
+      customer_phone,
+      customer_email,
+      customer_address,
       technician_id: technician_id || null,
       sales_id: sales_id || null,
       notes: notes || null,
@@ -62,6 +69,36 @@ export async function createTicketAction(formData: FormData) {
 
   // Build all follow-up writes and run them in parallel
   const followUps: Promise<unknown>[] = [];
+
+  // Handle attachments
+  const files = formData.getAll("files") as File[];
+  if (files.length > 0) {
+    const supabase = createServerSupabaseClient();
+    const uploadOps = files.map(async (file) => {
+      const ext = file.name.split(".").pop();
+      const path = `${ticket.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+      const { data, error } = await supabase.storage
+        .from("attachments")
+        .upload(path, file, { contentType: file.type });
+
+      if (error) return;
+
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from("attachments").getPublicUrl(data.path);
+
+      let fileType: "image" | "video" | "pdf" = "pdf";
+      if (file.type.startsWith("image/")) fileType = "image";
+      if (file.type.startsWith("video/")) fileType = "video";
+
+      await db.ticketAttachment.create({
+        data: { ticket_id: ticket.id, file_url: publicUrl, file_type: fileType },
+      });
+    });
+    // Add to follow-up ops so they run in parallel
+    followUps.push(Promise.all(uploadOps));
+  }
 
   // Status log
   followUps.push(

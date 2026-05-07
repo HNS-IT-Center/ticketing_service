@@ -121,7 +121,7 @@ export default async function CustomerDashboard() {
                         <td style={{ textTransform: "capitalize" }}>
                           {t.ticket_type.replace("_", " ")}
                         </td>
-                        <td><Badge variant={t.status} /></td>
+                        <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                         <td style={{ color: "var(--text-muted)" }}>
                           {t.technician?.name ?? "—"}
                         </td>
@@ -149,7 +149,7 @@ export default async function CustomerDashboard() {
                       <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", fontSize: "0.875rem" }}>
                         {t.ticket_code}
                       </span>
-                      <Badge variant={t.status} />
+                      <Badge variant={t.status} technicianId={t.technician_id} />
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                       <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>

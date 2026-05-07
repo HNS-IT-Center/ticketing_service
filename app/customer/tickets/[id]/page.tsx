@@ -59,7 +59,7 @@ export default async function TicketDetailPage({
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <h1 style={{ fontSize: "1.25rem" }}>{DETAIL_LABELS[ticket.ticket_type]}</h1>
-            <Badge variant={ticket.status} />
+            <Badge variant={ticket.status} technicianId={ticket.technician_id} />
           </div>
           <p style={{ color: "var(--text-muted)", fontFamily: "monospace", marginTop: "0.25rem" }}>
             {ticket.ticket_code}
@@ -229,7 +229,7 @@ export default async function TicketDetailPage({
                 }}
               >
                 <div style={{ flexShrink: 0, marginTop: "0.2rem" }}>
-                  <Badge variant={log.new_status} />
+                  <Badge variant={log.new_status} technicianId={ticket.technician_id} />
                 </div>
                 <div>
                   <p style={{ fontSize: "0.8125rem", fontWeight: 500 }}>

@@ -14,6 +14,7 @@ interface Row {
   points: number;
   currentLoad: number;
   maxLoad: number;
+  details?: Record<string, { count: number; totalHours: number; timedCount: number }>;
 }
 
 interface Props {
@@ -38,21 +39,50 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
     const rankEmoji = (i: number) =>
       i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
 
+    const topTech = rows[0];
+    const topTechCard = topTech ? `
+      <div style="background: linear-gradient(135deg, #0f172a, #1e3a8a); color: white; border-radius: 16px; padding: 1.5rem; margin-bottom: 2rem; display: flex; align-items: center; justify-content: space-between;">
+        <div>
+          <div style="color: #fbbf24; font-weight: 800; font-size: 1.25rem; margin-bottom: 0.25rem;">
+            👑 ${monthLabel === "All Time" ? "Technician of the Year" : "Technician of the Month"}
+          </div>
+          <div style="font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem;">${topTech.name}</div>
+          <div style="color: #94a3b8; font-size: 0.9rem;">
+            ${topTech.success} Completed • ${topTech.points} Points Earned • ${Math.round((topTech.success / topTech.tickets) * 100 || 0)}% Win Rate
+          </div>
+        </div>
+        <div style="background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2); padding: 1rem 1.5rem; border-radius: 12px; text-align: center;">
+          <div style="font-size: 2.5rem; font-weight: 800; color: #f8fafc;">#1</div>
+        </div>
+      </div>
+    ` : "";
+
     const tableRows = rows
       .map(
-        (p, i) => `
+        (p, i) => {
+          let detailsHtml = "";
+          if (p.details) {
+            detailsHtml = `<div class="details-grid">` + Object.entries(p.details).map(([type, stats]) => {
+              const avg = stats.timedCount > 0 ? (stats.totalHours / stats.timedCount).toFixed(1) : null;
+              const typeLabel = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+              return `<div class="detail-box"><strong>${typeLabel}:</strong> ${stats.count} <span class="detail-avg">${avg ? `(Avg: ${avg} H)` : "(No time track)"}</span></div>`;
+            }).join("") + `</div>`;
+          }
+
+          return `
       <tr class="${i % 2 === 0 ? "even" : ""}">
         <td class="rank">${rankEmoji(i)}</td>
         <td>
           <div class="name">${p.name}</div>
-          ${p.workDays.length ? `<div class="sub">${p.workDays.join(", ")}</div>` : ""}
+          ${detailsHtml}
         </td>
         <td>${p.shift ? `<span class="shift">${p.shift}</span>` : "—"}</td>
         <td class="num">${p.tickets}</td>
         <td class="num success">${p.success}</td>
         <td class="num failed">${p.failed}</td>
         <td class="num points">${p.points} pts</td>
-      </tr>`
+      </tr>`;
+        }
       )
       .join("");
 
@@ -162,6 +192,13 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
   .success { color: #16a34a; }
   .failed  { color: #cd2426; }
   .points  { color: #16469d; }
+  .details-grid { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+  .detail-box { font-size: 0.65rem; background: #e8eef9; color: #1a1a2e; padding: 0.2rem 0.4rem; border-radius: 4px; border: 1px solid #c3d2ec; }
+  .detail-avg { color: #4a5568; }
+  
+  /* Prevent rows and summary from splitting across pages */
+  tr, .summary { page-break-inside: avoid; }
+  
   /* ── Footer ── */
   .footer {
     margin-top: 1.75rem;
@@ -177,7 +214,7 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
     body { background: #fff; padding: 1.5cm; }
     .stat { box-shadow: none; }
     table { box-shadow: none; }
-    @page { margin: 0; }
+    @page { margin: 15mm; }
   }
 </style>
 </head>
@@ -191,11 +228,13 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
       </div>
     </div>
     <div class="report-meta">
-      <div class="report-title">Technician Performance Report</div>
+      <div class="report-title">${monthLabel === "All Time" ? "Technician of the Year Report" : `Technician of the Month Report`}</div>
       <div class="report-period">${period}</div>
       <div class="report-date">Generated: ${new Date().toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" })}</div>
     </div>
   </div>
+
+  ${topTechCard}
 
   <div class="summary">
     <div class="stat">

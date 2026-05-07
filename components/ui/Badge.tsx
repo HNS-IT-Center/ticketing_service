@@ -36,13 +36,21 @@ const BADGE_CLASSES: Record<string, string> = {
 export default function Badge({
   variant,
   label,
+  technicianId,
 }: {
   variant: BadgeVariant | string;
   label?: string;
+  technicianId?: string | null;
 }) {
+  let displayLabel = label ?? BADGE_LABELS[variant] ?? variant;
+  if (!label && variant === "waiting") {
+    // Determine dynamic waiting label
+    displayLabel = technicianId ? "⏳ Waiting for Work" : "⏳ Waiting for Technician";
+  }
+
   return (
     <span className={BADGE_CLASSES[variant] ?? "badge"}>
-      {label ?? BADGE_LABELS[variant] ?? variant}
+      {displayLabel}
     </span>
   );
 }

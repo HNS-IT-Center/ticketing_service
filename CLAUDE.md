@@ -286,13 +286,39 @@ waiting ──→ on_progress ──→ done
 
 ## 🚀 Running the Project
 
-```bash
-npm install
-npx prisma db push
-$env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed
-npm run dev
-# → http://localhost:3000
-```
+### Setup on a New Device
+
+When cloning the project to a new device, you will need to reconfigure the environment variables and the database connection. Follow these steps:
+
+1. **Install Dependencies**
+   ```bash
+   npm install
+   ```
+
+2. **Configure Environment Variables**
+   - Copy the newly created `.env.example` file to create a new `.env.local` file in the root directory.
+   - Fill in your **Supabase Project URL**, **Anon Key**, and **Service Role Key** (found in your Supabase dashboard under Project Settings > API).
+   - Fill in the **Database URL** using the Supabase Session Pooler connection string (found in Project Settings > Database). **IMPORTANT:** Make sure to include `sslmode=no-verify` at the end of the connection string.
+   - Generate a random 32+ character string for `SESSION_SECRET` (you can use any password generator).
+
+3. **Push Database Schema**
+   Sync your Prisma schema to the newly connected Supabase PostgreSQL database:
+   ```bash
+   npx prisma db push
+   ```
+
+4. **Seed the Database (Optional but recommended)**
+   If this is a fresh database, you need to populate it with initial dummy accounts, tickets, and upgrades:
+   ```bash
+   $env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed
+   ```
+   *(Note: The `NODE_TLS_REJECT_UNAUTHORIZED="0"` flag is required to bypass self-signed certificate errors from the Supabase session pooler during the seed script).*
+
+5. **Start the Development Server**
+   ```bash
+   npm run dev
+   # → http://localhost:3000
+   ```
 
 ---
 

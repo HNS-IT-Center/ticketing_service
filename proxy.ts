@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decrypt } from "@/lib/session";
 
-const PUBLIC_ROUTES = ["/login", "/register"];
+const PUBLIC_ROUTES = ["/login", "/register", "/ticket"];
 const ADMIN_ROUTES = ["/admin"];
 const TECHNICIAN_ROUTES = ["/technician"];
 const CUSTOMER_ROUTES = ["/customer"];
@@ -38,7 +38,8 @@ export async function proxy(request: NextRequest) {
   // Role-based access
   if (
     ADMIN_ROUTES.some((r) => pathname.startsWith(r)) &&
-    session.role !== "Administrator"
+    session.role !== "Administrator" &&
+    session.role !== "Sales"
   ) {
     return NextResponse.redirect(
       new URL(getDashboardRoute(session.role), request.url)

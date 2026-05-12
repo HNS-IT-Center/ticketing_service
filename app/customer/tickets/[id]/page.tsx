@@ -207,7 +207,7 @@ export default async function TicketDetailPage({
               message: m.message,
               created_at: m.created_at.toISOString(),
               is_read: m.is_read,
-              sender: { name: m.sender.name, role: m.sender.role },
+              sender: { name: m.sender?.name ?? m.sender_name ?? "Anonymous", role: m.sender?.role ?? "Customer" },
               isOwn: m.sender_id === session.userId,
             }))}
             currentUserId={session.userId}

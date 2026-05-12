@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
+import { sendTicketStatusEmail } from "@/lib/email";
 
 function getTicketPoints(type: string): number {
   if (type === "pc_build") return 4;
@@ -113,9 +114,14 @@ export async function updateTicketStatusAction(formData: FormData) {
 
   const oldStatus = ticket.status;
 
+  // Track performance timestamps
+  const ticketUpdateData: Record<string, unknown> = { status: newStatus };
+  if (newStatus === "on_progress") ticketUpdateData.work_started_at = new Date();
+  if (newStatus === "done") ticketUpdateData.work_completed_at = new Date();
+
   await db.ticket.update({
     where: { id: ticketId },
-    data: { status: newStatus },
+    data: ticketUpdateData as any,
   });
 
   // Log
@@ -201,7 +207,7 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // When done: notify the technician with points earned
+  // When done: notify the technician with points earned + send customer email
   if (newStatus === "done") {
     const points = getTicketPoints(ticket.ticket_type);
     // Fetch updated total to show current total
@@ -218,6 +224,25 @@ export async function updateTicketStatusAction(formData: FormData) {
         message: `🎉 Congratulations! You earned ${points} pts for ticket #${ticket.ticket_code}. Current total: ${currentTotal} pts`,
       },
     });
+  }
+
+  // Send email to customer on every status change
+  const fullTicket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    include: { user: { select: { name: true, email: true } } },
+  });
+  if (fullTicket) {
+    const customerEmail = fullTicket.customer_email || fullTicket.user.email;
+    const customerName = fullTicket.customer_name || fullTicket.user.name;
+    if (customerEmail && ticket.user_id !== session.userId) {
+      await sendTicketStatusEmail({
+        to: customerEmail,
+        customerName,
+        ticketCode: ticket.ticket_code,
+        status: newStatus,
+        shareToken: fullTicket.public_share_token,
+      });
+    }
   }
 
   revalidatePath(`/technician/tickets/${ticketId}`);

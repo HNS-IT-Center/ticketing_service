@@ -19,9 +19,9 @@ export default async function LeaderboardPage({
 
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-  // Fetch all technicians
+  // Fetch all eligible technicians (exclude team leaders)
   const technicians = await db.user.findMany({
-    where: { role: "Technician" },
+    where: { role: "Technician", is_team_leader: false },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

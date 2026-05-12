@@ -33,12 +33,31 @@ enum TicketType {
   upgrade
 }
 
+// CS intake label — separate from TicketType (internal technical classification)
+enum ServiceCategory {
+  service
+  build_pc
+  upgrade
+  diagnostic
+  others
+}
+
+enum PickupMethod {
+  self_pickup
+  courier
+}
+
 enum TicketStatus {
   waiting
   on_progress
+  done
+  ready_for_pickup   // After done: item ready at counter (self-pickup)
+  waiting_pickup     // Customer has been notified, not yet picked up
+  handed_to_courier  // After done: item handed to courier (courier pickup)
+  delivered          // Courier delivered to customer
+  completed          // Final state for both pickup paths
   cancelled
   rejected
-  done
 }
 
 enum DeviceType {
@@ -69,6 +88,35 @@ enum CleaningPackage {
 }
 
 // ─────────────────────────────────────────────
+// STORE LOCATIONS
+// ─────────────────────────────────────────────
+
+model StoreLocation {
+  id         String  @id @default(cuid())
+  name       String  @unique       // e.g. "Nagoya Gateway"
+  code       String  @unique       // e.g. "NGW" — used in ticket_code prefix
+  address    String?
+  is_active  Boolean @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  tickets           Ticket[]
+  technician_stores TechnicianStoreAssignment[]
+}
+
+model TechnicianStoreAssignment {
+  id            String        @id @default(cuid())
+  technician_id String
+  technician    User          @relation(fields: [technician_id], references: [id], onDelete: Cascade)
+  store_id      String
+  store         StoreLocation @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  assigned_at   DateTime      @default(now())
+
+  @@unique([technician_id, store_id])
+  @@index([technician_id])
+}
+
+// ─────────────────────────────────────────────
 // USERS
 // ─────────────────────────────────────────────
 
@@ -85,6 +133,9 @@ model User {
   shift     Shift?
   work_days Json?  // e.g. ["Mon","Tue","Wed"]
 
+  // Team leader flag — excluded from leaderboard display but can still work on tickets
+  is_team_leader Boolean @default(false)
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -98,6 +149,7 @@ model User {
   workload           TechnicianWorkload?
   performance        TechnicianPerformance?
   leaderboards       Leaderboard[]
+  store_assignments  TechnicianStoreAssignment[]
 
   @@index([email])
 }
@@ -113,9 +165,10 @@ model Ticket {
   user_id String
   user    User   @relation("TicketUser", fields: [user_id], references: [id])
 
-  ticket_type TicketType
-  status      TicketStatus @default(waiting)
-  device_type DeviceType
+  ticket_type      TicketType
+  service_category ServiceCategory?  // CS intake label (what customer came in for)
+  status           TicketStatus @default(waiting)
+  device_type      DeviceType
 
   technician_id String?
   technician    User?   @relation("TicketTechnician", fields: [technician_id], references: [id])
@@ -123,13 +176,34 @@ model Ticket {
   sales_id String?
   sales    User?   @relation("TicketSales", fields: [sales_id], references: [id])
 
-  notes String? // Rich text (HTML)
+  // Store location — original intake store (NEVER changes after creation)
+  store_location_id String?
+  store_location    StoreLocation? @relation(fields: [store_location_id], references: [id])
+
+  notes            String? // Rich text (HTML) — visible to all
+  technician_notes String? // Notes from CS to technician — plain text
 
   is_for_self      Boolean @default(true)  // false = ticket created on behalf of another person
   customer_name    String?                 // Name of the actual recipient (if is_for_self = false)
   customer_phone   String?
   customer_email   String?
   customer_address String?
+
+  // CS intake fields
+  accessories      String?        // accessories included with device
+  device_condition String?        // customer-described physical condition
+  is_overnight     Boolean  @default(false)  // true = multi-day service
+  checking_fee     Decimal? @db.Decimal(12,2)
+  pickup_method    PickupMethod?
+  terms_accepted   Boolean  @default(false)
+
+  // Public access
+  public_chat_enabled Boolean @default(false)
+  public_share_token  String? @unique    // secure token for /ticket/[token] public page
+
+  // Performance tracking timestamps
+  work_started_at   DateTime?  // set when technician moves to on_progress
+  work_completed_at DateTime?  // set when technician moves to done
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -148,6 +222,8 @@ model Ticket {
 
   @@index([user_id])
   @@index([technician_id])
+  @@index([store_location_id])
+  @@index([public_share_token])
 }
 
 // ─────────────────────────────────────────────
@@ -221,8 +297,9 @@ model TicketMessage {
   ticket_id String
   ticket    Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
 
-  sender_id String
-  sender    User   @relation(fields: [sender_id], references: [id])
+  sender_id   String?       // null = anonymous public message
+  sender      User?   @relation(fields: [sender_id], references: [id])
+  sender_name String?       // for anonymous senders
 
   message  String
   is_read  Boolean @default(false)

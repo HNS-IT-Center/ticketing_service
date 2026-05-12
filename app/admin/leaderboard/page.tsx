@@ -21,7 +21,7 @@ export default async function AdminLeaderboardPage({
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   const technicians = await db.user.findMany({
-    where: { role: "Technician" },
+    where: { role: "Technician", is_team_leader: false },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { customAlphabet } from "nanoid";
+import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { createServerSupabaseClient } from "@/lib/supabase";
@@ -33,7 +34,35 @@ export async function createTicketAction(formData: FormData) {
   const technician_id = (formData.get("technician_id") as string | null) || null;
   const sales_id = (formData.get("sales_id") as string | null) || null;
 
-  const ticket_code = `TKT-${nanoid()}`;
+  // New CS intake fields
+  const store_location_id = (formData.get("store_location_id") as string | null) || null;
+  const service_category = (formData.get("service_category") as string | null) || null;
+  const accessories = (formData.get("accessories") as string | null) || null;
+  const device_condition = (formData.get("device_condition") as string | null) || null;
+  const is_overnight = formData.get("is_overnight") === "1";
+  const pickup_method = (formData.get("pickup_method") as string | null) || null;
+  const terms_accepted = formData.get("terms_accepted") === "1";
+  const technician_notes = (formData.get("technician_notes") as string | null) || null;
+
+  // Generate ticket code — store-prefixed if store selected, else TKT-{nanoid}
+  let ticket_code: string;
+  if (store_location_id) {
+    const store = await db.storeLocation.findUnique({
+      where: { id: store_location_id },
+      select: { code: true },
+    });
+    if (store) {
+      const count = await db.ticket.count({ where: { store_location_id } });
+      ticket_code = `${store.code}-${String(count + 1).padStart(6, "0")}`;
+    } else {
+      ticket_code = `TKT-${nanoid()}`;
+    }
+  } else {
+    ticket_code = `TKT-${nanoid()}`;
+  }
+
+  // Auto-generate a secure public share token
+  const public_share_token = randomBytes(24).toString("hex");
   const points = getTicketPoints(ticket_type);
 
   // Workload check if technician assigned (must be done before ticket creation)
@@ -63,6 +92,16 @@ export async function createTicketAction(formData: FormData) {
       sales_id: sales_id || null,
       notes: notes || null,
       status: "waiting",
+      // New fields
+      store_location_id,
+      service_category: service_category as any,
+      accessories,
+      device_condition,
+      is_overnight,
+      pickup_method: pickup_method as any,
+      terms_accepted,
+      technician_notes,
+      public_share_token,
     },
     select: { id: true },
   });
@@ -274,4 +313,39 @@ export async function uploadAttachmentsAction(ticketId: string, files: File[]) {
   );
 
   revalidatePath(`/customer/tickets/${ticketId}`);
+}
+
+// ─── Send Public (Anonymous) Message ───────────────────────────────────────
+export async function sendPublicMessageAction(
+  ticketId: string,
+  shareToken: string,
+  message: string,
+  senderName: string
+) {
+  // Verify the share token matches to prevent abuse
+  const ticket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    select: { public_share_token: true, public_chat_enabled: true },
+  });
+
+  if (!ticket || ticket.public_share_token !== shareToken) {
+    return { error: "Invalid ticket or share token" };
+  }
+  if (!ticket.public_chat_enabled) {
+    return { error: "Chat is disabled for this ticket" };
+  }
+
+  await db.ticketMessage.create({
+    data: {
+      ticket_id: ticketId,
+      sender_id: null,        // anonymous
+      sender_name: senderName,
+      message,
+      is_read: false,
+    },
+  });
+
+  revalidatePath(`/ticket/${shareToken}`);
+  revalidatePath(`/admin/tickets/${ticketId}`);
+  return { success: true };
 }

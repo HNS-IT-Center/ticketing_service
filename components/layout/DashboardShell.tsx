@@ -19,6 +19,7 @@ import {
   ChevronRight,
   Settings,
   Activity,
+  Store,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import NotificationBell from "./NotificationBell";
@@ -45,10 +46,18 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   admin: [
     { href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
+    { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
     { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
     { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
     { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
     { href: "/admin/logs", label: "Logs", icon: <Activity size={18} /> },
+    { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
+  ],
+  // Sales (CS) — shared admin layout with filtered nav
+  sales: [
+    { href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+    { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
+    { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
     { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
   ],
 };
@@ -57,11 +66,12 @@ const ROLE_LABELS: Record<string, string> = {
   customer: "Customer",
   technician: "Technician",
   admin: "Administrator",
+  sales: "Customer Service",
 };
 
 interface DashboardShellProps {
   children: React.ReactNode;
-  role: "customer" | "technician" | "admin";
+  role: "customer" | "technician" | "admin" | "sales";
   userName: string;
   userId: string;
 }
@@ -105,8 +115,8 @@ export default function DashboardShell({ children, role, userName, userId }: Das
     .slice(0, 2)
     .toUpperCase();
 
-  const profileHref = `/${role}/profile`;
-  const ticketsHref = role === "admin" ? "/admin/tickets" : `/${role}/tickets`;
+  const profileHref = role === "sales" ? "/admin/profile" : `/${role}/profile`;
+  const ticketsHref = role === "admin" || role === "sales" ? "/admin/tickets" : `/${role}/tickets`;
 
   const currentLabel =
     navItems.find((n) => pathname === n.href || pathname.startsWith(n.href))?.label ?? "Dashboard";

@@ -5,7 +5,9 @@ import Badge from "@/components/ui/Badge";
 import TicketChat from "@/app/customer/tickets/[id]/TicketChat";
 import AdminAssignPanel from "./AdminAssignPanel";
 import AdminStatusPanel from "./AdminStatusPanel";
-import { FileText, Film, File } from "lucide-react";
+import AdminWorkflowPanel from "./AdminWorkflowPanel";
+import { FileText, Film, File, Link2 } from "lucide-react";
+import Link from "next/link";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -14,7 +16,7 @@ export default async function AdminTicketDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireRole("Administrator");
+  const session = await requireRole("Administrator", "Sales");
   const { id } = await params;
 
   const [ticket, technicians, salesUsers] = await Promise.all([
@@ -24,6 +26,7 @@ export default async function AdminTicketDetailPage({
         user: { select: { name: true, email: true, phone_number: true, address: true } },
         technician: { select: { name: true } },
         sales: { select: { name: true } },
+        store_location: { select: { name: true, code: true } },
         messages: {
           orderBy: { created_at: "asc" },
           include: { sender: { select: { name: true, role: true } } },
@@ -62,15 +65,34 @@ export default async function AdminTicketDetailPage({
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <h1 style={{ fontSize: "1.25rem" }}>{ticket.ticket_code}</h1>
             <Badge variant={ticket.status} technicianId={ticket.technician_id} />
+            {ticket.store_location && (
+              <span style={{ fontSize: "0.75rem", background: "#f0f4ff", color: "#4f46e5", padding: "0.15rem 0.5rem", borderRadius: "4px", fontWeight: 600, fontFamily: "monospace" }}>
+                {ticket.store_location.code}
+              </span>
+            )}
           </div>
           <p style={{ color: "var(--text-muted)", marginTop: "0.25rem", textTransform: "capitalize" }}>
             {ticket.ticket_type.replace(/_/g, " ")} &bull; {ticket.device_type.replace(/_/g, " ")}
           </p>
+          {ticket.store_location && (
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>📍 {ticket.store_location.name}</p>
+          )}
           <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
             Created {new Date(ticket.created_at).toLocaleString("id-ID")}
           </p>
         </div>
-        <AdminStatusPanel ticketId={ticket.id} currentStatus={ticket.status} />
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "flex-end" }}>
+          <AdminStatusPanel ticketId={ticket.id} currentStatus={ticket.status} />
+          {ticket.public_share_token && (
+            <Link
+              href={`/ticket/${ticket.public_share_token}`}
+              target="_blank"
+              style={{ display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.8125rem", color: "var(--primary)", textDecoration: "none" }}
+            >
+              <Link2 size={14} /> Public Link
+            </Link>
+          )}
+        </div>
       </div>
 
       <div className="ticket-detail-grid">
@@ -122,6 +144,14 @@ export default async function AdminTicketDetailPage({
             currentSalesId={ticket.sales_id}
             technicians={technicians}
             salesUsers={salesUsers}
+          />
+
+          {/* Workflow panel — CS handover actions */}
+          <AdminWorkflowPanel
+            ticketId={ticket.id}
+            currentStatus={ticket.status as any}
+            pickupMethod={ticket.pickup_method}
+            userRole={session.role}
           />
 
           {/* Notes */}
@@ -225,7 +255,7 @@ export default async function AdminTicketDetailPage({
               message: m.message,
               created_at: m.created_at.toISOString(),
               is_read: m.is_read,
-              sender: { name: m.sender.name, role: m.sender.role },
+              sender: { name: m.sender?.name ?? m.sender_name ?? "Anonymous", role: m.sender?.role ?? "Customer" },
               isOwn: false,
             }))}
             currentUserId="admin"

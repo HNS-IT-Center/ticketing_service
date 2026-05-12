@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
+import { sendTicketStatusEmail } from "@/lib/email";
 
 // ─── Create User ───────────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
@@ -53,6 +54,7 @@ export async function updateUserAction(userId: string, formData: FormData) {
   const shift = formData.get("shift") as string | null;
   const work_days = formData.get("work_days") as string | null;
   const max_points = formData.get("max_points") as string | null;
+  const is_team_leader = formData.get("is_team_leader") === "1";
 
   await db.user.update({
     where: { id: userId },
@@ -64,6 +66,7 @@ export async function updateUserAction(userId: string, formData: FormData) {
       role: formData.get("role") as any,
       shift: shift ? (shift as any) : null,
       work_days: work_days ? JSON.parse(work_days) : null,
+      is_team_leader,
     },
   });
 
@@ -144,11 +147,15 @@ export async function snapshotLeaderboardAction(month: number, year: number) {
 // ─── Admin Update Ticket Status ────────────────────────────────────────────
 export async function adminUpdateTicketStatusAction(
   ticketId: string,
-  newStatus: "waiting" | "on_progress" | "cancelled" | "rejected" | "done"
+  newStatus: "waiting" | "on_progress" | "cancelled" | "rejected" | "done" |
+             "ready_for_pickup" | "waiting_pickup" | "handed_to_courier" | "delivered" | "completed"
 ) {
-  const session = await requireRole("Administrator");
+  const session = await requireRole("Administrator", "Sales");
 
-  const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
+  const ticket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    include: { user: { select: { name: true, email: true } } },
+  });
   if (!ticket) return { error: "Ticket not found" };
 
   await db.$transaction([
@@ -167,15 +174,16 @@ export async function adminUpdateTicketStatusAction(
   ]);
 
   // Update technician performance if closing a ticket
-  if ((newStatus === "done" || newStatus === "cancelled" || newStatus === "rejected") && ticket.technician_id) {
+  const isTerminal = ["done", "cancelled", "rejected", "completed"].includes(newStatus);
+  if (isTerminal && ticket.technician_id) {
     const points = ticket.ticket_type === "pc_build" ? 4 : ticket.ticket_type === "service" ? 3 : 2;
     await db.technicianPerformance.update({
       where: { technician_id: ticket.technician_id },
       data: {
         tickets_handled: { increment: 1 },
-        success_count: newStatus === "done" ? { increment: 1 } : undefined,
-        failed_count: newStatus !== "done" ? { increment: 1 } : undefined,
-        total_points_completed: newStatus === "done" ? { increment: points } : undefined,
+        success_count: newStatus === "done" || newStatus === "completed" ? { increment: 1 } : undefined,
+        failed_count: newStatus !== "done" && newStatus !== "completed" ? { increment: 1 } : undefined,
+        total_points_completed: (newStatus === "done" || newStatus === "completed") ? { increment: points } : undefined,
       },
     });
     await db.technicianWorkload.update({
@@ -193,7 +201,31 @@ export async function adminUpdateTicketStatusAction(
     },
   });
 
+  // Send email to customer if they have an email address
+  const customerEmail = ticket.customer_email || ticket.user.email;
+  const customerName = ticket.customer_name || ticket.user.name;
+  if (customerEmail) {
+    await sendTicketStatusEmail({
+      to: customerEmail,
+      customerName,
+      ticketCode: ticket.ticket_code,
+      status: newStatus,
+      shareToken: ticket.public_share_token,
+    });
+  }
+
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath("/admin/tickets");
+  return { success: true };
+}
+
+// ─── Toggle Public Chat ─────────────────────────────────────────────────────
+export async function togglePublicChatAction(ticketId: string, enabled: boolean) {
+  await requireRole("Administrator", "Sales");
+  await db.ticket.update({
+    where: { id: ticketId },
+    data: { public_chat_enabled: enabled },
+  });
+  revalidatePath(`/admin/tickets/${ticketId}`);
   return { success: true };
 }

@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { Activity, Search, Calendar } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import Link from "next/link";
+import { formatDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Logs — HNS IT Center" };
 
@@ -140,10 +141,7 @@ export default async function AdminLogsPage({
                 logs.map(log => (
                   <tr key={log.id}>
                     <td style={{ whiteSpace: "nowrap" }}>
-                      {new Date(log.created_at).toLocaleString("id-ID", {
-                        dateStyle: "medium",
-                        timeStyle: "short",
-                      })}
+                      {formatDateTime(log.created_at)}
                     </td>
                     <td style={{ fontFamily: "monospace", fontWeight: 600 }}>
                       <Link href={`/admin/tickets/${log.ticket_id}`} style={{ color: "var(--primary)", textDecoration: "none" }}>

@@ -3,8 +3,10 @@ import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Badge from "@/components/ui/Badge";
 import TicketChat from "./TicketChat";
+import PublicShareButton from "@/components/ui/PublicShareButton";
 import { markMessagesReadAction } from "@/app/actions/tickets";
 import { FileText, Film, ImageIcon, File } from "lucide-react";
+import { formatDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -60,6 +62,9 @@ export default async function TicketDetailPage({
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <h1 style={{ fontSize: "1.25rem" }}>{DETAIL_LABELS[ticket.ticket_type]}</h1>
             <Badge variant={ticket.status} technicianId={ticket.technician_id} />
+            {ticket.public_share_token && (
+              <PublicShareButton shareToken={ticket.public_share_token} />
+            )}
           </div>
           <p style={{ color: "var(--text-muted)", fontFamily: "monospace", marginTop: "0.25rem" }}>
             {ticket.ticket_code}
@@ -79,7 +84,7 @@ export default async function TicketDetailPage({
                 { label: "Device", value: ticket.device_type.replace(/_/g, " ") },
                 { label: "Technician", value: ticket.technician?.name ?? "Not assigned" },
                 { label: "Recipient", value: ticket.is_for_self ? session.name : ticket.customer_name },
-                { label: "Created", value: new Date(ticket.created_at).toLocaleString("id-ID") },
+                { label: "Created", value: formatDateTime(ticket.created_at) },
               ].map(({ label, value }) => (
                 <div key={label}>
                   <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginBottom: "0.2rem" }}>{label}</p>
@@ -238,7 +243,7 @@ export default async function TicketDetailPage({
                   </p>
                   <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
                     by {log.changer.name} •{" "}
-                    {new Date(log.created_at).toLocaleString("id-ID")}
+                    {formatDateTime(log.created_at)}
                   </p>
                 </div>
               </div>

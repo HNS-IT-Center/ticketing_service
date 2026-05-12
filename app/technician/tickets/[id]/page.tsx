@@ -6,6 +6,7 @@ import TicketChat from "@/app/customer/tickets/[id]/TicketChat";
 import StatusUpdater from "./StatusUpdater";
 import { markMessagesReadAction } from "@/app/actions/tickets";
 import { FileText, Film, ImageIcon, File } from "lucide-react";
+import { formatDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -185,11 +186,14 @@ export default async function TechnicianTicketDetailPage({
           <h3 style={{ marginBottom: "1rem" }}>Status History</h3>
           <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {ticket.status_logs.map((log) => (
-              <div key={log.id} style={{ paddingBottom: "0.75rem", borderBottom: "1px solid var(--border-light)" }}>
+              <div key={log.id} style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
                 <Badge variant={log.new_status} technicianId={ticket.technician_id} />
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
-                  {log.changer.name} • {new Date(log.created_at).toLocaleString("id-ID")}
-                </p>
+                <div>
+                  <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>Status updated to {log.new_status.replace("_", " ").toUpperCase()}</div>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                    {log.changer.name} • {formatDateTime(log.created_at)}
+                  </div>
+                </div>
               </div>
             ))}
           </div>

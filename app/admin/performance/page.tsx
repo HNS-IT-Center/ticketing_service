@@ -33,7 +33,7 @@ type Row = {
 export default async function AdminPerformancePage({
   searchParams,
 }: {
-  searchParams: Promise<{ month?: string; year?: string }>;
+  searchParams: Promise<{ month?: string; year?: string; store?: string }>;
 }) {
   await requireRole("Administrator");
   const params = await searchParams;
@@ -41,6 +41,22 @@ export default async function AdminPerformancePage({
   const now = new Date();
   const filterMonth = params.month ? parseInt(params.month) : null;
   const filterYear  = params.year  ? parseInt(params.year)  : null;
+  const filterStore = params.store || null;
+
+  const stores = await db.storeLocation.findMany({
+    where: { is_active: true },
+    select: { id: true, name: true, code: true },
+    orderBy: { name: "asc" },
+  });
+
+  let allowedTechIds: Set<string> | null = null;
+  if (filterStore) {
+    const assignments = await db.technicianStoreAssignment.findMany({
+      where: { store_id: filterStore },
+      select: { technician_id: true },
+    });
+    allowedTechIds = new Set(assignments.map((a) => a.technician_id));
+  }
 
   let rows: Row[] = [];
 
@@ -173,6 +189,10 @@ export default async function AdminPerformancePage({
     });
   }
 
+  if (allowedTechIds) {
+    rows = rows.filter((r) => allowedTechIds!.has(r.id));
+  }
+
   // Fetch detailed tickets for all displayed technicians to compute average times
   const techIds = rows.map(r => r.id);
   const startDate = filterMonth && filterYear ? new Date(filterYear, filterMonth - 1, 1) : null;
@@ -238,6 +258,10 @@ export default async function AdminPerformancePage({
 
         <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
           <form style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
+            <select name="store" defaultValue={filterStore ?? ""} className="form-input" style={{ width: "auto" }}>
+              <option value="">All stores</option>
+              {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+            </select>
             <select name="month" defaultValue={filterMonth ?? ""} className="form-input" style={{ width: "auto" }}>
               <option value="">All months</option>
               {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
@@ -246,7 +270,7 @@ export default async function AdminPerformancePage({
               {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <button type="submit" className="btn btn-primary btn-sm">Apply</button>
-            {(filterMonth || filterYear) && (
+            {(filterMonth || filterYear || filterStore) && (
               <a href="/admin/performance" className="btn btn-ghost btn-sm">Clear</a>
             )}
           </form>

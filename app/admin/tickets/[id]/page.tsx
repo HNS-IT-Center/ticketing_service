@@ -6,8 +6,10 @@ import TicketChat from "@/app/customer/tickets/[id]/TicketChat";
 import AdminAssignPanel from "./AdminAssignPanel";
 import AdminStatusPanel from "./AdminStatusPanel";
 import AdminWorkflowPanel from "./AdminWorkflowPanel";
+import PublicChatToggle from "./PublicChatToggle";
 import { FileText, Film, File, Link2 } from "lucide-react";
 import Link from "next/link";
+import { formatDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -78,7 +80,7 @@ export default async function AdminTicketDetailPage({
             <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>📍 {ticket.store_location.name}</p>
           )}
           <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
-            Created {new Date(ticket.created_at).toLocaleString("id-ID")}
+            Created {formatDateTime(ticket.created_at)}
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "flex-end" }}>
@@ -92,6 +94,7 @@ export default async function AdminTicketDetailPage({
               <Link2 size={14} /> Public Link
             </Link>
           )}
+          <PublicChatToggle ticketId={ticket.id} initialEnabled={ticket.public_chat_enabled} />
         </div>
       </div>
 
@@ -271,13 +274,13 @@ export default async function AdminTicketDetailPage({
             ) : (
               ticket.status_logs.map((log) => (
                 <div key={log.id} style={{ paddingBottom: "0.75rem", borderBottom: "1px solid var(--border-light)" }}>
-                  <div style={{ display: "flex", gap: "0.375rem", alignItems: "center", flexWrap: "wrap" }}>
-                    {log.old_status && <><Badge variant={log.old_status} technicianId={ticket.technician_id} /><span style={{ color: "var(--text-muted)", fontSize: "0.8rem" }}>→</span></>}
+                  <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{ color: "var(--text-secondary)" }}>Status updated to</span>
                     <Badge variant={log.new_status} technicianId={ticket.technician_id} />
                   </div>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.35rem" }}>
-                    {log.changer.name} &bull; {new Date(log.created_at).toLocaleString("id-ID")}
-                  </p>
+                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                    {log.changer.name} &bull; {formatDateTime(log.created_at)}
+                  </div>
                 </div>
               ))
             )}

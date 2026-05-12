@@ -7,7 +7,7 @@ export const metadata = { title: "Create Ticket — HNS IT Center" };
 export default async function CreateTicketPage() {
   const session = await requireRole("Customer", "Sales");
 
-  const [upgrades, technicians, sales, userProfile] = await Promise.all([
+  const [upgrades, technicians, sales, userProfile, stores] = await Promise.all([
     db.upgrade.findMany({ orderBy: { name: "asc" } }),
     db.user.findMany({
       where: { role: "Technician" },
@@ -22,6 +22,11 @@ export default async function CreateTicketPage() {
     db.user.findUnique({
       where: { id: session.userId },
       select: { name: true, email: true, phone_number: true, address: true },
+    }),
+    db.storeLocation.findMany({
+      where: { is_active: true },
+      select: { id: true, name: true, code: true },
+      orderBy: { name: "asc" },
     }),
   ]);
 
@@ -38,6 +43,7 @@ export default async function CreateTicketPage() {
         technicians={technicians}
         sales={sales}
         userProfile={userProfile ?? undefined}
+        stores={stores}
       />
     </div>
   );

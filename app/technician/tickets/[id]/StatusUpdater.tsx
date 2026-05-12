@@ -19,6 +19,16 @@ const TRANSITIONS: Record<string, { label: string; next: string; color: string; 
   ],
 };
 
+const POST_DONE_STATUSES = ["done", "ready_for_pickup", "waiting_pickup", "handed_to_courier", "delivered", "completed"];
+const POST_DONE_LABELS: Record<string, string> = {
+  done: "✅ Marked as done — awaiting CS/Admin to complete handover",
+  ready_for_pickup: "📦 Ready for pickup — waiting for customer",
+  waiting_pickup: "🔔 Customer notified — awaiting pickup",
+  handed_to_courier: "🚚 Handed to courier — awaiting delivery confirmation",
+  delivered: "📬 Delivered — awaiting completion confirmation",
+  completed: "🎉 Ticket completed!",
+};
+
 export default function StatusUpdater({
   ticketId,
   currentStatus,
@@ -33,7 +43,25 @@ export default function StatusUpdater({
   const [files, setFiles] = useState<File[]>([]);
 
   const actions = TRANSITIONS[currentStatus] ?? [];
-  if (actions.length === 0) return null;
+
+  // Show read-only status message for post-done states
+  if (actions.length === 0) {
+    const postDoneMsg = POST_DONE_LABELS[currentStatus];
+    if (!postDoneMsg) return null;
+    return (
+      <div style={{
+        padding: "0.875rem 1rem",
+        background: currentStatus === "completed" ? "#f0fdf4" : "#fafafa",
+        border: `1px solid ${currentStatus === "completed" ? "#bbf7d0" : "var(--border)"}`,
+        borderRadius: "var(--radius-md)",
+        fontSize: "0.875rem",
+        color: currentStatus === "completed" ? "#15803d" : "var(--text-secondary)",
+        fontWeight: 500,
+      }}>
+        {postDoneMsg}
+      </div>
+    );
+  }
 
   const handleConfirm = () => {
     if (!pendingAction) return;

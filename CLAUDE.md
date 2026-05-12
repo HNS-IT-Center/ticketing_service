@@ -453,6 +453,19 @@ When cloning the project to a new device, you will need to reconfigure the envir
 
 ---
 
+### SPRINT 2026-05-12 SESSION — Phase 2 Finalization
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| F1 | CS Intake Flow enhancements | ✅ | Added fields to `CreateTicketForm.tsx` (Service Category, Store Selection, Accessories, Condition, Overnight, Pickup, Terms of Service). |
+| F2 | Public Chat Toggle | ✅ | Created `PublicChatToggle.tsx` and integrated it into admin ticket detail page. Verified `sendPublicMessageAction`. |
+| F3 | Technician Status Updater | ✅ | `StatusUpdater.tsx` now shows "Awaiting Handover" banner when done. |
+| F4 | Performance Store Filter | ✅ | Added store filter to `AdminPerformancePage` and filtered technicians by their store assignments. |
+| F5 | Technician Store Filtering | ✅ | Filtered unassigned tickets in `TechnicianDashboard` by technician's assigned stores. |
+| F6 | Share Ticket Button | ✅ | Added `PublicShareButton` to customer ticket detail page header. |
+| F7 | formatDateTime consistency | ✅ | Replaced `new Date().toLocaleString()` with `formatDateTime()` in admin logs, ticket details, etc. |
+
+---
+
 ### 🔒 SECURITY: RLS (Row Level Security)
 Supabase RLS has **not yet been enabled** on any tables. Here is what needs to be done manually in the Supabase SQL Editor:
 

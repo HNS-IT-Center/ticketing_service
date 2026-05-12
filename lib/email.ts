@@ -5,8 +5,10 @@ const resend = process.env.RESEND_API_KEY
   ? new Resend(process.env.RESEND_API_KEY)
   : null;
 
+// Use Resend's onboarding sender as fallback — works without a verified domain.
+// Once you verify your own domain, set NEXT_PUBLIC_FROM_EMAIL in .env.local.
 const FROM_EMAIL =
-  process.env.NEXT_PUBLIC_FROM_EMAIL ?? "noreply@hnsitcenter.com";
+  process.env.NEXT_PUBLIC_FROM_EMAIL ?? "onboarding@resend.dev";
 const APP_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
 

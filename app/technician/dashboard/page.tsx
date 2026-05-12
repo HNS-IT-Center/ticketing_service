@@ -18,9 +18,23 @@ function getTicketPoints(type: string) {
 export default async function TechnicianDashboard() {
   const session = await requireRole("Technician");
 
+  // Get technician's assigned stores
+  const assignments = await db.technicianStoreAssignment.findMany({
+    where: { technician_id: session.userId },
+    select: { store_id: true },
+  });
+  const storeIds = assignments.map((a) => a.store_id);
+
   const [unassigned, myTickets, workload, performance] = await Promise.all([
     db.ticket.findMany({
-      where: { technician_id: null, status: "waiting" },
+      where: { 
+        technician_id: null, 
+        status: "waiting",
+        OR: [
+          { store_location_id: { in: storeIds } },
+          { store_location_id: null }
+        ]
+      },
       orderBy: { created_at: "asc" },
       take: 10,
       include: { user: { select: { name: true } } },

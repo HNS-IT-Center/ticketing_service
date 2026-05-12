@@ -130,7 +130,9 @@ ticket-app-2/
 │   │   │   └── [id]/
 │   │   │       ├── page.tsx           # Full ticket detail (.ticket-detail-grid)
 │   │   │       ├── AdminAssignPanel.tsx
-│   │   │       └── AdminStatusPanel.tsx
+│   │   │       ├── AdminStatusPanel.tsx
+│   │   │       ├── AdminWorkflowPanel.tsx
+│   │   │       └── PublicChatToggle.tsx
 │   │   ├── users/
 │   │   │   ├── page.tsx
 │   │   │   ├── create/
@@ -140,7 +142,9 @@ ticket-app-2/
 │   │   │       ├── page.tsx
 │   │   │       └── EditUserForm.tsx
 │   │   └── performance/
-│   │       ├── page.tsx               # Month/year filter, period-aggregated stats
+│   │       ├── page.tsx               # Month/year/store filter, period-aggregated stats
+│   │       ├── ExportToPDF.tsx        # Client-side PDF generation
+│   │       ├── SharePerformance.tsx
 │   │       └── LeaderboardSnapshot.tsx
 │   ├── customer/
 │   │   ├── dashboard/page.tsx         # Stat cards + recent tickets (max 5)
@@ -149,7 +153,7 @@ ticket-app-2/
 │   │       ├── page.tsx               # Paginated (10/page), table+card responsive
 │   │       ├── create/
 │   │       │   ├── page.tsx
-│   │       │   └── CreateTicketForm.tsx   # 4-step multi-form, +62 phone prefix
+│   │       │   └── CreateTicketForm.tsx   # 5-step form (Store, Intake fields, T&C)
 │   │       └── [id]/
 │   │           ├── page.tsx               # .ticket-detail-grid, attachment viewer
 │   │           └── TicketChat.tsx
@@ -180,8 +184,10 @@ ticket-app-2/
 │       ├── FileUpload.tsx
 │       ├── Modal.tsx
 │       ├── ProfileForm.tsx        # Shared profile form (name/email/phone/address)
+│       ├── PublicShareButton.tsx  # Copies public ticket URL
 │       ├── RichTextEditor.tsx
-│       └── TagInput.tsx
+│       ├── TagInput.tsx
+│       └── TermsModal.tsx         # T&C policy modal
 ├── lib/
 │   ├── db.ts
 │   ├── session.ts

@@ -367,9 +367,11 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
               <label className="form-label">Service Category</label>
               <select className="form-input" value={serviceCategory} onChange={(e) => setServiceCategory(e.target.value)}>
                 <option value="">None / General</option>
-                <option value="Hardware">Hardware</option>
-                <option value="Software">Software</option>
-                <option value="Network">Network</option>
+                <option value="service">Service</option>
+                <option value="build_pc">Build PC</option>
+                <option value="upgrade">Upgrade</option>
+                <option value="diagnostic">Diagnostic</option>
+                <option value="others">Others</option>
               </select>
             </div>
 

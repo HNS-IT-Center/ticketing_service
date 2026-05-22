@@ -5,7 +5,6 @@ import { createTicketAction } from "@/app/actions/tickets";
 import dynamic from "next/dynamic";
 import TagInput from "@/components/ui/TagInput";
 import FileUpload from "@/components/ui/FileUpload";
-import TermsModal from "@/components/ui/TermsModal";
 import { AlertCircle, ChevronRight, ChevronLeft } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -15,7 +14,6 @@ interface CreateTicketFormProps {
   upgrades: { id: string; name: string; points: number }[];
   technicians: { id: string; name: string }[];
   sales: { id: string; name: string }[];
-  stores: { id: string; name: string; code: string }[];
   userProfile?: { name: string; email: string; phone_number: string; address: string | null };
 }
 
@@ -27,9 +25,9 @@ const TICKET_TYPES = [
   { value: "pc_build", label: "PC Build", desc: "Custom PC assembly" },
 ];
 
-const DEVICE_TYPES = ["PC_Office", "PC_Gaming", "Laptop_Office", "Laptop_Gaming", "Company", "Internet_Cafe"];
+const DEVICE_TYPES = ["PC_Office", "PC_Gaming", "Laptop_Office", "Laptop_Gaming"];
 
-export default function CreateTicketForm({ upgrades, technicians, sales, stores, userProfile }: CreateTicketFormProps) {
+export default function CreateTicketForm({ upgrades, technicians, sales, userProfile }: CreateTicketFormProps) {
   const [step, setStep] = useState(1);
   const [isPending, startTransition] = useTransition();
 
@@ -63,12 +61,6 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
   // Step 2 — Category
   const [ticketType, setTicketType] = useState("");
   const [deviceType, setDeviceType] = useState("");
-  // New CS intake fields
-  const [serviceCategory, setServiceCategory] = useState("");
-  const [storeLocationId, setStoreLocationId] = useState("");
-  const [accessories, setAccessories] = useState("");
-  const [deviceCondition, setDeviceCondition] = useState("");
-  const [isOvernight, setIsOvernight] = useState(false);
 
   // Step 3 — Category-specific
   const [notes, setNotes] = useState("");
@@ -80,12 +72,9 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
   const [selectedSales, setSelectedSales] = useState("");
   const [files, setFiles] = useState<File[]>([]);
 
-  // Step 4 — Pickup & Terms
-  const [pickupMethod, setPickupMethod] = useState<"self_pickup" | "courier">("self_pickup");
-  const [termsAccepted, setTermsAccepted] = useState(false);
-
-  // Step 5 — Confirm
+  // Step 4 — Confirm
   const [checkCorrect, setCheckCorrect] = useState(false);
+  const [checkPromo, setCheckPromo] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
 
@@ -100,7 +89,6 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
     if (step === 2) {
       if (!ticketType) errs.ticketType = "Please select a ticket type";
       if (!deviceType) errs.deviceType = "Please select a device type";
-      if (!storeLocationId) errs.storeLocationId = "Please select a store";
     }
     if (step === 3) {
       if ((ticketType === "service" || ticketType === "warranty_claim") && !notes) {
@@ -120,10 +108,8 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
       }
     }
     if (step === 4) {
-      if (!termsAccepted) errs.termsAccepted = "You must accept the terms to continue";
-    }
-    if (step === 5) {
       if (!checkCorrect) errs.checkCorrect = "Please confirm data correctness";
+      if (!checkPromo) errs.checkPromo = "Please agree to the terms";
     }
     setErrors(errs);
     return Object.keys(errs).length === 0;
@@ -140,35 +126,21 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
       fd.append("device_type", deviceType);
       fd.append("notes", notes);
       fd.append("is_for_self", isForSelf ? "1" : "0");
-      if (!isForSelf) {
-        fd.append("customer_name", name);
-        fd.append("customer_email", email);
-        fd.append("customer_address", address);
-      }
+      if (!isForSelf) fd.append("customer_name", name);
       if (purchaseDate) fd.append("purchase_date", purchaseDate);
       if (cleaningPackage) fd.append("service_package", cleaningPackage);
       selectedUpgrades.forEach((id) => fd.append("upgrade_ids", id));
       if (ticketType === "pc_build") fd.append("components", JSON.stringify(components));
       if (selectedTechnician) fd.append("technician_id", selectedTechnician);
       if (selectedSales) fd.append("sales_id", selectedSales);
-      fd.append("phone", `+62${phone}`);
-      // New CS intake fields
-      if (serviceCategory) fd.append("service_category", serviceCategory);
-      if (storeLocationId) fd.append("store_location_id", storeLocationId);
-      if (accessories) fd.append("accessories", accessories);
-      if (deviceCondition) fd.append("device_condition", deviceCondition);
-      fd.append("is_overnight", isOvernight ? "1" : "0");
-      fd.append("pickup_method", pickupMethod);
-      fd.append("terms_accepted", termsAccepted ? "1" : "0");
-
-      files.forEach((file) => fd.append("files", file));
+      fd.append("phone", `+62${phone}`); // prepend +62 prefix
 
       const result = await createTicketAction(fd);
       if (result?.error) toast.error(result.error);
     });
   };
 
-  const STEPS = ["Personal Info", "Category", "Details", "Pickup & Terms", "Confirm"];
+  const STEPS = ["Personal Info", "Category", "Details", "Confirm"];
 
   return (
     <div style={{ maxWidth: "680px", margin: "0 auto" }}>
@@ -182,8 +154,6 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
           padding: "0.25rem",
           marginBottom: "1.5rem",
           gap: "0.25rem",
-          opacity: step > 1 ? 0.6 : 1,
-          pointerEvents: step > 1 ? "none" : "auto",
         }}
       >
         {[
@@ -194,13 +164,12 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
             key={String(val)}
             type="button"
             onClick={() => handleToggle(val)}
-            disabled={step > 1}
             style={{
               flex: 1,
               padding: "0.625rem 1rem",
               borderRadius: "calc(var(--radius-lg) - 4px)",
               border: "none",
-              cursor: step > 1 ? "not-allowed" : "pointer",
+              cursor: "pointer",
               background: isForSelf === val ? "var(--primary)" : "transparent",
               color: isForSelf === val ? "#fff" : "var(--text-secondary)",
               fontWeight: 600,
@@ -351,51 +320,6 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
               </select>
               {errors.deviceType && <span className="form-error"><AlertCircle size={12} />{errors.deviceType}</span>}
             </div>
-
-            <div className="form-group">
-              <label className="form-label">Store Location *</label>
-              <select className={`form-input ${errors.storeLocationId ? "error" : ""}`} value={storeLocationId} onChange={(e) => setStoreLocationId(e.target.value)}>
-                <option value="">Select store...</option>
-                {stores.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name} ({s.code})</option>
-                ))}
-              </select>
-              {errors.storeLocationId && <span className="form-error"><AlertCircle size={12} />{errors.storeLocationId}</span>}
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Service Category</label>
-              <select className="form-input" value={serviceCategory} onChange={(e) => setServiceCategory(e.target.value)}>
-                <option value="">None / General</option>
-                <option value="service">Service</option>
-                <option value="build_pc">Build PC</option>
-                <option value="upgrade">Upgrade</option>
-                <option value="diagnostic">Diagnostic</option>
-                <option value="others">Others</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Accessories Included</label>
-              <input className="form-input" value={accessories} onChange={(e) => setAccessories(e.target.value)} placeholder="e.g., Charger, Bag" />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Device Condition</label>
-              <input className="form-input" value={deviceCondition} onChange={(e) => setDeviceCondition(e.target.value)} placeholder="e.g., Scratches on lid" />
-            </div>
-
-            <div className="form-group">
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" }}>
-                <input type="checkbox" checked={isOvernight} onChange={(e) => setIsOvernight(e.target.checked)} />
-                <span className="form-label" style={{ marginBottom: 0 }}>Device will stay overnight</span>
-              </label>
-            </div>
-
-            <div style={{ padding: "1rem", background: "var(--cream-dark)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
-              <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.25rem" }}>Checking Fee Policy</p>
-              <p style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>Checking fee is currently free (Rp 0) during early operations.</p>
-            </div>
           </div>
         )}
 
@@ -501,70 +425,13 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
                     {technicians.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
                   </select>
                 </div>
-                <div className="form-group">
-                  <label className="form-label">Attachments (optional)</label>
-                  <FileUpload onChange={setFiles} />
-                </div>
               </>
             )}
           </div>
         )}
 
-        {/* Step 4: Pickup & Terms */}
+        {/* Step 4: Confirm */}
         {step === 4 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-            <h2 style={{ marginBottom: "0.25rem" }}>Pickup & Terms</h2>
-
-            <div className="form-group">
-              <label className="form-label">Pickup Method *</label>
-              <div style={{ display: "flex", gap: "0.75rem" }}>
-                <button
-                  type="button"
-                  onClick={() => setPickupMethod("self_pickup")}
-                  className="btn"
-                  style={{
-                    flex: 1,
-                    background: pickupMethod === "self_pickup" ? "var(--primary)" : "var(--white)",
-                    color: pickupMethod === "self_pickup" ? "#fff" : "var(--text-primary)",
-                    border: `2px solid ${pickupMethod === "self_pickup" ? "var(--primary)" : "var(--border)"}`,
-                    padding: "0.875rem",
-                  }}
-                >
-                  Self Pickup
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setPickupMethod("courier")}
-                  className="btn"
-                  style={{
-                    flex: 1,
-                    background: pickupMethod === "courier" ? "var(--primary)" : "var(--white)",
-                    color: pickupMethod === "courier" ? "#fff" : "var(--text-primary)",
-                    border: `2px solid ${pickupMethod === "courier" ? "var(--primary)" : "var(--border)"}`,
-                    padding: "0.875rem",
-                  }}
-                >
-                  Courier
-                </button>
-              </div>
-            </div>
-
-            <div className="form-group" style={{ marginTop: "0.5rem" }}>
-              <TermsModal />
-              
-              <label style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", cursor: "pointer", marginTop: "1rem" }}>
-                <input type="checkbox" checked={termsAccepted} onChange={(e) => setTermsAccepted(e.target.checked)} style={{ marginTop: "0.2rem" }} />
-                <span style={{ fontSize: "0.9rem" }}>
-                  I have read and agree to the Terms & Conditions
-                </span>
-              </label>
-              {errors.termsAccepted && <span className="form-error"><AlertCircle size={12} />{errors.termsAccepted}</span>}
-            </div>
-          </div>
-        )}
-
-        {/* Step 5: Confirm */}
-        {step === 5 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
             <h2 style={{ marginBottom: "0.25rem" }}>Confirm Submission</h2>
 
@@ -573,7 +440,6 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
               {[
                 ["Ticket Type", TICKET_TYPES.find((t) => t.value === ticketType)?.label],
                 ["Device", deviceType.replace(/_/g, " ")],
-                ["Store", stores.find((s) => s.id === storeLocationId)?.name || ""],
                 ["Name", name],
                 ["Phone", phone],
                 ["Email", email],
@@ -593,6 +459,14 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
                 </span>
               </label>
               {errors.checkCorrect && <span className="form-error"><AlertCircle size={12} />{errors.checkCorrect}</span>}
+
+              <label style={{ display: "flex", gap: "0.75rem", alignItems: "flex-start", cursor: "pointer" }}>
+                <input type="checkbox" checked={checkPromo} onChange={(e) => setCheckPromo(e.target.checked)} style={{ marginTop: "0.2rem" }} />
+                <span style={{ fontSize: "0.9rem" }}>
+                  I agree that my data may be used for promotional and service improvement purposes.
+                </span>
+              </label>
+              {errors.checkPromo && <span className="form-error"><AlertCircle size={12} />{errors.checkPromo}</span>}
             </div>
           </div>
         )}
@@ -605,7 +479,7 @@ export default function CreateTicketForm({ upgrades, technicians, sales, stores,
             </button>
           ) : <div />}
 
-          {step < 5 ? (
+          {step < 4 ? (
             <button type="button" onClick={next} className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
               Next <ChevronRight size={16} />
             </button>

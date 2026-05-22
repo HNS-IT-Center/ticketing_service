@@ -13,9 +13,10 @@ const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
 // ─── Ticket Point Calculator ───────────────────────────────────────────────
 function getTicketPoints(type: string): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 3;
-  return 2;
+  if (type === "service") return 4;
+  if (type === "warranty_claim") return 2;
+  if (type === "cleaning") return 4;
+  return 3;
 }
 
 // ─── Create Ticket ─────────────────────────────────────────────────────────
@@ -25,12 +26,11 @@ export async function createTicketAction(formData: FormData) {
   const ticket_type = formData.get("ticket_type") as string;
   const device_type = formData.get("device_type") as string;
   const notes = formData.get("notes") as string | null;
-  const is_for_self = formData.get("is_for_self") === "1";
+  const customer_type = (formData.get("customer_type") as string) || "User";
   const customer_name = formData.get("customer_name") as string | null;
   const customer_email = formData.get("customer_email") as string | null;
   const customer_address = formData.get("customer_address") as string | null;
-  const phone = formData.get("phone") as string;
-  const customer_phone = is_for_self ? null : phone;
+  const customer_phone = formData.get("phone") as string;
   const technician_id = (formData.get("technician_id") as string | null) || null;
   const sales_id = (formData.get("sales_id") as string | null) || null;
 
@@ -40,6 +40,8 @@ export async function createTicketAction(formData: FormData) {
   const accessories = (formData.get("accessories") as string | null) || null;
   const device_condition = (formData.get("device_condition") as string | null) || null;
   const is_overnight = formData.get("is_overnight") === "1";
+  const is_overnight_check = formData.get("is_overnight_check") === "1";
+  const checking_fee = is_overnight_check ? 50000 : null;
   const pickup_method = (formData.get("pickup_method") as string | null) || null;
   const terms_accepted = formData.get("terms_accepted") === "1";
   const technician_notes = (formData.get("technician_notes") as string | null) || null;
@@ -65,16 +67,7 @@ export async function createTicketAction(formData: FormData) {
   const public_share_token = randomBytes(24).toString("hex");
   const points = getTicketPoints(ticket_type);
 
-  // Workload check if technician assigned (must be done before ticket creation)
-  if (technician_id) {
-    const workload = await db.technicianWorkload.findUnique({
-      where: { technician_id },
-      select: { current_points: true, max_points: true },
-    });
-    if (workload && workload.current_points + points > workload.max_points) {
-      return { error: "Selected technician has reached their workload limit" };
-    }
-  }
+  // Workload check removed in Phase 3
 
   // Build the category-specific detail create operations for the transaction
   const ticket = await db.ticket.create({
@@ -83,8 +76,9 @@ export async function createTicketAction(formData: FormData) {
       user_id: session.userId,
       ticket_type: ticket_type as any,
       device_type: device_type as any,
-      is_for_self,
-      customer_name: is_for_self ? null : customer_name,
+      is_for_self: false,
+      customer_type: customer_type as any,
+      customer_name,
       customer_phone,
       customer_email,
       customer_address,
@@ -98,6 +92,8 @@ export async function createTicketAction(formData: FormData) {
       accessories,
       device_condition,
       is_overnight,
+      is_overnight_check,
+      checking_fee,
       pickup_method: pickup_method as any,
       terms_accepted,
       technician_notes,
@@ -216,7 +212,7 @@ export async function createTicketAction(formData: FormData) {
   // Run all follow-up writes in parallel
   await Promise.all(followUps);
 
-  redirect(`/customer/tickets/${ticket.id}?success=1`);
+  redirect(`/technician/tickets`);
 }
 
 // ─── Send Message ──────────────────────────────────────────────────────────

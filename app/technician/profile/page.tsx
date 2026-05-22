@@ -40,6 +40,21 @@ export default async function TechnicianProfilePage() {
   const currentLoad   = workload?.current_points ?? 0;
   const maxLoad       = workload?.max_points ?? 7;
 
+  const getLevelInfo = (tickets: number) => {
+    if (tickets <= 100) {
+      const level = Math.floor(tickets / 10) + 1;
+      const progress = tickets % 10;
+      return { level, progress, required: 10 };
+    } else {
+      const extra = tickets - 100;
+      const level = 11 + Math.floor(extra / 15);
+      const progress = extra % 15;
+      return { level, progress, required: 15 };
+    }
+  };
+
+  const levelInfo = getLevelInfo(totalHandled);
+
   const statCards = [
     { label: "Tickets Handled", value: totalHandled, icon: <Wrench size={20} />, color: "var(--primary)" },
     { label: "Completed", value: totalSuccess, icon: <CheckCircle size={20} />, color: "#16a34a" },
@@ -108,6 +123,25 @@ export default async function TechnicianProfilePage() {
           <div
             className={`workload-fill${currentLoad >= maxLoad ? " danger" : ""}`}
             style={{ width: `${Math.min((currentLoad / maxLoad) * 100, 100)}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Technician Leveling bar */}
+      <div className="card">
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem", alignItems: "center" }}>
+          <span style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <Trophy size={18} />
+            Level {levelInfo.level}
+          </span>
+          <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 500 }}>
+            {levelInfo.progress} / {levelInfo.required} Tickets to next level
+          </span>
+        </div>
+        <div className="workload-bar" style={{ height: "12px", background: "var(--cream-dark)" }}>
+          <div
+            className="workload-fill"
+            style={{ width: `${Math.min((levelInfo.progress / levelInfo.required) * 100, 100)}%`, background: "var(--primary)" }}
           />
         </div>
       </div>

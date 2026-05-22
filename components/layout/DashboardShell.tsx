@@ -31,21 +31,18 @@ type NavItem = {
 };
 
 const NAV_ITEMS: Record<string, NavItem[]> = {
-  customer: [
-    { href: "/customer/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/customer/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
-    { href: "/customer/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-    { href: "/customer/profile", label: "Profile", icon: <User size={18} /> },
-  ],
   technician: [
     { href: "/technician/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/technician/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
+    { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+    { href: "/technician/schedule", label: "Schedule", icon: <Users size={18} /> },
     { href: "/technician/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
     { href: "/technician/profile", label: "Profile", icon: <User size={18} /> },
   ],
   admin: [
     { href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
+    { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
     { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
     { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
     { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
@@ -53,20 +50,19 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { href: "/admin/logs", label: "Logs", icon: <Activity size={18} /> },
     { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
   ],
-  // Sales (CS) — shared admin layout with filtered nav
   sales: [
     { href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
+    { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
     { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
     { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
   ],
 };
 
 const ROLE_LABELS: Record<string, string> = {
-  customer: "Customer",
   technician: "Technician",
   admin: "Administrator",
-  sales: "Customer Service",
+  sales: "Sales",
 };
 
 interface DashboardShellProps {

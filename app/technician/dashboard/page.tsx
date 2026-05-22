@@ -25,7 +25,7 @@ export default async function TechnicianDashboard() {
   });
   const storeIds = assignments.map((a) => a.store_id);
 
-  const [unassigned, myTickets, workload, performance] = await Promise.all([
+  const [unassigned, myTickets, performance] = await Promise.all([
     db.ticket.findMany({
       where: { 
         technician_id: null, 
@@ -45,13 +45,10 @@ export default async function TechnicianDashboard() {
       take: 10,
       include: { user: { select: { name: true } } },
     }),
-    db.technicianWorkload.findUnique({ where: { technician_id: session.userId } }),
     db.technicianPerformance.findUnique({ where: { technician_id: session.userId } }),
   ]);
 
-  const currentPoints = workload?.current_points ?? 0;
-  const maxPoints = workload?.max_points ?? 7;
-  const pct = Math.min((currentPoints / maxPoints) * 100, 100);
+
 
   const now = new Date();
   const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth();
@@ -77,21 +74,7 @@ export default async function TechnicianDashboard() {
 
       {/* Stats row */}
       <div className="tech-stats-grid">
-        {/* Workload */}
-        <div className="stat-card tech-workload-card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.75rem" }}>
-            <h3 style={{ fontSize: "1rem" }}>Current Workload</h3>
-            <span style={{ fontWeight: 700, fontSize: "1.125rem", color: pct >= 100 ? "var(--accent)" : "var(--primary)" }}>
-              {currentPoints} / {maxPoints} pts
-            </span>
-          </div>
-          <div className="workload-bar">
-            <div className={`workload-fill ${pct >= 100 ? "danger" : ""}`} style={{ width: `${pct}%` }} />
-          </div>
-          <p style={{ fontSize: "0.8rem", color: "var(--text-muted)", marginTop: "0.5rem" }}>
-            {pct >= 100 ? "⚠️ Workload full — complete tickets to take new ones" : `${maxPoints - currentPoints} pts remaining`}
-          </p>
-        </div>
+
 
         {/* Stat mini cards */}
         {[
@@ -175,8 +158,6 @@ export default async function TechnicianDashboard() {
         </h3>
         <AvailableTickets 
           tickets={unassigned} 
-          currentPoints={currentPoints} 
-          maxPoints={maxPoints} 
         />
       </div>
     </div>

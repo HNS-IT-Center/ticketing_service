@@ -24,12 +24,8 @@ function getTicketPoints(type: string) {
 
 export default function AvailableTickets({
   tickets,
-  currentPoints,
-  maxPoints,
 }: {
   tickets: UnassignedTicket[];
-  currentPoints: number;
-  maxPoints: number;
 }) {
   const [sort, setSort] = useState<SortType>("default");
 
@@ -103,7 +99,7 @@ export default function AvailableTickets({
                     <TakeTicketButton
                       ticketId={t.id}
                       points={getTicketPoints(t.ticket_type)}
-                      canTake={currentPoints + getTicketPoints(t.ticket_type) <= maxPoints}
+                      canTake={true}
                     />
                   </td>
                 </tr>
@@ -135,7 +131,7 @@ export default function AvailableTickets({
                 <TakeTicketButton
                   ticketId={t.id}
                   points={pts}
-                  canTake={currentPoints + pts <= maxPoints}
+                  canTake={true}
                 />
               </div>
             </div>

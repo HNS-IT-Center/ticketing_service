@@ -92,6 +92,7 @@ export async function updateTicketStatusAction(formData: FormData) {
   const ticketId = formData.get("ticketId") as string;
   const newStatus = formData.get("newStatus") as "on_progress" | "done" | "cancelled" | "rejected";
   const reason = formData.get("reason") as string | null;
+  const eventAction = formData.get("eventAction") as "START" | "PAUSE" | "RESUME" | "DONE" | null;
   const files = formData.getAll("files") as File[];
 
   const session = await requireRole("Technician");
@@ -135,6 +136,16 @@ export async function updateTicketStatusAction(formData: FormData) {
     },
   });
 
+  if (eventAction) {
+    await db.ticketTimeLog.create({
+      data: {
+        ticket_id: ticketId,
+        event: eventAction,
+        reason: reason || null,
+      }
+    });
+  }
+
   // Handle Attachments
   if (files && files.length > 0) {
     const { createServerSupabaseClient } = await import("@/lib/supabase");
@@ -147,7 +158,7 @@ export async function updateTicketStatusAction(formData: FormData) {
         .from("attachments")
         .upload(path, file, { contentType: file.type });
 
-      if (error) return;
+      if (error) return null;
 
       const {
         data: { publicUrl },
@@ -160,8 +171,22 @@ export async function updateTicketStatusAction(formData: FormData) {
       await db.ticketAttachment.create({
         data: { ticket_id: ticketId, file_url: publicUrl, file_type: fileType },
       });
+
+      return { publicUrl, fileType };
     });
-    await Promise.all(uploadOps);
+    const uploadedFiles = await Promise.all(uploadOps);
+
+    // Save first image as first_build_url for PC build ticket when marked done
+    if (newStatus === "done" && ticket.ticket_type === "pc_build") {
+      const firstImage = uploadedFiles.find((f) => f && f.fileType === "image");
+      if (firstImage) {
+        await db.ticketPcBuildDetail.upsert({
+          where: { ticket_id: ticketId },
+          create: { ticket_id: ticketId, first_build_url: firstImage.publicUrl },
+          update: { first_build_url: firstImage.publicUrl },
+        });
+      }
+    }
   }
 
   // Update workload + performance when terminal

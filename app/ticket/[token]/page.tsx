@@ -28,6 +28,7 @@ export default async function PublicTicketPage({
         orderBy: { created_at: "asc" },
         include: { sender: { select: { name: true, role: true } } },
       },
+      time_logs: { orderBy: { created_at: "asc" } },
     },
   });
 
@@ -46,6 +47,31 @@ export default async function PublicTicketPage({
   const currentIdx = STATUS_STEPS.findIndex((s) => s.key === ticket.status);
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
   const shareUrl = `${appUrl}/ticket/${token}`;
+
+  let totalTimeMs = 0;
+  let lastStartTime: Date | null = null;
+  for (const log of ticket.time_logs) {
+    if (log.event === "START" || log.event === "RESUME") {
+      lastStartTime = log.created_at;
+    } else if ((log.event === "PAUSE" || log.event === "DONE") && lastStartTime) {
+      totalTimeMs += log.created_at.getTime() - lastStartTime.getTime();
+      lastStartTime = null;
+    }
+  }
+  // If still actively working, add time up to now
+  if (lastStartTime && ticket.status === "on_progress" && !ticket.time_logs.find(l => l.event === "PAUSE" && l.created_at > lastStartTime!)) {
+    totalTimeMs += Date.now() - lastStartTime.getTime();
+  }
+
+  const formatDuration = (ms: number) => {
+    if (ms === 0) return "Belum dimulai";
+    const mins = Math.floor(ms / 60000);
+    const hours = Math.floor(mins / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days} Hari ${hours % 24} Jam`;
+    if (hours > 0) return `${hours} Jam ${mins % 60} Menit`;
+    return `${mins} Menit`;
+  };
 
   return (
     <div style={{
@@ -95,7 +121,8 @@ export default async function PublicTicketPage({
                 ["Perangkat", ticket.device_type.replace(/_/g, " ")],
                 ["Dibuat", formatDateTime(ticket.created_at)],
                 ["Pengiriman", ticket.pickup_method === "courier" ? "Kurir" : ticket.pickup_method === "self_pickup" ? "Ambil Sendiri" : "—"],
-                ["Overnight", ticket.is_overnight ? "Ya" : "Tidak"],
+                ["Waktu Kerja Aktif", formatDuration(totalTimeMs)],
+                ...(ticket.is_overnight_check ? [["Cek & Diagnosa", "Overnight (Fee Rp. 50,000)"]] : []),
               ].map(([label, value]) => (
                 <div key={label as string}>
                   <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginBottom: "0.2rem" }}>{label}</div>
@@ -135,6 +162,20 @@ export default async function PublicTicketPage({
               ))}
             </div>
           </div>
+
+          {/* Progress Proof Image */}
+          {ticket.progress_proof_url && (
+            <div style={{ padding: "1.5rem 1.75rem", borderBottom: "1px solid #f3f4f6" }}>
+              <div style={{ fontWeight: 600, fontSize: "0.9375rem", color: "#111827", marginBottom: "1rem" }}>
+                Bukti Progress / Pengambilan
+              </div>
+              <img 
+                src={ticket.progress_proof_url} 
+                alt="Progress Proof" 
+                style={{ width: "100%", maxHeight: "300px", objectFit: "cover", borderRadius: "12px", border: "1px solid #e5e7eb" }}
+              />
+            </div>
+          )}
 
           {/* Share button */}
           <div style={{ padding: "1rem 1.75rem" }}>

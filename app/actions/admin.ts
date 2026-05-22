@@ -56,6 +56,25 @@ export async function updateUserAction(userId: string, formData: FormData) {
   const max_points = formData.get("max_points") as string | null;
   const is_team_leader = formData.get("is_team_leader") === "1";
 
+  if (is_team_leader) {
+    const stores = await db.technicianStoreAssignment.findMany({
+      where: { technician_id: userId },
+      select: { store_id: true }
+    });
+    for (const assignment of stores) {
+      const existingLeader = await db.technicianStoreAssignment.findFirst({
+        where: {
+          store_id: assignment.store_id,
+          technician_id: { not: userId },
+          technician: { is_team_leader: true }
+        }
+      });
+      if (existingLeader) {
+        return { error: "One of the assigned stores already has a Team Leader. Max 1 Team Leader per store." };
+      }
+    }
+  }
+
   await db.user.update({
     where: { id: userId },
     data: {
@@ -154,7 +173,10 @@ export async function adminUpdateTicketStatusAction(
 
   const ticket = await db.ticket.findUnique({
     where: { id: ticketId },
-    include: { user: { select: { name: true, email: true } } },
+    include: { 
+      user: { select: { name: true, email: true } },
+      cleaning_detail: true 
+    },
   });
   if (!ticket) return { error: "Ticket not found" };
 
@@ -176,7 +198,14 @@ export async function adminUpdateTicketStatusAction(
   // Update technician performance if closing a ticket
   const isTerminal = ["done", "cancelled", "rejected", "completed"].includes(newStatus);
   if (isTerminal && ticket.technician_id) {
-    const points = ticket.ticket_type === "pc_build" ? 4 : ticket.ticket_type === "service" ? 3 : 2;
+    let points = 3; // default 'others'
+    if (ticket.ticket_type === "service" || ticket.ticket_type === "pc_build") {
+      points = 4;
+    } else if (ticket.ticket_type === "warranty_claim") {
+      points = 2;
+    } else if (ticket.ticket_type === "cleaning" && ticket.cleaning_detail?.service_package === "Deep_Clean") {
+      points = 4;
+    }
     await db.technicianPerformance.update({
       where: { technician_id: ticket.technician_id },
       data: {
@@ -192,18 +221,20 @@ export async function adminUpdateTicketStatusAction(
     });
   }
 
-  // Notify customer
-  await db.notification.create({
-    data: {
-      user_id: ticket.user_id,
-      ticket_id: ticketId,
-      type: "status_update",
-    },
-  });
+  // Notify customer if they have a user account
+  if (ticket.user_id) {
+    await db.notification.create({
+      data: {
+        user_id: ticket.user_id,
+        ticket_id: ticketId,
+        type: "status_update",
+      },
+    });
+  }
 
   // Send email to customer if they have an email address
-  const customerEmail = ticket.customer_email || ticket.user.email;
-  const customerName = ticket.customer_name || ticket.user.name;
+  const customerEmail = ticket.customer_email || ticket.user?.email;
+  const customerName = ticket.customer_name || ticket.user?.name;
   if (customerEmail) {
     await sendTicketStatusEmail({
       to: customerEmail,

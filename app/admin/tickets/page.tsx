@@ -14,7 +14,7 @@ export default async function AdminTicketsPage({
 }: {
   searchParams: Promise<{ status?: string; q?: string; page?: string; sort?: string }>;
 }) {
-  await requireRole("Administrator");
+  const session = await requireRole("Administrator", "Sales");
   const params = await searchParams;
   const statusFilter = params.status || "all";
   const query = params.q || "";
@@ -23,6 +23,7 @@ export default async function AdminTicketsPage({
   const sortParam = params.sort || "created_desc";
 
   const where = {
+    ...(session.role === "Sales" ? { sales_id: session.userId } : {}),
     ...(statusFilter !== "all" ? { status: statusFilter as any } : {}),
     ...(query
       ? {

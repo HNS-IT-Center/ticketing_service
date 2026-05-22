@@ -143,10 +143,7 @@ export default function LoginPage() {
             fontSize: "0.9375rem",
           }}
         >
-          Don&apos;t have an account?{" "}
-          <Link href="/register" style={{ fontWeight: 600 }}>
-            Create one
-          </Link>
+          Staff login only.
         </p>
       </div>
     </div>

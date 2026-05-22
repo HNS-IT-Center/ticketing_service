@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Badge from "@/components/ui/Badge";
-import TicketChat from "@/app/customer/tickets/[id]/TicketChat";
+import TicketChat from "@/components/TicketChat";
 import StatusUpdater from "./StatusUpdater";
 import { markMessagesReadAction } from "@/app/actions/tickets";
 import { FileText, Film, ImageIcon, File } from "lucide-react";
@@ -37,6 +37,8 @@ export default async function TechnicianTicketDetailPage({
       cleaning_detail: true,
       upgrade_details: { include: { upgrade: true } },
       pc_components: true,
+      pc_build_detail: true,
+      time_logs: { orderBy: { created_at: "asc" } },
     },
   });
 
@@ -60,7 +62,7 @@ export default async function TechnicianTicketDetailPage({
           </p>
         </div>
         {isAssigned && (
-          <StatusUpdater ticketId={ticket.id} currentStatus={ticket.status} />
+          <StatusUpdater ticketId={ticket.id} currentStatus={ticket.status} timeLogs={ticket.time_logs} />
         )}
       </div>
 

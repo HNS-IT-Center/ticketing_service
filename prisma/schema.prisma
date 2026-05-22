@@ -39,6 +39,7 @@ enum ServiceCategory {
   build_pc
   upgrade
   diagnostic
+  on_site
   others
 }
 
@@ -65,8 +66,20 @@ enum DeviceType {
   PC_Gaming
   Laptop_Office
   Laptop_Gaming
-  Company
+}
+
+enum CustomerType {
+  User
   Internet_Cafe
+  Company
+  Dealer
+}
+
+enum TimeLogEvent {
+  START
+  PAUSE
+  RESUME
+  DONE
 }
 
 enum FileType {
@@ -150,6 +163,9 @@ model User {
   performance        TechnicianPerformance?
   leaderboards       Leaderboard[]
   store_assignments  TechnicianStoreAssignment[]
+  leaves             TechnicianLeave[]
+  overridden_shifts  ShiftOverride[]       @relation("OriginalShift")
+  overriding_shifts  ShiftOverride[]       @relation("OverrideShift")
 
   @@index([email])
 }
@@ -162,8 +178,8 @@ model Ticket {
   id          String @id @default(cuid())
   ticket_code String @unique
 
-  user_id String
-  user    User   @relation("TicketUser", fields: [user_id], references: [id])
+  user_id String?
+  user    User?   @relation("TicketUser", fields: [user_id], references: [id])
 
   ticket_type      TicketType
   service_category ServiceCategory?  // CS intake label (what customer came in for)
@@ -189,13 +205,20 @@ model Ticket {
   customer_email   String?
   customer_address String?
 
+  customer_type    CustomerType @default(User)
+
   // CS intake fields
   accessories      String?        // accessories included with device
   device_condition String?        // customer-described physical condition
   is_overnight     Boolean  @default(false)  // true = multi-day service
+  is_overnight_check Boolean @default(false)
   checking_fee     Decimal? @db.Decimal(12,2)
   pickup_method    PickupMethod?
   terms_accepted   Boolean  @default(false)
+
+  payment_proof_url   String?
+  delivery_proof_url  String?
+  progress_proof_url  String?
 
   // Public access
   public_chat_enabled Boolean @default(false)
@@ -212,6 +235,7 @@ model Ticket {
   attachments      TicketAttachment[]
   messages         TicketMessage[]
   status_logs      TicketStatusLog[]
+  time_logs        TicketTimeLog[]
   notifications    Notification[]
   service_detail   TicketServiceDetail?
   warranty_detail  TicketWarrantyDetail?
@@ -267,9 +291,11 @@ model TicketUpgradeDetail {
 }
 
 model TicketPcBuildDetail {
-  id        String @id @default(cuid())
-  ticket_id String @unique
-  ticket    Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  id                 String  @id @default(cuid())
+  ticket_id          String  @unique
+  ticket             Ticket  @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  first_build_url    String? // Uploaded by technician upon marking done
+  revision_build_url String? // Uploaded by assigned Sales
 }
 
 model TicketPcBuildComponent {
@@ -385,4 +411,44 @@ model Notification {
   created_at DateTime @default(now())
 
   @@index([user_id])
+}
+
+// ─────────────────────────────────────────────
+// TIME LOGGING & SCHEDULING (PHASE 3)
+// ─────────────────────────────────────────────
+
+model TicketTimeLog {
+  id         String       @id @default(cuid())
+  ticket_id  String
+  ticket     Ticket       @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  event      TimeLogEvent
+  reason     String?
+  created_at DateTime     @default(now())
+
+  @@index([ticket_id])
+}
+
+model TechnicianLeave {
+  id            String   @id @default(cuid())
+  technician_id String
+  technician    User     @relation(fields: [technician_id], references: [id], onDelete: Cascade)
+  date          DateTime @db.Date
+  reason        String?
+  is_off_day    Boolean  @default(false)
+  created_at    DateTime @default(now())
+
+  @@unique([technician_id, date])
+}
+
+model ShiftOverride {
+  id               String   @id @default(cuid())
+  original_tech_id String
+  override_tech_id String
+  original_tech    User     @relation("OriginalShift", fields: [original_tech_id], references: [id], onDelete: Cascade)
+  override_tech    User     @relation("OverrideShift", fields: [override_tech_id], references: [id], onDelete: Cascade)
+  date             DateTime @db.Date
+  shift            Shift
+  created_at       DateTime @default(now())
+
+  @@unique([original_tech_id, date])
 }

@@ -4,7 +4,6 @@ import { decrypt } from "@/lib/session";
 const PUBLIC_ROUTES = ["/login", "/register", "/ticket"];
 const ADMIN_ROUTES = ["/admin"];
 const TECHNICIAN_ROUTES = ["/technician"];
-const CUSTOMER_ROUTES = ["/customer"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -55,28 +54,16 @@ export async function proxy(request: NextRequest) {
     );
   }
 
-  if (
-    CUSTOMER_ROUTES.some((r) => pathname.startsWith(r)) &&
-    session.role !== "Customer" &&
-    session.role !== "Sales"
-  ) {
-    return NextResponse.redirect(
-      new URL(getDashboardRoute(session.role), request.url)
-    );
-  }
-
   return NextResponse.next();
 }
 
 function getDashboardRoute(role: string): string {
   switch (role) {
     case "Administrator":
+    case "Sales":
       return "/admin/dashboard";
     case "Technician":
       return "/technician/dashboard";
-    case "Customer":
-    case "Sales":
-      return "/customer/dashboard";
     default:
       return "/login";
   }

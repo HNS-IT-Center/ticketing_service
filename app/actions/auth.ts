@@ -8,16 +8,6 @@ import { createSession, deleteSession } from "@/lib/session";
 
 // ─── Schemas ───────────────────────────────────────────────────────────────
 
-const RegisterSchema = z.object({
-  name: z.string().min(2, "Name must be at least 2 characters"),
-  email: z.string().email("Invalid email address"),
-  phone_number: z
-    .string()
-    .regex(/^\+62\d{9,13}$/, "Phone must start with +62 and be 9-13 digits"),
-  address: z.string().min(5, "Address must be at least 5 characters"),
-  password: z.string().min(8, "Password must be at least 8 characters"),
-});
-
 const LoginSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(1, "Password is required"),
@@ -29,47 +19,8 @@ export type FormState = {
 } | undefined;
 
 // ─── Register ──────────────────────────────────────────────────────────────
-
-export async function registerAction(
-  state: FormState,
-  formData: FormData
-): Promise<FormState> {
-  const raw = {
-    name: formData.get("name"),
-    email: formData.get("email"),
-    phone_number: formData.get("phone_number"),
-    address: formData.get("address"),
-    password: formData.get("password"),
-  };
-
-  const validated = RegisterSchema.safeParse(raw);
-  if (!validated.success) {
-    return { errors: validated.error.flatten().fieldErrors };
-  }
-
-  const { name, email, phone_number, address, password } = validated.data;
-
-  const existing = await db.user.findUnique({ where: { email } });
-  if (existing) {
-    return { errors: { email: ["Email already in use"] } };
-  }
-
-  const hashedPassword = await bcrypt.hash(password, 12);
-
-  const user = await db.user.create({
-    data: {
-      name,
-      email,
-      phone_number,
-      address,
-      password: hashedPassword,
-      role: "Customer",
-    },
-  });
-
-  await createSession(user.id, user.role, user.name);
-  redirect("/customer/dashboard");
-}
+// Registration for customers is disabled in Phase 3.
+// Admins create staff accounts directly.
 
 // ─── Login ─────────────────────────────────────────────────────────────────
 
@@ -104,11 +55,14 @@ export async function loginAction(
   // Redirect based on role
   switch (user.role) {
     case "Administrator":
+    case "Sales":
       redirect("/admin/dashboard");
     case "Technician":
       redirect("/technician/dashboard");
+    case "Customer":
     default:
-      redirect("/customer/dashboard");
+      await deleteSession();
+      return { message: "Customer login is disabled. Please use your ticket link." };
   }
 }
 

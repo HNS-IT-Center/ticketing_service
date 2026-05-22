@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Badge from "@/components/ui/Badge";
-import TicketChat from "@/app/customer/tickets/[id]/TicketChat";
+import TicketChat from "@/components/TicketChat";
 import AdminAssignPanel from "./AdminAssignPanel";
 import AdminStatusPanel from "./AdminStatusPanel";
 import AdminWorkflowPanel from "./AdminWorkflowPanel";
@@ -10,6 +10,8 @@ import PublicChatToggle from "./PublicChatToggle";
 import { FileText, Film, File, Link2 } from "lucide-react";
 import Link from "next/link";
 import { formatDateTime } from "@/lib/utils";
+import PcBuildHandover from "./PcBuildHandover";
+import CustomerWhatsAppActions from "./CustomerWhatsAppActions";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -43,6 +45,7 @@ export default async function AdminTicketDetailPage({
         upgrade_details: { include: { upgrade: true } },
         pc_components: true,
         attachments: true,
+        pc_build_detail: true,
       },
     }),
     db.user.findMany({
@@ -58,6 +61,11 @@ export default async function AdminTicketDetailPage({
   ]);
 
   if (!ticket) notFound();
+
+  // Sales authorization guard: cannot access if not assigned
+  if (session.role === "Sales" && ticket.sales_id !== session.userId) {
+    notFound();
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -138,6 +146,14 @@ export default async function AdminTicketDetailPage({
                 </div>
               ))}
             </div>
+            
+            <CustomerWhatsAppActions 
+              customerPhone={(ticket.is_for_self ? ticket.user.phone_number : ticket.customer_phone) || ""}
+              customerName={(ticket.is_for_self ? ticket.user.name : ticket.customer_name) || "Customer"}
+              ticketCode={ticket.ticket_code}
+              status={ticket.status}
+              publicLink={ticket.public_share_token}
+            />
           </div>
 
           {/* Assignment panel */}
@@ -154,6 +170,7 @@ export default async function AdminTicketDetailPage({
             ticketId={ticket.id}
             currentStatus={ticket.status as any}
             pickupMethod={ticket.pickup_method}
+            customerAddress={ticket.is_for_self ? ticket.user.address : ticket.customer_address}
             userRole={session.role}
           />
 
@@ -207,6 +224,18 @@ export default async function AdminTicketDetailPage({
                 ))}
               </div>
             </div>
+          )}
+
+          {/* PC Build Handover Verification */}
+          {ticket.ticket_type === "pc_build" && (
+            <PcBuildHandover
+              ticketId={ticket.id}
+              firstBuildUrl={ticket.pc_build_detail?.first_build_url ?? null}
+              revisionBuildUrl={ticket.pc_build_detail?.revision_build_url ?? null}
+              status={ticket.status}
+              userRole={session.role}
+              isAssignedSales={ticket.sales_id === session.userId}
+            />
           )}
 
           {/* Attachments */}

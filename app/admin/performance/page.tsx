@@ -25,8 +25,7 @@ type Row = {
   success: number;
   failed: number;
   points: number;
-  currentLoad: number;
-  maxLoad: number;
+  activeTickets: number;
   details?: Record<string, TicketDetails>;
 };
 
@@ -119,7 +118,7 @@ export default async function AdminPerformancePage({
           shift: u?.shift ?? null,
           workDays: Array.isArray(u?.work_days) ? (u!.work_days as string[]) : [],
           tickets: 0, success: 0, failed: 0, points: 0,
-          currentLoad: 0, maxLoad: 7,
+          activeTickets: 0,
         });
       }
       return techMap.get(techId)!;
@@ -139,14 +138,16 @@ export default async function AdminPerformancePage({
       row.failed++;
     }
 
-    // Fetch workload separately for display
-    const workloads = await db.technicianWorkload.findMany({
-      where: { technician_id: { in: Array.from(techMap.keys()) } },
-      select: { technician_id: true, current_points: true, max_points: true },
+    // Fetch active tickets for display
+    const activeTicketsData = await db.ticket.groupBy({
+      by: ["technician_id"],
+      where: { technician_id: { in: Array.from(techMap.keys()) }, status: { in: ["waiting", "on_progress"] } },
+      _count: { id: true },
     });
-    for (const wl of workloads) {
-      const row = techMap.get(wl.technician_id);
-      if (row) { row.currentLoad = wl.current_points; row.maxLoad = wl.max_points; }
+    for (const data of activeTicketsData) {
+      if (!data.technician_id) continue;
+      const row = techMap.get(data.technician_id);
+      if (row) { row.activeTickets = data._count.id; }
     }
 
     rows = Array.from(techMap.values()).sort((a, b) => b.points - a.points);
@@ -163,17 +164,17 @@ export default async function AdminPerformancePage({
       where: { id: { in: techIds } },
       select: { id: true, name: true, shift: true, work_days: true },
     });
-    const workloads = await db.technicianWorkload.findMany({
-      where: { technician_id: { in: techIds } },
-      select: { technician_id: true, current_points: true, max_points: true },
+    const activeTicketsData = await db.ticket.groupBy({
+      by: ["technician_id"],
+      where: { technician_id: { in: techIds }, status: { in: ["waiting", "on_progress"] } },
+      _count: { id: true },
     });
 
     const userMap  = new Map(users.map((u) => [u.id, u]));
-    const loadMap  = new Map(workloads.map((w) => [w.technician_id, w]));
+    const activeMap = new Map(activeTicketsData.map((d) => [d.technician_id, d._count.id]));
 
     rows = performance.map((p) => {
       const u  = userMap.get(p.technician_id);
-      const wl = loadMap.get(p.technician_id);
       return {
         id: p.technician_id,
         name: u?.name ?? "Unknown",
@@ -183,8 +184,7 @@ export default async function AdminPerformancePage({
         success: p.success_count,
         failed: p.failed_count,
         points: p.total_points_completed,
-        currentLoad: wl?.current_points ?? 0,
-        maxLoad: wl?.max_points ?? 7,
+        activeTickets: activeMap.get(p.technician_id) ?? 0,
       };
     });
   }
@@ -304,13 +304,12 @@ export default async function AdminPerformancePage({
             <thead>
               <tr>
                 <th>Rank</th><th>Technician</th><th>Shift</th>
-                <th>Workload</th><th>Tickets</th>
+                <th>Active Tickets</th><th>Tickets Completed</th>
                 <th>Success</th><th>Failed</th><th>Points</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((p, i) => {
-                const pct = p.maxLoad ? Math.round((p.currentLoad / p.maxLoad) * 100) : 0;
                 return (
                   <tr key={p.id}>
                     <td style={{ fontWeight: 800, color: i === 0 ? "#ca8a04" : "var(--text-muted)" }}>
@@ -337,14 +336,9 @@ export default async function AdminPerformancePage({
                     </td>
                     <td style={{ textTransform: "capitalize" }}>{p.shift ?? "—"}</td>
                     <td>
-                      <div style={{ minWidth: "100px" }}>
-                        <div style={{ fontSize: "0.8rem", marginBottom: "0.2rem" }}>
-                          {p.currentLoad}/{p.maxLoad} pts
-                        </div>
-                        <div className="workload-bar">
-                          <div className={`workload-fill ${pct >= 100 ? "danger" : ""}`} style={{ width: `${pct}%` }} />
-                        </div>
-                      </div>
+                      <span className="badge badge-technician">
+                        {p.activeTickets} active
+                      </span>
                     </td>
                     <td style={{ fontWeight: 600 }}>{p.tickets}</td>
                     <td style={{ color: "#16a34a", fontWeight: 600 }}>{p.success}</td>

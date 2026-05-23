@@ -24,7 +24,7 @@ export default async function StoresPage() {
         </div>
         <Link
           href="/admin/stores/create"
-          className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+          className="btn btn-primary"
         >
           <Plus size={16} />
           Add Store
@@ -55,32 +55,29 @@ export default async function StoresPage() {
                     <Store size={20} className="text-indigo-600" />
                   </div>
                   <div>
-                    <div className="font-bold text-gray-900">{store.name}</div>
-                    <div className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded mt-0.5 inline-block">
+                    <div className="font-bold text-gray-900" style={{ fontSize: "1.1rem" }}>{store.name}</div>
+                    <div className="badge" style={{ background: "var(--cream-dark)", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
                       {store.code}
                     </div>
                   </div>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                  store.is_active
-                    ? "bg-green-50 text-green-700"
-                    : "bg-gray-100 text-gray-500"
-                }`}>
+                <span className={`badge ${store.is_active ? "badge-done" : "badge-cancelled"}`}>
                   {store.is_active ? "Active" : "Inactive"}
                 </span>
               </div>
 
               {store.address && (
-                <p className="text-sm text-gray-500 mb-3 line-clamp-1">{store.address}</p>
+                <p className="text-sm text-gray-500 mb-4 line-clamp-1">{store.address}</p>
               )}
 
-              <div className="flex gap-4 text-sm text-gray-600 border-t border-gray-100 pt-3 mt-2">
-                <span className="flex items-center gap-1">
+              <div className="flex gap-4 text-sm text-gray-600 border-t border-gray-100 pt-4 mt-2">
+                <span className="flex items-center gap-1.5">
                   <Users size={14} className="text-gray-400" />
                   {store._count.technician_stores} technician{store._count.technician_stores !== 1 ? "s" : ""}
                 </span>
-                <span>
-                  🎫 {store._count.tickets} ticket{store._count.tickets !== 1 ? "s" : ""}
+                <span className="flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"/></svg>
+                  {store._count.tickets} ticket{store._count.tickets !== 1 ? "s" : ""}
                 </span>
               </div>
             </Link>

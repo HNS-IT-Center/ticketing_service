@@ -106,7 +106,9 @@ export async function createTicketAction(formData: FormData) {
   const followUps: Promise<unknown>[] = [];
 
   // Handle attachments
-  const files = formData.getAll("files") as File[];
+  const ticketFiles = formData.getAll("ticket_files") as File[];
+  const progressFiles = formData.getAll("progress_files") as File[];
+  const files = [...ticketFiles, ...progressFiles];
   if (files.length > 0) {
     const supabase = createServerSupabaseClient();
     const uploadOps = files.map(async (file) => {
@@ -212,7 +214,11 @@ export async function createTicketAction(formData: FormData) {
   // Run all follow-up writes in parallel
   await Promise.all(followUps);
 
-  redirect(`/technician/tickets`);
+  if (session.role === "Administrator" || session.role === "Sales") {
+    redirect(`/admin/tickets`);
+  } else {
+    redirect(`/technician/tickets`);
+  }
 }
 
 // ─── Send Message ──────────────────────────────────────────────────────────

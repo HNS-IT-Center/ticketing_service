@@ -54,6 +54,10 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [components, setComponents] = useState<string[]>([]);
   const [newComponent, setNewComponent] = useState("");
 
+  // Attachments
+  const [ticketFiles, setTicketFiles] = useState<File[]>([]);
+  const [progressFiles, setProgressFiles] = useState<File[]>([]);
+
   // Step 5: Confirm
   const [termsAccepted, setTermsAccepted] = useState(false);
 
@@ -119,6 +123,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (ticketType === "pc_build") {
         fd.append("components", JSON.stringify(components));
       }
+      
+      ticketFiles.forEach(f => fd.append("ticket_files", f));
+      progressFiles.forEach(f => fd.append("progress_files", f));
       
       fd.append("is_for_self", "0"); // Technicians always make tickets on behalf of customers
 
@@ -412,6 +419,23 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Applies a checking fee of Rp. 50,000</span>
                 </div>
               </label>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginTop: "1rem" }}>
+              <div className="form-group">
+                <label className="form-label">Ticket Attachments</label>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Photos of device condition before service.</p>
+                <div style={{ background: "var(--bg)", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1rem" }}>
+                  <input type="file" multiple onChange={e => setTicketFiles(Array.from(e.target.files || []))} className="form-input" style={{ border: "none", padding: 0 }} />
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label">Progress Attachments</label>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Photos of work already done (if any).</p>
+                <div style={{ background: "var(--bg)", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1rem" }}>
+                  <input type="file" multiple onChange={e => setProgressFiles(Array.from(e.target.files || []))} className="form-input" style={{ border: "none", padding: 0 }} />
+                </div>
+              </div>
             </div>
           </div>
         )}

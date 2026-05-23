@@ -83,9 +83,14 @@ export default async function TechnicianTicketsPage({
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <h1>My Tickets</h1>
-          <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>
-            Manage tickets assigned to you
-          </p>
+          <div className="flex items-center gap-3 mt-1">
+            <p className="text-gray-500">
+              Manage tickets assigned to you
+            </p>
+            <Link href="/technician/tickets/create" className="btn btn-primary btn-sm flex items-center gap-1.5" style={{ padding: "0.25rem 0.75rem" }}>
+              <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span> New Ticket
+            </Link>
+          </div>
         </div>
         <form style={{ display: "flex", gap: "0.5rem" }}>
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}

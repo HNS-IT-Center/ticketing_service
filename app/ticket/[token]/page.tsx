@@ -76,7 +76,7 @@ export default async function PublicTicketPage({
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(135deg, #f0f4ff 0%, #faf5ff 100%)",
+      background: "var(--bg)",
       display: "flex",
       flexDirection: "column",
       alignItems: "center",
@@ -95,7 +95,7 @@ export default async function PublicTicketPage({
         {/* Ticket card */}
         <div style={{ background: "#ffffff", borderRadius: "16px", boxShadow: "0 4px 24px rgba(0,0,0,0.08)", overflow: "hidden" }}>
           {/* Ticket header */}
-          <div style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)", padding: "1.5rem 1.75rem" }}>
+          <div style={{ background: "linear-gradient(135deg, var(--primary), var(--accent-brand))", padding: "1.5rem 1.75rem" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem" }}>
               <div>
                 <div style={{ color: "#e0e7ff", fontSize: "0.75rem", marginBottom: "0.25rem" }}>Nomor Tiket</div>
@@ -106,7 +106,7 @@ export default async function PublicTicketPage({
               <Badge variant={ticket.status} technicianId={ticket.technician_id} />
             </div>
             {ticket.store_location && (
-              <div style={{ marginTop: "0.75rem", color: "#c7d2fe", fontSize: "0.8125rem" }}>
+              <div style={{ marginTop: "0.75rem", color: "#fecaca", fontSize: "0.8125rem" }}>
                 📍 {ticket.store_location.name}
               </div>
             )}
@@ -117,7 +117,6 @@ export default async function PublicTicketPage({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
               {[
                 ["Tipe Layanan", ticket.ticket_type.replace(/_/g, " ")],
-                ["Kategori", ticket.service_category?.replace(/_/g, " ") ?? "—"],
                 ["Perangkat", ticket.device_type.replace(/_/g, " ")],
                 ["Dibuat", formatDateTime(ticket.created_at)],
                 ["Pengiriman", ticket.pickup_method === "courier" ? "Kurir" : ticket.pickup_method === "self_pickup" ? "Ambil Sendiri" : "—"],
@@ -142,7 +141,7 @@ export default async function PublicTicketPage({
                 <div key={log.id} style={{ display: "flex", gap: "0.875rem", alignItems: "flex-start" }}>
                   <div style={{
                     width: "28px", height: "28px", borderRadius: "50%",
-                    background: i === ticket.status_logs.length - 1 ? "#6366f1" : "#e5e7eb",
+                    background: i === ticket.status_logs.length - 1 ? "var(--primary)" : "#f3f4f6",
                     display: "flex", alignItems: "center", justifyContent: "center",
                     flexShrink: 0, marginTop: "2px",
                     color: i === ticket.status_logs.length - 1 ? "white" : "#9ca3af",

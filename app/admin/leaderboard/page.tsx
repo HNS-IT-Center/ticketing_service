@@ -177,12 +177,55 @@ export default async function AdminLeaderboardPage({
           </div>
         </div>
       ) : (
-        <div className="leaderboard-layout">
-          
-          {/* Main Visual Panels */}
-          <div className="leaderboard-chart flex flex-col gap-4">
-            
-            {/* Podium */}
+        <>
+          {isStoreTab ? (
+            <div className="flex flex-col gap-6 w-full mt-4">
+              <div className="text-center mb-2">
+                <h2 className="text-2xl font-black text-gray-800 uppercase tracking-wider flex items-center justify-center gap-2">
+                  <span className="text-red-500">⚔️</span> Team vs Team Showdown <span className="text-red-500">⚔️</span>
+                </h2>
+                <p className="text-gray-500 mt-1">Which store will dominate the leaderboard?</p>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {rankedStores.map((store, i) => {
+                  const isFirst = i === 0 && store.points > 0;
+                  const isSecond = i === 1 && store.points > 0;
+                  const isThird = i === 2 && store.points > 0;
+                  const borderColor = isFirst ? "#f59e0b" : isSecond ? "#9ca3af" : isThird ? "#b45309" : "var(--border-light)";
+                  const bgGradient = isFirst ? "linear-gradient(135deg, rgba(245,158,11,0.1) 0%, rgba(245,158,11,0.02) 100%)" : "var(--white)";
+                  
+                  return (
+                    <div key={store.id} className="card relative overflow-hidden flex flex-col items-center p-6 border-2" style={{ borderColor, background: bgGradient, transition: "transform 0.2s" }}>
+                      {isFirst && <div className="absolute top-0 right-0 bg-yellow-500 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow flex items-center gap-1"><Crown size={12}/> 1st Place</div>}
+                      {isSecond && <div className="absolute top-0 right-0 bg-gray-400 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow">2nd Place</div>}
+                      {isThird && <div className="absolute top-0 right-0 bg-amber-700 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow">3rd Place</div>}
+                      
+                      <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black mb-3 border-4 shadow-lg" style={{ background: "var(--primary)", color: "white", borderColor: isFirst ? "#f59e0b" : "white" }}>
+                        {store.code}
+                      </div>
+                      
+                      <h3 className="text-xl font-bold text-gray-800 text-center mb-1">{store.name}</h3>
+                      <div className="text-sm text-gray-500 mb-5 flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
+                        <Users size={14} className="text-gray-600" /> {store.techCount} Technicians
+                      </div>
+                      
+                      <div className="w-full bg-white rounded-xl p-4 text-center border shadow-sm" style={{ borderColor: isFirst ? "rgba(245,158,11,0.3)" : "var(--border-light)" }}>
+                        <div className="text-4xl font-extrabold mb-1" style={{ color: isFirst ? "#f59e0b" : "var(--primary)" }}>
+                          {store.points} <span className="text-sm font-bold text-gray-400 uppercase tracking-widest ml-1">Pts</span>
+                        </div>
+                        <div className="text-xs text-gray-500 font-medium">{store.tickets} tickets completed</div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="leaderboard-layout">
+              {/* Main Visual Panels */}
+              <div className="leaderboard-chart flex flex-col gap-4">
+                
+                {/* Podium */}
             <div className="card overflow-hidden" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #16469d 60%, #2557bb 100%)", border: "none", padding: "0" }}>
               <div style={{ padding: "1rem 1.5rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
                 {isStoreTab ? <Store size={18} style={{ color: "#f59e0b" }} /> : <Trophy size={18} style={{ color: "#f59e0b" }} />}
@@ -314,10 +357,11 @@ export default async function AdminLeaderboardPage({
                   </div>
                 );
               })}
+              </div>
             </div>
           </div>
-          
-        </div>
+          )}
+        </>
       )}
     </div>
   );

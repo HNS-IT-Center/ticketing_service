@@ -25,7 +25,7 @@ export default async function AdminUsersPage({
     },
     orderBy: { created_at: "desc" },
     include: {
-      workload: { select: { current_points: true, max_points: true } },
+      _count: { select: { tickets_technician: { where: { status: { in: ["waiting", "on_progress"] } } } } },
     },
   });
 
@@ -42,8 +42,8 @@ export default async function AdminUsersPage({
       </div>
 
       {/* Filters */}
-      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+      <div className="flex flex-col md:flex-row gap-3 md:items-center px-4 md:px-0">
+        <div className="flex gap-2 flex-wrap">
           {ROLES.map((r) => (
             <Link
               key={r}
@@ -60,13 +60,12 @@ export default async function AdminUsersPage({
             </Link>
           ))}
         </div>
-        <form style={{ marginLeft: "auto" }}>
+        <form className="w-full md:w-auto md:ml-auto">
           <input
             name="q"
             defaultValue={query}
-            className="form-input"
+            className="form-input w-full md:w-[220px]"
             placeholder="Search by name or email..."
-            style={{ width: "220px" }}
           />
         </form>
       </div>
@@ -76,7 +75,7 @@ export default async function AdminUsersPage({
         <div className="table-wrapper">
           <table>
             <thead>
-              <tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Workload</th><th>Joined</th><th></th></tr>
+              <tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Active Tickets</th><th>Joined</th><th></th></tr>
             </thead>
             <tbody>
               {users.map((u) => (
@@ -86,9 +85,9 @@ export default async function AdminUsersPage({
                   <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{u.phone_number}</td>
                   <td><Badge variant={u.role} /></td>
                   <td>
-                    {u.workload ? (
-                      <span style={{ fontSize: "0.875rem" }}>
-                        {u.workload.current_points} / {u.workload.max_points} pts
+                    {u.role === "Technician" ? (
+                      <span className="badge badge-technician">
+                        {u._count.tickets_technician} active
                       </span>
                     ) : "—"}
                   </td>
@@ -117,9 +116,9 @@ export default async function AdminUsersPage({
               <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{u.email}</div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
                 <span style={{ color: "var(--text-secondary)" }}>{u.phone_number}</span>
-                {u.workload && (
-                  <span style={{ color: "var(--primary)", fontWeight: 600 }}>
-                    {u.workload.current_points}/{u.workload.max_points} pts
+                {u.role === "Technician" && (
+                  <span className="badge badge-technician text-xs">
+                    {u._count.tickets_technician} active
                   </span>
                 )}
               </div>

@@ -82,7 +82,7 @@ export default function StoreEditForm({
           </Link>
           <div>
             <h1 className="text-2xl font-bold text-gray-900">{store.name}</h1>
-            <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded">
+            <span className="badge badge-sales px-2 py-0.5 mt-0.5">
               {store.code}
             </span>
             <span className="ml-2 text-sm text-gray-500">· {store._count.tickets} tickets</span>
@@ -106,9 +106,7 @@ export default function StoreEditForm({
               <button
                 type="button"
                 onClick={() => setIsActive((p) => !p)}
-                className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  isActive ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                }`}
+                className={`badge ${isActive ? "badge-done" : "badge-cancelled"} cursor-pointer hover:opacity-80 transition-opacity`}
               >
                 {isActive ? "Active" : "Inactive"}
               </button>
@@ -140,7 +138,7 @@ export default function StoreEditForm({
 
           {/* Assign new technician */}
           {unassignedTechs.length > 0 && (
-            <div className="flex gap-2 mb-4">
+            <div className="flex gap-3 mb-6 items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
               <select
                 value={selectedTech}
                 onChange={(e) => setSelectedTech(e.target.value)}
@@ -155,7 +153,7 @@ export default function StoreEditForm({
                 type="button"
                 onClick={assignTech}
                 disabled={!selectedTech || isPending}
-                className="btn btn-primary flex items-center gap-1"
+                className="btn btn-primary flex items-center gap-2 px-6"
               >
                 <UserPlus size={16} /> Assign
               </button>
@@ -165,11 +163,11 @@ export default function StoreEditForm({
           {store.technician_stores.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-4">No technicians assigned yet</p>
           ) : (
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-3">
               {store.technician_stores.map((a) => (
                 <div
                   key={a.technician_id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                  className="flex items-center justify-between p-4 bg-white border border-gray-200 shadow-sm rounded-xl hover:border-indigo-300 transition-colors"
                 >
                   <div>
                     <div className="font-medium text-gray-800 text-sm">{a.technician.name}</div>
@@ -181,7 +179,7 @@ export default function StoreEditForm({
                     type="button"
                     onClick={() => removeTech(a.technician_id, a.technician.name)}
                     disabled={isPending}
-                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                    className="p-2 text-gray-400 hover:text-white hover:bg-red-500 rounded-lg transition-colors"
                     title="Remove from store"
                   >
                     <X size={16} />

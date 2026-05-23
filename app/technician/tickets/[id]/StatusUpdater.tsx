@@ -99,26 +99,26 @@ export default function StatusUpdater({
     <>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         {currentStatus === "waiting" && (
-          <Button onClick={() => handleAction("on_progress", "START")} disabled={isPending}>
+          <Button onClick={() => handleAction("on_progress", "START")} disabled={isPending} className="px-5 py-2.5">
             <Play className="mr-2 h-4 w-4" /> Start Work
           </Button>
         )}
 
         {currentStatus === "on_progress" && isPaused && (
-          <Button onClick={() => setActiveDialog("resume")} disabled={isPending} variant="secondary">
+          <Button onClick={() => setActiveDialog("resume")} disabled={isPending} variant="secondary" className="px-5 py-2.5">
             <Play className="mr-2 h-4 w-4" /> Resume Work
           </Button>
         )}
 
         {currentStatus === "on_progress" && !isPaused && (
           <>
-            <Button onClick={() => setActiveDialog("pause")} disabled={isPending} variant="secondary">
+            <Button onClick={() => setActiveDialog("pause")} disabled={isPending} variant="secondary" className="px-4 py-2.5">
               <Pause className="mr-2 h-4 w-4" /> Pause waiting for Customer
             </Button>
-            <Button onClick={() => setActiveDialog("done")} disabled={isPending} style={{ background: "#16a34a", color: "white" }}>
+            <Button onClick={() => setActiveDialog("done")} disabled={isPending} style={{ background: "#16a34a", color: "white" }} className="px-5 py-2.5">
               <CheckCircle className="mr-2 h-4 w-4" /> Mark Done
             </Button>
-            <Button onClick={() => setActiveDialog("cancel")} disabled={isPending} variant="destructive">
+            <Button onClick={() => setActiveDialog("cancel")} disabled={isPending} variant="destructive" className="px-5 py-2.5">
               <XCircle className="mr-2 h-4 w-4" /> Cancel
             </Button>
           </>
@@ -127,7 +127,7 @@ export default function StatusUpdater({
 
       {/* PAUSE DIALOG */}
       <Dialog open={activeDialog === "pause"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Pause Work</DialogTitle>
           </DialogHeader>
@@ -155,7 +155,7 @@ export default function StatusUpdater({
 
       {/* RESUME DIALOG */}
       <Dialog open={activeDialog === "resume"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Resume Work</DialogTitle>
           </DialogHeader>
@@ -183,7 +183,7 @@ export default function StatusUpdater({
 
       {/* DONE DIALOG */}
       <Dialog open={activeDialog === "done"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Mark Ticket as Done</DialogTitle>
           </DialogHeader>
@@ -204,7 +204,7 @@ export default function StatusUpdater({
 
       {/* CANCEL DIALOG */}
       <Dialog open={activeDialog === "cancel"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
+        <DialogContent className="max-h-[85vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle size={18} /> Cancel Ticket

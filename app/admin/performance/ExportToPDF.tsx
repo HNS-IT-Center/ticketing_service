@@ -12,8 +12,6 @@ interface Row {
   success: number;
   failed: number;
   points: number;
-  currentLoad: number;
-  maxLoad: number;
   details?: Record<string, { count: number; totalHours: number; timedCount: number }>;
 }
 

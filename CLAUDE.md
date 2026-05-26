@@ -81,7 +81,7 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 | `TicketAttachment`       | File URLs from Supabase Storage                                |
 | `TicketMessage`          | Chat/comment messages between users                            |
 | `TicketStatusLog`        | Audit trail of all status changes                              |
-| `TechnicianWorkload`     | Tracks `current_points` vs `max_points` (default 7)            |
+| `TechnicianWorkload`     | (Deprecated) Formerly tracked workload point limits            |
 | `TechnicianPerformance`  | Tracks tickets handled, success/fail counts, total points      |
 | `Leaderboard`            | Monthly snapshot of technician rankings                        |
 | `Notification`           | In-app alerts for status updates and messages                  |
@@ -103,7 +103,7 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 | `service`   | 3      |
 | all others  | 2      |
 
-Max workload per technician: **7 points** (configurable per user via admin).
+Max workload per technician: **Removed**. Technicians can request any number of tickets, which are then approved by an Admin or Team Leader. Workload is now dynamically tracked as "Active Tickets" (tickets in `waiting` or `on_progress` status).
 
 ---
 
@@ -276,7 +276,7 @@ waiting ──→ on_progress ──→ done
 - Polled via `GET /api/notifications` route
 - `NotificationBell` component in the topbar polls and displays unread count
 - Types: `message` (new chat), `status_update` (ticket status changed)
-- **Not real-time** — uses polling. Supabase Realtime not yet wired.
+- **Real-time enabled** — uses Supabase Realtime WebSockets to instantly update the unread count when a new record is inserted.
 
 ---
 
@@ -469,6 +469,13 @@ When cloning the project to a new device, you will need to reconfigure the envir
 | F5 | Technician Store Filtering | ✅ | Filtered unassigned tickets in `TechnicianDashboard` by technician's assigned stores. |
 | F6 | Share Ticket Button | ✅ | Added `PublicShareButton` to customer ticket detail page header. |
 | F7 | formatDateTime consistency | ✅ | Replaced `new Date().toLocaleString()` with `formatDateTime()` in admin logs, ticket details, etc. |
+
+### SPRINT 2026-05-25 SESSION — Dynamic Workload & Assignments
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| W1 | Dynamic Workload Tracking | ✅ | Removed `TechnicianWorkload` max_points logic. Profile now queries `Ticket` table for active ticket counts. `TakeTicketButton` limits removed. |
+| W2 | Store Coordinator Assignments | ✅ | `adminAssignTicketAction` now accepts `is_team_leader`. Rendered `AdminAssignPanel` inside Technician portal for Store Coordinators to accept requests. |
+| W3 | Supabase Realtime Notifications | ✅ | `NotificationBell.tsx` updated from 30s `setInterval` polling to Supabase `.channel('realtime:notifications').on('postgres_changes')`. |
 
 ---
 

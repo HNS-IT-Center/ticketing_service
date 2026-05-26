@@ -11,79 +11,60 @@ function getTicketPoints(type: string): number {
   return 2;
 }
 
-// ─── Take Ticket (Technician) ──────────────────────────────────────────────
-export async function takeTicketAction(ticketId: string) {
+// ─── Request Ticket Assignment (Technician) ────────────────────────────────
+export async function requestTicketAssignmentAction(ticketId: string) {
   const session = await requireRole("Technician");
 
   const ticket = await db.ticket.findUnique({
     where: { id: ticketId },
-    select: { id: true, user_id: true, technician_id: true, status: true, ticket_type: true, ticket_code: true },
+    select: { id: true, technician_id: true, status: true, ticket_type: true, ticket_code: true },
   });
   if (!ticket) return { error: "Ticket not found" };
   if (ticket.technician_id) return { error: "Ticket already assigned" };
   if (ticket.status !== "waiting") return { error: "Ticket is not in waiting status" };
 
-  // Workload check
-  const points = getTicketPoints(ticket.ticket_type);
-  const workload = await db.technicianWorkload.findUnique({
-    where: { technician_id: session.userId },
+  // Workload check removed: Technicians can request freely as assignments are gated.
+
+  // Check if request already exists
+  const existingRequest = await db.ticketAssignmentRequest.findUnique({
+    where: { ticket_id_technician_id: { ticket_id: ticketId, technician_id: session.userId } },
   });
 
-  const currentPoints = workload?.current_points ?? 0;
-  const maxPoints = workload?.max_points ?? 7;
-
-  if (currentPoints + points > maxPoints) {
-    return {
-      error: `Cannot take ticket — workload limit reached (${currentPoints}/${maxPoints} pts)`,
-    };
+  if (existingRequest) {
+    return { error: "You have already requested this ticket." };
   }
 
-  // Assign technician
-  await db.ticket.update({
-    where: { id: ticketId },
-    data: { technician_id: session.userId },
-  });
-
-  // Update workload
-  await db.technicianWorkload.upsert({
-    where: { technician_id: session.userId },
-    create: { technician_id: session.userId, current_points: points, max_points: 7 },
-    update: { current_points: { increment: points } },
-  });
-
-  // Log status (stays waiting but assigned)
-  await db.ticketStatusLog.create({
+  // Create Assignment Request
+  await db.ticketAssignmentRequest.create({
     data: {
       ticket_id: ticketId,
-      old_status: "waiting",
-      new_status: "waiting",
-      changed_by: session.userId,
+      technician_id: session.userId,
     },
   });
 
-  // Notify customer — only if the customer is NOT the same person as the technician
-  if (ticket.user_id !== session.userId) {
+  // Notify Admins and Team Leaders
+  const adminsAndLeaders = await db.user.findMany({
+    where: {
+      OR: [
+        { role: "Administrator" },
+        { is_team_leader: true }
+      ]
+    },
+    select: { id: true },
+  });
+  
+  for (const admin of adminsAndLeaders) {
     await db.notification.create({
       data: {
-        user_id: ticket.user_id,
+        user_id: admin.id,
         ticket_id: ticketId,
         type: "status_update",
+        message: `Technician requested assignment for ticket #${ticket.ticket_code}`,
       },
     });
   }
 
-  // Notify the technician that they have been assigned
-  await db.notification.create({
-    data: {
-      user_id: session.userId,
-      ticket_id: ticketId,
-      type: "assigned",
-      message: `You have been assigned ticket #${ticket.ticket_code}`,
-    },
-  });
-
   revalidatePath("/technician/dashboard");
-  revalidatePath(`/technician/tickets/${ticketId}`);
   return { success: true };
 }
 
@@ -194,11 +175,7 @@ export async function updateTicketStatusAction(formData: FormData) {
   if (isTerminal) {
     const points = getTicketPoints(ticket.ticket_type);
 
-    // Reduce workload
-    await db.technicianWorkload.updateMany({
-      where: { technician_id: session.userId },
-      data: { current_points: { decrement: points } },
-    });
+    // Workload reduction removed: tracked dynamically
 
     // Update performance
     const isSuccess = newStatus === "done";

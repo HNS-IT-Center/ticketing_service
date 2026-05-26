@@ -11,6 +11,7 @@ interface Props {
   currentSalesId: string | null;
   technicians: { id: string; name: string }[];
   salesUsers: { id: string; name: string }[];
+  assignmentRequests?: { id: string; technician_id: string; technician: { name: string }; status: string }[];
 }
 
 export default function AdminAssignPanel({
@@ -19,6 +20,7 @@ export default function AdminAssignPanel({
   currentSalesId,
   technicians,
   salesUsers,
+  assignmentRequests = [],
 }: Props) {
   const [techId, setTechId] = useState(currentTechnicianId || "");
   const [saleId, setSaleId] = useState(currentSalesId || "");
@@ -36,11 +38,37 @@ export default function AdminAssignPanel({
     });
   };
 
+  const pendingRequests = assignmentRequests.filter(r => r.status === "pending" && r.technician_id !== currentTechnicianId);
+
   return (
     <div className="card">
       <h3 style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
         <UserCheck size={18} /> Assignment
       </h3>
+
+      {pendingRequests.length > 0 && (
+        <div style={{ marginBottom: "1.5rem", padding: "0.75rem", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "0.5rem" }}>
+          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1e40af", marginBottom: "0.5rem" }}>
+            Technician Requests:
+          </p>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+            {pendingRequests.map(req => (
+              <li key={req.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.875rem", color: "#1e3a8a" }}>
+                <span>{req.technician.name} requested to be assigned.</span>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  style={{ background: "#3b82f6", color: "#fff", padding: "0.2rem 0.5rem" }}
+                  onClick={() => setTechId(req.technician_id)}
+                >
+                  Select
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
         <div className="form-group">
           <label className="form-label">Technician</label>

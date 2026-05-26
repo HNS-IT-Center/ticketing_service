@@ -1,12 +1,14 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import TicketChat from "@/components/TicketChat";
 import StatusUpdater from "./StatusUpdater";
 import { markMessagesReadAction } from "@/app/actions/tickets";
-import { FileText, Film, ImageIcon, File } from "lucide-react";
+import { FileText, Film, ImageIcon, File, Link2 } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
+import AdminAssignPanel from "@/app/admin/tickets/[id]/AdminAssignPanel";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -18,29 +20,35 @@ export default async function TechnicianTicketDetailPage({
   const session = await requireRole("Technician");
   const { id } = await params;
 
-  const ticket = await db.ticket.findUnique({
-    where: { id },
-    include: {
-      user: { select: { name: true, email: true, phone_number: true, address: true } },
-      technician: { select: { name: true } },
-      messages: {
-        orderBy: { created_at: "asc" },
-        include: { sender: { select: { name: true, role: true } } },
+  const [ticket, currentUser] = await Promise.all([
+    db.ticket.findUnique({
+      where: { id },
+      include: {
+        user: { select: { name: true, email: true, phone_number: true, address: true } },
+        technician: { select: { name: true } },
+        messages: {
+          orderBy: { created_at: "asc" },
+          include: { sender: { select: { name: true, role: true } } },
+        },
+        attachments: true,
+        status_logs: {
+          orderBy: { created_at: "desc" },
+          take: 20,
+          include: { changer: { select: { name: true } } },
+        },
+        warranty_detail: true,
+        cleaning_detail: true,
+        upgrade_details: { include: { upgrade: true } },
+        pc_components: true,
+        pc_build_detail: true,
+        time_logs: { orderBy: { created_at: "asc" } },
+        assignment_requests: {
+          include: { technician: { select: { name: true } } }
+        },
       },
-      attachments: true,
-      status_logs: {
-        orderBy: { created_at: "desc" },
-        take: 20,
-        include: { changer: { select: { name: true } } },
-      },
-      warranty_detail: true,
-      cleaning_detail: true,
-      upgrade_details: { include: { upgrade: true } },
-      pc_components: true,
-      pc_build_detail: true,
-      time_logs: { orderBy: { created_at: "asc" } },
-    },
-  });
+    }),
+    db.user.findUnique({ where: { id: session.userId }, select: { is_team_leader: true } })
+  ]);
 
   if (!ticket) notFound();
 
@@ -48,6 +56,19 @@ export default async function TechnicianTicketDetailPage({
   await markMessagesReadAction(id);
 
   const isAssigned = ticket.technician_id === session.userId;
+  const isTeamLeader = currentUser?.is_team_leader || false;
+
+  let technicians: { id: string; name: string }[] = [];
+  let salesUsers: { id: string; name: string }[] = [];
+  
+  if (isTeamLeader) {
+    const [fetchedTechs, fetchedSales] = await Promise.all([
+      db.user.findMany({ where: { role: "Technician" }, select: { id: true, name: true } }),
+      db.user.findMany({ where: { role: "Sales" }, select: { id: true, name: true } }),
+    ]);
+    technicians = fetchedTechs;
+    salesUsers = fetchedSales;
+  }
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -61,9 +82,33 @@ export default async function TechnicianTicketDetailPage({
             {ticket.ticket_type.replace("_", " ")} • {ticket.device_type.replace(/_/g, " ")}
           </p>
         </div>
-        {isAssigned && (
-          <StatusUpdater ticketId={ticket.id} currentStatus={ticket.status} timeLogs={ticket.time_logs} />
-        )}
+        <div className="flex flex-col gap-3 items-start md:items-end mt-2 md:mt-0">
+          {isAssigned && (
+            <StatusUpdater ticketId={ticket.id} currentStatus={ticket.status} timeLogs={ticket.time_logs} />
+          )}
+          {ticket.public_share_token && (
+            <Link
+              href={`/ticket/${ticket.public_share_token}`}
+              target="_blank"
+              className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100"
+            >
+              <Link2 size={16} /> Public Link
+            </Link>
+          )}
+
+          {isTeamLeader && (
+            <div style={{ marginTop: "1rem" }}>
+              <AdminAssignPanel
+                ticketId={ticket.id}
+                currentTechnicianId={ticket.technician_id}
+                currentSalesId={ticket.sales_id}
+                technicians={technicians}
+                salesUsers={salesUsers}
+                assignmentRequests={ticket.assignment_requests as any}
+              />
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="ticket-detail-grid">

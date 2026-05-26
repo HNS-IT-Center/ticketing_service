@@ -152,7 +152,7 @@ export default async function AdminLeaderboardPage({
       </div>
 
       {/* Premium Tab Toggles */}
-      <div className="flex bg-gray-100 p-1 rounded-xl w-fit border border-gray-200" style={{ gap: "0.25rem" }}>
+      <div className="flex bg-gray-100 p-1 rounded-xl w-fit border border-gray-200 gap-1">
         <Link 
           href={buildTabHref("technician")} 
           className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all text-decoration-none ${!isStoreTab ? "bg-white text-gray-800 shadow" : "text-gray-500 hover:text-gray-700"}`}
@@ -200,16 +200,16 @@ export default async function AdminLeaderboardPage({
                       {isSecond && <div className="absolute top-0 right-0 bg-gray-400 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow">2nd Place</div>}
                       {isThird && <div className="absolute top-0 right-0 bg-amber-700 text-white text-xs font-bold px-3 py-1 rounded-bl-lg shadow">3rd Place</div>}
                       
-                      <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black mb-3 border-4 shadow-lg" style={{ background: "var(--primary)", color: "white", borderColor: isFirst ? "#f59e0b" : "white" }}>
+                      <div className="w-20 h-20 rounded-full flex items-center justify-center text-3xl font-black mb-3 border-4 shadow-lg bg-primary text-white" style={{ borderColor: isFirst ? "#f59e0b" : "white" }}>
                         {store.code}
                       </div>
                       
                       <h3 className="text-xl font-bold text-gray-800 text-center mb-1">{store.name}</h3>
-                      <div className="text-sm text-gray-500 mb-5 flex items-center gap-1.5 bg-gray-100 px-3 py-1 rounded-full">
+                      <div className="text-sm text-gray-500 mb-5 inline-flex w-fit items-center gap-1.5 bg-gray-100 px-4 py-1.5 rounded-full">
                         <Users size={14} className="text-gray-600" /> {store.techCount} Technicians
                       </div>
                       
-                      <div className="w-full bg-white rounded-xl p-4 text-center border shadow-sm" style={{ borderColor: isFirst ? "rgba(245,158,11,0.3)" : "var(--border-light)" }}>
+                      <div className="w-full bg-white rounded-xl p-4 text-center border shadow-sm" style={{ borderColor: isFirst ? "rgba(245, 158, 11, 0.3)" : "var(--border-light)" }}>
                         <div className="text-4xl font-extrabold mb-1" style={{ color: isFirst ? "#f59e0b" : "var(--primary)" }}>
                           {store.points} <span className="text-sm font-bold text-gray-400 uppercase tracking-widest ml-1">Pts</span>
                         </div>
@@ -226,88 +226,88 @@ export default async function AdminLeaderboardPage({
               <div className="leaderboard-chart flex flex-col gap-4">
                 
                 {/* Podium */}
-            <div className="card overflow-hidden" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #16469d 60%, #2557bb 100%)", border: "none", padding: "0" }}>
-              <div style={{ padding: "1rem 1.5rem 0", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                {isStoreTab ? <Store size={18} style={{ color: "#f59e0b" }} /> : <Trophy size={18} style={{ color: "#f59e0b" }} />}
-                <span style={{ color: "rgba(255,255,255,0.9)", fontWeight: 700, fontSize: "0.9375rem" }}>
+            <div className="card overflow-hidden border-none p-0" style={{ background: "linear-gradient(135deg, #1e3a5f 0%, #16469d 60%, #2557bb 100%)" }}>
+              <div  className="pt-4 px-6 flex items-center gap-2">
+                {isStoreTab ? <Store size={18}  className="text-amber-500" /> : <Trophy size={18}  className="text-amber-500" />}
+                <span  className="font-bold text-[0.9375rem]" style={{ color: "rgba(255, 255, 255, 0.9)" }}>
                   {isStoreTab ? "Top Store Standings" : "Top Performers"}
                 </span>
               </div>
               
-              <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: "0.75rem", padding: "1.5rem 1rem 0", minHeight: "280px" }}>
+              <div  className="flex justify-center items-end gap-3 pt-6 px-4" style={{ minHeight: "280px" }}>
                 
                 {/* 2nd Place */}
                 {second && (() => { const cfg = RANK_CONFIG[1]; return (
-                  <div style={{ flex:"0 0 100px", display:"flex", flexDirection:"column", alignItems:"center" }}>
-                    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"4px", marginBottom:"8px" }}>
+                  <div className="flex flex-col items-center flex-none w-[100px]">
+                    <div className="flex flex-col items-center gap-1 mb-2">
                       <Crown size={18} style={{ color: cfg.color }} />
-                      <div style={{ width:cfg.avatarSize,height:cfg.avatarSize,borderRadius:"50%",background:cfg.bg,border:`2px solid ${cfg.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:cfg.fontSize,fontWeight:700,color:"#fff", fontFamily: "monospace" }}>
+                      <div className="rounded-full flex items-center justify-center font-bold text-white font-mono" style={{ width:cfg.avatarSize, height:cfg.avatarSize, background:cfg.bg, border:`2px solid ${cfg.border}`, fontSize:cfg.fontSize }}>
                         {isStoreTab ? (second as any).code : getInitials(second.name)}
                       </div>
-                      <span style={{ fontSize:"0.75rem",fontWeight:600,color:"rgba(255,255,255,0.9)",textAlign:"center",maxWidth:"90px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{second.name}</span>
-                      <span style={{ fontSize:"0.7rem",color:"rgba(255,255,255,0.6)" }}>{second.points} pts</span>
+                      <span className="text-xs font-semibold text-white/90 text-center max-w-[90px] truncate">{second.name}</span>
+                      <span className="text-[0.7rem] text-white/60">{second.points} pts</span>
                     </div>
-                    <div style={{ width:"100%",height:`${cfg.barH}px`,background:cfg.bg,borderRadius:"6px 6px 0 0",border:`1px solid ${cfg.border}`,display:"flex",alignItems:"center",justifyContent:"center",transformOrigin:"bottom",animation:"growBar 0.8s 0.2s ease both" }}>
-                      <span style={{ fontSize:"2rem",fontWeight:900,color:cfg.color }}>2</span>
+                    <div className="w-full rounded-t-md border flex items-center justify-center origin-bottom animate-[growBar_0.8s_0.2s_ease_both]" style={{ height:`${cfg.barH}px`, background:cfg.bg, borderColor:cfg.border }}>
+                      <span className="text-3xl font-black" style={{ color:cfg.color }}>2</span>
                     </div>
                   </div>
                 ); })()}
                 
                 {/* 1st Place */}
                 {first && (() => { const cfg = RANK_CONFIG[0]; return (
-                  <div style={{ flex:"0 0 120px", display:"flex", flexDirection:"column", alignItems:"center" }}>
-                    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"4px", marginBottom:"8px" }}>
+                  <div className="flex flex-col items-center flex-none w-[120px]">
+                    <div className="flex flex-col items-center gap-1 mb-2">
                       <Crown size={26} style={{ color:cfg.color, filter:`drop-shadow(0 0 8px ${cfg.glow})` }} />
-                      <div style={{ width:cfg.avatarSize,height:cfg.avatarSize,borderRadius:"50%",background:cfg.bg,border:`2px solid ${cfg.border}`,boxShadow:`0 0 20px ${cfg.glow}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:cfg.fontSize,fontWeight:700,color:"#fff", fontFamily: "monospace" }}>
+                      <div className="rounded-full flex items-center justify-center font-bold text-white font-mono" style={{ width:cfg.avatarSize, height:cfg.avatarSize, background:cfg.bg, border:`2px solid ${cfg.border}`, boxShadow:`0 0 20px ${cfg.glow}`, fontSize:cfg.fontSize }}>
                         {isStoreTab ? (first as any).code : getInitials(first.name)}
                       </div>
-                      <span style={{ fontSize:"0.875rem",fontWeight:700,color:"#fff",textAlign:"center",maxWidth:"110px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{first.name}</span>
-                      <span style={{ fontSize:"0.75rem",color:"#fcd34d",fontWeight:600 }}>{first.points} pts</span>
+                      <span className="text-sm font-bold text-white text-center max-w-[110px] truncate">{first.name}</span>
+                      <span className="text-xs font-semibold text-amber-300">{first.points} pts</span>
                     </div>
-                    <div style={{ width:"100%",height:`${cfg.barH}px`,background:cfg.bg,borderRadius:"6px 6px 0 0",border:`1px solid ${cfg.border}`,boxShadow:`0 -6px 24px ${cfg.glow}`,display:"flex",alignItems:"center",justifyContent:"center",transformOrigin:"bottom",animation:"growBar 0.8s ease both" }}>
-                      <span style={{ fontSize:"2.5rem",fontWeight:900,color:"#f59e0b" }}>1</span>
+                    <div className="w-full rounded-t-md border flex items-center justify-center origin-bottom animate-[growBar_0.8s_ease_both]" style={{ height:`${cfg.barH}px`, background:cfg.bg, borderColor:cfg.border, boxShadow:`0 -6px 24px ${cfg.glow}` }}>
+                      <span className="text-5xl font-black text-amber-500">1</span>
                     </div>
                   </div>
                 ); })()}
                 
                 {/* 3rd Place */}
                 {third && (() => { const cfg = RANK_CONFIG[2]; return (
-                  <div style={{ flex:"0 0 100px", display:"flex", flexDirection:"column", alignItems:"center" }}>
-                    <div style={{ display:"flex", flexDirection:"column", alignItems:"center", gap:"4px", marginBottom:"8px" }}>
+                  <div className="flex flex-col items-center flex-none w-[100px]">
+                    <div className="flex flex-col items-center gap-1 mb-2">
                       <Crown size={16} style={{ color: cfg.color }} />
-                      <div style={{ width:cfg.avatarSize,height:cfg.avatarSize,borderRadius:"50%",background:cfg.bg,border:`2px solid ${cfg.border}`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:cfg.fontSize,fontWeight:700,color:"#fff", fontFamily: "monospace" }}>
+                      <div className="rounded-full flex items-center justify-center font-bold text-white font-mono" style={{ width:cfg.avatarSize, height:cfg.avatarSize, background:cfg.bg, border:`2px solid ${cfg.border}`, fontSize:cfg.fontSize }}>
                         {isStoreTab ? (third as any).code : getInitials(third.name)}
                       </div>
-                      <span style={{ fontSize:"0.75rem",fontWeight:600,color:"rgba(255,255,255,0.9)",textAlign:"center",maxWidth:"90px",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{third.name}</span>
-                      <span style={{ fontSize:"0.7rem",color:"rgba(255,255,255,0.6)" }}>{third.points} pts</span>
+                      <span className="text-xs font-semibold text-white/90 text-center max-w-[90px] truncate">{third.name}</span>
+                      <span className="text-[0.7rem] text-white/60">{third.points} pts</span>
                     </div>
-                    <div style={{ width:"100%",height:`${cfg.barH}px`,background:cfg.bg,borderRadius:"6px 6px 0 0",border:`1px solid ${cfg.border}`,display:"flex",alignItems:"center",justifyContent:"center",transformOrigin:"bottom",animation:"growBar 0.8s 0.4s ease both" }}>
-                      <span style={{ fontSize:"1.75rem",fontWeight:900,color:"#b45309" }}>3</span>
+                    <div className="w-full rounded-t-md border flex items-center justify-center origin-bottom animate-[growBar_0.8s_0.4s_ease_both]" style={{ height:`${cfg.barH}px`, background:cfg.bg, borderColor:cfg.border }}>
+                      <span className="text-[1.75rem] font-black text-amber-700">3</span>
                     </div>
                   </div>
                 ); })()}
               </div>
-              <div style={{ height:"8px",background:"rgba(255,255,255,0.12)",borderTop:"1px solid rgba(255,255,255,0.18)" }} />
+              <div style={{ height:"8px", background:"rgba(255, 255, 255, 0.12)", borderTop:"1px solid rgba(255, 255, 255, 0.18)" }} />
             </div>
 
             {/* Progress Bars */}
             {top5.length > 0 && (
-              <div className="card" style={{ padding: "1.25rem" }}>
-                <h3 style={{ fontSize:"0.875rem",fontWeight:700,color:"var(--text-secondary)",marginBottom:"1rem",textTransform:"uppercase",letterSpacing:"0.05em" }}>
+              <div className="card p-5">
+                <h3 style={{ fontSize:"0.875rem", fontWeight:700, color:"var(--text-secondary)", marginBottom:"1rem", textTransform:"uppercase", letterSpacing:"0.05em" }}>
                   Top 5 — Points Breakdown
                 </h3>
-                <div style={{ display:"flex",flexDirection:"column",gap:"0.75rem" }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:"0.75rem" }}>
                   {top5.map((t, i) => {
                     const pct = Math.round((t.points / maxPts) * 100);
                     const barColor = i===0?"#f59e0b":i===1?"#9ca3af":i===2?"#b45309":"var(--primary)";
                     return (
-                      <div key={t.id} style={{ display:"flex",alignItems:"center",gap:"0.75rem" }}>
-                        <span style={{ width:"1.5rem",textAlign:"right",fontWeight:700,fontSize:"0.875rem",color:barColor,flexShrink:0 }}>#{i+1}</span>
-                        <span style={{ width:"7rem",fontSize:"0.875rem",fontWeight:500,flexShrink:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{t.name}</span>
-                        <div style={{ flex:1,background:"var(--cream-dark)",borderRadius:"999px",height:"10px",overflow:"hidden" }}>
+                      <div key={t.id} style={{ display:"flex", alignItems:"center", gap:"0.75rem" }}>
+                        <span style={{ width:"1.5rem", textAlign:"right", fontWeight:700, fontSize:"0.875rem", color:barColor, flexShrink:0 }}>#{i+1}</span>
+                        <span style={{ width:"7rem", fontSize:"0.875rem", fontWeight:500, flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.name}</span>
+                        <div style={{ flex:1, background:"var(--cream-dark)", borderRadius:"999px", height:"10px", overflow:"hidden" }}>
                           <div style={{ height:"100%",width:`${pct}%`,borderRadius:"999px",background:barColor,animation:`growBar 0.8s ${i*0.1}s ease both`,transformOrigin:"left" }} />
                         </div>
-                        <span style={{ width:"3.5rem",textAlign:"right",fontSize:"0.875rem",fontWeight:700,color:barColor,flexShrink:0 }}>{t.points} pts</span>
+                        <span style={{ width:"3.5rem", textAlign:"right", fontSize:"0.875rem", fontWeight:700, color:barColor, flexShrink:0 }}>{t.points} pts</span>
                       </div>
                     );
                   })}
@@ -318,13 +318,13 @@ export default async function AdminLeaderboardPage({
 
           {/* Side List Rankings */}
           <div className="leaderboard-list">
-            <div style={{ padding:"0.75rem 0",borderBottom:"1px solid var(--border-light)",marginBottom:"0.5rem" }}>
-              <h3 style={{ fontSize:"0.875rem",fontWeight:700,color:"var(--text-secondary)",textTransform:"uppercase",letterSpacing:"0.05em" }}>
+            <div style={{ padding:"0.75rem 0", borderBottom:"1px solid var(--border-light)", marginBottom:"0.5rem" }}>
+              <h3 style={{ fontSize:"0.875rem", fontWeight:700, color:"var(--text-secondary)", textTransform:"uppercase", letterSpacing:"0.05em" }}>
                 All Rankings
               </h3>
             </div>
             
-            <div style={{ display:"flex",flexDirection:"column",gap:"0.5rem" }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:"0.5rem" }}>
               {ranked.map((t, i) => {
                 const rank = i + 1;
                 const isTop3 = rank <= 3;
@@ -332,27 +332,27 @@ export default async function AdminLeaderboardPage({
                 return (
                   <div key={t.id} style={{ display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.75rem 0.875rem",background:isTop3?`${medalColor}0d`:"var(--white)",border:`1.5px solid ${isTop3?`${medalColor}40`:"var(--border-light)"}`,borderRadius:"var(--radius-md)",animation:`fadeIn 0.4s ${i*0.05}s ease both` }}>
                     <div style={{ width:"2rem",height:"2rem",borderRadius:"50%",flexShrink:0,background:isTop3?`${medalColor}20`:"var(--cream)",display:"flex",alignItems:"center",justifyContent:"center" }}>
-                      {rank<=3 ? <Medal size={14} style={{ color:medalColor }} /> : <span style={{ fontSize:"0.75rem",fontWeight:700,color:"var(--text-muted)" }}>{rank}</span>}
+                      {rank<=3 ? <Medal size={14} style={{ color:medalColor }} /> : <span style={{ fontSize:"0.75rem", fontWeight:700, color:"var(--text-muted)" }}>{rank}</span>}
                     </div>
                     
                     <div style={{ width:"2.25rem",height:"2.25rem",borderRadius:"50%",flexShrink:0,background:isTop3?`${medalColor}30`:"var(--primary)",color:isTop3?medalColor:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.75rem",fontWeight:700,border:isTop3?`1.5px solid ${medalColor}60` : "none", fontFamily: "monospace" }}>
                       {isStoreTab ? (t as any).code : getInitials(t.name)}
                     </div>
                     
-                    <div style={{ flex:1,minWidth:0 }}>
-                      <div style={{ fontWeight:600,fontSize:"0.875rem",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap" }}>{t.name}</div>
-                      <div style={{ fontSize:"0.75rem",color:"var(--text-muted)", display: "flex", gap: "0.5rem" }}>
+                    <div style={{ flex:1, minWidth:0 }}>
+                      <div style={{ fontWeight:600, fontSize:"0.875rem", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{t.name}</div>
+                      <div  className="flex gap-2" style={{ fontSize:"0.75rem", color:"var(--text-muted)" }}>
                         <span>{t.tickets} ticket{t.tickets!==1?"s":""}</span>
                         {isStoreTab && (
-                          <span style={{ color: "var(--primary)", display: "flex", alignItems: "center", gap: "2px" }}>
+                          <span  className="text-primary flex items-center" style={{ gap: "2px" }}>
                             <Users size={12} /> {(t as any).techCount} techs
                           </span>
                         )}
                       </div>
                     </div>
                     
-                    <span style={{ fontWeight:800,fontSize:"0.9375rem",color:isTop3?medalColor:"var(--primary)",flexShrink:0 }}>
-                      {t.points}<span style={{ fontSize:"0.7rem",fontWeight:500,color:"var(--text-muted)",marginLeft:"2px" }}>pts</span>
+                    <span style={{ fontWeight:800, fontSize:"0.9375rem", color:isTop3?medalColor:"var(--primary)", flexShrink:0 }}>
+                      {t.points}<span style={{ fontSize:"0.7rem", fontWeight:500, color:"var(--text-muted)", marginLeft:"2px" }}>pts</span>
                     </span>
                   </div>
                 );

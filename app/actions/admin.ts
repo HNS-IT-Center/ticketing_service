@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireRole, requireSession } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
 
 // ─── Create User ───────────────────────────────────────────────────────────
@@ -33,11 +33,7 @@ export async function createUserAction(formData: FormData) {
     },
   });
 
-  // If technician, create workload record
   if (data.role === "Technician") {
-    await db.technicianWorkload.create({
-      data: { technician_id: user.id, current_points: 0, max_points: 7 },
-    });
     await db.technicianPerformance.create({
       data: { technician_id: user.id },
     });
@@ -89,17 +85,7 @@ export async function updateUserAction(userId: string, formData: FormData) {
     },
   });
 
-  if (max_points) {
-    await db.technicianWorkload.upsert({
-      where: { technician_id: userId },
-      create: {
-        technician_id: userId,
-        current_points: 0,
-        max_points: parseInt(max_points),
-      },
-      update: { max_points: parseInt(max_points) },
-    });
-  }
+  // Workload setting removed
 
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${userId}`);
@@ -120,14 +106,53 @@ export async function adminAssignTicketAction(
   technicianId: string | null,
   salesId: string | null
 ) {
-  await requireRole("Administrator");
+  const session = await requireSession();
+  
+  if (session.role !== "Administrator") {
+    const user = await db.user.findUnique({ where: { id: session.userId }, select: { is_team_leader: true } });
+    if (!user?.is_team_leader) {
+      throw new Error("Unauthorized");
+    }
+  }
 
-  await db.ticket.update({
-    where: { id: ticketId },
-    data: {
-      technician_id: technicianId || null,
-      sales_id: salesId || null,
-    },
+  await db.$transaction(async (tx) => {
+    // 1. Update ticket assignment
+    await tx.ticket.update({
+      where: { id: ticketId },
+      data: {
+        technician_id: technicianId || null,
+        sales_id: salesId || null,
+      },
+    });
+
+    // 2. Resolve pending requests
+    if (technicianId) {
+      await tx.ticketAssignmentRequest.updateMany({
+        where: { ticket_id: ticketId, technician_id: technicianId, status: "pending" },
+        data: { status: "approved" },
+      });
+      // Reject others
+      await tx.ticketAssignmentRequest.updateMany({
+        where: { ticket_id: ticketId, technician_id: { not: technicianId }, status: "pending" },
+        data: { status: "rejected" },
+      });
+      
+      // Notify assigned tech
+      await tx.notification.create({
+        data: {
+          user_id: technicianId,
+          ticket_id: ticketId,
+          type: "assigned",
+          message: `Admin assigned you to ticket #${ticketId.substring(0, 8)}`, // We don't have ticket code here easily, substring is fallback
+        }
+      });
+    } else {
+      // If unassigned, just reject all pending
+      await tx.ticketAssignmentRequest.updateMany({
+        where: { ticket_id: ticketId, status: "pending" },
+        data: { status: "rejected" },
+      });
+    }
   });
 
   revalidatePath("/admin/tickets");
@@ -215,10 +240,7 @@ export async function adminUpdateTicketStatusAction(
         total_points_completed: (newStatus === "done" || newStatus === "completed") ? { increment: points } : undefined,
       },
     });
-    await db.technicianWorkload.update({
-      where: { technician_id: ticket.technician_id },
-      data: { current_points: { decrement: points } },
-    });
+    // Workload decrement removed
   }
 
   // Notify customer if they have a user account

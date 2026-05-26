@@ -21,17 +21,8 @@ interface User {
   is_team_leader: boolean;
 }
 
-interface Workload {
-  max_points: number;
-}
 
-export default function EditUserForm({
-  user,
-  workload,
-}: {
-  user: User;
-  workload: Workload | null;
-}) {
+export default function EditUserForm({ user }: { user: User }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -111,10 +102,6 @@ export default function EditUserForm({
                   <option value="morning">Morning (09:00–18:00)</option>
                   <option value="noon">Noon (12:00–22:00)</option>
                 </select>
-              </div>
-              <div className="form-group">
-                <label className="form-label">Max Points</label>
-                <input name="max_points" type="number" className="form-input" defaultValue={workload?.max_points ?? 7} min={1} max={20} />
               </div>
             </div>
             <div className="form-group" style={{ marginTop: "0.75rem" }}>

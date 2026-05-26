@@ -10,7 +10,7 @@ export const metadata = { title: "My Profile — HNS IT Center" };
 export default async function TechnicianProfilePage() {
   const session = await requireRole("Technician");
 
-  const [user, performance, workload] = await Promise.all([
+  const [user, performance, activeTicketsCount] = await Promise.all([
     db.user.findUnique({
       where: { id: session.userId },
       select: {
@@ -26,8 +26,8 @@ export default async function TechnicianProfilePage() {
     db.technicianPerformance.findUnique({
       where: { technician_id: session.userId },
     }),
-    db.technicianWorkload.findUnique({
-      where: { technician_id: session.userId },
+    db.ticket.count({
+      where: { technician_id: session.userId, status: { in: ["waiting", "on_progress"] } },
     }),
   ]);
 
@@ -37,8 +37,6 @@ export default async function TechnicianProfilePage() {
   const totalSuccess  = performance?.success_count ?? 0;
   const totalFail     = performance?.failed_count ?? 0;
   const totalPoints   = performance?.total_points_completed ?? 0;
-  const currentLoad   = workload?.current_points ?? 0;
-  const maxLoad       = workload?.max_points ?? 7;
 
   const getLevelInfo = (tickets: number) => {
     if (tickets <= 100) {
@@ -113,18 +111,10 @@ export default async function TechnicianProfilePage() {
         ))}
       </div>
 
-      {/* Current workload bar */}
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem" }}>
-          <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>Current Workload</span>
-          <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{currentLoad} / {maxLoad} pts</span>
-        </div>
-        <div className="workload-bar">
-          <div
-            className={`workload-fill${currentLoad >= maxLoad ? " danger" : ""}`}
-            style={{ width: `${Math.min((currentLoad / maxLoad) * 100, 100)}%` }}
-          />
-        </div>
+      {/* Active tickets */}
+      <div className="card flex items-center justify-between">
+        <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>Active Tickets</span>
+        <span style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--primary)" }}>{activeTicketsCount}</span>
       </div>
 
       {/* Technician Leveling bar */}

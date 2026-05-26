@@ -8,9 +8,13 @@ const TECHNICIAN_ROUTES = ["/technician"];
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public routes
-  if (PUBLIC_ROUTES.some((route) => pathname.startsWith(route))) {
-    // If already logged in, redirect to dashboard
+  // Allow public ticket tracking route without redirecting authenticated users
+  if (pathname.startsWith("/ticket")) {
+    return NextResponse.next();
+  }
+
+  // Redirect authenticated users away from login/register
+  if (pathname.startsWith("/login") || pathname.startsWith("/register")) {
     const sessionCookie = request.cookies.get("session")?.value;
     const session = await decrypt(sessionCookie);
     if (session) {

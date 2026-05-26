@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Bell } from "lucide-react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 interface Notification {
   id: string;
@@ -50,12 +51,34 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
     }
   }, []);
 
-  // Poll unread count every 30s (was polling full list — now much cheaper)
+  // Poll unread count initially, then listen to realtime inserts
   useEffect(() => {
     pollUnreadCount();
-    const interval = setInterval(pollUnreadCount, 30000);
-    return () => clearInterval(interval);
-  }, [pollUnreadCount]);
+
+    const channel = supabase
+      .channel("realtime:notifications")
+      .on(
+        "postgres_changes",
+        {
+          event: "INSERT",
+          schema: "public",
+          table: "Notification",
+          filter: `user_id=eq.${userId}`,
+        },
+        (payload) => {
+          setUnreadCount((prev) => prev + 1);
+          // If the list is currently open, we should fetch it again or optimistically insert
+          if (listLoaded) {
+            fetchFullList();
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [pollUnreadCount, userId, listLoaded, fetchFullList]);
 
   // Load full list when bell opens
   useEffect(() => {

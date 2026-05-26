@@ -90,7 +90,7 @@ export default async function AdminTicketsPage({
             <p className="text-gray-500">
               {totalCount} ticket{totalCount !== 1 ? "s" : ""}
             </p>
-            <Link href="/technician/tickets/create" className="btn btn-primary btn-sm flex items-center gap-1.5" style={{ padding: "0.25rem 0.75rem" }}>
+            <Link href="/admin/tickets/create" className="btn btn-primary btn-sm flex items-center gap-1.5" style={{ padding: "0.25rem 0.75rem" }}>
               <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span> New Ticket
             </Link>
           </div>

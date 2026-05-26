@@ -46,6 +46,9 @@ export default async function AdminTicketDetailPage({
         pc_components: true,
         attachments: true,
         pc_build_detail: true,
+        assignment_requests: {
+          include: { technician: { select: { name: true } } },
+        },
       },
     }),
     db.user.findMany({
@@ -171,6 +174,7 @@ export default async function AdminTicketDetailPage({
               currentSalesId={ticket.sales_id}
               technicians={technicians}
               salesUsers={salesUsers}
+              assignmentRequests={ticket.assignment_requests as any}
             />
           )}
 

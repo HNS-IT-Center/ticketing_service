@@ -9,17 +9,14 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
   await requireRole("Administrator");
   const { id } = await params;
 
-  const [user, workload] = await Promise.all([
-    db.user.findUnique({ where: { id } }),
-    db.technicianWorkload.findUnique({ where: { technician_id: id } }),
-  ]);
+  const user = await db.user.findUnique({ where: { id } });
 
   if (!user) notFound();
 
   return (
     <div style={{ maxWidth: "600px" }}>
       <h1 style={{ marginBottom: "1.5rem" }}>Edit User</h1>
-      <EditUserForm user={user as any} workload={workload} />
+      <EditUserForm user={user as any} />
     </div>
   );
 }

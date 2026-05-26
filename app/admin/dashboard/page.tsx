@@ -57,9 +57,14 @@ export default async function AdminDashboard() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-      <div>
-        <h1>Admin Dashboard</h1>
-        <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>System overview and management</p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div>
+          <h1>Admin Dashboard</h1>
+          <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>System overview and management</p>
+        </div>
+        <Link href="/admin/tickets/create" className="btn btn-primary btn-sm flex items-center gap-1.5" style={{ padding: "0.5rem 1rem" }}>
+          <span style={{ fontSize: "1.2rem", lineHeight: 1 }}>+</span> New Ticket
+        </Link>
       </div>
 
       {/* Stats grid — auto-fill, collapses to 2-col on mobile */}

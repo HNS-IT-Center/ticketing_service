@@ -42,7 +42,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   admin: [
     { href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
-    { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+    { href: "/admin/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
     { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
     { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
     { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
@@ -53,7 +53,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   sales: [
     { href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
-    { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+    { href: "/admin/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
     { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
     { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
   ],

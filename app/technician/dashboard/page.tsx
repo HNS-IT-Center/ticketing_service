@@ -157,7 +157,14 @@ export default async function TechnicianDashboard() {
           Available Tickets <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 400 }}>({unassigned.length})</span>
         </h3>
         <AvailableTickets 
-          tickets={unassigned} 
+          tickets={unassigned.map(t => ({
+            id: t.id,
+            ticket_code: t.ticket_code,
+            ticket_type: t.ticket_type,
+            device_type: t.device_type,
+            created_at: t.created_at,
+            user: { name: t.user?.name || "Unknown" }
+          }))} 
         />
       </div>
     </div>

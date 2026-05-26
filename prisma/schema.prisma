@@ -166,6 +166,7 @@ model User {
   leaves             TechnicianLeave[]
   overridden_shifts  ShiftOverride[]       @relation("OriginalShift")
   overriding_shifts  ShiftOverride[]       @relation("OverrideShift")
+  assignment_requests TicketAssignmentRequest[]
 
   @@index([email])
 }
@@ -243,11 +244,25 @@ model Ticket {
   upgrade_details  TicketUpgradeDetail[]
   pc_build_detail  TicketPcBuildDetail?
   pc_components    TicketPcBuildComponent[]
+  assignment_requests TicketAssignmentRequest[]
 
   @@index([user_id])
   @@index([technician_id])
   @@index([store_location_id])
   @@index([public_share_token])
+}
+
+model TicketAssignmentRequest {
+  id            String   @id @default(cuid())
+  ticket_id     String
+  ticket        Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  technician_id String
+  technician    User     @relation(fields: [technician_id], references: [id], onDelete: Cascade)
+  status        String   @default("pending") // pending, approved, rejected
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  @@unique([ticket_id, technician_id])
 }
 
 // ─────────────────────────────────────────────

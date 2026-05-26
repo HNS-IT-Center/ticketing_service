@@ -46,8 +46,7 @@ export default async function StoresPage() {
             <Link
               key={store.id}
               href={`/admin/stores/${store.id}`}
-              className="card hover:shadow-md transition-shadow no-underline"
-              style={{ textDecoration: "none" }}
+              className="card hover:shadow-md transition-shadow flex flex-col h-full"
             >
               <div className="flex items-start justify-between mb-3">
                 <div className="flex items-center gap-3">
@@ -55,8 +54,8 @@ export default async function StoresPage() {
                     <Store size={20} className="text-indigo-600" />
                   </div>
                   <div>
-                    <div className="font-bold text-gray-900" style={{ fontSize: "1.1rem" }}>{store.name}</div>
-                    <div className="badge" style={{ background: "var(--cream-dark)", color: "var(--text-secondary)", marginTop: "0.25rem" }}>
+                    <div className="font-bold text-gray-900 text-lg">{store.name}</div>
+                    <div className="badge bg-[var(--cream-dark)] text-[var(--text-secondary)] mt-1">
                       {store.code}
                     </div>
                   </div>
@@ -70,7 +69,8 @@ export default async function StoresPage() {
                 <p className="text-sm text-gray-500 mb-4 line-clamp-1">{store.address}</p>
               )}
 
-              <div className="flex gap-4 text-sm text-gray-600 border-t border-gray-100 pt-4 mt-2">
+              <div className="flex-1"></div>
+              <div className="flex gap-4 mt-6 border-t border-gray-100 text-sm text-gray-600 pt-4">
                 <span className="flex items-center gap-1.5">
                   <Users size={14} className="text-gray-400" />
                   {store._count.technician_stores} technician{store._count.technician_stores !== 1 ? "s" : ""}

@@ -56,7 +56,7 @@ export default function AvailableTickets({
     <>
       {/* Desktop table */}
       <div className="admin-ticket-table">
-        <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
+        <div className="table-wrapper border-none" style={{ boxShadow: "none" }}>
           <table>
             <thead>
               <tr>
@@ -69,7 +69,7 @@ export default function AvailableTickets({
                   style={{ cursor: "pointer", userSelect: "none" }}
                   title="Click to sort"
                 >
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.25rem" }}>
+                  <div  className="flex items-center gap-1">
                     Date
                     {sort === "default" ? (
                       <ArrowDown size={14} style={{ opacity: 0.5 }} />
@@ -87,20 +87,16 @@ export default function AvailableTickets({
             <tbody>
               {sortedTickets.map((t) => (
                 <tr key={t.id}>
-                  <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
+                  <td  className="font-mono font-semibold text-primary">{t.ticket_code}</td>
                   <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
                   <td>{t.user.name}</td>
-                  <td style={{ color: "var(--text-muted)" }}>{t.device_type.replace(/_/g, " ")}</td>
-                  <td style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>
+                  <td  className="text-muted-foreground">{t.device_type.replace(/_/g, " ")}</td>
+                  <td  className="text-muted-foreground" style={{ fontSize: "0.85rem" }}>
                     {new Date(t.created_at).toLocaleDateString("id-ID")}
                   </td>
                   <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
                   <td>
-                    <TakeTicketButton
-                      ticketId={t.id}
-                      points={getTicketPoints(t.ticket_type)}
-                      canTake={true}
-                    />
+                    <TakeTicketButton ticketId={t.id} />
                   </td>
                 </tr>
               ))}
@@ -115,24 +111,20 @@ export default function AvailableTickets({
           const pts = getTicketPoints(t.ticket_type);
           return (
             <div key={t.id} className="mobile-ticket-card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>{t.ticket_code}</span>
+              <div  className="flex justify-between items-center">
+                <span  className="font-mono font-bold text-primary">{t.ticket_code}</span>
                 <span className="badge badge-technician">{pts} pts</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+              <div  className="flex justify-between text-muted-foreground mt-1" style={{ fontSize: "0.8125rem" }}>
                 <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
                 <span>{t.user.name}</span>
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+              <div  className="flex justify-between text-muted-foreground mt-1" style={{ fontSize: "0.8125rem" }}>
                 <span>{t.device_type.replace(/_/g, " ")}</span>
                 <span>{new Date(t.created_at).toLocaleDateString("id-ID")}</span>
               </div>
               <div style={{ marginTop: "0.75rem" }}>
-                <TakeTicketButton
-                  ticketId={t.id}
-                  points={pts}
-                  canTake={true}
-                />
+                <TakeTicketButton ticketId={t.id} />
               </div>
             </div>
           );

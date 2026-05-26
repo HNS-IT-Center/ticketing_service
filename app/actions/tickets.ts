@@ -200,16 +200,7 @@ export async function createTicketAction(formData: FormData) {
     }
   }
 
-  // Workload update (if technician assigned)
-  if (technician_id) {
-    followUps.push(
-      db.technicianWorkload.upsert({
-        where: { technician_id },
-        create: { technician_id, current_points: points, max_points: 7 },
-        update: { current_points: { increment: points } },
-      })
-    );
-  }
+  // Workload update removed: workload is tracked dynamically.
 
   // Run all follow-up writes in parallel
   await Promise.all(followUps);

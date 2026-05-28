@@ -162,7 +162,7 @@ export default async function AdminTicketsPage({
               </thead>
               <tbody>
                 {tickets.map((t) => {
-                  const actualName = t.is_for_self ? t.user.name : t.customer_name;
+                  const actualName = t.is_for_self ? t.user?.name : t.customer_name;
                   return (
                     <tr key={t.id}>
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
@@ -202,7 +202,7 @@ export default async function AdminTicketsPage({
                 <span>{new Date(t.created_at).toLocaleDateString("id-ID")}</span>
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
-                <span style={{ color: "var(--text-secondary)" }}>👤 {t.user.name}</span>
+                <span style={{ color: "var(--text-secondary)" }}>👤 {t.user?.name || "Guest"}</span>
                 <span style={{ color: t.technician ? "var(--text-secondary)" : "var(--accent)" }}>
                   {t.technician ? `🔧 ${t.technician.name}` : "Unassigned"}
                 </span>

@@ -18,7 +18,7 @@ export default async function StoreDetailPage({ params }: { params: Promise<{ id
       where: { id },
       include: {
         technician_stores: {
-          include: { technician: { select: { id: true, name: true, shift: true } } },
+          include: { technician: { select: { id: true, name: true, shift: true, is_team_leader: true } } },
           orderBy: { assigned_at: "asc" },
         },
         _count: { select: { tickets: true } },

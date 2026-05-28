@@ -41,9 +41,9 @@ export default function AdminAssignPanel({
   const pendingRequests = assignmentRequests.filter(r => r.status === "pending" && r.technician_id !== currentTechnicianId);
 
   return (
-    <div className="card">
-      <h3 style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        <UserCheck size={18} /> Assignment
+    <div className="card" style={{ alignSelf: "flex-start", width: "100%" }}>
+      <h3 style={{ marginBottom: "1rem" }}>
+        Assignment
       </h3>
 
       {pendingRequests.length > 0 && (
@@ -69,7 +69,7 @@ export default function AdminAssignPanel({
         </div>
       )}
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1rem" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1rem" }}>
         <div className="form-group">
           <label className="form-label">Technician</label>
           <select

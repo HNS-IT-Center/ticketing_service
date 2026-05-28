@@ -30,6 +30,8 @@ export default async function TechnicianDashboard() {
       where: { 
         technician_id: null, 
         status: "waiting",
+        // Exclude tickets that have a pending assignment request from ANY technician
+        assignment_requests: { none: { status: "pending" } },
         OR: [
           { store_location_id: { in: storeIds } },
           { store_location_id: null }
@@ -115,7 +117,7 @@ export default async function TechnicianDashboard() {
                       <tr key={t.id}>
                         <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
                         <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                        <td>{t.user.name}</td>
+                        <td>{t.user?.name || "Guest"}</td>
                         <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
                         <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                         <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
@@ -137,7 +139,7 @@ export default async function TechnicianDashboard() {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                       <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                      <span>{t.user.name}</span>
+                      <span>{t.user?.name || "Guest"}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span>

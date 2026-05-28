@@ -101,7 +101,7 @@ export default async function AdminDashboard() {
                   <tr key={t.id}>
                     <td><Link href={`/admin/tickets/${t.id}`} style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</Link></td>
                     <td style={{ textTransform: "capitalize", fontSize: "0.875rem" }}>{t.ticket_type.replace("_", " ")}</td>
-                    <td style={{ fontSize: "0.875rem" }}>{t.user.name}</td>
+                    <td style={{ fontSize: "0.875rem" }}>{t.user?.name || "Guest"}</td>
                     <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                     <td style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{t.technician?.name ?? "—"}</td>
                   </tr>
@@ -138,7 +138,7 @@ export default async function AdminDashboard() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                   <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                  <span>{t.user.name}</span>
+                  <span>{t.user?.name || "Guest"}</span>
                 </div>
                 {t.technician && (
                   <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>

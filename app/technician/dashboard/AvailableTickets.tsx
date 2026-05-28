@@ -89,7 +89,7 @@ export default function AvailableTickets({
                 <tr key={t.id}>
                   <td  className="font-mono font-semibold text-primary">{t.ticket_code}</td>
                   <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                  <td>{t.user.name}</td>
+                  <td>{t.user?.name || "Guest"}</td>
                   <td  className="text-muted-foreground">{t.device_type.replace(/_/g, " ")}</td>
                   <td  className="text-muted-foreground" style={{ fontSize: "0.85rem" }}>
                     {new Date(t.created_at).toLocaleDateString("id-ID")}
@@ -117,7 +117,7 @@ export default function AvailableTickets({
               </div>
               <div  className="flex justify-between text-muted-foreground mt-1" style={{ fontSize: "0.8125rem" }}>
                 <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                <span>{t.user.name}</span>
+                <span>{t.user?.name || "Guest"}</span>
               </div>
               <div  className="flex justify-between text-muted-foreground mt-1" style={{ fontSize: "0.8125rem" }}>
                 <span>{t.device_type.replace(/_/g, " ")}</span>

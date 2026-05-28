@@ -197,8 +197,8 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // Notify customer of status change (skip if technician is the ticket owner)
-  if (ticket.user_id !== session.userId) {
+  // Create notification for customer if ticket is tied to a user account
+  if (ticket.user_id && ticket.user_id !== session.userId) {
     await db.notification.create({
       data: {
         user_id: ticket.user_id,
@@ -234,12 +234,12 @@ export async function updateTicketStatusAction(formData: FormData) {
     include: { user: { select: { name: true, email: true } } },
   });
   if (fullTicket) {
-    const customerEmail = fullTicket.customer_email || fullTicket.user.email;
-    const customerName = fullTicket.customer_name || fullTicket.user.name;
+    const customerEmail = fullTicket.customer_email || fullTicket.user?.email;
+    const customerName = fullTicket.customer_name || fullTicket.user?.name;
     if (customerEmail && ticket.user_id !== session.userId) {
       await sendTicketStatusEmail({
         to: customerEmail,
-        customerName,
+        customerName: customerName || "Customer",
         ticketCode: ticket.ticket_code,
         status: newStatus,
         shareToken: fullTicket.public_share_token,

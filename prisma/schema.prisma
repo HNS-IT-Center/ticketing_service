@@ -220,6 +220,7 @@ model Ticket {
   payment_proof_url   String?
   delivery_proof_url  String?
   progress_proof_url  String?
+  revision_proof_url  String?
 
   // Public access
   public_chat_enabled Boolean @default(false)

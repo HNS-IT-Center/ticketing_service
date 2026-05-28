@@ -8,7 +8,7 @@ export default async function AdminCreateTicketPage() {
   await requireRole("Administrator", "Sales", "Technician");
 
   const storeLocations = await db.storeLocation.findMany({ where: { is_active: true } });
-  const technicians = await db.user.findMany({ where: { role: "Technician" }, select: { id: true, name: true } });
+  const technicians = await db.user.findMany({ where: { role: "Technician" }, select: { id: true, name: true, store_assignments: { select: { store_id: true } } } });
   const sales = await db.user.findMany({ where: { role: "Sales" }, select: { id: true, name: true } });
   const upgrades = await db.upgrade.findMany();
 

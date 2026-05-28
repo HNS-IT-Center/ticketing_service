@@ -36,18 +36,11 @@ export default function TicketChat({ ticketId, messages, currentUserId, customer
     if (!newMessage.trim()) return;
 
     startTransition(async () => {
-      const fd = new FormData();
-      fd.append("ticketId", ticketId);
-      fd.append("message", newMessage);
-      if (!currentUserId && customerName) {
-        fd.append("senderName", customerName);
-      }
-
-      const res = await sendMessageAction(fd);
-      if (res?.error) {
-        toast.error(res.error);
-      } else {
+      try {
+        await sendMessageAction(ticketId, newMessage);
         setNewMessage("");
+      } catch (err: any) {
+        toast.error(err.message || "Failed to send message");
       }
     });
   };

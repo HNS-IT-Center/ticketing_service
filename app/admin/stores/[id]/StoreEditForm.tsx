@@ -14,7 +14,7 @@ import {
 import Modal from "@/components/ui/Modal";
 
 interface Technician { id: string; name: string; }
-interface Assignment { technician_id: string; technician: { id: string; name: string; shift: string | null }; }
+interface Assignment { technician_id: string; technician: { id: string; name: string; shift: string | null; is_team_leader?: boolean }; }
 
 interface Store {
   id: string; name: string; code: string; address: string | null;
@@ -170,7 +170,12 @@ export default function StoreEditForm({
                   className="flex items-center justify-between p-4 bg-white border border-gray-200 shadow-sm rounded-xl hover:border-indigo-300 transition-colors"
                 >
                   <div>
-                    <div className="font-medium text-gray-800 text-sm">{a.technician.name}</div>
+                    <div className="font-medium text-gray-800 text-sm flex items-center gap-2">
+                      {a.technician.name}
+                      {a.technician.is_team_leader && (
+                        <span className="badge badge-assigned px-1.5 py-0.5 text-[0.7rem] bg-indigo-50 text-indigo-600 border border-indigo-200">Coordinator</span>
+                      )}
+                    </div>
                     {a.technician.shift && (
                       <div className="text-xs text-gray-400 capitalize">{a.technician.shift} shift</div>
                     )}

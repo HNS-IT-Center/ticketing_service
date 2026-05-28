@@ -8,7 +8,7 @@ export default function PublicShareButton({ url }: { url: string }) {
   const [canShare, setCanShare] = useState(false);
 
   useEffect(() => {
-    if (typeof navigator !== "undefined" && navigator.share) {
+    if (typeof navigator !== "undefined" && "share" in navigator) {
       setCanShare(true);
     }
   }, []);

@@ -31,7 +31,7 @@ To re-seed at any time: `$env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed`
 | Layer         | Technology                                                        |
 | ------------- | ----------------------------------------------------------------- |
 | Framework     | Next.js 16.2.4 (App Router, Turbopack)                            |
-| Language      | TypeScript                                                        |
+| Language      | **TypeScript** (Strict Type Checking Enabled)                     |
 | ORM           | Prisma 7.8.0                                                      |
 | DB Adapter    | `@prisma/adapter-pg` (PrismaPg) — **required for Prisma 7**       |
 | Database      | Supabase Postgres (Session Pooler, port 5432)                     |
@@ -477,6 +477,14 @@ When cloning the project to a new device, you will need to reconfigure the envir
 | W2 | Store Coordinator Assignments | ✅ | `adminAssignTicketAction` now accepts `is_team_leader`. Rendered `AdminAssignPanel` inside Technician portal for Store Coordinators to accept requests. |
 | W3 | Supabase Realtime Notifications | ✅ | `NotificationBell.tsx` updated from 30s `setInterval` polling to Supabase `.channel('realtime:notifications').on('postgres_changes')`. |
 
+### SPRINT 2026-05-28 SESSION — UI & Layout Refinements
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| U1 | Technician Ticket View Alignment | ✅ | `app/technician/tickets/[id]/page.tsx` now matches the 2-column sidebar layout of the Admin view. Added `CustomerWhatsAppActions`, `PcBuildHandover`, and `AdminAssignPanel` (for Store Coordinators). |
+| U2 | Assignment Panel Template | ✅ | `AdminAssignPanel.tsx` updated to structurally match the `Status History` card. Moved below Status History in the right column on both Admin and Technician views. |
+| U3 | CreateTicketForm Syntax Fix | ✅ | Fixed JSX syntax errors and removed improperly nested fragment blocks in `CreateTicketForm.tsx`. |
+| U4 | RichTextEditor ESLint Fix | ✅ | Extracted `ToolbarBtn` outside of `RichTextEditor` component to fix ESLint "calling setState synchronously" / component-in-render errors. |
+
 ---
 
 ### 🔒 SECURITY: RLS (Row Level Security)
@@ -526,6 +534,7 @@ END $$;
 6. Commit after each logical group
 
 **Key constraint reminders:**
+- **TypeScript & ESLint:** This project strictly uses **TypeScript**. You must always run `npx tsc --noEmit` and `npm run lint` before committing to ensure there are no typing or formatting errors that would break the build.
 - **Routing guard:** `proxy.ts` (not `middleware.ts`), exported function named `proxy` (not `middleware`)
 - **Prisma 7:** Never use `datasources` option — use `@prisma/adapter-pg` pattern in `lib/db.ts`
 - **Tiptap:** Always pass `immediatelyRender: false` to `useEditor()`

@@ -260,7 +260,7 @@ export async function adminUpdateTicketStatusAction(
   if (customerEmail) {
     await sendTicketStatusEmail({
       to: customerEmail,
-      customerName,
+      customerName: customerName || "Customer",
       ticketCode: ticket.ticket_code,
       status: newStatus,
       shareToken: ticket.public_share_token,

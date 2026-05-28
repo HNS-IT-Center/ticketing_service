@@ -5,8 +5,7 @@ import { adminUpdateTicketStatusAction } from "@/app/actions/admin";
 import { uploadDeliveryProofAction } from "@/app/actions/delivery";
 import toast from "react-hot-toast";
 import { CheckCircle, Truck, Package, Flag, Printer, Upload } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-
+import Modal from "@/components/ui/Modal";
 
 type TicketStatus =
   | "waiting" | "on_progress" | "done" | "ready_for_pickup"
@@ -203,68 +202,58 @@ export default function AdminWorkflowPanel({ ticketId, currentStatus, pickupMeth
       )}
 
       {/* Dialog for Courier Handover */}
-      <Dialog open={activeDialog === "courier_handover"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Hand to Courier</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleProofSubmit} className="flex flex-col gap-4 py-4">
-            <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-sm">
-              <p className="font-semibold mb-1">Customer Address:</p>
-              <p className="mb-2">{customerAddress || "No address provided."}</p>
-              <button type="button" className="btn btn-outline" style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }} onClick={copyAddress}>
-                Copy Address
-              </button>
-            </div>
-            
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Upload Payment Proof (Required)</label>
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="form-input"
-                required
-              />
-            </div>
-            
-            <DialogFooter>
-              <button type="button" className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={isPending || !file}>
-                {isPending ? "Uploading..." : "Upload & Hand to Courier"}
-              </button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <Modal open={activeDialog === "courier_handover"} onClose={closeDialog} title="Hand to Courier">
+        <form onSubmit={handleProofSubmit} className="flex flex-col gap-4 py-4">
+          <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-sm">
+            <p className="font-semibold mb-1">Customer Address:</p>
+            <p className="mb-2">{customerAddress || "No address provided."}</p>
+            <button type="button" className="btn btn-outline" style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }} onClick={copyAddress}>
+              Copy Address
+            </button>
+          </div>
+          
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Upload Payment Proof (Required)</label>
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="form-input"
+              required
+            />
+          </div>
+          
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
+            <button type="button" className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={isPending || !file}>
+              {isPending ? "Uploading..." : "Upload & Hand to Courier"}
+            </button>
+          </div>
+        </form>
+      </Modal>
 
       {/* Dialog for Self Pickup Completion */}
-      <Dialog open={activeDialog === "self_pickup_complete"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Complete Handover</DialogTitle>
-          </DialogHeader>
-          <form onSubmit={handleProofSubmit} className="flex flex-col gap-4 py-4">
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Upload Progress Proof / Handover Photo (Required)</label>
-              <input 
-                type="file" 
-                accept="image/*" 
-                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                className="form-input"
-                required
-              />
-            </div>
-            
-            <DialogFooter>
-              <button type="button" className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-              <button type="submit" className="btn btn-primary" disabled={isPending || !file}>
-                {isPending ? "Uploading..." : "Upload & Complete"}
-              </button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+      <Modal open={activeDialog === "self_pickup_complete"} onClose={closeDialog} title="Complete Handover">
+        <form onSubmit={handleProofSubmit} className="flex flex-col gap-4 py-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Upload Progress Proof / Handover Photo (Required)</label>
+            <input 
+              type="file" 
+              accept="image/*" 
+              onChange={(e) => setFile(e.target.files?.[0] || null)}
+              className="form-input"
+              required
+            />
+          </div>
+          
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
+            <button type="button" className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
+            <button type="submit" className="btn btn-primary" disabled={isPending || !file}>
+              {isPending ? "Uploading..." : "Upload & Complete"}
+            </button>
+          </div>
+        </form>
+      </Modal>
     </div>
   );
 }

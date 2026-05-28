@@ -7,9 +7,10 @@ import toast from "react-hot-toast";
 
 type Props = {
   storeLocations: { id: string; name: string; code: string }[];
-  technicians: { id: string; name: string }[];
+  technicians: { id: string; name: string; store_assignments: { store_id: string }[] }[];
   sales: { id: string; name: string }[];
   upgrades: { id: string; name: string }[];
+  defaultStoreLocationId?: string;
 };
 
 const STEPS = ["Store & Assign", "Customer", "Category", "Details", "Confirm"];
@@ -22,12 +23,12 @@ const TICKET_TYPES = [
   { value: "pc_build", label: "PC Build", desc: "Custom PC assembly" },
 ];
 
-export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades }: Props) {
+export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades, defaultStoreLocationId }: Props) {
   const [step, setStep] = useState(1);
   const [isPending, startTransition] = useTransition();
 
   // Step 1: Store & Assignment
-  const [storeLocationId, setStoreLocationId] = useState("");
+  const [storeLocationId, setStoreLocationId] = useState(defaultStoreLocationId || "");
   const [technicianId, setTechnicianId] = useState("");
   const [salesId, setSalesId] = useState("");
 
@@ -43,7 +44,6 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
 
   // Step 4: Details
   const [accessories, setAccessories] = useState("");
-  const [deviceCondition, setDeviceCondition] = useState("");
   const [notes, setNotes] = useState("");
   const [isOvernight, setIsOvernight] = useState(false);
   
@@ -77,11 +77,13 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (!deviceType) errs.deviceType = "Device type is required.";
     }
     if (step === 4) {
-      if (!notes.trim() && ticketType !== "pc_build" && ticketType !== "upgrade") errs.notes = "Please describe the job or problem.";
+      if (ticketType === "service" || ticketType === "warranty_claim") {
+        if (!notes.trim()) errs.notes = "Problem description is required.";
+      }
       if (ticketType === "warranty_claim" && !purchaseDate) errs.purchaseDate = "Purchase date is required.";
       if (ticketType === "cleaning" && !cleaningPackage) errs.cleaningPackage = "Please select a cleaning package.";
       if (ticketType === "upgrade" && selectedUpgrades.length === 0) errs.selectedUpgrades = "Please select at least one upgrade.";
-      if (ticketType === "pc_build" && components.length === 0) errs.components = "Please add at least one component.";
+      if (ticketType === "pc_build" && ticketFiles.length === 0) errs.ticketFiles = "First Build Attachment is required.";
     }
     if (step === 5) {
       if (!termsAccepted) errs.termsAccepted = "You must confirm the details.";
@@ -111,7 +113,6 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       fd.append("pickup_method", pickupMethod);
 
       if (accessories) fd.append("accessories", accessories);
-      if (deviceCondition) fd.append("device_condition", deviceCondition);
       if (notes) fd.append("notes", notes);
       if (isOvernight) fd.append("is_overnight_check", "1");
 
@@ -129,7 +130,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       
       fd.append("is_for_self", "0"); // Technicians always make tickets on behalf of customers
 
-      const result = await createTicketAction(fd);
+      const result = await createTicketAction(fd) as any;
       if (result?.error) {
         toast.error(result.error);
         setErrors({ submit: result.error });
@@ -202,7 +203,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
               <label className="form-label">Assign Technician</label>
               <select className="form-input" value={technicianId} onChange={e => setTechnicianId(e.target.value)}>
                 <option value="">(Assign Later)</option>
-                {technicians.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                {technicians
+                  .filter(t => !storeLocationId || t.store_assignments.some(sa => sa.store_id === storeLocationId))
+                  .map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
               </select>
             </div>
             <div className="form-group">
@@ -319,22 +322,15 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
         {step === 4 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
             <h2 style={{ marginBottom: "0.5rem" }}>Details & Notes</h2>
-            
-            <div className="form-group">
-              <label className="form-label">Accessories Included</label>
-              <input className="form-input" value={accessories} onChange={e => setAccessories(e.target.value)} placeholder="e.g. Charger, Bag" />
-            </div>
-            
-            <div className="form-group">
-              <label className="form-label">Device Condition</label>
-              <input className="form-input" value={deviceCondition} onChange={e => setDeviceCondition(e.target.value)} placeholder="Physical condition upon receipt" />
-            </div>
 
-            <div className="form-group">
-              <label className="form-label">Problem Description / Notes *</label>
-              <textarea className={`form-input ${errors.notes ? "error" : ""}`} rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Provide details of the job..." />
-              {errors.notes && <span className="form-error"><AlertCircle size={12} />{errors.notes}</span>}
-            </div>
+            {/* Common for specific types */}
+            {(ticketType === "service" || ticketType === "warranty_claim") && (
+              <div className="form-group">
+                <label className="form-label">Problem Description / Notes *</label>
+                <textarea className={`form-input ${errors.notes ? "error" : ""}`} rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Provide details of the problem..." />
+                {errors.notes && <span className="form-error"><AlertCircle size={12} />{errors.notes}</span>}
+              </div>
+            )}
 
             {/* Dynamic Fields */}
             {ticketType === "warranty_claim" && (
@@ -346,16 +342,22 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             )}
 
             {ticketType === "cleaning" && (
-              <div className="form-group">
-                <label className="form-label">Cleaning Package *</label>
-                <select className={`form-input ${errors.cleaningPackage ? "error" : ""}`} value={cleaningPackage} onChange={e => setCleaningPackage(e.target.value)}>
-                  <option value="">Select Package</option>
-                  <option value="Basic_Clean">Basic Clean</option>
-                  <option value="Deep_Clean">Deep Clean</option>
-                  <option value="Thermal_Paste_Replacement">Thermal Paste Replacement</option>
-                </select>
-                {errors.cleaningPackage && <span className="form-error"><AlertCircle size={12} />{errors.cleaningPackage}</span>}
-              </div>
+              <>
+                <div className="form-group">
+                  <label className="form-label">Accessories Included</label>
+                  <input className="form-input" value={accessories} onChange={e => setAccessories(e.target.value)} placeholder="e.g. Charger, Bag" />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Cleaning Package *</label>
+                  <select className={`form-input ${errors.cleaningPackage ? "error" : ""}`} value={cleaningPackage} onChange={e => setCleaningPackage(e.target.value)}>
+                    <option value="">Select Package</option>
+                    <option value="Basic_Clean">Basic Clean</option>
+                    <option value="Deep_Clean">Deep Clean</option>
+                    <option value="Thermal_Paste_Replacement">Thermal Paste Replacement</option>
+                  </select>
+                  {errors.cleaningPackage && <span className="form-error"><AlertCircle size={12} />{errors.cleaningPackage}</span>}
+                </div>
+              </>
             )}
 
             {ticketType === "upgrade" && (
@@ -381,65 +383,88 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   ))}
                 </div>
                 {errors.selectedUpgrades && <span className="form-error"><AlertCircle size={12} />{errors.selectedUpgrades}</span>}
+                
+                {selectedUpgrades.length > 0 && (
+                  <div style={{ marginTop: "1rem", padding: "0.75rem", background: "var(--cream)", border: "1px solid var(--border)", borderRadius: "var(--radius-md)" }}>
+                    <span style={{ fontWeight: 600 }}>Upgrade Services Fee</span>
+                    <p style={{ fontSize: "0.85rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                      An installation fee of Rp. 50,000 applies for these upgrades.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 
             {ticketType === "pc_build" && (
-              <div className="form-group">
-                <label className="form-label">PC Components *</label>
-                <div style={{ display: "flex", gap: "0.5rem" }}>
-                  <input
-                    className="form-input"
-                    value={newComponent}
-                    onChange={e => setNewComponent(e.target.value)}
-                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addComponent(); } }}
-                    placeholder="e.g. RTX 4090, i9-14900K"
-                  />
-                  <button type="button" onClick={addComponent} className="btn btn-outline">Add</button>
-                </div>
-                {components.length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>
-                    {components.map((c, i) => (
-                      <span key={i} style={{ background: "var(--cream-dark)", padding: "0.25rem 0.75rem", borderRadius: "4px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                        {c}
-                        <button type="button" onClick={() => setComponents(components.filter((_, idx) => idx !== i))} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--accent)" }}>×</button>
-                      </span>
-                    ))}
+              <>
+                <div className="form-group">
+                  <label className="form-label">PC Components</label>
+                  <div style={{ display: "flex", gap: "0.5rem" }}>
+                    <input
+                      className="form-input"
+                      value={newComponent}
+                      onChange={e => setNewComponent(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); addComponent(); } }}
+                      placeholder="e.g. RTX 4090, i9-14900K"
+                    />
+                    <button type="button" onClick={addComponent} className="btn btn-outline">Add</button>
                   </div>
-                )}
-                {errors.components && <span className="form-error"><AlertCircle size={12} />{errors.components}</span>}
-              </div>
+                  {components.length > 0 && (
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", marginTop: "0.75rem" }}>
+                      {components.map((c, i) => (
+                        <span key={i} style={{ background: "var(--cream-dark)", padding: "0.25rem 0.75rem", borderRadius: "4px", fontSize: "0.85rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                          {c}
+                          <button type="button" onClick={() => setComponents(components.filter((_, idx) => idx !== i))} style={{ border: "none", background: "none", cursor: "pointer", color: "var(--accent)" }}>×</button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  {errors.components && <span className="form-error"><AlertCircle size={12} />{errors.components}</span>}
+                </div>
+                
+                <div className="form-group" style={{ marginTop: "1rem" }}>
+                  <label className="form-label">First Build Attachment *</label>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Upload proof or initial build setup.</p>
+                  <div style={{ background: "var(--bg)", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1rem" }}>
+                    <input type="file" onChange={e => setTicketFiles(Array.from(e.target.files || []))} className={`form-input ${errors.ticketFiles ? "error" : ""}`} style={{ border: "none", padding: 0 }} />
+                  </div>
+                  {errors.ticketFiles && <span className="form-error"><AlertCircle size={12} />{errors.ticketFiles}</span>}
+                </div>
+              </>
             )}
 
-            <div className="form-group" style={{ marginTop: "1rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", background: "var(--cream)", padding: "1rem", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                <input type="checkbox" checked={isOvernight} onChange={e => setIsOvernight(e.target.checked)} style={{ width: "1.25rem", height: "1.25rem" }} />
-                <div>
-                  <strong style={{ display: "block" }}>Device will stay overnight (Check and Diagnosis)</strong>
-                  <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Applies a checking fee of Rp. 50,000</span>
+            {ticketType === "service" && (
+              <>
+                <div className="form-group" style={{ marginTop: "1rem" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", background: "var(--cream)", padding: "1rem", borderRadius: "8px", border: "1px solid var(--border)" }}>
+                    <input type="checkbox" checked={isOvernight} onChange={e => setIsOvernight(e.target.checked)} style={{ width: "1.25rem", height: "1.25rem" }} />
+                    <div>
+                      <strong style={{ display: "block" }}>Device will stay overnight (Check and Diagnosis)</strong>
+                      <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Applies a checking fee of Rp. 50,000</span>
+                    </div>
+                  </label>
                 </div>
-              </label>
-            </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem", marginTop: "1rem" }}>
+                <div className="form-group">
+                  <label className="form-label">Ticket Attachments (Max 6)</label>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Photos or video of device condition before service.</p>
+                  <div style={{ background: "var(--bg)", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1rem" }}>
+                    <input type="file" multiple onChange={e => setTicketFiles(Array.from(e.target.files || []))} className="form-input" style={{ border: "none", padding: 0 }} />
+                  </div>
+                </div>
+              </>
+            )}
+
+            {ticketType === "warranty_claim" && (
               <div className="form-group">
-                <label className="form-label">Ticket Attachments</label>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Photos of device condition before service.</p>
+                <label className="form-label">Invoice Attachment (Max 2 files)</label>
                 <div style={{ background: "var(--bg)", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1rem" }}>
                   <input type="file" multiple onChange={e => setTicketFiles(Array.from(e.target.files || []))} className="form-input" style={{ border: "none", padding: 0 }} />
                 </div>
               </div>
-              <div className="form-group">
-                <label className="form-label">Progress Attachments</label>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Photos of work already done (if any).</p>
-                <div style={{ background: "var(--bg)", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1rem" }}>
-                  <input type="file" multiple onChange={e => setProgressFiles(Array.from(e.target.files || []))} className="form-input" style={{ border: "none", padding: 0 }} />
-                </div>
-              </div>
-            </div>
+            )}
           </div>
         )}
-
         {/* Step 5: Confirm */}
         {step === 5 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>

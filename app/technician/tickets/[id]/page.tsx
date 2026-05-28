@@ -9,6 +9,8 @@ import { markMessagesReadAction } from "@/app/actions/tickets";
 import { FileText, Film, ImageIcon, File, Link2 } from "lucide-react";
 import { formatDateTime } from "@/lib/utils";
 import AdminAssignPanel from "@/app/admin/tickets/[id]/AdminAssignPanel";
+import CustomerWhatsAppActions from "@/app/admin/tickets/[id]/CustomerWhatsAppActions";
+import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -21,8 +23,13 @@ export default async function TechnicianTicketDetailPage({
   const { id } = await params;
 
   const [ticket, currentUser] = await Promise.all([
-    db.ticket.findUnique({
-      where: { id },
+    db.ticket.findFirst({
+      where: {
+        OR: [
+          { id },
+          { ticket_code: id }
+        ]
+      },
       include: {
         user: { select: { name: true, email: true, phone_number: true, address: true } },
         technician: { select: { name: true } },
@@ -96,18 +103,6 @@ export default async function TechnicianTicketDetailPage({
             </Link>
           )}
 
-          {isTeamLeader && (
-            <div style={{ marginTop: "1rem" }}>
-              <AdminAssignPanel
-                ticketId={ticket.id}
-                currentTechnicianId={ticket.technician_id}
-                currentSalesId={ticket.sales_id}
-                technicians={technicians}
-                salesUsers={salesUsers}
-                assignmentRequests={ticket.assignment_requests as any}
-              />
-            </div>
-          )}
         </div>
       </div>
 
@@ -125,10 +120,10 @@ export default async function TechnicianTicketDetailPage({
             </div>
             <div className="flex flex-col gap-4">
               {[
-                ["Name", ticket.is_for_self ? ticket.user.name : ticket.customer_name],
-                ["Email", ticket.is_for_self ? ticket.user.email : ticket.customer_email],
-                ["Phone", ticket.is_for_self ? ticket.user.phone_number : ticket.customer_phone],
-                ["Address", ticket.is_for_self ? ticket.user.address : ticket.customer_address],
+                ["Name", ticket.is_for_self ? ticket.user?.name : ticket.customer_name],
+                ["Email", ticket.is_for_self ? ticket.user?.email : ticket.customer_email],
+                ["Phone", ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone],
+                ["Address", ticket.is_for_self ? ticket.user?.address : ticket.customer_address],
               ].map(([label, value]) => (
                 <div key={label}>
                   <p className="text-xs text-gray-500 mb-1">
@@ -152,6 +147,14 @@ export default async function TechnicianTicketDetailPage({
                 </div>
               ))}
             </div>
+
+            <CustomerWhatsAppActions 
+              customerPhone={(ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone) || ""}
+              customerName={(ticket.is_for_self ? ticket.user?.name : ticket.customer_name) || "Customer"}
+              ticketCode={ticket.ticket_code}
+              status={ticket.status}
+              publicLink={ticket.public_share_token}
+            />
           </div>
 
           {/* Notes */}
@@ -169,6 +172,49 @@ export default async function TechnicianTicketDetailPage({
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
                 {ticket.pc_components.map((c) => (
                   <span key={c.id} className="badge badge-technician">{c.component_name}</span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* PC Build Handover Verification */}
+          {ticket.ticket_type === "pc_build" && (
+            <PcBuildHandover
+              ticketId={ticket.id}
+              firstBuildUrl={ticket.pc_build_detail?.first_build_url ?? null}
+              revisionBuildUrl={ticket.pc_build_detail?.revision_build_url ?? null}
+              status={ticket.status}
+              userRole={session.role}
+              isAssignedSales={ticket.sales_id === session.userId}
+            />
+          )}
+
+          {/* Proof Attachments */}
+          {(ticket.payment_proof_url || ticket.progress_proof_url || ticket.delivery_proof_url || ticket.revision_proof_url) && (
+            <div className="card">
+              <h3 style={{ marginBottom: "1rem" }}>Proof Attachments</h3>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
+                {[
+                  { label: "Payment Proof", url: ticket.payment_proof_url },
+                  { label: "Progress Proof", url: ticket.progress_proof_url },
+                  { label: "Delivery Proof", url: ticket.delivery_proof_url },
+                  { label: "Revision Proof", url: ticket.revision_proof_url },
+                ].filter(p => p.url).map((proof, idx) => (
+                  <a
+                    key={idx}
+                    href={proof.url!}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    title={proof.label}
+                    style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.375rem", width: "100px", textDecoration: "none" }}
+                  >
+                    <div style={{ width: "100px", height: "80px", borderRadius: "0.5rem", overflow: "hidden", border: "1px solid var(--border)", background: "var(--cream)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                      <img src={proof.url!} alt={proof.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    </div>
+                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textAlign: "center", wordBreak: "break-all", maxWidth: "100px", lineHeight: 1.3, fontWeight: 500 }}>
+                      {proof.label}
+                    </span>
+                  </a>
                 ))}
               </div>
             </div>
@@ -230,22 +276,41 @@ export default async function TechnicianTicketDetailPage({
           />
         </div>
 
-        {/* Status log */}
-        <div className="card">
-          <h3 style={{ marginBottom: "1rem" }}>Status History</h3>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {ticket.status_logs.map((log) => (
-              <div key={log.id} style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
-                <Badge variant={log.new_status} technicianId={ticket.technician_id} />
-                <div>
-                  <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>Status updated to {log.new_status.replace("_", " ").toUpperCase()}</div>
-                  <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                    {log.changer.name} • {formatDateTime(log.created_at)}
+        {/* Right Sidebar Column */}
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          {/* Status log */}
+          <div className="card" style={{ alignSelf: "flex-start", width: "100%" }}>
+            <h3 style={{ marginBottom: "1rem" }}>Status History</h3>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {ticket.status_logs.length === 0 ? (
+                <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>No status changes yet</p>
+              ) : (
+                ticket.status_logs.map((log) => (
+                  <div key={log.id} style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
+                    <Badge variant={log.new_status} technicianId={ticket.technician_id} />
+                    <div>
+                      <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>Status updated to {log.new_status.replace("_", " ").toUpperCase()}</div>
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
+                        {log.changer.name} • {formatDateTime(log.created_at)}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
-            ))}
+                ))
+              )}
+            </div>
           </div>
+
+          {/* Assignment panel (Admin & Store Coordinator only) */}
+          {isTeamLeader && (
+            <AdminAssignPanel
+              ticketId={ticket.id}
+              currentTechnicianId={ticket.technician_id}
+              currentSalesId={ticket.sales_id}
+              technicians={technicians}
+              salesUsers={salesUsers}
+              assignmentRequests={ticket.assignment_requests as any}
+            />
+          )}
         </div>
       </div>
     </div>

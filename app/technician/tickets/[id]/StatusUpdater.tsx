@@ -6,15 +6,7 @@ import FileUpload from "@/components/ui/FileUpload";
 import toast from "react-hot-toast";
 import { AlertTriangle, Play, Pause, CheckCircle, XCircle } from "lucide-react";
 
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import Modal from "@/components/ui/Modal";
 
 type Status = string;
 type TimeLog = { id: string; event: string; created_at: Date };
@@ -99,142 +91,120 @@ export default function StatusUpdater({
     <>
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         {currentStatus === "waiting" && (
-          <Button onClick={() => handleAction("on_progress", "START")} disabled={isPending} className="px-5 py-2.5">
+          <button onClick={() => handleAction("on_progress", "START")} disabled={isPending} className="btn btn-primary px-5 py-2.5">
             <Play className="mr-2 h-4 w-4" /> Start Work
-          </Button>
+          </button>
         )}
 
         {currentStatus === "on_progress" && isPaused && (
-          <Button onClick={() => setActiveDialog("resume")} disabled={isPending} variant="secondary" className="px-5 py-2.5">
+          <button onClick={() => setActiveDialog("resume")} disabled={isPending} className="btn btn-secondary px-5 py-2.5">
             <Play className="mr-2 h-4 w-4" /> Resume Work
-          </Button>
+          </button>
         )}
 
         {currentStatus === "on_progress" && !isPaused && (
           <>
-            <Button onClick={() => setActiveDialog("pause")} disabled={isPending} variant="secondary" className="px-4 py-2.5">
+            <button onClick={() => setActiveDialog("pause")} disabled={isPending} className="btn btn-secondary px-4 py-2.5">
               <Pause className="mr-2 h-4 w-4" /> Pause waiting for Customer
-            </Button>
-            <Button onClick={() => setActiveDialog("done")} disabled={isPending} style={{ background: "#16a34a", color: "white" }} className="px-5 py-2.5">
+            </button>
+            <button onClick={() => setActiveDialog("done")} disabled={isPending} style={{ background: "#16a34a", color: "white" }} className="btn px-5 py-2.5">
               <CheckCircle className="mr-2 h-4 w-4" /> Mark Done
-            </Button>
-            <Button onClick={() => setActiveDialog("cancel")} disabled={isPending} variant="destructive" className="px-5 py-2.5">
+            </button>
+            <button onClick={() => setActiveDialog("cancel")} disabled={isPending} className="btn" style={{ background: "var(--destructive)", color: "white" }}>
               <XCircle className="mr-2 h-4 w-4" /> Cancel
-            </Button>
+            </button>
           </>
         )}
       </div>
 
       {/* PAUSE DIALOG */}
-      <Dialog open={activeDialog === "pause"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Pause Work</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="pause-reason">Reason For Pausing *</Label>
-              <textarea
-                id="pause-reason"
-                className="form-input"
-                rows={3}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Why are you pausing work? (e.g., Waiting for customer approval...)"
-              />
-            </div>
+      <Modal open={activeDialog === "pause"} onClose={closeDialog} title="Pause Work">
+        <div className="grid gap-4 py-4">
+          <div className="flex flex-col gap-2">
+            <label htmlFor="pause-reason" className="text-sm font-medium">Reason For Pausing *</label>
+            <textarea
+              id="pause-reason"
+              className="form-input"
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why are you pausing work? (e.g., Waiting for customer approval...)"
+            />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>Cancel</Button>
-            <Button onClick={() => handleAction("on_progress", "PAUSE", true)} disabled={isPending}>
-              {isPending ? "Saving..." : "Confirm Pause"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
+          <button className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => handleAction("on_progress", "PAUSE", true)} disabled={isPending}>
+            {isPending ? "Saving..." : "Confirm Pause"}
+          </button>
+        </div>
+      </Modal>
 
       {/* RESUME DIALOG */}
-      <Dialog open={activeDialog === "resume"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Resume Work</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="resume-reason">Reason For Resuming *</Label>
-              <textarea
-                id="resume-reason"
-                className="form-input"
-                rows={3}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Why are you resuming work? (e.g., Customer approved part replacement...)"
-              />
-            </div>
+      <Modal open={activeDialog === "resume"} onClose={closeDialog} title="Resume Work">
+        <div className="grid gap-4 py-4">
+          <div className="flex flex-col gap-2">
+            <label htmlFor="resume-reason" className="text-sm font-medium">Reason For Resuming *</label>
+            <textarea
+              id="resume-reason"
+              className="form-input"
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Why are you resuming work? (e.g., Customer approved part replacement...)"
+            />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>Cancel</Button>
-            <Button onClick={() => handleAction("on_progress", "RESUME", true)} disabled={isPending}>
-              {isPending ? "Saving..." : "Confirm Resume"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
+          <button className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
+          <button className="btn btn-primary" onClick={() => handleAction("on_progress", "RESUME", true)} disabled={isPending}>
+            {isPending ? "Saving..." : "Confirm Resume"}
+          </button>
+        </div>
+      </Modal>
 
       {/* DONE DIALOG */}
-      <Dialog open={activeDialog === "done"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Mark Ticket as Done</DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="flex flex-col gap-2">
-              <Label>Proof Attachments *</Label>
-              <FileUpload onChange={setFiles} />
-            </div>
+      <Modal open={activeDialog === "done"} onClose={closeDialog} title="Mark Ticket as Done">
+        <div className="grid gap-4 py-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Proof Attachments *</label>
+            <FileUpload onChange={setFiles} />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>Go Back</Button>
-            <Button style={{ background: "#16a34a", color: "white" }} onClick={() => handleAction("done", "DONE", false, true)} disabled={isPending}>
-              {isPending ? "Saving..." : "Confirm Mark Done"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
+          <button className="btn btn-ghost" onClick={closeDialog}>Go Back</button>
+          <button className="btn" style={{ background: "#16a34a", color: "white" }} onClick={() => handleAction("done", "DONE", false, true)} disabled={isPending}>
+            {isPending ? "Saving..." : "Confirm Mark Done"}
+          </button>
+        </div>
+      </Modal>
 
       {/* CANCEL DIALOG */}
-      <Dialog open={activeDialog === "cancel"} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent className="max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle size={18} /> Cancel Ticket
-            </DialogTitle>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="flex flex-col gap-2">
-              <Label htmlFor="cancel-reason">Reason For Cancelling *</Label>
-              <textarea
-                id="cancel-reason"
-                className="form-input"
-                rows={3}
-                value={reason}
-                onChange={(e) => setReason(e.target.value)}
-                placeholder="Explain why this ticket is being cancelled..."
-              />
-            </div>
-            <div className="flex flex-col gap-2">
-              <Label>Attachments (Optional but recommended)</Label>
-              <FileUpload onChange={setFiles} />
-            </div>
+      <Modal open={activeDialog === "cancel"} onClose={closeDialog} title="Cancel Ticket">
+        <div className="grid gap-4 py-4">
+          <div className="flex flex-col gap-2">
+            <label htmlFor="cancel-reason" className="text-sm font-medium text-destructive">Reason For Cancelling *</label>
+            <textarea
+              id="cancel-reason"
+              className="form-input"
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Explain why this ticket is being cancelled..."
+            />
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={closeDialog}>Go Back</Button>
-            <Button variant="destructive" onClick={() => handleAction("cancelled", null, true, false)} disabled={isPending}>
-              {isPending ? "Saving..." : "Confirm Cancellation"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Attachments (Optional but recommended)</label>
+            <FileUpload onChange={setFiles} />
+          </div>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
+          <button className="btn btn-ghost" onClick={closeDialog}>Go Back</button>
+          <button className="btn" style={{ background: "var(--destructive)", color: "white" }} onClick={() => handleAction("cancelled", null, true, false)} disabled={isPending}>
+            {isPending ? "Saving..." : "Confirm Cancellation"}
+          </button>
+        </div>
+      </Modal>
     </>
   );
 }

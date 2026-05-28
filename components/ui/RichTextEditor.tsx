@@ -25,6 +25,28 @@ interface RichTextEditorProps {
   minHeight?: string;
 }
 
+const ToolbarBtn = ({
+  onClick,
+  active,
+  title,
+  children,
+}: {
+  onClick: () => void;
+  active?: boolean;
+  title: string;
+  children: React.ReactNode;
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={active ? "is-active" : ""}
+    title={title}
+    aria-label={title}
+  >
+    {children}
+  </button>
+);
+
 export default function RichTextEditor({
   value,
   onChange,
@@ -70,28 +92,6 @@ export default function RichTextEditor({
   };
 
   if (!editor) return null;
-
-  const ToolbarBtn = ({
-    onClick,
-    active,
-    title,
-    children,
-  }: {
-    onClick: () => void;
-    active?: boolean;
-    title: string;
-    children: React.ReactNode;
-  }) => (
-    <button
-      type="button"
-      onClick={onClick}
-      className={active ? "is-active" : ""}
-      title={title}
-      aria-label={title}
-    >
-      {children}
-    </button>
-  );
 
   return (
     <div className="tiptap-editor">

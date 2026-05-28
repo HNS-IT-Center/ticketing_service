@@ -4,8 +4,7 @@ import { useState, useTransition } from "react";
 import { assignLeaveAction, overrideShiftAction } from "@/app/actions/schedule";
 import toast from "react-hot-toast";
 import { Calendar, UserX, UserCheck } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Label } from "@/components/ui/label";
+import Modal from "@/components/ui/Modal";
 
 type Technician = {
   id: string;
@@ -102,62 +101,56 @@ export default function ScheduleManager({ technicians }: { technicians: Technici
         ))}
       </div>
 
-      <Dialog open={!!selectedTech} onOpenChange={(open) => !open && closeDialog()}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Manage Schedule: {selectedTech?.name}</DialogTitle>
-          </DialogHeader>
+      <Modal open={!!selectedTech} onClose={closeDialog} title={`Manage Schedule: ${selectedTech?.name || ""}`}>
+        <div className="flex gap-2 border-b pb-2 mb-4 mt-4">
+          <button type="button" className={`btn flex items-center gap-2 ${activeTab === "leave" ? "btn-primary" : "btn-ghost"}`} onClick={() => setActiveTab("leave")}>
+            <UserX className="h-4 w-4" /> Assign Leave
+          </button>
+          <button type="button" className={`btn flex items-center gap-2 ${activeTab === "override" ? "btn-primary" : "btn-ghost"}`} onClick={() => setActiveTab("override")}>
+            <UserCheck className="h-4 w-4" /> Override Shift
+          </button>
+        </div>
 
-          <div className="flex gap-2 border-b pb-2 mb-4">
-            <button type="button" className={`btn flex items-center gap-2 ${activeTab === "leave" ? "btn-primary" : "btn-ghost"}`} onClick={() => setActiveTab("leave")}>
-              <UserX className="h-4 w-4" /> Assign Leave
-            </button>
-            <button type="button" className={`btn flex items-center gap-2 ${activeTab === "override" ? "btn-primary" : "btn-ghost"}`} onClick={() => setActiveTab("override")}>
-              <UserCheck className="h-4 w-4" /> Override Shift
-            </button>
+        <div className="grid gap-4 py-4">
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-medium">Date *</label>
+            <input type="date" className="form-input" value={date} onChange={(e) => setDate(e.target.value)} />
           </div>
 
-          <div className="grid gap-4 py-4">
+          {activeTab === "leave" ? (
             <div className="flex flex-col gap-2">
-              <Label>Date *</Label>
-              <input type="date" className="form-input" value={date} onChange={(e) => setDate(e.target.value)} />
+              <label className="text-sm font-medium">Reason (Optional)</label>
+              <input type="text" className="form-input" placeholder="e.g., Sick, Vacation" value={reason} onChange={(e) => setReason(e.target.value)} />
             </div>
-
-            {activeTab === "leave" ? (
+          ) : (
+            <>
               <div className="flex flex-col gap-2">
-                <Label>Reason (Optional)</Label>
-                <input type="text" className="form-input" placeholder="e.g., Sick, Vacation" value={reason} onChange={(e) => setReason(e.target.value)} />
+                <label className="text-sm font-medium">Covering Technician *</label>
+                <select className="form-input" value={overrideTechId} onChange={(e) => setOverrideTechId(e.target.value)}>
+                  <option value="">Select Technician</option>
+                  {technicians.filter((t) => t.id !== selectedTech?.id).map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
               </div>
-            ) : (
-              <>
-                <div className="flex flex-col gap-2">
-                  <Label>Covering Technician *</Label>
-                  <select className="form-input" value={overrideTechId} onChange={(e) => setOverrideTechId(e.target.value)}>
-                    <option value="">Select Technician</option>
-                    {technicians.filter((t) => t.id !== selectedTech?.id).map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-2">
-                  <Label>Shift *</Label>
-                  <select className="form-input" value={shift} onChange={(e) => setShift(e.target.value as any)}>
-                    <option value="morning">Morning (10:00 - 19:00)</option>
-                    <option value="noon">Noon (13:00 - 22:00)</option>
-                  </select>
-                </div>
-              </>
-            )}
-          </div>
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium">Shift *</label>
+                <select className="form-input" value={shift} onChange={(e) => setShift(e.target.value as any)}>
+                  <option value="morning">Morning (10:00 - 19:00)</option>
+                  <option value="noon">Noon (13:00 - 22:00)</option>
+                </select>
+              </div>
+            </>
+          )}
+        </div>
 
-          <DialogFooter>
-            <button type="button" className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-            <button type="button" className="btn btn-primary" onClick={activeTab === "leave" ? handleLeaveSubmit : handleOverrideSubmit} disabled={isPending}>
-              {isPending ? "Saving..." : "Save Changes"}
-            </button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
+          <button type="button" className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
+          <button type="button" className="btn btn-primary" onClick={activeTab === "leave" ? handleLeaveSubmit : handleOverrideSubmit} disabled={isPending}>
+            {isPending ? "Saving..." : "Save Changes"}
+          </button>
+        </div>
+      </Modal>
     </div>
   );
 }

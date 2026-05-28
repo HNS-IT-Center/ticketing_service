@@ -161,7 +161,7 @@ export default async function TechnicianTicketsPage({
               </thead>
               <tbody>
                 {tickets.map((t) => {
-                  const actualName = t.is_for_self ? t.user.name : t.customer_name;
+                  const actualName = t.is_for_self ? t.user?.name : t.customer_name;
                   return (
                     <tr key={t.id}>
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
@@ -190,7 +190,7 @@ export default async function TechnicianTicketsPage({
             <p>No tickets found</p>
           </div>
         ) : tickets.map((t) => {
-          const actualName = t.is_for_self ? t.user.name : t.customer_name;
+          const actualName = t.is_for_self ? t.user?.name : t.customer_name;
           return (
             <Link key={t.id} href={`/technician/tickets/${t.id}`} style={{ textDecoration: "none" }}>
               <div className="mobile-ticket-card">

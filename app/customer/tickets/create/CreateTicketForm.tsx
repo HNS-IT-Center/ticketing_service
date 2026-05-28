@@ -135,7 +135,7 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
       if (selectedSales) fd.append("sales_id", selectedSales);
       fd.append("phone", `+62${phone}`); // prepend +62 prefix
 
-      const result = await createTicketAction(fd);
+      const result = await createTicketAction(fd) as any;
       if (result?.error) toast.error(result.error);
     });
   };

@@ -247,7 +247,7 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
     </div>
     <div class="stat">
       <div class="stat-val" style="color:#cd2426">${rows.reduce((a, r) => a + r.failed, 0)}</div>
-      <div class="stat-label">Failed</div>
+      <div class="stat-label">Cancelled</div>
     </div>
     <div class="stat">
       <div class="stat-val">${rows.reduce((a, r) => a + r.points, 0)}</div>
@@ -263,7 +263,7 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
         <th>Shift</th>
         <th class="num">Tickets</th>
         <th class="num">Done</th>
-        <th class="num">Failed</th>
+        <th class="num">Cancelled</th>
         <th class="num">Points</th>
       </tr>
     </thead>

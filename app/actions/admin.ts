@@ -115,45 +115,43 @@ export async function adminAssignTicketAction(
     }
   }
 
-  await db.$transaction(async (tx) => {
-    // 1. Update ticket assignment
-    await tx.ticket.update({
-      where: { id: ticketId },
-      data: {
-        technician_id: technicianId || null,
-        sales_id: salesId || null,
-      },
-    });
-
-    // 2. Resolve pending requests
-    if (technicianId) {
-      await tx.ticketAssignmentRequest.updateMany({
-        where: { ticket_id: ticketId, technician_id: technicianId, status: "pending" },
-        data: { status: "approved" },
-      });
-      // Reject others
-      await tx.ticketAssignmentRequest.updateMany({
-        where: { ticket_id: ticketId, technician_id: { not: technicianId }, status: "pending" },
-        data: { status: "rejected" },
-      });
-      
-      // Notify assigned tech
-      await tx.notification.create({
-        data: {
-          user_id: technicianId,
-          ticket_id: ticketId,
-          type: "assigned",
-          message: `Admin assigned you to ticket #${ticketId.substring(0, 8)}`, // We don't have ticket code here easily, substring is fallback
-        }
-      });
-    } else {
-      // If unassigned, just reject all pending
-      await tx.ticketAssignmentRequest.updateMany({
-        where: { ticket_id: ticketId, status: "pending" },
-        data: { status: "rejected" },
-      });
-    }
+  // 1. Update ticket assignment
+  await db.ticket.update({
+    where: { id: ticketId },
+    data: {
+      technician_id: technicianId || null,
+      sales_id: salesId || null,
+    },
   });
+
+  // 2. Resolve pending requests
+  if (technicianId) {
+    await db.ticketAssignmentRequest.updateMany({
+      where: { ticket_id: ticketId, technician_id: technicianId, status: "pending" },
+      data: { status: "approved" },
+    });
+    // Reject others
+    await db.ticketAssignmentRequest.updateMany({
+      where: { ticket_id: ticketId, technician_id: { not: technicianId }, status: "pending" },
+      data: { status: "rejected" },
+    });
+    
+    // Notify assigned tech
+    await db.notification.create({
+      data: {
+        user_id: technicianId,
+        ticket_id: ticketId,
+        type: "assigned",
+        message: `Admin assigned you to ticket #${ticketId.substring(0, 8)}`, // We don't have ticket code here easily, substring is fallback
+      }
+    });
+  } else {
+    // If unassigned, just reject all pending
+    await db.ticketAssignmentRequest.updateMany({
+      where: { ticket_id: ticketId, status: "pending" },
+      data: { status: "rejected" },
+    });
+  }
 
   revalidatePath("/admin/tickets");
   revalidatePath(`/admin/tickets/${ticketId}`);

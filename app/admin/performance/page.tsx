@@ -214,11 +214,17 @@ export default async function AdminPerformancePage({
     select: {
       technician_id: true,
       ticket_type: true,
-      status_logs: { select: { new_status: true, created_at: true } }
+      time_logs: { select: { event: true, created_at: true }, orderBy: { created_at: "asc" } }
     }
   });
 
   const rowMap = new Map(rows.map(r => [r.id, r]));
+
+  // We need calculateWorkingTimeMs, let's just copy the logic here or import it.
+  // Actually, wait, calculateWorkingTimeMs is in @/lib/utils, let's use it.
+  // Since we are doing a replace, let's make sure it's imported at the top.
+  // Or better yet, just inline it for safety if we can't easily add the import.
+  // We can just calculate the time logs directly here.
 
   for (const t of completedTickets) {
     if (!t.technician_id) continue;
@@ -231,14 +237,23 @@ export default async function AdminPerformancePage({
     const det = row.details[t.ticket_type];
     det.count++;
 
-    const onProgressLog = t.status_logs.find(l => l.new_status === "on_progress");
-    const doneLog = t.status_logs.find(l => l.new_status === "done");
-    if (onProgressLog && doneLog) {
-      const ms = doneLog.created_at.getTime() - onProgressLog.created_at.getTime();
-      if (ms > 0) {
-        det.totalHours += ms / (1000 * 60 * 60);
-        det.timedCount++;
+    let totalMs = 0;
+    let lastStart: number | null = null;
+    for (const log of t.time_logs) {
+      if (log.event === "START" || log.event === "RESUME") {
+        lastStart = log.created_at.getTime();
+      } else if (log.event === "PAUSE" || log.event === "DONE") {
+        if (lastStart) {
+          totalMs += log.created_at.getTime() - lastStart;
+          lastStart = null;
+        }
       }
+    }
+    // If it never recorded a DONE for some reason, we do not add Date.now() because it's a completed ticket.
+    
+    if (totalMs > 0) {
+      det.totalHours += totalMs / (1000 * 60 * 60);
+      det.timedCount++;
     }
   }
 
@@ -305,7 +320,7 @@ export default async function AdminPerformancePage({
               <tr>
                 <th>Rank</th><th>Technician</th><th>Shift</th>
                 <th>Active Tickets</th><th>Tickets Completed</th>
-                <th>Success</th><th>Failed</th><th>Points</th>
+                <th>Success</th><th>Cancelled</th><th>Points</th>
               </tr>
             </thead>
             <tbody>

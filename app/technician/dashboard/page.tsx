@@ -1,11 +1,11 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
+import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import TakeTicketButton from "./TakeTicketButton";
 import AvailableTickets from "./AvailableTickets";
 import { Ticket, CheckCircle, Trophy } from "lucide-react";
-import { getTopTechnicianOfMonth } from "@/lib/performance";
 
 export const metadata = { title: "Technician Dashboard — HNS IT Center" };
 
@@ -18,45 +18,54 @@ function getTicketPoints(type: string) {
 export default async function TechnicianDashboard() {
   const session = await requireRole("Technician");
 
-  // Get technician's assigned stores
-  const assignments = await db.technicianStoreAssignment.findMany({
-    where: { technician_id: session.userId },
-    select: { store_id: true },
-  });
-  const storeIds = assignments.map((a) => a.store_id);
+  const now = new Date();
+  const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+  const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
+  const lastMonthStart = new Date(lastMonthYear, lastMonth - 1, 1);
+  const lastMonthEnd   = new Date(lastMonthYear, lastMonth, 1);
 
-  const [unassigned, myTickets, performance] = await Promise.all([
-    db.ticket.findMany({
-      where: { 
-        technician_id: null, 
-        status: "waiting",
-        // Exclude tickets that have a pending assignment request from ANY technician
-        assignment_requests: { none: { status: "pending" } },
-        OR: [
-          { store_location_id: { in: storeIds } },
-          { store_location_id: null }
-        ]
-      },
-      orderBy: { created_at: "asc" },
-      take: 10,
-      include: { user: { select: { name: true } } },
+  // All fetches in ONE parallel batch — no sequential round-trips
+  const [assignments, myTickets, performance, topTechRow] = await Promise.all([
+    db.technicianStoreAssignment.findMany({
+      where: { technician_id: session.userId },
+      select: { store_id: true },
     }),
     db.ticket.findMany({
       where: { technician_id: session.userId, status: { in: ["waiting", "on_progress"] } },
       orderBy: { updated_at: "desc" },
       take: 10,
-      include: { user: { select: { name: true } } },
+      select: { id: true, ticket_code: true, ticket_type: true, device_type: true, status: true, technician_id: true, is_for_self: true, user: { select: { name: true } } },
     }),
-    db.technicianPerformance.findUnique({ where: { technician_id: session.userId } }),
+    db.technicianPerformance.findUnique({ where: { technician_id: session.userId }, select: { tickets_handled: true, success_count: true } }),
+    // Top technician: use groupBy to avoid loading all ticket rows
+    db.ticketStatusLog.groupBy({
+      by: ["changed_by"],
+      where: { new_status: "done", created_at: { gte: lastMonthStart, lt: lastMonthEnd } },
+      _count: { id: true },
+      orderBy: { _count: { id: "desc" } },
+      take: 1,
+    }),
   ]);
 
+  const storeIds = assignments.map((a) => a.store_id);
+  const topTechId = topTechRow[0]?.changed_by ?? null;
+  const isTopTechLastMonth = topTechId === session.userId;
 
-
-  const now = new Date();
-  const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth();
-  const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-  const topTechLastMonth = await getTopTechnicianOfMonth(lastMonth, lastMonthYear);
-  const isTopTechLastMonth = topTechLastMonth === session.userId;
+  // Unassigned tickets for this technician's stores — fetched after we know storeIds
+  const unassigned = await db.ticket.findMany({
+    where: {
+      technician_id: null,
+      status: "waiting",
+      assignment_requests: { none: { status: "pending" } },
+      OR: [
+        { store_location_id: { in: storeIds } },
+        { store_location_id: null },
+      ],
+    },
+    orderBy: { created_at: "asc" },
+    take: 10,
+    select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, user: { select: { name: true } } },
+  });
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>

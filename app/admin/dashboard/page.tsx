@@ -1,5 +1,6 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
+import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import { Users, Ticket, CheckCircle, Clock, AlertCircle, TrendingUp, ArrowRight } from "lucide-react";
@@ -11,6 +12,18 @@ export default async function AdminDashboard() {
   const isSales = session.role === "Sales";
   const salesFilter = isSales ? { sales_id: session.userId } : {};
 
+  // Cache semi-static counts for 30 seconds to avoid repeated DB hits
+  const getCounts = unstable_cache(
+    async () => Promise.all([
+      isSales ? Promise.resolve([]) : db.user.groupBy({ by: ["role"], _count: { role: true } }),
+      db.ticket.count({ where: salesFilter }),
+      db.ticket.count({ where: { ...salesFilter, technician_id: { not: null } } }),
+      db.ticket.count({ where: { ...salesFilter, status: { in: ["done", "cancelled", "rejected"] } } }),
+    ]),
+    ["admin-dashboard-counts", session.userId],
+    { revalidate: 30 }
+  );
+
   const [
     totalUsers,
     totalTickets,
@@ -19,15 +32,17 @@ export default async function AdminDashboard() {
     recentTickets,
     topTechnicians,
   ] = await Promise.all([
-    isSales ? Promise.resolve([]) : db.user.groupBy({ by: ["role"], _count: { role: true } }),
-    db.ticket.count({ where: salesFilter }),
-    db.ticket.count({ where: { ...salesFilter, technician_id: { not: null } } }),
-    db.ticket.count({ where: { ...salesFilter, status: { in: ["done", "cancelled", "rejected"] } } }),
+    getCounts().then(r => r[0] as Awaited<ReturnType<typeof db.user.groupBy>>),
+    getCounts().then(r => r[1] as number),
+    getCounts().then(r => r[2] as number),
+    getCounts().then(r => r[3] as number),
     db.ticket.findMany({
       where: salesFilter,
       orderBy: { created_at: "desc" },
       take: 8,
-      include: {
+      select: {
+        id: true, ticket_code: true, ticket_type: true, status: true,
+        technician_id: true, is_for_self: true, customer_name: true,
         user: { select: { name: true } },
         technician: { select: { name: true } },
       },
@@ -35,12 +50,12 @@ export default async function AdminDashboard() {
     db.technicianPerformance.findMany({
       orderBy: { total_points_completed: "desc" },
       take: 5,
-      include: { technician: { select: { id: true, name: true } } },
+      select: { id: true, tickets_handled: true, total_points_completed: true, technician: { select: { id: true, name: true } } },
     }),
   ]);
 
   const countByRole = Object.fromEntries(
-    totalUsers.map((u) => [u.role, u._count.role])
+    (totalUsers as { role: string; _count: { role: number } }[]).map((u) => [u.role, u._count.role])
   );
 
   const statCards = [

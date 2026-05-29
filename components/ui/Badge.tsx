@@ -52,19 +52,27 @@ export default function Badge({
   variant,
   label,
   technicianId,
+  isPaused,
 }: {
   variant: BadgeVariant | string;
   label?: string;
   technicianId?: string | null;
+  isPaused?: boolean;
 }) {
   let displayLabel = label ?? BADGE_LABELS[variant] ?? variant.replace(/_/g, " ");
+  let badgeClass = BADGE_CLASSES[variant] ?? "badge";
+
+  if (isPaused && variant === "on_progress") {
+    displayLabel = "⏸️ Paused";
+    badgeClass = "badge badge-waiting"; // Or a specific pause class
+  }
   if (!label && variant === "waiting") {
     // Determine dynamic waiting label
     displayLabel = technicianId ? "⏳ Waiting for Work" : "⏳ Waiting for Technician";
   }
 
   return (
-    <span className={BADGE_CLASSES[variant] ?? "badge"}>
+    <span className={badgeClass}>
       {displayLabel}
     </span>
   );

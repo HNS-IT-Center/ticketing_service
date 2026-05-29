@@ -87,7 +87,7 @@ export async function updateTicketStatusAction(formData: FormData) {
   }
 
   // Validation rules
-  if (newStatus === "on_progress" && ticket.status !== "waiting") {
+  if (newStatus === "on_progress" && ticket.status !== "waiting" && ticket.status !== "on_progress") {
     return { error: "Can only move to On Progress from Waiting" };
   }
   if (newStatus === "done" && ticket.status !== "on_progress") {

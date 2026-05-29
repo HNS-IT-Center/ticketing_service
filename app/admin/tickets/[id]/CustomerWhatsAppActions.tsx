@@ -47,7 +47,7 @@ export default function CustomerWhatsAppActions({ customerPhone, customerName, t
   ];
 
   return (
-    <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-gray-100">
+    <div className="flex flex-col gap-3 mt-5">
       <div className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5" style={{ color: "#25D366" }}>
         <WhatsAppIcon size={16} /> WhatsApp Quick Actions
       </div>

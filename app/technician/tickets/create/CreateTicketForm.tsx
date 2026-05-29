@@ -36,6 +36,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [customerType, setCustomerType] = useState("User");
   const [customerName, setCustomerName] = useState("");
   const [phone, setPhone] = useState("");
+  const [customerAddress, setCustomerAddress] = useState("");
 
   // Step 3: Category
   const [ticketType, setTicketType] = useState("");
@@ -107,6 +108,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       fd.append("customer_type", customerType);
       fd.append("customer_name", customerName);
       fd.append("phone", `+62${phone}`);
+      if (customerAddress) fd.append("customer_address", customerAddress);
 
       fd.append("ticket_type", ticketType);
       fd.append("device_type", deviceType);
@@ -251,6 +253,16 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 />
               </div>
               {errors.phone && <span className="form-error"><AlertCircle size={12} />{errors.phone}</span>}
+            </div>
+            <div className="form-group">
+              <label className="form-label">Customer Address</label>
+              <textarea 
+                className="form-input" 
+                value={customerAddress} 
+                onChange={e => setCustomerAddress(e.target.value)} 
+                placeholder="Full address for delivery or pickup..."
+                rows={3}
+              />
             </div>
           </div>
         )}

@@ -7,10 +7,11 @@ import TicketChat from "@/components/TicketChat";
 import StatusUpdater from "./StatusUpdater";
 import { markMessagesReadAction } from "@/app/actions/tickets";
 import { FileText, Film, ImageIcon, File, Link2 } from "lucide-react";
-import { formatDateTime } from "@/lib/utils";
+import { formatDateTime, calculateWorkingTimeMs, formatWorkingTime } from "@/lib/utils";
 import AdminAssignPanel from "@/app/admin/tickets/[id]/AdminAssignPanel";
 import CustomerWhatsAppActions from "@/app/admin/tickets/[id]/CustomerWhatsAppActions";
 import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
+import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -65,6 +66,33 @@ export default async function TechnicianTicketDetailPage({
   const isAssigned = ticket.technician_id === session.userId;
   const isTeamLeader = currentUser?.is_team_leader || false;
 
+  const isPaused = ticket.time_logs.length > 0 && ticket.time_logs[ticket.time_logs.length - 1].event === "PAUSE";
+  const isDone = ["done", "completed", "ready_for_pickup", "waiting_pickup", "handed_to_courier", "delivered", "cancelled", "rejected"].includes(ticket.status);
+  const serializedTimeLogs = ticket.time_logs.map(l => ({ event: l.event, created_at: l.created_at.toISOString() }));
+
+  const historyEvents = [
+    ...ticket.status_logs
+      .filter(log => log.old_status !== log.new_status)
+      .map(log => ({
+        id: `status_${log.id}`,
+        variant: log.new_status,
+        isPaused: false,
+        text: `Status updated to ${log.new_status.replace(/_/g, " ").toUpperCase()}`,
+        userName: log.changer.name,
+        date: log.created_at
+      })),
+    ...ticket.time_logs
+      .filter(log => log.event === "PAUSE" || log.event === "RESUME")
+      .map(log => ({
+        id: `time_${log.id}`,
+        variant: "on_progress",
+        isPaused: log.event === "PAUSE",
+        text: log.event === "PAUSE" ? "Work Paused" : "Work Resumed, Status updated to ON PROGRESS",
+        userName: ticket.technician?.name ?? "Technician",
+        date: log.created_at
+      }))
+  ].sort((a, b) => b.date.getTime() - a.date.getTime());
+
   let technicians: { id: string; name: string }[] = [];
   let salesUsers: { id: string; name: string }[] = [];
   
@@ -83,7 +111,7 @@ export default async function TechnicianTicketDetailPage({
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             <h1 style={{ fontSize: "1.25rem" }}>{ticket.ticket_code}</h1>
-            <Badge variant={ticket.status} technicianId={ticket.technician_id} />
+            <Badge variant={ticket.status} technicianId={ticket.technician_id} isPaused={isPaused} />
           </div>
           <p style={{ color: "var(--text-muted)", marginTop: "0.25rem", textTransform: "capitalize" }}>
             {ticket.ticket_type.replace("_", " ")} • {ticket.device_type.replace(/_/g, " ")}
@@ -281,24 +309,45 @@ export default async function TechnicianTicketDetailPage({
           {/* Status log */}
           <div className="card" style={{ alignSelf: "flex-start", width: "100%" }}>
             <h3 style={{ marginBottom: "1rem" }}>Status History</h3>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {ticket.status_logs.length === 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
+              {historyEvents.length === 0 ? (
                 <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>No status changes yet</p>
               ) : (
-                ticket.status_logs.map((log) => (
-                  <div key={log.id} style={{ display: "flex", alignItems: "flex-start", gap: "1rem" }}>
-                    <Badge variant={log.new_status} technicianId={ticket.technician_id} />
-                    <div>
-                      <div style={{ fontSize: "0.875rem", fontWeight: 500, color: "var(--text-primary)" }}>Status updated to {log.new_status.replace("_", " ").toUpperCase()}</div>
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                        {log.changer.name} • {formatDateTime(log.created_at)}
+                historyEvents.map((event) => {
+                  const bg = event.isPaused
+                    ? "#fef9c3"
+                    : event.variant === "on_progress" ? "#eff6ff"
+                    : event.variant === "done" ? "#f0fdf4"
+                    : event.variant === "waiting" ? "#fffbeb"
+                    : event.variant === "cancelled" || event.variant === "rejected" ? "#fff1f2"
+                    : event.variant === "ready_for_pickup" || event.variant === "waiting_pickup" || event.variant === "handed_to_courier" || event.variant === "delivered" || event.variant === "completed" ? "#f0fdf4"
+                    : "#f8fafc";
+                  const border = event.isPaused
+                    ? "#fde68a"
+                    : event.variant === "on_progress" ? "#bfdbfe"
+                    : event.variant === "done" ? "#bbf7d0"
+                    : event.variant === "waiting" ? "#fde68a"
+                    : event.variant === "cancelled" || event.variant === "rejected" ? "#fecdd3"
+                    : event.variant === "ready_for_pickup" || event.variant === "waiting_pickup" || event.variant === "handed_to_courier" || event.variant === "delivered" || event.variant === "completed" ? "#bbf7d0"
+                    : "#e2e8f0";
+                  return (
+                    <div key={event.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: "0.5rem", padding: "0.625rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                      <Badge variant={event.variant} technicianId={ticket.technician_id} isPaused={event.isPaused} />
+                      <div style={{ fontSize: "0.8125rem", fontWeight: 500, color: "var(--text-primary)" }}>{event.text}</div>
+                      <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>
+                        {event.userName} • {formatDateTime(event.date)}
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>
+
+          {/* Working Time Widget */}
+          {ticket.time_logs.length > 0 && (
+            <WorkingTimeDisplay timeLogs={serializedTimeLogs} isDone={isDone} />
+          )}
 
           {/* Assignment panel (Admin & Store Coordinator only) */}
           {isTeamLeader && (

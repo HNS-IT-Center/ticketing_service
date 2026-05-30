@@ -13,6 +13,7 @@ import { formatDateTime, calculateWorkingTimeMs, formatWorkingTime } from "@/lib
 import PcBuildHandover from "./PcBuildHandover";
 import CustomerWhatsAppActions from "./CustomerWhatsAppActions";
 import WorkingTimeDisplay from "./WorkingTimeDisplay";
+import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -191,6 +192,7 @@ export default async function AdminTicketDetailPage({
                   </div>
                 </div>
               ))}
+              <PickupMethodSelector ticketId={ticket.id} initialMethod={ticket.pickup_method} />
             </div>
             
             <CustomerWhatsAppActions 
@@ -272,6 +274,7 @@ export default async function AdminTicketDetailPage({
               status={ticket.status}
               userRole={session.role}
               isAssignedSales={ticket.sales_id === session.userId}
+              isAssignedTechnician={ticket.technician_id === session.userId}
             />
           )}
 

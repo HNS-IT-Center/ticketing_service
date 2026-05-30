@@ -10,6 +10,7 @@ import { FileText, Film, ImageIcon, File, Link2 } from "lucide-react";
 import { formatDateTime, calculateWorkingTimeMs, formatWorkingTime } from "@/lib/utils";
 import AdminAssignPanel from "@/app/admin/tickets/[id]/AdminAssignPanel";
 import CustomerWhatsAppActions from "@/app/admin/tickets/[id]/CustomerWhatsAppActions";
+import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
 
@@ -174,6 +175,7 @@ export default async function TechnicianTicketDetailPage({
                   </div>
                 </div>
               ))}
+              <PickupMethodSelector ticketId={ticket.id} initialMethod={ticket.pickup_method} />
             </div>
 
             <CustomerWhatsAppActions 
@@ -214,6 +216,7 @@ export default async function TechnicianTicketDetailPage({
               status={ticket.status}
               userRole={session.role}
               isAssignedSales={ticket.sales_id === session.userId}
+              isAssignedTechnician={ticket.technician_id === session.userId}
             />
           )}
 

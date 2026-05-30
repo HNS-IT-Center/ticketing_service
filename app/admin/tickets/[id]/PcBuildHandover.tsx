@@ -12,6 +12,7 @@ interface PcBuildHandoverProps {
   status: string;
   userRole: string;
   isAssignedSales: boolean;
+  isAssignedTechnician: boolean;
 }
 
 export default function PcBuildHandover({
@@ -21,14 +22,19 @@ export default function PcBuildHandover({
   status,
   userRole,
   isAssignedSales,
+  isAssignedTechnician,
 }: PcBuildHandoverProps) {
   const [isPending, startTransition] = useTransition();
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<"image" | "pdf" | null>(null);
+  const [isReplacing, setIsReplacing] = useState(false);
 
   const isCompletedState = !["waiting", "on_progress"].includes(status);
-  const canUpload = (userRole === "Administrator" || (userRole === "Sales" && isAssignedSales)) && isCompletedState;
+  const canUpload = userRole === "Administrator" || (userRole === "Sales" && isAssignedSales) || (userRole === "Technician" && isAssignedTechnician);
+
+  const isPdfUrl = (url: string | null) => url ? url.toLowerCase().includes(".pdf") : false;
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -47,11 +53,12 @@ export default function PcBuildHandover({
 
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const droppedFile = e.dataTransfer.files[0];
-      if (droppedFile.type.startsWith("image/")) {
+      if (droppedFile.type.startsWith("image/") || droppedFile.type === "application/pdf") {
         setFile(droppedFile);
         setPreviewUrl(URL.createObjectURL(droppedFile));
+        setFileType(droppedFile.type === "application/pdf" ? "pdf" : "image");
       } else {
-        toast.error("Please upload an image file");
+        toast.error("Please upload an image or PDF file");
       }
     }
   };
@@ -59,11 +66,12 @@ export default function PcBuildHandover({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       const selectedFile = e.target.files[0];
-      if (selectedFile.type.startsWith("image/")) {
+      if (selectedFile.type.startsWith("image/") || selectedFile.type === "application/pdf") {
         setFile(selectedFile);
         setPreviewUrl(URL.createObjectURL(selectedFile));
+        setFileType(selectedFile.type === "application/pdf" ? "pdf" : "image");
       } else {
-        toast.error("Please upload an image file");
+        toast.error("Please upload an image or PDF file");
       }
     }
   };
@@ -80,9 +88,11 @@ export default function PcBuildHandover({
       if (res.error) {
         toast.error(res.error);
       } else {
-        toast.success("Revision build image uploaded successfully!");
+        toast.success("Revision build file uploaded successfully!");
         setFile(null);
         setPreviewUrl(null);
+        setFileType(null);
+        setIsReplacing(false);
       }
     });
   };
@@ -110,12 +120,20 @@ export default function PcBuildHandover({
           
           {firstBuildUrl ? (
             <div className="group" style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--border)", height: "220px", background: "#111" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={firstBuildUrl} 
-                alt="First Build Layout" 
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-              />
+              {isPdfUrl(firstBuildUrl) ? (
+                <iframe 
+                  src={firstBuildUrl} 
+                  style={{ width: "100%", height: "100%", border: "none", backgroundColor: "#fff" }}
+                  title="First Build PDF"
+                />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img 
+                  src={firstBuildUrl} 
+                  alt="First Build Layout" 
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                />
+              )}
               <div style={{ position: "absolute", top: "0.75rem", right: "0.75rem", background: "rgba(22, 163, 74, 0.9)", color: "white", padding: "0.25rem 0.625rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", backdropFilter: "blur(4px)" }}>
                 <CheckCircle2 size={12} /> Uploaded
               </div>
@@ -141,41 +159,67 @@ export default function PcBuildHandover({
         {/* Revision Build Layout */}
         <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
           <h4 style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.375rem", color: "var(--text-secondary)" }}>
-            <UploadCloud size={16} /> Revision Build (Sales)
+            <UploadCloud size={16} /> Revision Build
           </h4>
 
-          {revisionBuildUrl ? (
+          {revisionBuildUrl && !isReplacing ? (
             <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--border)", height: "220px", background: "#111" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={revisionBuildUrl} 
-                alt="Revision Build Layout" 
-                style={{ width: "100%", height: "100%", objectFit: "contain" }}
-              />
+              {isPdfUrl(revisionBuildUrl) ? (
+                <iframe 
+                  src={revisionBuildUrl} 
+                  style={{ width: "100%", height: "100%", border: "none", backgroundColor: "#fff" }}
+                  title="Revision Build PDF"
+                />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img 
+                  src={revisionBuildUrl} 
+                  alt="Revision Build Layout" 
+                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
+                />
+              )}
               <div style={{ position: "absolute", top: "0.75rem", right: "0.75rem", background: "rgba(79, 70, 229, 0.9)", color: "white", padding: "0.25rem 0.625rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", backdropFilter: "blur(4px)" }}>
                 <CheckCircle2 size={12} /> Revised
               </div>
-              <a 
-                href={revisionBuildUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{ position: "absolute", bottom: "0.75rem", right: "0.75rem", background: "rgba(0, 0, 0, 0.6)", color: "white", width: "2rem", height: "2rem", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", backdropFilter: "blur(4px)" }}
-                title="View Full Size"
-              >
-                <Eye size={14} />
-              </a>
+              <div style={{ position: "absolute", bottom: "0.75rem", right: "0.75rem", display: "flex", gap: "0.5rem" }}>
+                {canUpload && (
+                  <button 
+                    onClick={() => setIsReplacing(true)}
+                    style={{ background: "rgba(255, 255, 255, 0.9)", color: "#111", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600, display: "flex", alignItems: "center", border: "none", cursor: "pointer", backdropFilter: "blur(4px)" }}
+                  >
+                    Replace
+                  </button>
+                )}
+                <a 
+                  href={revisionBuildUrl} 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  style={{ background: "rgba(0, 0, 0, 0.6)", color: "white", width: "2rem", height: "2rem", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", backdropFilter: "blur(4px)" }}
+                  title="View Full Size"
+                >
+                  <Eye size={14} />
+                </a>
+              </div>
             </div>
           ) : previewUrl ? (
             <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--primary)", height: "220px", background: "#f3f4f6", display: "flex", flexDirection: "column" }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img 
-                src={previewUrl} 
-                alt="Revision Preview" 
-                style={{ width: "100%", height: "170px", objectFit: "contain" }}
-              />
+              {fileType === "pdf" ? (
+                <iframe 
+                  src={previewUrl} 
+                  style={{ width: "100%", height: "170px", border: "none", backgroundColor: "#fff" }}
+                  title="Revision Preview PDF"
+                />
+              ) : (
+                /* eslint-disable-next-line @next/next/no-img-element */
+                <img 
+                  src={previewUrl} 
+                  alt="Revision Preview" 
+                  style={{ width: "100%", height: "170px", objectFit: "contain" }}
+                />
+              )}
               <div style={{ height: "50px", display: "flex", background: "var(--white)", borderTop: "1px solid var(--border-light)" }}>
                 <button 
-                  onClick={() => { setFile(null); setPreviewUrl(null); }}
+                  onClick={() => { setFile(null); setPreviewUrl(null); setIsReplacing(false); }}
                   className="btn btn-ghost btn-sm"
                   style={{ flex: 1, borderRadius: 0, height: "100%", borderRight: "1px solid var(--border-light)" }}
                   disabled={isPending}
@@ -216,7 +260,7 @@ export default function PcBuildHandover({
             >
               <input
                 type="file"
-                accept="image/*"
+                accept="image/*,application/pdf"
                 onChange={handleFileChange}
                 style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
               />
@@ -228,18 +272,10 @@ export default function PcBuildHandover({
             <div style={{ borderRadius: "12px", border: "1.5px dashed var(--border-light)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "220px", background: "#f9fafb", color: "var(--text-muted)", gap: "0.5rem", padding: "1rem", textAlign: "center" }}>
               <Lock size={28} style={{ opacity: 0.4 }} />
               <span style={{ fontSize: "0.8125rem", fontWeight: 500 }}>
-                {!isCompletedState 
-                  ? "Awaiting technician completion" 
-                  : !isAssignedSales && userRole === "Sales"
-                    ? "Assigned Sales only" 
-                    : "Access Restricted"}
+                Access Restricted
               </span>
               <span style={{ fontSize: "0.75rem", opacity: 0.8 }}>
-                {!isCompletedState
-                  ? "Upload unlocks when status is done"
-                  : !isAssignedSales && userRole === "Sales"
-                    ? "Only the assigned Sales agent can upload"
-                    : "Only Administrators and assigned Sales can upload"}
+                Only Administrators, assigned Sales, or Technician can upload
               </span>
             </div>
           )}

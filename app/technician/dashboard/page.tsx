@@ -34,7 +34,7 @@ export default async function TechnicianDashboard() {
       where: { technician_id: session.userId, status: { in: ["waiting", "on_progress"] } },
       orderBy: { updated_at: "desc" },
       take: 10,
-      select: { id: true, ticket_code: true, ticket_type: true, device_type: true, status: true, technician_id: true, is_for_self: true, user: { select: { name: true } } },
+      select: { id: true, ticket_code: true, ticket_type: true, device_type: true, status: true, technician_id: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
     }),
     db.technicianPerformance.findUnique({ where: { technician_id: session.userId }, select: { tickets_handled: true, success_count: true } }),
     // Top technician: use groupBy to avoid loading all ticket rows
@@ -64,7 +64,7 @@ export default async function TechnicianDashboard() {
     },
     orderBy: { created_at: "asc" },
     take: 10,
-    select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, user: { select: { name: true } } },
+    select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
   });
 
   return (
@@ -126,7 +126,7 @@ export default async function TechnicianDashboard() {
                       <tr key={t.id}>
                         <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
                         <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                        <td>{t.user?.name || "Guest"}</td>
+                        <td>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</td>
                         <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
                         <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                         <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
@@ -148,7 +148,7 @@ export default async function TechnicianDashboard() {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                       <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                      <span>{t.user?.name || "Guest"}</span>
+                      <span>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span>
@@ -174,7 +174,7 @@ export default async function TechnicianDashboard() {
             ticket_type: t.ticket_type,
             device_type: t.device_type,
             created_at: t.created_at,
-            user: { name: t.user?.name || "Unknown" }
+            user: { name: t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest") }
           }))} 
         />
       </div>

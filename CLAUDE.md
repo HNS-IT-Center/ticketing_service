@@ -127,6 +127,8 @@ ticket-app-2/
 │   │   ├── profile/page.tsx          # Admin profile editor
 │   │   ├── tickets/
 │   │   │   ├── page.tsx               # All-tickets list with search/filter
+│   │   │   ├── create/
+│   │   │   │   ├── page.tsx             # Create ticket page for admin
 │   │   │   └── [id]/
 │   │   │       ├── page.tsx           # Full ticket detail (.ticket-detail-grid)
 │   │   │       ├── AdminAssignPanel.tsx
@@ -151,9 +153,6 @@ ticket-app-2/
 │   │   ├── profile/page.tsx           # Customer profile editor
 │   │   └── tickets/
 │   │       ├── page.tsx               # Paginated (10/page), table+card responsive
-│   │       ├── create/
-│   │       │   ├── page.tsx
-│   │       │   └── CreateTicketForm.tsx   # 5-step form (Store, Intake fields, T&C)
 │   │       └── [id]/
 │   │           ├── page.tsx               # .ticket-detail-grid, attachment viewer
 │   │           └── TicketChat.tsx
@@ -165,6 +164,9 @@ ticket-app-2/
 │   │   ├── profile/page.tsx           # Technician profile with perf stats
 │   │   └── tickets/
 │   │       ├── page.tsx               # Paginated (10/page), table+card responsive
+│   │       ├── create/
+│   │       │   ├── page.tsx
+│   │       │   └── CreateTicketForm.tsx   # 5-step form (Store, Intake fields, T&C)
 │   │       └── [id]/
 │   │           ├── page.tsx           # .ticket-detail-grid
 │   │           └── StatusUpdater.tsx  # Confirm modal before status change
@@ -263,7 +265,7 @@ waiting ──→ on_progress ──→ done
     └──→ rejected
 ```
 
-- **Customer** creates tickets (status starts at `waiting`)
+- **Admin** or **Technician** creates tickets (status starts at `waiting`). Customers cannot create tickets.
 - **Technician** can "Take Ticket" (moves to `on_progress`) then mark `done` or `cancelled`
 - **Admin** can approve (`on_progress`), reject, mark done, or cancel at any stage
 - Each transition logs to `TicketStatusLog` and creates a `Notification` for the customer
@@ -412,7 +414,7 @@ When cloning the project to a new device, you will need to reconfigure the envir
 | S1 | Sidebar closed + mobile blank space bug | ✅ | `globals.css` — `.dashboard-main` on mobile now uses `margin-left: 0 !important` to override `.sidebar-collapsed` margin. |
 | S2 | Logo display fix | ✅ | `DashboardShell.tsx` — switched from `<Image>` to plain `<img>` for logo to avoid Next.js hydration/optimization issues. Always visible regardless of collapsed state. |
 | S3 | Sidebar toggle arrow outside sidebar | ✅ | `DashboardShell.tsx` — `.sidebar-collapse-btn` moved outside sidebar logo div, positioned as `absolute right: -12px` floating element. `sidebar` has `overflow: visible`. |
-| S4 | All "TechServe" → "HNS IT Center" branding | ✅ | Fixed in: `app/layout.tsx`, all metadata titles in admin/users, admin/users/create, admin/users/[id], customer/tickets/create pages. |
+| S4 | All "TechServe" → "HNS IT Center" branding | ✅ | Fixed in: `app/layout.tsx`, all metadata titles in admin/users, admin/users/create, admin/users/[id] pages. |
 | S5 | Stat card inline (icon + text horizontally) | ✅ | `globals.css` — `.stat-card` now `flex-direction: row`. Added `.stat-card-icon`, `.stat-card-body`, `.stat-card-value`, `.stat-card-label` classes. Customer dashboard uses `.customer-stats-grid` (2-col mobile, 4-col desktop). |
 | S6 | Recent Tickets mobile card view (Dashboard) | ✅ | `app/customer/dashboard/page.tsx` — uses `.admin-ticket-table` / `.admin-ticket-cards` toggle, max 5 tickets, card view on mobile. |
 | S7 | My Tickets pagination (per 10) | ✅ | `app/customer/tickets/page.tsx` — paginated with `take: 10, skip`, prev/next controls, total count display. |
@@ -484,6 +486,16 @@ When cloning the project to a new device, you will need to reconfigure the envir
 | U2 | Assignment Panel Template | ✅ | `AdminAssignPanel.tsx` updated to structurally match the `Status History` card. Moved below Status History in the right column on both Admin and Technician views. |
 | U3 | CreateTicketForm Syntax Fix | ✅ | Fixed JSX syntax errors and removed improperly nested fragment blocks in `CreateTicketForm.tsx`. |
 | U4 | RichTextEditor ESLint Fix | ✅ | Extracted `ToolbarBtn` outside of `RichTextEditor` component to fix ESLint "calling setState synchronously" / component-in-render errors. |
+
+### SPRINT 2026-05-30 SESSION — Ticketing Logic & UI Polish
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| T1 | Ticket Creation Role Restriction | ✅ | **Important Context Rule**: Customers can no longer create tickets. Only Admins and Technicians are authorized to create tickets. |
+| T2 | PC Build Revision Flexibility | ✅ | Removed `on_progress`/`waiting` gating for PC Build uploads. Revisions can now be uploaded at any time (including before the ticket is marked Done). Added a "Replace" button to swap existing uploads. |
+| T3 | Real Customer Names in Dashboards | ✅ | Both Admin and Technician dashboards now respect the `is_for_self` flag, displaying the designated `customer_name` instead of the account owner's name for third-party tickets. |
+| T4 | Leaderboard Styling Consistency | ✅ | Restored the blue gradient podium backgrounds for the Top 3 ranks in both the Admin and Technician leaderboards (bypassed Tailwind v4 bugs with inline styles). Standardized tab toggle button classes (`btn-primary` and `btn-outline`). |
+| T5 | Notification System Enhancements | ✅ | Notifications now display the Ticket Code (`#TIC...`) instead of raw URLs. Clicking a notification correctly targets and marks only that single notification as read. Assignment notifications feature a new distinct emoji. |
+| T6 | Pickup Method Updates | ✅ | Integrated `PickupMethodSelector` allowing Admins/Technicians to change the handover method (Self-Pickup vs Courier) even after ticket creation. |
 
 ---
 

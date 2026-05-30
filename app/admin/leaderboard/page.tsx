@@ -151,18 +151,18 @@ export default async function AdminLeaderboardPage({
         </form>
       </div>
 
-      {/* Premium Tab Toggles */}
-      <div className="flex bg-gray-100 p-1 rounded-xl w-fit border border-gray-200 gap-1">
+      {/* Tab Toggles */}
+      <div className="flex gap-2">
         <Link 
           href={buildTabHref("technician")} 
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all text-decoration-none ${!isStoreTab ? "bg-white text-gray-800 shadow" : "text-gray-500 hover:text-gray-700"}`}
+          className={`btn btn-sm flex items-center gap-1.5 ${!isStoreTab ? "btn-primary" : "btn-outline"}`}
         >
           <User size={15} />
           Technicians
         </Link>
         <Link 
           href={buildTabHref("store")} 
-          className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-semibold transition-all text-decoration-none ${isStoreTab ? "bg-white text-gray-800 shadow" : "text-gray-500 hover:text-gray-700"}`}
+          className={`btn btn-sm flex items-center gap-1.5 ${isStoreTab ? "btn-primary" : "btn-outline"}`}
         >
           <Store size={15} />
           Store Standings
@@ -329,13 +329,17 @@ export default async function AdminLeaderboardPage({
                 const rank = i + 1;
                 const isTop3 = rank <= 3;
                 const medalColor = rank===1?"#f59e0b":rank===2?"#9ca3af":rank===3?"#b45309":"var(--text-muted)";
+                // Use a blue tint background for the Top 3 to match the previous design
+                const bgStyle = isTop3 ? "rgba(22, 70, 157, 0.08)" : "var(--white)";
+                const borderStyle = isTop3 ? "rgba(22, 70, 157, 0.2)" : "var(--border-light)";
+                
                 return (
-                  <div key={t.id} style={{ display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.75rem 0.875rem",background:isTop3?`${medalColor}0d`:"var(--white)",border:`1.5px solid ${isTop3?`${medalColor}40`:"var(--border-light)"}`,borderRadius:"var(--radius-md)",animation:`fadeIn 0.4s ${i*0.05}s ease both` }}>
+                  <div key={t.id} style={{ display:"flex",alignItems:"center",gap:"0.75rem",padding:"0.75rem 0.875rem",background:bgStyle,border:`1.5px solid ${borderStyle}`,borderRadius:"var(--radius-md)",animation:`fadeIn 0.4s ${i*0.05}s ease both` }}>
                     <div style={{ width:"2rem",height:"2rem",borderRadius:"50%",flexShrink:0,background:isTop3?`${medalColor}20`:"var(--cream)",display:"flex",alignItems:"center",justifyContent:"center" }}>
                       {rank<=3 ? <Medal size={14} style={{ color:medalColor }} /> : <span style={{ fontSize:"0.75rem", fontWeight:700, color:"var(--text-muted)" }}>{rank}</span>}
                     </div>
                     
-                    <div style={{ width:"2.25rem",height:"2.25rem",borderRadius:"50%",flexShrink:0,background:isTop3?`${medalColor}30`:"var(--primary)",color:isTop3?medalColor:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.75rem",fontWeight:700,border:isTop3?`1.5px solid ${medalColor}60` : "none", fontFamily: "monospace" }}>
+                    <div style={{ width:"2.25rem",height:"2.25rem",borderRadius:"50%",flexShrink:0,background:isTop3?"var(--primary)":"var(--primary)",color:"white",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"0.75rem",fontWeight:700,border:isTop3?`1.5px solid rgba(255,255,255,0.3)` : "none", fontFamily: "monospace" }}>
                       {isStoreTab ? (t as any).code : getInitials(t.name)}
                     </div>
                     

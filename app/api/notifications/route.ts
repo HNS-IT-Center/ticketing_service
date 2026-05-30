@@ -51,14 +51,31 @@ export async function GET(request: Request) {
   });
 }
 
-export async function POST() {
+export async function POST(request: Request) {
   const session = await getSession();
   if (!session) return NextResponse.json({ ok: false }, { status: 401 });
 
-  await db.notification.updateMany({
-    where: { user_id: session.userId, is_read: false },
-    data: { is_read: true },
-  });
+  try {
+    const text = await request.text();
+    const body = text ? JSON.parse(text) : {};
+    
+    if (body.id) {
+      await db.notification.updateMany({
+        where: { id: body.id, user_id: session.userId, is_read: false },
+        data: { is_read: true },
+      });
+    } else {
+      await db.notification.updateMany({
+        where: { user_id: session.userId, is_read: false },
+        data: { is_read: true },
+      });
+    }
+  } catch (e) {
+    await db.notification.updateMany({
+      where: { user_id: session.userId, is_read: false },
+      data: { is_read: true },
+    });
+  }
 
   return NextResponse.json({ ok: true });
 }

@@ -108,8 +108,21 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
     const nextOpen = !open;
     setOpen(nextOpen);
     if (nextOpen) {
-      // Refresh list on open, mark read if there are unreads
+      // Refresh list on open
       fetchFullList();
+    }
+  };
+
+  const handleNotificationClick = async (n: Notification) => {
+    setOpen(false);
+    if (!n.is_read) {
+      await fetch("/api/notifications", { 
+        method: "POST", 
+        body: JSON.stringify({ id: n.id }),
+        headers: { "Content-Type": "application/json" }
+      });
+      setNotifications((prev) => prev.map((notif) => notif.id === n.id ? { ...notif, is_read: true } : notif));
+      setUnreadCount((prev) => Math.max(0, prev - 1));
     }
   };
 
@@ -219,7 +232,7 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
                       transition: "background 0.15s",
                       fontSize: "0.875rem",
                     }}
-                    onClick={() => setOpen(false)}
+                    onClick={() => handleNotificationClick(n)}
                   >
                     <div style={{ fontWeight: n.is_read ? 400 : 600 }}>
                       {notifLabel}

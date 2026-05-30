@@ -109,6 +109,7 @@ export async function createTicketAction(formData: FormData) {
   const ticketFiles = formData.getAll("ticket_files") as File[];
   const progressFiles = formData.getAll("progress_files") as File[];
   const files = [...ticketFiles, ...progressFiles];
+  let firstUploadedUrl: string | null = null;
   if (files.length > 0) {
     const supabase = createServerSupabaseClient();
     const uploadOps = files.map(async (file) => {
@@ -119,7 +120,7 @@ export async function createTicketAction(formData: FormData) {
         .from("attachments")
         .upload(path, file, { contentType: file.type });
 
-      if (error) return;
+      if (error) return null;
 
       const {
         data: { publicUrl },
@@ -132,9 +133,12 @@ export async function createTicketAction(formData: FormData) {
       await db.ticketAttachment.create({
         data: { ticket_id: ticket.id, file_url: publicUrl, file_type: fileType },
       });
+      return publicUrl;
     });
-    // Add to follow-up ops so they run in parallel
-    followUps.push(Promise.all(uploadOps));
+    
+    // We await the uploads to get the first file URL for PC builds
+    const uploadedUrls = await Promise.all(uploadOps);
+    firstUploadedUrl = uploadedUrls.find(url => url != null) || null;
   }
 
   // Status log
@@ -186,7 +190,7 @@ export async function createTicketAction(formData: FormData) {
     case "pc_build": {
       const components = JSON.parse((formData.get("components") as string) || "[]") as string[];
       const pcOps: Promise<unknown>[] = [
-        db.ticketPcBuildDetail.create({ data: { ticket_id: ticket.id } }),
+        db.ticketPcBuildDetail.create({ data: { ticket_id: ticket.id, first_build_url: firstUploadedUrl } }),
       ];
       if (components.length > 0) {
         pcOps.push(
@@ -342,3 +346,21 @@ export async function sendPublicMessageAction(
   revalidatePath(`/admin/tickets/${ticketId}`);
   return { success: true };
 }
+
+// ─── Update Pickup Method ──────────────────────────────────────────────────
+export async function updatePickupMethodAction(ticketId: string, pickupMethod: "self_pickup" | "courier") {
+  const session = await requireSession();
+  if (session.role !== "Administrator" && session.role !== "Technician" && session.role !== "Sales") {
+    return { error: "Unauthorized" };
+  }
+
+  await db.ticket.update({
+    where: { id: ticketId },
+    data: { pickup_method: pickupMethod },
+  });
+
+  revalidatePath(`/admin/tickets/${ticketId}`);
+  revalidatePath(`/technician/tickets/${ticketId}`);
+  return { success: true };
+}
+

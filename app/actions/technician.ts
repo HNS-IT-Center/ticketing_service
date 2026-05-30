@@ -59,7 +59,7 @@ export async function requestTicketAssignmentAction(ticketId: string) {
         user_id: admin.id,
         ticket_id: ticketId,
         type: "status_update",
-        message: `Technician requested assignment for ticket #${ticket.ticket_code}`,
+        message: `🙋 Someone Request to handle Ticket #${ticket.ticket_code}`,
       },
     });
   }

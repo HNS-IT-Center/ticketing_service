@@ -116,12 +116,13 @@ export async function adminAssignTicketAction(
   }
 
   // 1. Update ticket assignment
-  await db.ticket.update({
+  const ticket = await db.ticket.update({
     where: { id: ticketId },
     data: {
       technician_id: technicianId || null,
       sales_id: salesId || null,
     },
+    select: { ticket_code: true }
   });
 
   // 2. Resolve pending requests
@@ -142,7 +143,7 @@ export async function adminAssignTicketAction(
         user_id: technicianId,
         ticket_id: ticketId,
         type: "assigned",
-        message: `Admin assigned you to ticket #${ticketId.substring(0, 8)}`, // We don't have ticket code here easily, substring is fallback
+        message: `Admin assigned you to ticket #${ticket.ticket_code}`,
       }
     });
   } else {

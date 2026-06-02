@@ -6,7 +6,7 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export const metadata = { title: "All Tickets — HNS IT Center" };
 
-const STATUS_FILTERS = ["all", "waiting", "on_progress", "done", "cancelled", "rejected"] as const;
+const STATUS_FILTERS = ["all", "unassigned", "waiting", "on_progress", "done", "cancelled", "rejected"] as const;
 const PAGE_SIZE = 10;
 
 export default async function AdminTicketsPage({
@@ -24,7 +24,8 @@ export default async function AdminTicketsPage({
 
   const where = {
     ...(session.role === "Sales" ? { sales_id: session.userId } : {}),
-    ...(statusFilter !== "all" ? { status: statusFilter as any } : {}),
+    ...(statusFilter !== "all" && statusFilter !== "unassigned" ? { status: statusFilter as any } : {}),
+    ...(statusFilter === "unassigned" ? { technician_id: null } : {}),
     ...(query
       ? {
           OR: [

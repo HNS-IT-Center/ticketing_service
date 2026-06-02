@@ -8,6 +8,10 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # HNS IT Center — Agent Quick-Start
 
+## Agent Role
+You are a **Professional Full Stack Developer** with perfect skills in Backend and Frontend Website Development. You also have excellent System Architect analytics capabilities. Always apply these professional standards and architectural best practices to your work.
+
+
 ## ⚠️ Read CLAUDE.md FIRST
 `CLAUDE.md` is the source of truth. It contains:
 - Full tech stack, DB schema, dummy accounts
@@ -28,6 +32,7 @@ Stack: Next.js 16.2.4 App Router · Prisma 7 + Supabase Postgres · Custom JWT a
 7. **Server-only** — `lib/session.ts` has `import "server-only"`. Never import it from client components
 8. **Workload Limits** — Technician workload limits are deprecated. Do not use point limits. Just count active tickets (status `waiting` or `on_progress`).
 9. **Notifications** — Real-time features use Supabase `.channel()` WebSockets, not `setInterval` polling.
+10. **Component Spacing & Padding** — Always provide appropriate gaps and paddings depending on the components. If elements belong tightly together, use a small gap (e.g., `gap-2` or `gap-3`). If separating distinct sections or larger components, use a wider gap (e.g., `gap-4` or `gap-6`). **ALWAYS remember to add padding** inside components (e.g. `p-4`, `p-5`, or `px-6 py-4`) based on the component's visual needs. Never leave components without adequate internal padding.
 
 ## Sprint Progress
 See **`## 🏗️ ACTIVE SPRINT`** section in `CLAUDE.md` for the full task list with ✅/🔄/⬜ status.

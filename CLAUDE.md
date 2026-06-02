@@ -2,6 +2,9 @@
 
 # HNS IT Center — Role-Based Ticketing System: Project Handoff
 
+## 🤖 Agent Role
+You are a **Professional Full Stack Developer** with perfect skills in Backend and Frontend Website Development. You also possess strong System Architect analytics and capabilities. Always adhere to these professional standards and architectural best practices when working in this codebase.
+
 ## 🧭 Project Overview
 
 A full-stack **role-based service ticketing system** for a computer repair/upgrade shop. Built with Next.js 16, Prisma 7, Supabase (Postgres + Storage), and Tiptap rich text.
@@ -497,6 +500,14 @@ When cloning the project to a new device, you will need to reconfigure the envir
 | T5 | Notification System Enhancements | ✅ | Notifications now display the Ticket Code (`#TIC...`) instead of raw URLs. Clicking a notification correctly targets and marks only that single notification as read. Assignment notifications feature a new distinct emoji. |
 | T6 | Pickup Method Updates | ✅ | Integrated `PickupMethodSelector` allowing Admins/Technicians to change the handover method (Self-Pickup vs Courier) even after ticket creation. |
 
+### SPRINT 2026-06-02 SESSION — Global Layout & Dashboard Updates
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| G1 | Global Content Centering | ✅ | Modified `.dashboard-content` in `globals.css` with `display: flex; justify-content: center;` and `.dashboard-content > * { width: 100%; }` to globally center all form wrappers horizontally while allowing lists to maintain full width. |
+| G2 | Dashboard Stats (Stores) | ✅ | Replaced the Customers count on the Admin Dashboard with the total count of operational Stores using `db.storeLocation.count()`. |
+| G3 | Dashboard "Closed" Link | ✅ | Adjusted the Dashboard "Closed" tickets card to link directly to `/admin/tickets?status=done`. |
+| G4 | Tickets Filter Unassigned | ✅ | Added "Unassigned" to the Ticket status filters in `/admin/tickets`, routing queries for unassigned tickets using `{ technician_id: null }`. |
+
 ---
 
 ### 🔒 SECURITY: RLS (Row Level Security)
@@ -560,4 +571,4 @@ END $$;
 - **Point system:** `pc_build = 4pts, service = 3pts, all others = 2pts` — computed in page server component, not stored on `Ticket`
 - **Phone numbers:** Always stored as `+62XXXXXXXXX` format. The `+62` prefix widget is used in `CreateTicketForm` and `register/page.tsx`
 - **Notification bell:** Uses `position: fixed` (not `absolute`) to prevent mobile overflow
-
+- **Component Spacing & Padding:** Always provide appropriate gaps and paddings depending on the components. If elements belong tightly together, use a small gap (e.g., `gap-2`). If separating distinct sections or larger components, use a wider gap (e.g., `gap-4` or `gap-6`). **ALWAYS remember to add padding** inside components (e.g. `p-4`, `p-5`, or `px-6 py-4`) based on the component's visual needs. Never leave components without adequate internal padding.

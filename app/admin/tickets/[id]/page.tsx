@@ -192,7 +192,7 @@ export default async function AdminTicketDetailPage({
                   </div>
                 </div>
               ))}
-              <PickupMethodSelector ticketId={ticket.id} initialMethod={ticket.pickup_method} />
+              <PickupMethodSelector ticketId={ticket.id} initialMethod={ticket.pickup_method || "self_pickup"} />
             </div>
             
             <CustomerWhatsAppActions 

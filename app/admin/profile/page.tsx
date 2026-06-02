@@ -33,7 +33,7 @@ export default async function AdminProfilePage() {
   ];
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl">
+    <div className="flex flex-col gap-6 max-w-2xl mx-auto">
       {/* Header */}
       <div>
         <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-800">

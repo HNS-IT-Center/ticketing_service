@@ -612,6 +612,12 @@ tbody td {
 .dashboard-content {
   padding: 2rem 1.5rem;
   flex: 1;
+  display: flex;
+  justify-content: center;
+}
+
+.dashboard-content > * {
+  width: 100%;
 }
 
 /* ─── Notification Bell ───────────────────────────────────────────────────── */

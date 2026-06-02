@@ -14,7 +14,7 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
   if (!user) notFound();
 
   return (
-    <div style={{ maxWidth: "600px" }}>
+    <div className="mx-auto" style={{ maxWidth: "600px" }}>
       <h1 style={{ marginBottom: "1.5rem" }}>Edit User</h1>
       <EditUserForm user={user as any} />
     </div>

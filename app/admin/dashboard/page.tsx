@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
-import { Users, Ticket, CheckCircle, Clock, AlertCircle, TrendingUp, ArrowRight } from "lucide-react";
+import { Users, Ticket, CheckCircle, Clock, AlertCircle, TrendingUp, ArrowRight, Store } from "lucide-react";
 
 export const metadata = { title: "Dashboard — HNS IT Center" };
 
@@ -19,6 +19,7 @@ export default async function AdminDashboard() {
       db.ticket.count({ where: salesFilter }),
       db.ticket.count({ where: { ...salesFilter, technician_id: { not: null } } }),
       db.ticket.count({ where: { ...salesFilter, status: { in: ["done", "cancelled", "rejected"] } } }),
+      db.storeLocation.count(),
     ]),
     ["admin-dashboard-counts", session.userId],
     { revalidate: 30 }
@@ -29,6 +30,7 @@ export default async function AdminDashboard() {
     totalTickets,
     assignedTickets,
     closedTickets,
+    totalStores,
     recentTickets,
     topTechnicians,
   ] = await Promise.all([
@@ -36,6 +38,7 @@ export default async function AdminDashboard() {
     getCounts().then(r => r[1] as number),
     getCounts().then(r => r[2] as number),
     getCounts().then(r => r[3] as number),
+    getCounts().then(r => r[4] as number),
     db.ticket.findMany({
       where: salesFilter,
       orderBy: { created_at: "desc" },
@@ -61,13 +64,13 @@ export default async function AdminDashboard() {
   const statCards = [
     ...(!isSales ? [
       { label: "Technicians", value: countByRole.Technician ?? 0, icon: <Users size={20} />, color: "var(--primary)", href: "/admin/users?role=Technician" },
-      { label: "Customers", value: countByRole.Customer ?? 0, icon: <Users size={20} />, color: "#7c3aed", href: "/admin/users?role=Customer" },
+      { label: "Stores", value: totalStores ?? 0, icon: <Store size={20} />, color: "#7c3aed", href: "/admin/stores" },
       { label: "Sales", value: countByRole.Sales ?? 0, icon: <Users size={20} />, color: "#0891b2", href: "/admin/users?role=Sales" },
     ] : []),
     { label: "Total Tickets", value: totalTickets, icon: <Ticket size={20} />, color: "#ca8a04", href: "/admin/tickets" },
     { label: "Assigned", value: assignedTickets, icon: <CheckCircle size={20} />, color: "#16a34a", href: "/admin/tickets?assigned=true" },
     { label: "Unassigned", value: totalTickets - assignedTickets, icon: <Clock size={20} />, color: "#dc2626", href: "/admin/tickets?assigned=false" },
-    { label: "Closed", value: closedTickets, icon: <AlertCircle size={20} />, color: "var(--text-muted)", href: "/admin/tickets?closed=true" },
+    { label: "Closed", value: closedTickets, icon: <AlertCircle size={20} />, color: "var(--text-muted)", href: "/admin/tickets?status=done" },
   ];
 
   return (

@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import toast from "react-hot-toast";
-import { ArrowLeft, Trash2, UserPlus, X, Users } from "lucide-react";
+import { ArrowLeft, Trash2, UserPlus, X, Users, Clock, Crown } from "lucide-react";
 import {
   updateStoreAction,
   deleteStoreAction,
@@ -137,58 +137,78 @@ export default function StoreEditForm({
           </div>
 
           {/* Assign new technician */}
-          {unassignedTechs.length > 0 && (
-            <div className="flex gap-3 mb-6 items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
-              <select
-                value={selectedTech}
-                onChange={(e) => setSelectedTech(e.target.value)}
-                className="form-input flex-1"
-              >
-                <option value="">Select technician to assign...</option>
-                {unassignedTechs.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
-                ))}
-              </select>
-              <button
-                type="button"
-                onClick={assignTech}
-                disabled={!selectedTech || isPending}
-                className="btn btn-primary flex items-center gap-2 px-6"
-              >
-                <UserPlus size={16} /> Assign
-              </button>
-            </div>
-          )}
+          <div className="flex gap-3 mb-6 items-center bg-gray-50 p-4 rounded-xl border border-gray-100">
+            <select
+              value={selectedTech}
+              onChange={(e) => setSelectedTech(e.target.value)}
+              className="form-input flex-1"
+              disabled={unassignedTechs.length === 0 || isPending}
+            >
+              {unassignedTechs.length === 0 ? (
+                <option value="">All technicians are assigned to this store</option>
+              ) : (
+                <>
+                  <option value="">Select technician to assign...</option>
+                  {unassignedTechs.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </>
+              )}
+            </select>
+            <button
+              type="button"
+              onClick={assignTech}
+              disabled={!selectedTech || isPending || unassignedTechs.length === 0}
+              className="btn btn-primary flex items-center gap-2 px-6"
+            >
+              <UserPlus size={16} /> Assign
+            </button>
+          </div>
 
           {store.technician_stores.length === 0 ? (
             <p className="text-gray-400 text-sm text-center py-4">No technicians assigned yet</p>
           ) : (
-            <div className="flex flex-col gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {store.technician_stores.map((a) => (
                 <div
                   key={a.technician_id}
-                  className="flex items-center justify-between p-4 bg-white border border-gray-200 shadow-sm rounded-xl hover:border-indigo-300 transition-colors"
+                  className="flex flex-col bg-white border border-gray-100 shadow-sm rounded-2xl relative group overflow-hidden hover:shadow-md transition-shadow"
+                  style={{ padding: "1.25rem" }}
                 >
-                  <div>
-                    <div className="font-medium text-gray-800 text-sm flex items-center gap-2">
-                      {a.technician.name}
-                      {a.technician.is_team_leader && (
-                        <span className="badge badge-assigned px-1.5 py-0.5 text-[0.7rem] bg-indigo-50 text-indigo-600 border border-indigo-200">Coordinator</span>
-                      )}
+                  <div className="absolute top-0 left-0 w-1 h-full bg-indigo-500"></div>
+                  <div className="flex items-start justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="relative">
+                        <div className="w-10 h-10 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold text-sm">
+                          {a.technician.name.substring(0, 2).toUpperCase()}
+                        </div>
+                        {a.technician.is_team_leader && (
+                          <div className="absolute -top-2 -right-2 bg-yellow-400 text-white rounded-full p-0.5 shadow-sm border-2 border-white" title="Coordinator">
+                            <Crown size={12} strokeWidth={3} />
+                          </div>
+                        )}
+                      </div>
+                      <div>
+                        <div className="font-semibold text-gray-900 text-sm flex items-center gap-2">
+                          {a.technician.name}
+                        </div>
+                        {a.technician.shift && (
+                          <div className="text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                            <Clock size={12} /> <span className="capitalize">{a.technician.shift}</span> shift
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    {a.technician.shift && (
-                      <div className="text-xs text-gray-400 capitalize">{a.technician.shift} shift</div>
-                    )}
+                    <button
+                      type="button"
+                      onClick={() => removeTech(a.technician_id, a.technician.name)}
+                      disabled={isPending}
+                      className="p-1.5 text-gray-400 hover:text-white hover:bg-red-500 rounded-lg transition-colors"
+                      title="Remove from store"
+                    >
+                      <X size={16} />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => removeTech(a.technician_id, a.technician.name)}
-                    disabled={isPending}
-                    className="p-2 text-gray-400 hover:text-white hover:bg-red-500 rounded-lg transition-colors"
-                    title="Remove from store"
-                  >
-                    <X size={16} />
-                  </button>
                 </div>
               ))}
             </div>

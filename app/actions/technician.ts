@@ -1,13 +1,14 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
 
-function getTicketPoints(type: string): number {
+function getTicketPoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
   if (type === "service") return 3;
+  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
   return 2;
 }
 
@@ -25,13 +26,17 @@ export async function requestTicketAssignmentAction(ticketId: string) {
 
   // Workload check removed: Technicians can request freely as assignments are gated.
 
-  // Check if request already exists
-  const existingRequest = await db.ticketAssignmentRequest.findUnique({
-    where: { ticket_id_technician_id: { ticket_id: ticketId, technician_id: session.userId } },
+  // Block if ANY technician already has a pending request for this ticket (1 at a time rule)
+  const anyPendingRequest = await db.ticketAssignmentRequest.findFirst({
+    where: { ticket_id: ticketId, status: "pending" },
+    select: { technician_id: true },
   });
 
-  if (existingRequest) {
-    return { error: "You have already requested this ticket." };
+  if (anyPendingRequest) {
+    if (anyPendingRequest.technician_id === session.userId) {
+      return { error: "You have already requested this ticket." };
+    }
+    return { error: "Another technician has already requested this ticket." };
   }
 
   // Create Assignment Request
@@ -67,6 +72,26 @@ export async function requestTicketAssignmentAction(ticketId: string) {
   revalidatePath("/technician/dashboard");
   return { success: true };
 }
+
+// ─── Cancel Ticket Assignment Request (Technician) ─────────────────────────
+export async function cancelTicketRequestAction(ticketId: string) {
+  const session = await requireRole("Technician");
+
+  const request = await db.ticketAssignmentRequest.findUnique({
+    where: { ticket_id_technician_id: { ticket_id: ticketId, technician_id: session.userId } },
+  });
+
+  if (!request) return { error: "No pending request found for this ticket." };
+  if (request.status !== "pending") return { error: "Request already handled, cannot cancel." };
+
+  await db.ticketAssignmentRequest.delete({
+    where: { id: request.id },
+  });
+
+  revalidatePath("/technician/dashboard");
+  return { success: true };
+}
+
 
 // ─── Update Ticket Status ──────────────────────────────────────────────────
 export async function updateTicketStatusAction(formData: FormData) {
@@ -173,7 +198,13 @@ export async function updateTicketStatusAction(formData: FormData) {
   // Update workload + performance when terminal
   const isTerminal = ["done", "cancelled", "rejected"].includes(newStatus);
   if (isTerminal) {
-    const points = getTicketPoints(ticket.ticket_type);
+    const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
+
+    // Bust leaderboard + tech-month-winner caches so next page load is fresh
+    revalidateTag("leaderboard-techs", "max");
+    revalidateTag("leaderboard-stores", "max");
+    revalidateTag("tech-month-winner", "max");
+    revalidateTag(`user-profile:${session.userId}`, "max");
 
     // Workload reduction removed: tracked dynamically
 
@@ -211,7 +242,8 @@ export async function updateTicketStatusAction(formData: FormData) {
 
   // When done: notify the technician with points earned + send customer email
   if (newStatus === "done") {
-    const points = getTicketPoints(ticket.ticket_type);
+    const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
+    revalidateTag(`user-profile:${session.userId}`, "max");
     // Fetch updated total to show current total
     const perf = await db.technicianPerformance.findUnique({
       where: { technician_id: session.userId },

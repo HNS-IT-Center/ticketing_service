@@ -2,7 +2,7 @@
 
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 
 const profileSchema = z.object({
@@ -33,6 +33,7 @@ export async function updateTechnicianProfileAction(data: {
     },
   });
 
+  revalidateTag(`user-profile:${session.userId}`, "max");
   revalidatePath("/technician/profile");
   return { success: true };
 }
@@ -59,5 +60,34 @@ export async function updateAdminProfileAction(data: {
   });
 
   revalidatePath("/admin/profile");
+  return { success: true };
+}
+
+// ─── Equip / Unequip Title ─────────────────────────────────────────────────
+export async function equipTitleAction(titleKey: string | null) {
+  const session = await requireRole("Technician");
+
+  // Validate: if equipping, the title must exist in this user's inventory
+  if (titleKey !== null) {
+    const owned = await db.userTitle.findUnique({
+      where: {
+        user_id_title_key: { user_id: session.userId, title_key: titleKey },
+      },
+    });
+    if (!owned) return { error: "Title not found in your inventory" };
+  }
+
+  await db.user.update({
+    where: { id: session.userId },
+    data: { active_title: titleKey },
+  });
+
+  // Invalidate all relevant caches
+  revalidateTag(`user-profile:${session.userId}`, "max");
+  revalidateTag(`user-titles:${session.userId}`, "max");
+  revalidateTag("leaderboard-techs", "max"); // badge in All Rankings must update
+
+  revalidatePath("/technician/profile");
+  revalidatePath("/technician/dashboard");
   return { success: true };
 }

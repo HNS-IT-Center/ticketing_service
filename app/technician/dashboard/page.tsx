@@ -5,13 +5,15 @@ import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import TakeTicketButton from "./TakeTicketButton";
 import AvailableTickets from "./AvailableTickets";
-import { Ticket, CheckCircle, Trophy } from "lucide-react";
+import { Ticket, CheckCircle, Trophy, ShieldCheck } from "lucide-react";
+import { getTopTechnicianOfMonth, getTopStoreOfMonth, getUserTitles } from "@/lib/performance";
 
 export const metadata = { title: "Technician Dashboard — HNS IT Center" };
 
-function getTicketPoints(type: string) {
+function getTicketPoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
   if (type === "service") return 3;
+  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
   return 2;
 }
 
@@ -19,13 +21,15 @@ export default async function TechnicianDashboard() {
   const session = await requireRole("Technician");
 
   const now = new Date();
-  const lastMonth = now.getMonth() === 0 ? 12 : now.getMonth();
+  const lastMonth     = now.getMonth() === 0 ? 12 : now.getMonth();
   const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
-  const lastMonthStart = new Date(lastMonthYear, lastMonth - 1, 1);
-  const lastMonthEnd   = new Date(lastMonthYear, lastMonth, 1);
 
-  // All fetches in ONE parallel batch — no sequential round-trips
-  const [assignments, myTickets, performance, topTechRow] = await Promise.all([
+  // Fetch user info (is_team_leader, active_title) + assignment + performance in parallel
+  const [userInfo, assignments, myTickets, performance] = await Promise.all([
+    db.user.findUnique({
+      where: { id: session.userId },
+      select: { is_team_leader: true, active_title: true },
+    }),
     db.technicianStoreAssignment.findMany({
       where: { technician_id: session.userId },
       select: { store_id: true },
@@ -37,49 +41,89 @@ export default async function TechnicianDashboard() {
       select: { id: true, ticket_code: true, ticket_type: true, device_type: true, status: true, technician_id: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
     }),
     db.technicianPerformance.findUnique({ where: { technician_id: session.userId }, select: { tickets_handled: true, success_count: true } }),
-    // Top technician: use groupBy to avoid loading all ticket rows
-    db.ticketStatusLog.groupBy({
-      by: ["changed_by"],
-      where: { new_status: "done", created_at: { gte: lastMonthStart, lt: lastMonthEnd } },
-      _count: { id: true },
-      orderBy: { _count: { id: "desc" } },
-      take: 1,
+  ]);
+
+  const isCoordinator  = userInfo?.is_team_leader ?? false;
+  const storeIds       = assignments.map((a) => a.store_id);
+
+  // For title badge: check if this user won last month
+  const [topTechId, topStoreId, titles] = await Promise.all([
+    isCoordinator ? Promise.resolve(null) : getTopTechnicianOfMonth(lastMonth, lastMonthYear),
+    isCoordinator ? getTopStoreOfMonth(lastMonth, lastMonthYear) : Promise.resolve(null),
+    getUserTitles(session.userId),
+  ]);
+
+  // Check coordinator's store win
+  const isTopTechLastMonth = !isCoordinator && topTechId === session.userId;
+  const isCoordWinner      = isCoordinator && topStoreId !== null && storeIds.includes(topStoreId);
+
+  // Find equipped title
+  const activeTitle = titles.find((t) => t.title_key === userInfo?.active_title) ?? null;
+
+  // Unassigned tickets for this technician's stores
+  // Fetch: tickets list + my pending requests + ALL pending requests (to show "Requested by other")
+  const [unassigned, myPendingRequests, allPendingRequests] = await Promise.all([
+    db.ticket.findMany({
+      where: {
+        technician_id: null,
+        status: "waiting",
+        OR: [
+          { store_location_id: { in: storeIds } },
+          { store_location_id: null },
+        ],
+      },
+      orderBy: { created_at: "asc" },
+      take: 20,
+      select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
+    }),
+    db.ticketAssignmentRequest.findMany({
+      where: { technician_id: session.userId, status: "pending" },
+      select: { ticket_id: true },
+    }),
+    db.ticketAssignmentRequest.findMany({
+      where: { status: "pending" },
+      select: { ticket_id: true, technician_id: true },
     }),
   ]);
 
-  const storeIds = assignments.map((a) => a.store_id);
-  const topTechId = topTechRow[0]?.changed_by ?? null;
-  const isTopTechLastMonth = topTechId === session.userId;
-
-  // Unassigned tickets for this technician's stores — fetched after we know storeIds
-  const unassigned = await db.ticket.findMany({
-    where: {
-      technician_id: null,
-      status: "waiting",
-      assignment_requests: { none: { status: "pending" } },
-      OR: [
-        { store_location_id: { in: storeIds } },
-        { store_location_id: null },
-      ],
-    },
-    orderBy: { created_at: "asc" },
-    take: 10,
-    select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
-  });
+  // IDs where I have the pending request (show amber + Cancel)
+  const myRequestedIds = new Set(myPendingRequests.map((r) => r.ticket_id));
+  // IDs where SOMEONE ELSE has the pending request (show gray "Requested by other")
+  const otherRequestedIds = new Set(
+    allPendingRequests
+      .filter((r) => r.technician_id !== session.userId)
+      .map((r) => r.ticket_id)
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
       <div>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
-          <h1>Technician Dashboard</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+          <h1>{isCoordinator ? "Store Coordinator Dashboard" : "Technician Dashboard"}</h1>
+
+          {/* Technician of the Month badge */}
           {isTopTechLastMonth && (
             <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#fef3c7", color: "#b45309", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, border: "1px solid #fde68a" }}>
               <Trophy size={14} /> Technician of the Month
             </span>
           )}
+
+          {/* Coordinator of the Month badge */}
+          {isCoordWinner && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#f3e8ff", color: "#6b21a8", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, border: "1px solid #e9d5ff" }}>
+              <ShieldCheck size={14} /> Coordinator of the Month
+            </span>
+          )}
+
+          {/* Equipped title badge */}
+          {activeTitle && (
+            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "rgba(22,70,157,0.1)", color: "var(--primary)", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, border: "1px solid rgba(22,70,157,0.25)" }}>
+              {activeTitle.emoji} {activeTitle.title_label}
+            </span>
+          )}
         </div>
         <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>
-          Manage your assigned tickets and workload
+          {isCoordinator ? "Manage your store and assigned tickets" : "Manage your assigned tickets and workload"}
         </p>
       </div>
 
@@ -127,7 +171,7 @@ export default async function TechnicianDashboard() {
                         <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
                         <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
                         <td>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</td>
-                        <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span></td>
+                        <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type)} pts</span></td>
                         <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                         <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
                       </tr>
@@ -151,7 +195,7 @@ export default async function TechnicianDashboard() {
                       <span>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</span>
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span className="badge badge-technician">{getTicketPoints(t.ticket_type)} pts</span>
+                      <span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type)} pts</span>
                       <span style={{ fontSize: "0.8125rem", color: "var(--primary)", fontWeight: 500 }}>Manage →</span>
                     </div>
                   </div>
@@ -167,7 +211,7 @@ export default async function TechnicianDashboard() {
         <h3 style={{ marginBottom: "1rem" }}>
           Available Tickets <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 400 }}>({unassigned.length})</span>
         </h3>
-        <AvailableTickets 
+        <AvailableTickets
           tickets={unassigned.map(t => ({
             id: t.id,
             ticket_code: t.ticket_code,
@@ -175,7 +219,9 @@ export default async function TechnicianDashboard() {
             device_type: t.device_type,
             created_at: t.created_at,
             user: { name: t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest") }
-          }))} 
+          }))}
+          myRequestedIds={Array.from(myRequestedIds)}
+          otherRequestedIds={Array.from(otherRequestedIds)}
         />
       </div>
     </div>

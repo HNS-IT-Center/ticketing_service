@@ -149,6 +149,9 @@ model User {
   // Team leader flag — excluded from leaderboard display but can still work on tickets
   is_team_leader Boolean @default(false)
 
+  // Achievement title inventory — stores which title_key is currently equipped
+  active_title String?
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -167,6 +170,7 @@ model User {
   overridden_shifts  ShiftOverride[]       @relation("OriginalShift")
   overriding_shifts  ShiftOverride[]       @relation("OverrideShift")
   assignment_requests TicketAssignmentRequest[]
+  titles             UserTitle[]
 
   @@index([email])
 }
@@ -467,4 +471,22 @@ model ShiftOverride {
   created_at       DateTime @default(now())
 
   @@unique([original_tech_id, date])
+}
+
+// ─────────────────────────────────────────────
+// ACHIEVEMENT TITLES (Game Inventory)
+// ─────────────────────────────────────────────
+
+model UserTitle {
+  id          String   @id @default(cuid())
+  user_id     String
+  user        User     @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  title_key   String   // e.g. "technician_2026_04" or "coordinator_2026_05"
+  title_label String   // e.g. "Technician of April 2026"
+  title_type  String   // "technician" | "coordinator"
+  emoji       String   @default("🏆")
+  awarded_at  DateTime @default(now())
+
+  @@unique([user_id, title_key])
+  @@index([user_id])
 }

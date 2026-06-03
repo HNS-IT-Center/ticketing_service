@@ -8,9 +8,10 @@ export const metadata = { title: "Performance — HNS IT Center" };
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-function getTicketPoints(type: string): number {
+function getTicketPoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
   if (type === "service") return 3;
+  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
   return 2;
 }
 
@@ -78,7 +79,7 @@ export default async function AdminPerformancePage({
             },
           },
         },
-        select: { id: true, ticket_type: true, technician_id: true },
+        select: { id: true, ticket_type: true, device_type: true, technician_id: true },
       }),
       db.ticket.findMany({
         where: {
@@ -129,7 +130,7 @@ export default async function AdminPerformancePage({
       const row = getOrCreate(t.technician_id);
       row.tickets++;
       row.success++;
-      row.points += getTicketPoints(t.ticket_type);
+      row.points += getTicketPoints(t.ticket_type, t.device_type);
     }
     for (const t of failedTickets) {
       if (!t.technician_id) continue;

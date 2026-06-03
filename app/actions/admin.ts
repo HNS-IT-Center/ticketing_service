@@ -1,6 +1,6 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { db } from "@/lib/db";
@@ -240,6 +240,14 @@ export async function adminUpdateTicketStatusAction(
       },
     });
     // Workload decrement removed
+  }
+
+  // Notify customer if they have a user account
+  if (isTerminal && ticket.technician_id) {
+    revalidateTag("leaderboard-techs", "max");
+    revalidateTag("leaderboard-stores", "max");
+    revalidateTag("tech-month-winner", "max");
+    revalidateTag(`user-profile:${ticket.technician_id}`, "max");
   }
 
   // Notify customer if they have a user account

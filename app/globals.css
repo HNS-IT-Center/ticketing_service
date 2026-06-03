@@ -657,9 +657,10 @@ tbody td {
   backdrop-filter: blur(4px);
   z-index: 100;
   display: flex;
-  align-items: center;
+  align-items: flex-start;      /* don't center — let the modal sit at top + padded */
   justify-content: center;
-  padding: 1rem;
+  padding: 1.5rem 1rem;         /* vertical padding so modal is inset from edges */
+  overflow-y: auto;             /* entire overlay scrolls if modal is very tall */
   animation: fadeIn 0.2s ease;
 }
 
@@ -669,8 +670,12 @@ tbody td {
   padding: 2rem;
   width: 100%;
   max-width: 480px;
+  max-height: calc(100vh - 3rem);   /* never exceed viewport */
+  overflow-y: auto;                  /* scroll inside modal if content is tall */
+  overflow-x: hidden;                /* no child can push modal wider than max-width */
   box-shadow: var(--shadow-xl);
   animation: slideUp 0.3s ease;
+  margin: auto;                      /* self-center vertically when content fits */
 }
 
 .modal-header {
@@ -679,6 +684,13 @@ tbody td {
   justify-content: space-between;
   margin-bottom: 1rem;
   gap: 1rem;
+  position: sticky;
+  top: -2rem;               /* offset equal to modal padding so it sticks at the top edge */
+  background: var(--white);
+  padding-top: 0.25rem;
+  padding-bottom: 0.75rem;
+  z-index: 1;
+  margin-top: -0.25rem;
 }
 
 .modal-title { font-size: 1.125rem; font-weight: 700; }
@@ -1005,7 +1017,10 @@ tbody td {
     padding: 1.75rem 1.25rem;
   }
 
-  .modal { padding: 1.5rem; }
+  .modal {
+    padding: 1.5rem;
+    max-height: calc(100vh - 2rem);
+  }
 }
 
 @media (max-width: 480px) {

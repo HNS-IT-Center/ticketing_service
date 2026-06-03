@@ -164,7 +164,7 @@ export default function StatusUpdater({
       </Modal>
 
       {/* DONE DIALOG */}
-      <Modal open={activeDialog === "done"} onClose={closeDialog} title="Mark Ticket as Done">
+      <Modal open={activeDialog === "done"} onClose={closeDialog} title="Mark Ticket as Done" maxWidth="560px">
         <div className="grid gap-4 py-4">
           <div className="flex flex-col gap-2">
             <label className="text-sm font-medium">Proof Attachments *</label>
@@ -180,7 +180,7 @@ export default function StatusUpdater({
       </Modal>
 
       {/* CANCEL DIALOG */}
-      <Modal open={activeDialog === "cancel"} onClose={closeDialog} title="Cancel Ticket">
+      <Modal open={activeDialog === "cancel"} onClose={closeDialog} title="Cancel Ticket" maxWidth="560px">
         <div className="grid gap-4 py-4">
           <div className="flex flex-col gap-2">
             <label htmlFor="cancel-reason" className="text-sm font-medium text-destructive">Reason For Cancelling *</label>

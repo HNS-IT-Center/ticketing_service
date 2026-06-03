@@ -86,27 +86,31 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 | `TicketStatusLog`        | Audit trail of all status changes                              |
 | `TechnicianWorkload`     | (Deprecated) Formerly tracked workload point limits            |
 | `TechnicianPerformance`  | Tracks tickets handled, success/fail counts, total points      |
-| `Leaderboard`            | Monthly snapshot of technician rankings                        |
+| `Leaderboard`            | (Legacy) Monthly snapshot of technician rankings               |
 | `Notification`           | In-app alerts for status updates and messages                  |
+| `UserTitle`              | Achievement title inventory for users (equipped via profile)   |
+| `TicketAssignmentRequest`| Pending requests by technicians to claim waiting tickets        |
 
 ### Enums
 
 - `Role`: `Administrator | Technician | Sales | Customer`
 - `Shift`: `morning | noon`
 - `TicketType`: `service | warranty_claim | pc_build | cleaning | upgrade`
-- `TicketStatus`: `waiting | on_progress | cancelled | rejected | done`
+- `TicketStatus`: `waiting | on_progress | done | ready_for_pickup | waiting_pickup | handed_to_courier | delivered | completed | cancelled | rejected`
 - `DeviceType`: `PC_Office | PC_Gaming | Laptop_Office | Laptop_Gaming`
 - `CleaningPackage`: `Deep_Clean | Repaste`
+- `NotificationType`: `message | status_update | assigned | completed`
 
 ### Point System
 
-| Ticket Type | Points |
-| ----------- | ------ |
-| `pc_build`  | 4      |
-| `service`   | 3      |
-| all others  | 2      |
+| Ticket Type / Condition             | Points |
+| ---------------------------------- | ------ |
+| `pc_build`                         | 4      |
+| `service`                          | 3      |
+| `cleaning` + `PC_Gaming` device    | 4      |
+| all other `cleaning` / `upgrade` / other | 2 |
 
-Max workload per technician: **Removed**. Technicians can request any number of tickets, which are then approved by an Admin or Team Leader. Workload is now dynamically tracked as "Active Tickets" (tickets in `waiting` or `on_progress` status).
+Max workload per technician: **Removed**. Technicians can request any number of tickets, which are then approved by an Admin or Store Coordinator. Workload is dynamically tracked as "Active Tickets" (tickets in `waiting` or `on_progress` status).
 
 ---
 
@@ -120,8 +124,8 @@ ticket-app-2/
 │   │   │                     # updateTicketStatus, snapshotLeaderboard
 │   │   ├── auth.ts           # loginAction, registerAction, logoutAction
 │   │   ├── customer.ts       # updateProfileAction (customer)
-│   │   ├── profile.ts        # updateTechnicianProfileAction, updateAdminProfileAction
-│   │   ├── technician.ts     # takeTicketAction, updateTicketStatusAction
+│   │   ├── profile.ts        # updateTechnicianProfileAction, updateAdminProfileAction, equipTitleAction
+│   │   ├── technician.ts     # takeTicketAction, updateTicketStatusAction, cancelTicketRequestAction
 │   │   └── tickets.ts        # createTicketAction, sendMessageAction,
 │   │                         # markMessagesReadAction, uploadAttachmentsAction
 │   ├── admin/
@@ -162,9 +166,10 @@ ticket-app-2/
 │   ├── technician/
 │   │   ├── dashboard/
 │   │   │   ├── page.tsx
+│   │   │   ├── AvailableTickets.tsx   # Dashboard listing with request state controls
 │   │   │   └── TakeTicketButton.tsx
 │   │   ├── leaderboard/page.tsx       # Live leaderboard (from TicketStatusLog)
-│   │   ├── profile/page.tsx           # Technician profile with perf stats
+│   │   ├── profile/page.tsx           # Technician profile with title achievements inventory
 │   │   └── tickets/
 │   │       ├── page.tsx               # Paginated (10/page), table+card responsive
 │   │       ├── create/
@@ -174,16 +179,18 @@ ticket-app-2/
 │   │           ├── page.tsx           # .ticket-detail-grid
 │   │           └── StatusUpdater.tsx  # Confirm modal before status change
 │   ├── api/
-│   │   └── notifications/route.ts
+│   │   ├── notifications/route.ts
+│   │   └── ticket-requests/route.ts   # GET/POST endpoints for ticket assignment requests
 │   ├── login/page.tsx         # plain <img> logo, required attrs, native validation
 │   ├── register/page.tsx      # +62 prefix, terms checkbox, required attrs
 │   ├── page.tsx               # Root redirect by role
 │   ├── layout.tsx             # Root layout (Inter font, Toaster)
-│   └── globals.css            # Full design system (vanilla CSS, ~1076 lines)
-├── components/
+│   └── globals.css            # Full design system (vanilla CSS, Tailwind v4 imports)
+│── components/
 │   ├── layout/
-│   │   ├── DashboardShell.tsx    # Sidebar + topbar, collapse, logo, profile dropdown
-│   │   └── NotificationBell.tsx  # Fixed-position popup (mobile-safe)
+│   │   ├── DashboardShell.tsx    # Sidebar + topbar, collapse, profile dropdown
+│   │   ├── NotificationBell.tsx  # Fixed-position popup (mobile-safe)
+│   │   └── RequestsBell.tsx      # Bell popover dropdown for Admins/Coordinators to accept requests
 │   └── ui/
 │       ├── Badge.tsx
 │       ├── FileUpload.tsx
@@ -196,7 +203,9 @@ ticket-app-2/
 ├── lib/
 │   ├── db.ts
 │   ├── session.ts
-│   └── supabase.ts
+│   ├── supabase.ts
+│   ├── performance.ts        # Achievement calculations & caching helpers
+│   └── leaderboard.ts        # Leaderboard calculation helpers
 ├── prisma/
 │   ├── schema.prisma
 │   ├── seed.ts
@@ -258,29 +267,68 @@ The project originally had `@import "tailwindcss"` which broke the PostCSS pipel
 
 The seed uses `upsert({ where: { name } })` so the `Upgrade` model must have `name String @unique` in the schema.
 
+### 7. Next.js 16 Route Revalidation Rules
+
+**CRITICAL Gotcha:** Do NOT call `revalidateTag` inside components during page render or inside `unstable_cache` functions. Doing so throws a Next.js runtime error: *"Route used revalidateTag during render which is unsupported"*. Revalidation must only occur inside Server Actions (`"use server"`) or API Route handlers.
+
+For dynamic operations run during page render (such as checking/awarding monthly achievement titles), keep the corresponding database queries (e.g. `getUserTitles(userId)`) uncached. If they were cached, they would return stale data because Next.js reads the cache before the render-time DB write finishes.
+
+---
+
+## 🗲 Caching Strategy
+
+The application leverages Next.js `unstable_cache` combined with tag-based revalidation using `revalidateTag("tag", "max")` to optimize database query performance:
+
+### Cache Tags
+
+- `leaderboard-techs`: Caches leaderboard scores for technicians.
+- `leaderboard-stores`: Caches leaderboard scores for store locations.
+- `tech-month-winner`: Caches the awarded top technician of the month.
+- `user-profile:[userId]`: Caches technician profiles.
+- `user-titles:[userId]`: Caches active titles for a specific user (revalidated upon title equip).
+
+### Cache Invalidation
+
+Tags are invalidated when state changes occur in the system:
+- **Profile Updates:** Revalidates `user-profile:[userId]` in `updateTechnicianProfileAction`.
+- **Status Changes:** Revalidates `leaderboard-techs`, `leaderboard-stores`, `tech-month-winner`, and `user-profile:[userId]` in `updateTicketStatusAction` (technician & admin).
+- **Title Equipment:** Revalidates `user-titles:[userId]` and `user-profile:[userId]` in `equipTitleAction`.
+
 ---
 
 ## 🔄 Status Flow
 
 ```
-waiting ──→ on_progress ──→ done
-    │              └───────→ cancelled
+waiting ──→ on_progress ──→ ready_for_pickup ──→ waiting_pickup ──→ completed
+    │              └─────→ handed_to_courier ──→ delivered ─────┘
+    │              └─────→ done (handover state)
+    │              └─────→ cancelled
     └──→ rejected
 ```
 
 - **Admin** or **Technician** creates tickets (status starts at `waiting`). Customers cannot create tickets.
-- **Technician** can "Take Ticket" (moves to `on_progress`) then mark `done` or `cancelled`
-- **Admin** can approve (`on_progress`), reject, mark done, or cancel at any stage
-- Each transition logs to `TicketStatusLog` and creates a `Notification` for the customer
+- **Technician** can request to take a ticket, placing it in `waiting` with a pending request. Once approved by an Admin or Store Coordinator, status moves to `on_progress`.
+- **Technician** marks a ticket `done`, uploading proof attachments, which sends it to "Awaiting Handover" or the next pickup phase.
+- **Admin** can approve (`on_progress`), reject, mark done, or cancel at any stage.
+- Each transition logs to `TicketStatusLog` and creates a `Notification` for the customer.
+
+---
+
+## 📋 Ticket Assignment Requests Flow
+
+- **Constraint:** Only one technician can have a pending request on a ticket at a time. If Technician A requests Ticket A, other technicians see it as "Requested by other" (disabled) on their dashboard.
+- **Cancellation:** A technician can cancel their pending request directly from the dashboard, which restores the ticket to the open pool.
+- **Approvals:** Store Coordinators (Users with `is_team_leader: true`) and Administrators see pending counts and can approve or reject requests using the `<RequestsBell>` dropdown.
+- **Real-Time updates:** The `<RequestsBell>` listens to the `TicketAssignmentRequest` table insertions using Supabase realtime WebSocket channels.
 
 ---
 
 ## 🔔 Notification System
 
-- Stored in `Notification` table
-- Polled via `GET /api/notifications` route
-- `NotificationBell` component in the topbar polls and displays unread count
-- Types: `message` (new chat), `status_update` (ticket status changed)
+- Stored in `Notification` table.
+- Polled via `GET /api/notifications` route.
+- `NotificationBell` component in the topbar displays unread count.
+- Types: `message` (new chat), `status_update` (ticket status changed), `assigned` (technician assigned), `completed` (technician completed a ticket, awards points).
 - **Real-time enabled** — uses Supabase Realtime WebSockets to instantly update the unread count when a new record is inserted.
 
 ---
@@ -508,6 +556,17 @@ When cloning the project to a new device, you will need to reconfigure the envir
 | G3 | Dashboard "Closed" Link | ✅ | Adjusted the Dashboard "Closed" tickets card to link directly to `/admin/tickets?status=done`. |
 | G4 | Tickets Filter Unassigned | ✅ | Added "Unassigned" to the Ticket status filters in `/admin/tickets`, routing queries for unassigned tickets using `{ technician_id: null }`. |
 
+### SPRINT 2026-06-03 SESSION — Achievement System, Caching & Ticket Assignment Requests
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| AC1 | Cleaning + PC Gaming point correction | ✅ | `getTicketPoints()` now returns 4 points for `cleaning` ticket type with `PC_Gaming` device type, and 2 points for other cleaning tasks. |
+| AC2 | Store Coordinator Dashboard | ✅ | Dashboard renders title "Store Coordinator Dashboard" and awards purple "Coordinator of the Month" badge (with `ShieldCheck` icon) to coordinators (`is_team_leader: true`), excluding them from the technician ranking leaderboard. |
+| AC3 | Points Badge in My Tickets | ✅ | Added a colored badge (⭐ N pts) to both desktop table columns and mobile cards for all active/my tickets list pages. |
+| AC4 | Achievement Title System | ✅ | Added `UserTitle` model & `active_title` field. Designed a game-style inventory UI in the profile page allowing users to equip/unequip their earned titles. |
+| AC5 | Caching & Revalidation Gotchas | ✅ | Integrated `unstable_cache` across achievements, profiles, and leaderboards. Resolved runtime revalidation tag rendering errors by restricting `revalidateTag` calls strictly to Server Actions/API Route handlers. |
+| AC6 | Ticket Request Management System | ✅ | Restricted to 1 request per ticket. Added `<RequestsBell>` for Admins/Coordinators. Implemented ticket statuses: "Requested" (amber, cancelable by requesting technician) and "Requested by other" (gray, disabled) states. |
+| AC7 | Modal and Attachment File Name Wrapping | ✅ | Fixed proof dialog wrapping by changing `.modal-overlay` alignment, adding sticky headers, and wrapping filenames in `FileUpload` with `wordBreak: break-all`. |
+
 ---
 
 ### 🔒 SECURITY: RLS (Row Level Security)
@@ -531,6 +590,8 @@ ALTER TABLE "TicketUpgradeDetail"    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "TicketPcBuildDetail"    ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "TicketPcBuildComponent" ENABLE ROW LEVEL SECURITY;
 ALTER TABLE "Upgrade"                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "UserTitle"              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "TicketAssignmentRequest" ENABLE ROW LEVEL SECURITY;
 
 -- Step 2: Block all anon/public access (service_role bypasses RLS automatically)
 DO $$
@@ -568,7 +629,8 @@ END $$;
 - **`session.ts`** has `import "server-only"` — never import it from client components
 - **Stat cards:** Use `.stat-card > .stat-card-icon + .stat-card-body > (.stat-card-value + .stat-card-label)` — vertical column layout
 - **Leaderboard data:** Comes from `TicketStatusLog` where `new_status = "done"`, NOT from the `Leaderboard` snapshot table (which is legacy)
-- **Point system:** `pc_build = 4pts, service = 3pts, all others = 2pts` — computed in page server component, not stored on `Ticket`
+- **Point system:** `pc_build = 4pts, service = 3pts, cleaning + PC_Gaming = 4pts, all others = 2pts` — computed in page/actions helper (`getTicketPoints`), not stored on `Ticket`
 - **Phone numbers:** Always stored as `+62XXXXXXXXX` format. The `+62` prefix widget is used in `CreateTicketForm` and `register/page.tsx`
 - **Notification bell:** Uses `position: fixed` (not `absolute`) to prevent mobile overflow
 - **Component Spacing & Padding:** Always provide appropriate gaps and paddings depending on the components. If elements belong tightly together, use a small gap (e.g., `gap-2`). If separating distinct sections or larger components, use a wider gap (e.g., `gap-4` or `gap-6`). **ALWAYS remember to add padding** inside components (e.g. `p-4`, `p-5`, or `px-6 py-4`) based on the component's visual needs. Never leave components without adequate internal padding.
+

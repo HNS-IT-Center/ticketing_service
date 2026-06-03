@@ -12,11 +12,11 @@ import { createServerSupabaseClient } from "@/lib/supabase";
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
 // ─── Ticket Point Calculator ───────────────────────────────────────────────
-function getTicketPoints(type: string): number {
-  if (type === "service") return 4;
-  if (type === "warranty_claim") return 2;
-  if (type === "cleaning") return 4;
-  return 3;
+function getTicketPoints(type: string, deviceType?: string | null): number {
+  if (type === "pc_build") return 4;
+  if (type === "service") return 3;
+  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
+  return 2;
 }
 
 // ─── Create Ticket ─────────────────────────────────────────────────────────
@@ -65,7 +65,7 @@ export async function createTicketAction(formData: FormData) {
 
   // Auto-generate a secure public share token
   const public_share_token = randomBytes(24).toString("hex");
-  const points = getTicketPoints(ticket_type);
+  const points = getTicketPoints(ticket_type, device_type);
 
   // Workload check removed in Phase 3
 

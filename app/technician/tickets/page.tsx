@@ -4,6 +4,13 @@ import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
 
+function getTicketPoints(type: string, deviceType?: string | null): number {
+  if (type === "pc_build") return 4;
+  if (type === "service") return 3;
+  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
+  return 2;
+}
+
 export const metadata = { title: "My Tickets — HNS IT Center" };
 
 const STATUS_FILTERS = ["all", "waiting", "on_progress", "done", "cancelled"] as const;
@@ -50,6 +57,7 @@ export default async function TechnicianTicketsPage({
       take: PAGE_SIZE,
       skip,
       include: { user: { select: { name: true } } },
+      // Also fetch ticket_type and device_type so we can compute points
     }),
     db.ticket.count({ where }),
   ]);
@@ -154,6 +162,7 @@ export default async function TechnicianTicketsPage({
                   <th>{renderSortableHeader("Code", "code_asc", "code_desc")}</th>
                   <th>Type</th>
                   <th>Customer</th>
+                  <th>Points</th>
                   <th>{renderSortableHeader("Status", "status_asc", "status_desc")}</th>
                   <th>{renderSortableHeader("Updated", "updated_asc", "updated_desc")}</th>
                   <th></th>
@@ -162,6 +171,7 @@ export default async function TechnicianTicketsPage({
               <tbody>
                 {tickets.map((t) => {
                   const actualName = t.is_for_self ? t.user?.name : t.customer_name;
+                  const pts = getTicketPoints(t.ticket_type, t.device_type);
                   return (
                     <tr key={t.id}>
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
@@ -169,6 +179,19 @@ export default async function TechnicianTicketsPage({
                       <td>
                         <div style={{ fontWeight: 500 }}>{actualName}</div>
                         {!t.is_for_self && <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>(For Others)</div>}
+                      </td>
+                      <td>
+                        <span style={{
+                          display: "inline-flex", alignItems: "center",
+                          padding: "0.2rem 0.55rem", borderRadius: "999px",
+                          fontSize: "0.75rem", fontWeight: 700,
+                          background: pts >= 4 ? "rgba(124,58,237,0.1)" : pts === 3 ? "rgba(22,70,157,0.1)" : "rgba(22,163,74,0.1)",
+                          color: pts >= 4 ? "#6d28d9" : pts === 3 ? "var(--primary)" : "#15803d",
+                          border: `1px solid ${pts >= 4 ? "rgba(124,58,237,0.25)" : pts === 3 ? "rgba(22,70,157,0.25)" : "rgba(22,163,74,0.25)"}`,
+                          whiteSpace: "nowrap",
+                        }}>
+                          ⭐ {pts} pts
+                        </span>
                       </td>
                       <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                       <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{new Date(t.updated_at).toLocaleDateString("id-ID")}</td>
@@ -191,6 +214,7 @@ export default async function TechnicianTicketsPage({
           </div>
         ) : tickets.map((t) => {
           const actualName = t.is_for_self ? t.user?.name : t.customer_name;
+          const pts = getTicketPoints(t.ticket_type, t.device_type);
           return (
             <Link key={t.id} href={`/technician/tickets/${t.id}`} style={{ textDecoration: "none" }}>
               <div className="mobile-ticket-card">
@@ -203,9 +227,20 @@ export default async function TechnicianTicketsPage({
                 <div style={{ fontWeight: 500, fontSize: "0.875rem", margin: "0.25rem 0", color: "var(--text-primary)" }}>
                   Customer: {actualName} {!t.is_for_self && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(For Others)</span>}
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                   <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                  <span>{new Date(t.updated_at).toLocaleDateString("id-ID")}</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                    <span style={{
+                      display: "inline-flex", alignItems: "center",
+                      padding: "0.15rem 0.5rem", borderRadius: "999px",
+                      fontSize: "0.7rem", fontWeight: 700,
+                      background: pts >= 4 ? "rgba(124,58,237,0.1)" : pts === 3 ? "rgba(22,70,157,0.1)" : "rgba(22,163,74,0.1)",
+                      color: pts >= 4 ? "#6d28d9" : pts === 3 ? "var(--primary)" : "#15803d",
+                    }}>
+                      ⭐ {pts} pts
+                    </span>
+                    <span>{new Date(t.updated_at).toLocaleDateString("id-ID")}</span>
+                  </div>
                 </div>
               </div>
             </Link>

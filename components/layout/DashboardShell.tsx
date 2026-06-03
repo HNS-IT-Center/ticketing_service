@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import NotificationBell from "./NotificationBell";
+import RequestsBell from "./RequestsBell";
 
 type NavItem = {
   href: string;
@@ -70,9 +71,10 @@ interface DashboardShellProps {
   role: "customer" | "technician" | "admin" | "sales";
   userName: string;
   userId: string;
+  isCoordinator?: boolean;
 }
 
-export default function DashboardShell({ children, role, userName, userId }: DashboardShellProps) {
+export default function DashboardShell({ children, role, userName, userId, isCoordinator = false }: DashboardShellProps) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);     // mobile drawer
   const [collapsed, setCollapsed] = useState(false);          // desktop collapse
@@ -217,6 +219,11 @@ export default function DashboardShell({ children, role, userName, userId }: Das
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            {/* Requests bell — Admin, Sales, and Store Coordinators */}
+            {(role === "admin" || role === "sales" || isCoordinator) && (
+              <RequestsBell userId={userId} />
+            )}
+
             <NotificationBell userId={userId} role={role} />
 
             {/* ── Profile badge with dropdown ── */}

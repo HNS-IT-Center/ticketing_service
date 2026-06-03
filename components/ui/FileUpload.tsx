@@ -130,8 +130,8 @@ export default function FileUpload({
                   {getFileIcon(item.file.type)}
                 </div>
               )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <p style={{ fontWeight: 500, fontSize: "0.875rem", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
+                <p style={{ fontWeight: 500, fontSize: "0.875rem", wordBreak: "break-all", overflowWrap: "anywhere" }}>
                   {item.file.name}
                 </p>
                 <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>

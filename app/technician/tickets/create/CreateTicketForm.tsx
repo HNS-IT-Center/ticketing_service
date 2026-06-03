@@ -363,9 +363,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   <label className="form-label">Cleaning Package *</label>
                   <select className={`form-input ${errors.cleaningPackage ? "error" : ""}`} value={cleaningPackage} onChange={e => setCleaningPackage(e.target.value)}>
                     <option value="">Select Package</option>
-                    <option value="Basic_Clean">Basic Clean</option>
                     <option value="Deep_Clean">Deep Clean</option>
-                    <option value="Thermal_Paste_Replacement">Thermal Paste Replacement</option>
+                    <option value="Repaste">Repaste / Thermal Paste Replacement</option>
                   </select>
                   {errors.cleaningPackage && <span className="form-error"><AlertCircle size={12} />{errors.cleaningPackage}</span>}
                 </div>

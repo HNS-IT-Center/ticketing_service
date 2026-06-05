@@ -261,17 +261,17 @@ export async function adminUpdateTicketStatusAction(
     });
   }
 
-  // Send email to customer if they have an email address
+  // Fire email non-blocking — do NOT await it
   const customerEmail = ticket.customer_email || ticket.user?.email;
   const customerName = ticket.customer_name || ticket.user?.name;
   if (customerEmail) {
-    await sendTicketStatusEmail({
+    sendTicketStatusEmail({
       to: customerEmail,
       customerName: customerName || "Customer",
       ticketCode: ticket.ticket_code,
       status: newStatus,
       shareToken: ticket.public_share_token,
-    });
+    }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
   }
 
   revalidatePath(`/admin/tickets/${ticketId}`);

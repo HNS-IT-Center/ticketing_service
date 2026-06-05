@@ -120,7 +120,12 @@ export default async function TechnicianTicketDetailPage({
         </div>
         <div className="flex flex-col gap-3 items-start md:items-end mt-2 md:mt-0">
           {isAssigned && (
-            <StatusUpdater ticketId={ticket.id} currentStatus={ticket.status} timeLogs={ticket.time_logs} />
+            <StatusUpdater
+              ticketId={ticket.id}
+              currentStatus={ticket.status}
+              timeLogs={ticket.time_logs}
+              pickupMethod={(ticket.pickup_method as "self_pickup" | "courier" | null) ?? "self_pickup"}
+            />
           )}
           {ticket.public_share_token && (
             <Link

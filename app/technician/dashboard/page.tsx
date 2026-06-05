@@ -1,9 +1,7 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
-import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
-import TakeTicketButton from "./TakeTicketButton";
 import AvailableTickets from "./AvailableTickets";
 import { Ticket, CheckCircle, Trophy, ShieldCheck } from "lucide-react";
 import { getTopTechnicianOfMonth, getTopStoreOfMonth, getUserTitles } from "@/lib/performance";
@@ -12,7 +10,7 @@ export const metadata = { title: "Technician Dashboard — HNS IT Center" };
 
 function getTicketPoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
-  if (type === "service") return 3;
+  if (type === "service") return 5;
   if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
   return 2;
 }
@@ -24,34 +22,73 @@ export default async function TechnicianDashboard() {
   const lastMonth     = now.getMonth() === 0 ? 12 : now.getMonth();
   const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
 
-  // Fetch user info (is_team_leader, active_title) + assignment + performance in parallel
-  const [userInfo, assignments, myTickets, performance] = await Promise.all([
-    db.user.findUnique({
-      where: { id: session.userId },
-      select: { is_team_leader: true, active_title: true },
-    }),
-    db.technicianStoreAssignment.findMany({
-      where: { technician_id: session.userId },
-      select: { store_id: true },
-    }),
-    db.ticket.findMany({
-      where: { technician_id: session.userId, status: { in: ["waiting", "on_progress"] } },
-      orderBy: { updated_at: "desc" },
-      take: 10,
-      select: { id: true, ticket_code: true, ticket_type: true, device_type: true, status: true, technician_id: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
-    }),
-    db.technicianPerformance.findUnique({ where: { technician_id: session.userId }, select: { tickets_handled: true, success_count: true } }),
+  // ── STEP 1: Fire all queries that don't depend on each other simultaneously.
+  // The only dependency is: unassigned tickets need storeIds (from assignments).
+  // We resolve that by chaining unassigned off assignments via .then() — it fires
+  // as soon as assignments resolves without blocking any other parallel queries.
+
+  const assignmentsPromise = db.technicianStoreAssignment.findMany({
+    where: { technician_id: session.userId },
+    select: { store_id: true },
+  });
+
+  // Chain unassigned + pending requests off assignments (they need storeIds).
+  // All three fire as one group the moment assignmentsPromise resolves.
+  const storeRelatedPromise = assignmentsPromise.then((assignments) => {
+    const storeIds = assignments.map((a) => a.store_id);
+    return Promise.all([
+      db.ticket.findMany({
+        where: {
+          technician_id: null,
+          status: "waiting",
+          OR: [
+            { store_location_id: { in: storeIds } },
+            { store_location_id: null },
+          ],
+        },
+        orderBy: { created_at: "asc" },
+        take: 20,
+        select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
+      }),
+      db.ticketAssignmentRequest.findMany({
+        where: { technician_id: session.userId, status: "pending" },
+        select: { ticket_id: true },
+      }),
+      db.ticketAssignmentRequest.findMany({
+        where: { status: "pending" },
+        select: { ticket_id: true, technician_id: true },
+      }),
+    ] as const);
+  });
+
+  // All other queries fire immediately in parallel — no waiting
+  const [
+    [userInfo, myTickets, performance, topTechId, topStoreId, titles],
+    assignments,
+    [unassigned, myPendingRequests, allPendingRequests],
+  ] = await Promise.all([
+    Promise.all([
+      db.user.findUnique({
+        where: { id: session.userId },
+        select: { is_team_leader: true, active_title: true },
+      }),
+      db.ticket.findMany({
+        where: { technician_id: session.userId, status: { in: ["waiting", "on_progress"] } },
+        orderBy: { updated_at: "desc" },
+        take: 10,
+        select: { id: true, ticket_code: true, ticket_type: true, device_type: true, status: true, technician_id: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
+      }),
+      db.technicianPerformance.findUnique({ where: { technician_id: session.userId }, select: { tickets_handled: true, success_count: true } }),
+      getTopTechnicianOfMonth(lastMonth, lastMonthYear),
+      getTopStoreOfMonth(lastMonth, lastMonthYear),
+      getUserTitles(session.userId),
+    ] as const),
+    assignmentsPromise,
+    storeRelatedPromise,
   ]);
 
   const isCoordinator  = userInfo?.is_team_leader ?? false;
   const storeIds       = assignments.map((a) => a.store_id);
-
-  // For title badge: check if this user won last month
-  const [topTechId, topStoreId, titles] = await Promise.all([
-    isCoordinator ? Promise.resolve(null) : getTopTechnicianOfMonth(lastMonth, lastMonthYear),
-    isCoordinator ? getTopStoreOfMonth(lastMonth, lastMonthYear) : Promise.resolve(null),
-    getUserTitles(session.userId),
-  ]);
 
   // Check coordinator's store win
   const isTopTechLastMonth = !isCoordinator && topTechId === session.userId;
@@ -59,32 +96,6 @@ export default async function TechnicianDashboard() {
 
   // Find equipped title
   const activeTitle = titles.find((t) => t.title_key === userInfo?.active_title) ?? null;
-
-  // Unassigned tickets for this technician's stores
-  // Fetch: tickets list + my pending requests + ALL pending requests (to show "Requested by other")
-  const [unassigned, myPendingRequests, allPendingRequests] = await Promise.all([
-    db.ticket.findMany({
-      where: {
-        technician_id: null,
-        status: "waiting",
-        OR: [
-          { store_location_id: { in: storeIds } },
-          { store_location_id: null },
-        ],
-      },
-      orderBy: { created_at: "asc" },
-      take: 20,
-      select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
-    }),
-    db.ticketAssignmentRequest.findMany({
-      where: { technician_id: session.userId, status: "pending" },
-      select: { ticket_id: true },
-    }),
-    db.ticketAssignmentRequest.findMany({
-      where: { status: "pending" },
-      select: { ticket_id: true, technician_id: true },
-    }),
-  ]);
 
   // IDs where I have the pending request (show amber + Cancel)
   const myRequestedIds = new Set(myPendingRequests.map((r) => r.ticket_id));

@@ -7,7 +7,7 @@ import { sendTicketStatusEmail } from "@/lib/email";
 
 function getTicketPoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
-  if (type === "service") return 3;
+  if (type === "service") return 5;
   if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
   return 2;
 }
@@ -96,7 +96,9 @@ export async function cancelTicketRequestAction(ticketId: string) {
 // ─── Update Ticket Status ──────────────────────────────────────────────────
 export async function updateTicketStatusAction(formData: FormData) {
   const ticketId = formData.get("ticketId") as string;
-  const newStatus = formData.get("newStatus") as "on_progress" | "done" | "cancelled" | "rejected";
+  const newStatus = formData.get("newStatus") as
+    | "on_progress" | "done" | "cancelled" | "rejected"
+    | "ready_for_pickup" | "waiting_pickup" | "handed_to_courier" | "delivered" | "completed";
   const reason = formData.get("reason") as string | null;
   const eventAction = formData.get("eventAction") as "START" | "PAUSE" | "RESUME" | "DONE" | null;
   const files = formData.getAll("files") as File[];
@@ -112,11 +114,26 @@ export async function updateTicketStatusAction(formData: FormData) {
   }
 
   // Validation rules
-  if (newStatus === "on_progress" && ticket.status !== "waiting" && ticket.status !== "on_progress") {
-    return { error: "Can only move to On Progress from Waiting" };
-  }
-  if (newStatus === "done" && ticket.status !== "on_progress") {
-    return { error: "Can only mark Done from On Progress" };
+  const HANDOVER_CHAIN: Record<string, string> = {
+    on_progress: "waiting",
+    done: "on_progress",
+    ready_for_pickup: "done",
+    waiting_pickup: "ready_for_pickup",
+    handed_to_courier: "done",
+    delivered: "handed_to_courier",
+    completed: "waiting_pickup", // or "delivered" — checked below
+  };
+
+  const allowedPrevious = HANDOVER_CHAIN[newStatus];
+  const isValidTransition =
+    newStatus === "cancelled" ||
+    newStatus === "rejected" ||
+    ticket.status === allowedPrevious ||
+    (newStatus === "completed" && (ticket.status === "waiting_pickup" || ticket.status === "delivered")) ||
+    (newStatus === "on_progress" && ticket.status === "on_progress"); // allow re-start after pause
+
+  if (!isValidTransition) {
+    return { error: `Cannot move to "${newStatus}" from "${ticket.status}"` };
   }
 
   const oldStatus = ticket.status;
@@ -126,31 +143,27 @@ export async function updateTicketStatusAction(formData: FormData) {
   if (newStatus === "on_progress") ticketUpdateData.work_started_at = new Date();
   if (newStatus === "done") ticketUpdateData.work_completed_at = new Date();
 
-  await db.ticket.update({
-    where: { id: ticketId },
-    data: ticketUpdateData as any,
-  });
-
-  // Log
-  const log = await db.ticketStatusLog.create({
-    data: {
-      ticket_id: ticketId,
-      old_status: oldStatus,
-      new_status: newStatus,
-      reason: reason || null,
-      changed_by: session.userId,
-    },
-  });
-
-  if (eventAction) {
-    await db.ticketTimeLog.create({
+  // Run the core DB writes in parallel — none of them depend on each other
+  const [, log] = await Promise.all([
+    db.ticket.update({
+      where: { id: ticketId },
+      data: ticketUpdateData as any,
+    }),
+    db.ticketStatusLog.create({
       data: {
         ticket_id: ticketId,
-        event: eventAction,
+        old_status: oldStatus,
+        new_status: newStatus,
         reason: reason || null,
-      }
-    });
-  }
+        changed_by: session.userId,
+      },
+    }),
+    eventAction
+      ? db.ticketTimeLog.create({
+          data: { ticket_id: ticketId, event: eventAction, reason: reason || null },
+        })
+      : Promise.resolve(null),
+  ]);
 
   // Handle Attachments
   if (files && files.length > 0) {
@@ -260,24 +273,26 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // Send email to customer on every status change
-  const fullTicket = await db.ticket.findUnique({
+  // Fire email non-blocking — we do NOT await it.
+  // Resend can take 5-10s; the user should not wait for email delivery.
+  // The ticket has customer info already loaded in `ticket` — avoid a second DB round-trip.
+  db.ticket.findUnique({
     where: { id: ticketId },
-    include: { user: { select: { name: true, email: true } } },
-  });
-  if (fullTicket) {
+    select: { customer_email: true, customer_name: true, public_share_token: true, user: { select: { name: true, email: true } } },
+  }).then((fullTicket) => {
+    if (!fullTicket) return;
     const customerEmail = fullTicket.customer_email || fullTicket.user?.email;
     const customerName = fullTicket.customer_name || fullTicket.user?.name;
     if (customerEmail && ticket.user_id !== session.userId) {
-      await sendTicketStatusEmail({
+      sendTicketStatusEmail({
         to: customerEmail,
         customerName: customerName || "Customer",
         ticketCode: ticket.ticket_code,
         status: newStatus,
         shareToken: fullTicket.public_share_token,
-      });
+      }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
     }
-  }
+  }).catch(() => {/* non-fatal */});
 
   revalidatePath(`/technician/tickets/${ticketId}`);
   revalidatePath(`/customer/tickets/${ticketId}`);

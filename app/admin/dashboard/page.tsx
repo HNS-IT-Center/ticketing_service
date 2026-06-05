@@ -25,20 +25,9 @@ export default async function AdminDashboard() {
     { revalidate: 30 }
   );
 
-  const [
-    totalUsers,
-    totalTickets,
-    assignedTickets,
-    closedTickets,
-    totalStores,
-    recentTickets,
-    topTechnicians,
-  ] = await Promise.all([
-    getCounts().then(r => r[0] as Awaited<ReturnType<typeof db.user.groupBy>>),
-    getCounts().then(r => r[1] as number),
-    getCounts().then(r => r[2] as number),
-    getCounts().then(r => r[3] as number),
-    getCounts().then(r => r[4] as number),
+  // Fire counts + recent tickets + top technicians all in parallel
+  const [counts, recentTickets, topTechnicians] = await Promise.all([
+    getCounts(),
     db.ticket.findMany({
       where: salesFilter,
       orderBy: { created_at: "desc" },
@@ -56,6 +45,10 @@ export default async function AdminDashboard() {
       select: { id: true, tickets_handled: true, total_points_completed: true, technician: { select: { id: true, name: true } } },
     }),
   ]);
+
+  const [totalUsersRaw, totalTickets, assignedTickets, closedTickets, totalStores] = counts;
+  const totalUsers = totalUsersRaw as Awaited<ReturnType<typeof db.user.groupBy>>;
+
 
   const countByRole = Object.fromEntries(
     (totalUsers as { role: string; _count: { role: number } }[]).map((u) => [u.role, u._count.role])

@@ -10,7 +10,7 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 
 function getTicketPoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
-  if (type === "service") return 3;
+  if (type === "service") return 5;
   if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
   return 2;
 }

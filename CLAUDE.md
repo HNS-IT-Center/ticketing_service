@@ -106,7 +106,7 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 | Ticket Type / Condition             | Points |
 | ---------------------------------- | ------ |
 | `pc_build`                         | 4      |
-| `service`                          | 3      |
+| `service`                          | 5      |
 | `cleaning` + `PC_Gaming` device    | 4      |
 | all other `cleaning` / `upgrade` / other | 2 |
 
@@ -567,6 +567,14 @@ When cloning the project to a new device, you will need to reconfigure the envir
 | AC6 | Ticket Request Management System | ✅ | Restricted to 1 request per ticket. Added `<RequestsBell>` for Admins/Coordinators. Implemented ticket statuses: "Requested" (amber, cancelable by requesting technician) and "Requested by other" (gray, disabled) states. |
 | AC7 | Modal and Attachment File Name Wrapping | ✅ | Fixed proof dialog wrapping by changing `.modal-overlay` alignment, adding sticky headers, and wrapping filenames in `FileUpload` with `wordBreak: break-all`. |
 
+### SPRINT 2026-06-05 SESSION — Performance & Handover Refinements
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| P1 | Dashboard Performance | ✅ | Flattened database queries in `TechnicianDashboard` and `AdminDashboard` using `Promise.all` to eliminate waterfall waits, reducing query time significantly. |
+| P2 | Action Blocking Fix | ✅ | Refactored `updateTicketStatusAction` and `adminUpdateTicketStatusAction` to execute `sendTicketStatusEmail` as a fire-and-forget promise. Status update latency dropped from 10-19s to <1s. |
+| P3 | UI Skeletons & Animations | ✅ | Added missing CSS keyframes (`shimmer`, `spin`, `pulse-dot`) to `globals.css`. Built `loading.tsx` skeletons for 6 major views (leaderboards, profiles, users, logs). |
+| H1 | Technician Handover Flow | ✅ | Rewrote `StatusUpdater.tsx` to provide technicians with post-Done interactive buttons (`ready_for_pickup`, `handed_to_courier`, `completed`). Handover steps adapt automatically based on the `pickupMethod`. |
+
 ---
 
 ### 🔒 SECURITY: RLS (Row Level Security)
@@ -629,7 +637,7 @@ END $$;
 - **`session.ts`** has `import "server-only"` — never import it from client components
 - **Stat cards:** Use `.stat-card > .stat-card-icon + .stat-card-body > (.stat-card-value + .stat-card-label)` — vertical column layout
 - **Leaderboard data:** Comes from `TicketStatusLog` where `new_status = "done"`, NOT from the `Leaderboard` snapshot table (which is legacy)
-- **Point system:** `pc_build = 4pts, service = 3pts, cleaning + PC_Gaming = 4pts, all others = 2pts` — computed in page/actions helper (`getTicketPoints`), not stored on `Ticket`
+- **Point system:** `pc_build = 4pts, service = 5pts, cleaning + PC_Gaming = 4pts, all others = 2pts` — computed in page/actions helper (`getTicketPoints`), not stored on `Ticket`
 - **Phone numbers:** Always stored as `+62XXXXXXXXX` format. The `+62` prefix widget is used in `CreateTicketForm` and `register/page.tsx`
 - **Notification bell:** Uses `position: fixed` (not `absolute`) to prevent mobile overflow
 - **Component Spacing & Padding:** Always provide appropriate gaps and paddings depending on the components. If elements belong tightly together, use a small gap (e.g., `gap-2`). If separating distinct sections or larger components, use a wider gap (e.g., `gap-4` or `gap-6`). **ALWAYS remember to add padding** inside components (e.g. `p-4`, `p-5`, or `px-6 py-4`) based on the component's visual needs. Never leave components without adequate internal padding.

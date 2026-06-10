@@ -16,15 +16,43 @@ function getTicketPoints(type: string, deviceType?: string | null): number {
 export async function requestTicketAssignmentAction(ticketId: string) {
   const session = await requireRole("Technician");
 
-  const ticket = await db.ticket.findUnique({
-    where: { id: ticketId },
-    select: { id: true, technician_id: true, status: true, ticket_type: true, ticket_code: true },
-  });
+  const [ticket, currentUser] = await Promise.all([
+    db.ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, technician_id: true, status: true, ticket_type: true, ticket_code: true },
+    }),
+    db.user.findUnique({
+      where: { id: session.userId },
+      select: { is_team_leader: true },
+    }),
+  ]);
+
   if (!ticket) return { error: "Ticket not found" };
   if (ticket.technician_id) return { error: "Ticket already assigned" };
   if (ticket.status !== "waiting") return { error: "Ticket is not in waiting status" };
 
-  // Workload check removed: Technicians can request freely as assignments are gated.
+  // ── Coordinator shortcut: auto-assign without going through request queue ──
+  if (currentUser?.is_team_leader) {
+    await db.ticket.update({
+      where: { id: ticketId },
+      data: { technician_id: session.userId },
+    });
+    await db.ticketStatusLog.create({
+      data: {
+        ticket_id: ticketId,
+        old_status: "waiting",
+        new_status: "waiting",
+        reason: "Auto-assigned by Store Coordinator",
+        changed_by: session.userId,
+      },
+    });
+    revalidatePath("/technician/dashboard");
+    revalidatePath(`/technician/tickets/${ticketId}`);
+    revalidatePath(`/admin/tickets/${ticketId}`);
+    return { success: true };
+  }
+
+  // ── Regular technician: create request and notify admins ──────────────────
 
   // Block if ANY technician already has a pending request for this ticket (1 at a time rule)
   const anyPendingRequest = await db.ticketAssignmentRequest.findFirst({
@@ -319,22 +347,20 @@ export async function updateTicketStatusAction(formData: FormData) {
   }
 
   // ── Fire email non-blocking ───────────────────────────────────────────────
+  // Always send to the customer_email field on the ticket (entered at creation).
+  // Never fall back to the staff member's account email.
   db.ticket.findUnique({
     where: { id: ticketId },
-    select: { customer_email: true, customer_name: true, public_share_token: true, user: { select: { name: true, email: true } } },
+    select: { customer_email: true, customer_name: true, public_share_token: true },
   }).then((fullTicket) => {
-    if (!fullTicket) return;
-    const customerEmail = fullTicket.customer_email || fullTicket.user?.email;
-    const customerName = fullTicket.customer_name || fullTicket.user?.name;
-    if (customerEmail && ticket.user_id !== session.userId) {
-      sendTicketStatusEmail({
-        to: customerEmail,
-        customerName: customerName || "Customer",
-        ticketCode: ticket.ticket_code,
-        status: newStatus,
-        shareToken: fullTicket.public_share_token,
-      }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
-    }
+    if (!fullTicket?.customer_email) return;
+    sendTicketStatusEmail({
+      to: fullTicket.customer_email,
+      customerName: fullTicket.customer_name || "Customer",
+      ticketCode: ticket.ticket_code,
+      status: newStatus,
+      shareToken: fullTicket.public_share_token,
+    }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
   }).catch(() => {/* non-fatal */});
 
   revalidatePath(`/technician/tickets/${ticketId}`);

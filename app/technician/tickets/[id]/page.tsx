@@ -414,6 +414,7 @@ export default async function TechnicianTicketDetailPage({
               technicians={technicians}
               salesUsers={salesUsers}
               assignmentRequests={ticket.assignment_requests as any}
+              ticketStatus={ticket.status}
             />
           )}
         </div>

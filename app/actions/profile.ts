@@ -1,9 +1,10 @@
 "use server";
 
-import { requireRole } from "@/lib/session";
+import { requireRole, requireSession } from "@/lib/session";
 import { db } from "@/lib/db";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 
 const profileSchema = z.object({
   userId:  z.string().min(1),
@@ -88,6 +89,39 @@ export async function equipTitleAction(titleKey: string | null) {
   revalidateTag("leaderboard-techs", "max"); // badge in All Rankings must update
 
   revalidatePath("/technician/profile");
-  revalidatePath("/technician/dashboard");
+  revalidatePath("/technician/dashboard"); // removes badge from header immediately
+  return { success: true };
+}
+
+// ─── Change Password ────────────────────────────────────────────────────────
+export async function changePasswordAction(data: {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+}) {
+  const session = await requireSession();
+
+  if (data.newPassword.length < 8) {
+    return { error: "New password must be at least 8 characters." };
+  }
+  if (data.newPassword !== data.confirmPassword) {
+    return { error: "New passwords do not match." };
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: session.userId },
+    select: { password: true },
+  });
+  if (!user) return { error: "User not found." };
+
+  const isCorrect = await bcrypt.compare(data.currentPassword, user.password);
+  if (!isCorrect) return { error: "Current password is incorrect." };
+
+  const hashed = await bcrypt.hash(data.newPassword, 12);
+  await db.user.update({
+    where: { id: session.userId },
+    data: { password: hashed },
+  });
+
   return { success: true };
 }

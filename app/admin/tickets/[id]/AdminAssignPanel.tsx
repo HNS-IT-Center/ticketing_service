@@ -12,6 +12,7 @@ interface Props {
   technicians: { id: string; name: string }[];
   salesUsers: { id: string; name: string }[];
   assignmentRequests?: { id: string; technician_id: string; technician: { name: string }; status: string }[];
+  ticketStatus?: string;
 }
 
 export default function AdminAssignPanel({
@@ -21,10 +22,13 @@ export default function AdminAssignPanel({
   technicians,
   salesUsers,
   assignmentRequests = [],
+  ticketStatus = "waiting",
 }: Props) {
   const [techId, setTechId] = useState(currentTechnicianId || "");
   const [saleId, setSaleId] = useState(currentSalesId || "");
   const [isPending, startTransition] = useTransition();
+
+  const isTechLocked = ticketStatus !== "waiting";
 
   const save = () => {
     startTransition(async () => {
@@ -39,6 +43,8 @@ export default function AdminAssignPanel({
   };
 
   const pendingRequests = assignmentRequests.filter(r => r.status === "pending" && r.technician_id !== currentTechnicianId);
+
+  const assignedTech = technicians.find(t => t.id === currentTechnicianId);
 
   return (
     <div className="card" style={{ alignSelf: "flex-start", width: "100%" }}>
@@ -71,17 +77,26 @@ export default function AdminAssignPanel({
 
       <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1rem" }}>
         <div className="form-group">
-          <label className="form-label">Technician</label>
-          <select
-            className="form-input"
-            value={techId}
-            onChange={(e) => setTechId(e.target.value)}
-          >
-            <option value="">— Unassigned —</option>
-            {technicians.map((t) => (
-              <option key={t.id} value={t.id}>{t.name}</option>
-            ))}
-          </select>
+          <label className="form-label" style={{ display: "flex", justifyContent: "space-between" }}>
+            Technician
+            {isTechLocked && <span style={{ color: "#92400e", fontSize: "0.7rem", fontWeight: 600 }}>🔒 Locked</span>}
+          </label>
+          {isTechLocked ? (
+            <div style={{ fontWeight: 600, color: "var(--text-primary)", padding: "0.5rem 0.75rem", background: "var(--cream-dark)", borderRadius: "var(--radius-md)", border: "1px solid var(--border)" }}>
+              {assignedTech?.name ?? <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Unassigned</span>}
+            </div>
+          ) : (
+            <select
+              className="form-input"
+              value={techId}
+              onChange={(e) => setTechId(e.target.value)}
+            >
+              <option value="">— Unassigned —</option>
+              {technicians.map((t) => (
+                <option key={t.id} value={t.id}>{t.name}</option>
+              ))}
+            </select>
+          )}
         </div>
         <div className="form-group">
           <label className="form-label">Sales</label>

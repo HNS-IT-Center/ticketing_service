@@ -575,6 +575,19 @@ When cloning the project to a new device, you will need to reconfigure the envir
 | P3 | UI Skeletons & Animations | ✅ | Added missing CSS keyframes (`shimmer`, `spin`, `pulse-dot`) to `globals.css`. Built `loading.tsx` skeletons for 6 major views (leaderboards, profiles, users, logs). |
 | H1 | Technician Handover Flow | ✅ | Rewrote `StatusUpdater.tsx` to provide technicians with post-Done interactive buttons (`ready_for_pickup`, `handed_to_courier`, `completed`). Handover steps adapt automatically based on the `pickupMethod`. |
 
+### SPRINT 2026-06-10 SESSION — Post-Launch Refinements & Fixes
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| P1 | Assignment Locks | ✅ | `AdminAssignPanel.tsx` locks Technician select when ticket is `on_progress`, but keeps Sales select open for Admins/Coordinators. Server guard in `admin.ts` updated to allow Sales reassignment. |
+| P2 | Title Unequip Sync | ✅ | Added `revalidatePath("/technician/dashboard")` to `equipTitleAction` so dashboard updates immediately. |
+| P3 | Coordinator Quick Accept | ✅ | `requestTicketAssignmentAction` bypasses queue and directly assigns ticket if requester is `is_team_leader`. |
+| P4 | Dashboard Refresh | ✅ | Consolidated multiple `<RefreshButton />`s into a single top-header refresh button on the Technician Dashboard. |
+| P5 | My Tickets Sort Priority | ✅ | Modified `tickets/page.tsx` default sort to custom JS priority: On Progress > Waiting > Ready for Pickup > Done > Completed > Cancelled. |
+| P6 | Password Form Focus Bug | ✅ | Inlined `PasswordInput` in `ChangePasswordForm.tsx` to stop React remount/focus loss on keystroke. |
+| P7 | PC Build Replace Button | ✅ | Removed "Replace" button functionality from the First Build step in `PcBuildHandover.tsx`. |
+| P8 | Email Guard & Customer Focus | ✅ | Added `EMAIL_MILESTONES` to block non-essential emails. `admin.ts` & `technician.ts` now only email the explicitly provided `customer_email`, preventing staff email pollution. |
+| P9 | Level Calculation Bug | ✅ | Changed `totalHandled` to `totalSuccess` (`success_count`) in `profile/page.tsx` so cancelled/rejected tickets don't falsely inflate technician levels. |
+
 ---
 
 ### 🔒 SECURITY: RLS (Row Level Security)

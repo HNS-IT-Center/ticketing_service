@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { User, Ticket, Users, Shield } from "lucide-react";
 import ProfileForm from "@/components/ui/ProfileForm";
+import ChangePasswordForm from "@/components/ui/ChangePasswordForm";
 import { updateAdminProfileAction } from "@/app/actions/profile";
 
 export const metadata = { title: "My Profile — HNS IT Center" };
@@ -85,6 +86,9 @@ export default async function AdminProfilePage() {
         initialAddress={user.address ?? ""}
         updateAction={updateAdminProfileAction}
       />
+
+      {/* Change password */}
+      <ChangePasswordForm />
     </div>
   );
 }

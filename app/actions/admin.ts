@@ -115,6 +115,20 @@ export async function adminAssignTicketAction(
     }
   }
 
+  // Guard: cannot reassign technician once work has started
+  const existingTicket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    select: { status: true, technician_id: true, ticket_code: true },
+  });
+  if (!existingTicket) return { error: "Ticket not found" };
+  
+  if (existingTicket.status !== "waiting") {
+    // If work started, we ONLY allow updating the Sales assignment
+    if (technicianId !== existingTicket.technician_id) {
+      return { error: "Technician cannot be changed once work has started." };
+    }
+  }
+
   // 1. Update ticket assignment
   const ticket = await db.ticket.update({
     where: { id: ticketId },
@@ -262,12 +276,11 @@ export async function adminUpdateTicketStatusAction(
   }
 
   // Fire email non-blocking — do NOT await it
-  const customerEmail = ticket.customer_email || ticket.user?.email;
-  const customerName = ticket.customer_name || ticket.user?.name;
-  if (customerEmail) {
+  // Use only the customer_email entered at ticket creation, never the account owner's email.
+  if (ticket.customer_email) {
     sendTicketStatusEmail({
-      to: customerEmail,
-      customerName: customerName || "Customer",
+      to: ticket.customer_email,
+      customerName: ticket.customer_name || "Customer",
       ticketCode: ticket.ticket_code,
       status: newStatus,
       shareToken: ticket.public_share_token,

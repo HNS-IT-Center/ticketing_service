@@ -33,9 +33,10 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [salesId, setSalesId] = useState("");
 
   // Step 2: Customer Info
-  const [customerType, setCustomerType] = useState("User");
-  const [customerName, setCustomerName] = useState("");
-  const [phone, setPhone] = useState("");
+  const [customerType, setCustomerType]       = useState("User");
+  const [customerName, setCustomerName]       = useState("");
+  const [customerEmail, setCustomerEmail]     = useState("");
+  const [phone, setPhone]                     = useState("");
   const [customerAddress, setCustomerAddress] = useState("");
 
   // Step 3: Category
@@ -71,6 +72,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     }
     if (step === 2) {
       if (!customerName.trim()) errs.customerName = "Customer name is required.";
+      if (!customerEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail))
+        errs.customerEmail = "Valid customer email is required.";
       if (!phone.match(/^\d{9,13}$/)) errs.phone = "Enter valid phone number digits (9-13 digits).";
     }
     if (step === 3) {
@@ -107,6 +110,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
 
       fd.append("customer_type", customerType);
       fd.append("customer_name", customerName);
+      fd.append("customer_email", customerEmail);
       fd.append("phone", `+62${phone}`);
       if (customerAddress) fd.append("customer_address", customerAddress);
 
@@ -239,6 +243,20 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
               <label className="form-label">Customer Name *</label>
               <input className={`form-input ${errors.customerName ? "error" : ""}`} value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="John Doe" />
               {errors.customerName && <span className="form-error"><AlertCircle size={12} />{errors.customerName}</span>}
+            </div>
+            <div className="form-group">
+              <label className="form-label">Customer Email *</label>
+              <input
+                type="email"
+                className={`form-input ${errors.customerEmail ? "error" : ""}`}
+                value={customerEmail}
+                onChange={e => setCustomerEmail(e.target.value)}
+                placeholder="customer@email.com"
+              />
+              {errors.customerEmail && <span className="form-error"><AlertCircle size={12} />{errors.customerEmail}</span>}
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem", display: "block" }}>
+                Progress updates will be sent to this email address.
+              </span>
             </div>
             <div className="form-group">
               <label className="form-label">Phone Number *</label>
@@ -483,6 +501,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             <div style={{ background: "var(--cream)", padding: "1.5rem", borderRadius: "12px", fontSize: "0.9rem" }}>
               <p style={{ marginBottom: "0.5rem" }}><strong>Store:</strong> {storeLocations.find(s => s.id === storeLocationId)?.name}</p>
               <p style={{ marginBottom: "0.5rem" }}><strong>Customer:</strong> {customerName} ({customerType}) - +62{phone}</p>
+              <p style={{ marginBottom: "0.5rem" }}><strong>Email:</strong> {customerEmail}</p>
               <p style={{ marginBottom: "0.5rem" }}><strong>Type:</strong> {ticketType.replace(/_/g, " ")} | {deviceType.replace(/_/g, " ")}</p>
               {notes && <p style={{ marginBottom: "0.5rem" }}><strong>Notes:</strong> {notes}</p>}
               {accessories && <p style={{ marginBottom: "0.5rem" }}><strong>Accessories:</strong> {accessories}</p>}

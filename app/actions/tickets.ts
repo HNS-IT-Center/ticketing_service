@@ -8,6 +8,7 @@ import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { createServerSupabaseClient } from "@/lib/supabase";
+import { sendTicketStatusEmail } from "@/lib/email";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
@@ -208,6 +209,17 @@ export async function createTicketAction(formData: FormData) {
 
   // Run all follow-up writes in parallel
   await Promise.all(followUps);
+
+  // ── Fire creation email to customer (non-blocking) ────────────────────────
+  if (customer_email) {
+    sendTicketStatusEmail({
+      to: customer_email,
+      customerName: customer_name || "Customer",
+      ticketCode: ticket_code,
+      status: "waiting",
+      shareToken: public_share_token,
+    }).catch((err) => console.error("[EMAIL CREATE ERROR]", err));
+  }
 
   if (session.role === "Administrator" || session.role === "Sales") {
     redirect(`/admin/tickets`);

@@ -26,6 +26,17 @@ const STATUS_LABELS: Record<string, string> = {
   rejected: "Ditolak",
 };
 
+// ─── Email milestones: only send for these statuses, skip the rest ───────────
+// Prevents email spam for minor intermediate steps.
+const EMAIL_MILESTONES = new Set([
+  "waiting",          // ticket created
+  "on_progress",      // work started
+  "done",             // work completed by technician
+  "ready_for_pickup", // customer can come pick up
+  "handed_to_courier",// sent via courier
+  "completed",        // fully done (pickup confirmed / delivered)
+]);
+
 // ─── Send ticket status update email ────────────────────────────────────────
 export async function sendTicketStatusEmail(opts: {
   to: string;
@@ -35,6 +46,9 @@ export async function sendTicketStatusEmail(opts: {
   shareToken?: string | null;
   message?: string | null;
 }): Promise<void> {
+  // Only send for milestone statuses — silently skip all others
+  if (!EMAIL_MILESTONES.has(opts.status)) return;
+
   if (!resend) {
     // Resend not configured — log for dev visibility
     console.log(`[EMAIL SKIPPED] To: ${opts.to} | Ticket: ${opts.ticketCode} | Status: ${opts.status}`);

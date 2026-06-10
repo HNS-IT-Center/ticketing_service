@@ -27,7 +27,7 @@ export default async function TechnicianTicketsPage({
   const query = params.q || "";
   const page = Math.max(1, parseInt(params.page || "1") || 1);
   const skip = (page - 1) * PAGE_SIZE;
-  const sortParam = params.sort || "updated_desc";
+  const sortParam = params.sort || "priority";
 
   const where = {
     technician_id: session.userId,
@@ -43,24 +43,42 @@ export default async function TechnicianTicketsPage({
       : {}),
   };
 
-  let orderBy: any = { updated_at: "desc" };
-  if (sortParam === "updated_asc") orderBy = { updated_at: "asc" };
-  else if (sortParam === "status_asc") orderBy = { status: "asc" };
-  else if (sortParam === "status_desc") orderBy = { status: "desc" };
-  else if (sortParam === "code_asc") orderBy = { ticket_code: "asc" };
-  else if (sortParam === "code_desc") orderBy = { ticket_code: "desc" };
+  const STATUS_PRIORITY: Record<string, number> = {
+    on_progress: 1,
+    waiting: 2,
+    ready_for_pickup: 3,
+    waiting_pickup: 3,
+    handed_to_courier: 3,
+    done: 4,
+    delivered: 5,
+    completed: 6,
+    cancelled: 7,
+    rejected: 8,
+  };
 
-  const [tickets, totalCount] = await Promise.all([
-    db.ticket.findMany({
-      where,
-      orderBy,
-      take: PAGE_SIZE,
-      skip,
-      include: { user: { select: { name: true } } },
-      // Also fetch ticket_type and device_type so we can compute points
-    }),
-    db.ticket.count({ where }),
-  ]);
+  const allTickets = await db.ticket.findMany({
+    where,
+    include: { user: { select: { name: true } } },
+  });
+
+  allTickets.sort((a, b) => {
+    if (sortParam === "updated_desc") return b.updated_at.getTime() - a.updated_at.getTime();
+    if (sortParam === "updated_asc") return a.updated_at.getTime() - b.updated_at.getTime();
+    if (sortParam === "code_asc") return a.ticket_code.localeCompare(b.ticket_code);
+    if (sortParam === "code_desc") return b.ticket_code.localeCompare(a.ticket_code);
+    if (sortParam === "status_asc" || sortParam === "status_desc") {
+      const res = a.status.localeCompare(b.status);
+      return sortParam === "status_desc" ? -res : res;
+    }
+    // Default: priority sort
+    const pA = STATUS_PRIORITY[a.status] || 99;
+    const pB = STATUS_PRIORITY[b.status] || 99;
+    if (pA !== pB) return pA - pB;
+    return b.updated_at.getTime() - a.updated_at.getTime(); // secondary sort by latest updated
+  });
+
+  const totalCount = allTickets.length;
+  const tickets = allTickets.slice(skip, skip + PAGE_SIZE);
 
   const totalPages = Math.ceil(totalCount / PAGE_SIZE);
 
@@ -68,7 +86,7 @@ export default async function TechnicianTicketsPage({
     const qs = new URLSearchParams();
     if (statusFilter !== "all") qs.set("status", statusFilter);
     if (query) qs.set("q", query);
-    if (currentSort !== "updated_desc") qs.set("sort", currentSort);
+    if (currentSort !== "priority") qs.set("sort", currentSort);
     if (p > 1) qs.set("page", String(p));
     const str = qs.toString();
     return `/technician/tickets${str ? `?${str}` : ""}`;
@@ -102,7 +120,7 @@ export default async function TechnicianTicketsPage({
         </div>
         <form style={{ display: "flex", gap: "0.5rem" }}>
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
-          {sortParam !== "updated_desc" && <input type="hidden" name="sort" value={sortParam} />}
+          {sortParam !== "priority" && <input type="hidden" name="sort" value={sortParam} />}
           <input
             name="q"
             defaultValue={query}
@@ -125,7 +143,7 @@ export default async function TechnicianTicketsPage({
           const qs = new URLSearchParams();
           if (s !== "all") qs.set("status", s);
           if (query) qs.set("q", query);
-          if (sortParam !== "updated_desc") qs.set("sort", sortParam);
+          if (sortParam !== "priority") qs.set("sort", sortParam);
           const str = qs.toString();
           const href = `/technician/tickets${str ? `?${str}` : ""}`;
           return (

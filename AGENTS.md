@@ -33,6 +33,8 @@ Stack: Next.js 16.2.4 App Router · Prisma 7 + Supabase Postgres · Custom JWT a
 8. **Workload Limits** — Technician workload limits are deprecated. Do not use point limits. Just count active tickets (status `waiting` or `on_progress`).
 9. **Notifications** — Real-time features use Supabase `.channel()` WebSockets, not `setInterval` polling.
 10. **Component Spacing & Padding** — Always provide appropriate gaps and paddings depending on the components. If elements belong tightly together, use a small gap (e.g., `gap-2` or `gap-3`). If separating distinct sections or larger components, use a wider gap (e.g., `gap-4` or `gap-6`). **ALWAYS remember to add padding** inside components (e.g. `p-4`, `p-5`, or `px-6 py-4`) based on the component's visual needs. Never leave components without adequate internal padding.
+11. **Performance/Leveling** — `tickets_handled` increments on ALL terminal states (done, cancelled, rejected). For Level calculation or Leaderboards, you MUST use `success_count` (which strictly tracks 'done' statuses).
+12. **Email System** — Powered by Resend. Only sends to the explicitly provided `customer_email` in the ticket, bypassing the account owner's email to protect staff privacy. Uses `EMAIL_MILESTONES` in `lib/email.ts` to block non-essential spam. On free tier (`onboarding@resend.dev`), emails can only be sent to the developer's registered Resend email address.
 
 ## Sprint Progress
 See **`## 🏗️ ACTIVE SPRINT`** section in `CLAUDE.md` for the full task list with ✅/🔄/⬜ status.

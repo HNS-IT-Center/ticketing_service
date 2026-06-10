@@ -3,8 +3,9 @@ import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import AvailableTickets from "./AvailableTickets";
-import { Ticket, CheckCircle, Trophy, ShieldCheck } from "lucide-react";
-import { getTopTechnicianOfMonth, getTopStoreOfMonth, getUserTitles } from "@/lib/performance";
+import RefreshButton from "./RefreshButton";
+import { Ticket, CheckCircle, Trophy } from "lucide-react";
+import { getUserTitles } from "@/lib/performance";
 
 export const metadata = { title: "Technician Dashboard — HNS IT Center" };
 
@@ -17,10 +18,6 @@ function getTicketPoints(type: string, deviceType?: string | null): number {
 
 export default async function TechnicianDashboard() {
   const session = await requireRole("Technician");
-
-  const now = new Date();
-  const lastMonth     = now.getMonth() === 0 ? 12 : now.getMonth();
-  const lastMonthYear = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear();
 
   // ── STEP 1: Fire all queries that don't depend on each other simultaneously.
   // The only dependency is: unassigned tickets need storeIds (from assignments).
@@ -63,7 +60,7 @@ export default async function TechnicianDashboard() {
 
   // All other queries fire immediately in parallel — no waiting
   const [
-    [userInfo, myTickets, performance, topTechId, topStoreId, titles],
+    [userInfo, myTickets, performance, titles],
     assignments,
     [unassigned, myPendingRequests, allPendingRequests],
   ] = await Promise.all([
@@ -79,8 +76,6 @@ export default async function TechnicianDashboard() {
         select: { id: true, ticket_code: true, ticket_type: true, device_type: true, status: true, technician_id: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
       }),
       db.technicianPerformance.findUnique({ where: { technician_id: session.userId }, select: { tickets_handled: true, success_count: true } }),
-      getTopTechnicianOfMonth(lastMonth, lastMonthYear),
-      getTopStoreOfMonth(lastMonth, lastMonthYear),
       getUserTitles(session.userId),
     ] as const),
     assignmentsPromise,
@@ -89,10 +84,6 @@ export default async function TechnicianDashboard() {
 
   const isCoordinator  = userInfo?.is_team_leader ?? false;
   const storeIds       = assignments.map((a) => a.store_id);
-
-  // Check coordinator's store win
-  const isTopTechLastMonth = !isCoordinator && topTechId === session.userId;
-  const isCoordWinner      = isCoordinator && topStoreId !== null && storeIds.includes(topStoreId);
 
   // Find equipped title
   const activeTitle = titles.find((t) => t.title_key === userInfo?.active_title) ?? null;
@@ -109,29 +100,18 @@ export default async function TechnicianDashboard() {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
       <div>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-          <h1>{isCoordinator ? "Store Coordinator Dashboard" : "Technician Dashboard"}</h1>
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", justifyContent: "space-between", width: "100%" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
+            <h1>{isCoordinator ? "Store Coordinator Dashboard" : "Technician Dashboard"}</h1>
 
-          {/* Technician of the Month badge */}
-          {isTopTechLastMonth && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#fef3c7", color: "#b45309", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, border: "1px solid #fde68a" }}>
-              <Trophy size={14} /> Technician of the Month
-            </span>
-          )}
-
-          {/* Coordinator of the Month badge */}
-          {isCoordWinner && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "#f3e8ff", color: "#6b21a8", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, border: "1px solid #e9d5ff" }}>
-              <ShieldCheck size={14} /> Coordinator of the Month
-            </span>
-          )}
-
-          {/* Equipped title badge */}
-          {activeTitle && (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "rgba(22,70,157,0.1)", color: "var(--primary)", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, border: "1px solid rgba(22,70,157,0.25)" }}>
-              {activeTitle.emoji} {activeTitle.title_label}
-            </span>
-          )}
+            {/* Equipped title badge — only show if user has one equipped */}
+            {activeTitle && (
+              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "rgba(22,70,157,0.1)", color: "var(--primary)", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, border: "1px solid rgba(22,70,157,0.25)" }}>
+                {activeTitle.emoji} {activeTitle.title_label}
+              </span>
+            )}
+          </div>
+          <RefreshButton />
         </div>
         <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>
           {isCoordinator ? "Manage your store and assigned tickets" : "Manage your assigned tickets and workload"}

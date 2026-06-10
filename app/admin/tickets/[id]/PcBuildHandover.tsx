@@ -177,11 +177,6 @@ export default function PcBuildHandover({
                 <CheckCircle2 size={12} /> Uploaded
               </div>
               <div style={{ position: "absolute", bottom: "0.75rem", right: "0.75rem", display: "flex", gap: "0.5rem" }}>
-                {canUpload && (
-                  <button onClick={() => setFbIsReplacing(true)} style={{ background: "rgba(255,255,255,0.9)", color: "#111", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600, border: "none", cursor: "pointer", backdropFilter: "blur(4px)" }}>
-                    Replace
-                  </button>
-                )}
                 <a href={firstBuildUrl} target="_blank" rel="noopener noreferrer" style={{ background: "rgba(0,0,0,0.6)", color: "white", width: "2rem", height: "2rem", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", backdropFilter: "blur(4px)" }} title="View Full Size">
                   <Eye size={14} />
                 </a>

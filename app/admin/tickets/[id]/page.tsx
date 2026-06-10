@@ -460,6 +460,7 @@ export default async function AdminTicketDetailPage({
               technicians={technicians}
               salesUsers={salesUsers}
               assignmentRequests={ticket.assignment_requests as any}
+              ticketStatus={ticket.status}
             />
           )}
         </div>

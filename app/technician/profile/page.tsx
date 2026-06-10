@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/session";
 import { User, Wrench, CheckCircle, XCircle, Trophy, ShieldCheck, Package } from "lucide-react";
 import ProfileForm from "@/components/ui/ProfileForm";
+import ChangePasswordForm from "@/components/ui/ChangePasswordForm";
 import { updateTechnicianProfileAction, equipTitleAction } from "@/app/actions/profile";
 import { awardMonthlyTitles, getUserTitles, getTechnicianProfile } from "@/lib/performance";
 
@@ -61,7 +62,7 @@ export default async function TechnicianProfilePage() {
     const level = 11 + Math.floor(extra / 15);
     return { level, progress: extra % 15, required: 15 };
   };
-  const levelInfo = getLevelInfo(totalHandled);
+  const levelInfo = getLevelInfo(totalSuccess);
 
   const statCards = [
     { label: "Tickets Handled", value: totalHandled, icon: <Wrench size={20} />, color: "var(--primary)" },
@@ -266,6 +267,9 @@ export default async function TechnicianProfilePage() {
         initialAddress={user.address ?? ""}
         updateAction={updateTechnicianProfileAction}
       />
+
+      {/* Change password */}
+      <ChangePasswordForm />
     </div>
   );
 }

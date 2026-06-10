@@ -15,6 +15,17 @@ function getTicketPoints(type: string, deviceType?: string | null): number {
   return 2;
 }
 
+/** Converts decimal hours → human-readable "X Days Y Hours" (or just "Y Hours" / "< 1 Hour") */
+function formatAvgTime(hours: number): string {
+  if (hours < 1) return "< 1 Hour";
+  const totalHours = Math.round(hours);
+  const days = Math.floor(totalHours / 24);
+  const remainHours = totalHours % 24;
+  if (days === 0) return `${remainHours}h`;
+  if (remainHours === 0) return `${days}d`;
+  return `${days}d ${remainHours}h`;
+}
+
 type TicketDetails = { count: number; totalHours: number; timedCount: number; };
 
 type Row = {
@@ -259,8 +270,8 @@ export default async function AdminPerformancePage({
   }
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", minWidth: 0 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
         <div>
           <h1 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
             <TrendingUp size={24} /> Performance Tracking
@@ -272,17 +283,18 @@ export default async function AdminPerformancePage({
           </p>
         </div>
 
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "center" }}>
-          <form style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <select name="store" defaultValue={filterStore ?? ""} className="form-input" style={{ width: "auto" }}>
+        {/* Filter toolbar — wraps gracefully on mobile */}
+        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "flex-start" }}>
+          <form style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
+            <select name="store" defaultValue={filterStore ?? ""} className="form-input" style={{ width: "auto", minWidth: 0 }}>
               <option value="">All stores</option>
               {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>
-            <select name="month" defaultValue={filterMonth ?? ""} className="form-input" style={{ width: "auto" }}>
+            <select name="month" defaultValue={filterMonth ?? ""} className="form-input" style={{ width: "auto", minWidth: 0 }}>
               <option value="">All months</option>
               {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
             </select>
-            <select name="year" defaultValue={filterYear ?? now.getFullYear()} className="form-input" style={{ width: "auto" }}>
+            <select name="year" defaultValue={filterYear ?? now.getFullYear()} className="form-input" style={{ width: "auto", minWidth: 0 }}>
               {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
             </select>
             <button type="submit" className="btn btn-primary btn-sm">Apply</button>
@@ -290,11 +302,11 @@ export default async function AdminPerformancePage({
               <a href="/admin/performance" className="btn btn-ghost btn-sm">Clear</a>
             )}
           </form>
-          <div style={{ display: "flex", gap: "0.5rem" }}>
+          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
             {rows.length > 0 && (
-              <SharePerformance 
-                topTechnician={rows[0]} 
-                monthLabel={filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time"} 
+              <SharePerformance
+                topTechnician={rows[0]}
+                monthLabel={filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time"}
               />
             )}
             <ExportToPDF
@@ -302,6 +314,7 @@ export default async function AdminPerformancePage({
               filterMonth={filterMonth}
               filterYear={filterYear}
               monthLabel={filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time"}
+              storeName={filterStore ? (stores.find(s => s.id === filterStore)?.name ?? null) : null}
             />
           </div>
         </div>
@@ -315,57 +328,121 @@ export default async function AdminPerformancePage({
           </div>
         </div>
       ) : (
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Rank</th><th>Technician</th><th>Shift</th>
-                <th>Active Tickets</th><th>Tickets Completed</th>
-                <th>Success</th><th>Cancelled</th><th>Points</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((p, i) => {
-                return (
-                  <tr key={p.id}>
-                    <td style={{ fontWeight: 800, color: i === 0 ? "#ca8a04" : "var(--text-muted)" }}>
-                      {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
-                    </td>
-                    <td>
-                      <div style={{ fontWeight: 600 }}>{p.name}</div>
-                      {p.details && (
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.25rem", marginTop: "0.5rem", minWidth: "220px" }}>
-                          {Object.entries(p.details).map(([type, stats]) => {
-                            const avg = stats.timedCount > 0 ? (stats.totalHours / stats.timedCount).toFixed(1) : null;
-                            const typeLabel = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-                            return (
-                              <div key={type} style={{ fontSize: "0.7rem", color: "var(--text-secondary)", background: "var(--bg-light)", padding: "0.35rem 0.5rem", borderRadius: "0.375rem", border: "1px solid var(--border-light)" }}>
-                                <div style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.1rem" }}>{typeLabel}: {stats.count}</div>
-                                <div style={{ opacity: 0.8, fontSize: "0.65rem" }}>
-                                  {avg ? `Avg: ${avg} H` : "No tracked time"}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ textTransform: "capitalize" }}>{p.shift ?? "—"}</td>
-                    <td>
-                      <span className="badge badge-technician">
-                        {p.activeTickets} active
-                      </span>
-                    </td>
-                    <td style={{ fontWeight: 600 }}>{p.tickets}</td>
-                    <td style={{ color: "#16a34a", fontWeight: 600 }}>{p.success}</td>
-                    <td style={{ color: "var(--accent)", fontWeight: 600 }}>{p.failed}</td>
-                    <td style={{ fontWeight: 700, color: "var(--primary)" }}>{p.points}</td>
+        <>
+          {/* ── Desktop table (hidden on mobile) ── */}
+          <div className="admin-ticket-table">
+            <div className="table-wrapper">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Rank</th><th>Technician</th><th>Shift</th>
+                    <th>Active</th><th>Completed</th>
+                    <th>Success</th><th>Cancelled</th><th>Points</th>
                   </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+                </thead>
+                <tbody>
+                  {rows.map((p, i) => (
+                    <tr key={p.id}>
+                      <td style={{ fontWeight: 800, color: i === 0 ? "#ca8a04" : "var(--text-muted)" }}>
+                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                      </td>
+                      <td>
+                        <div style={{ fontWeight: 600 }}>{p.name}</div>
+                        {p.details && (
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.5rem" }}>
+                            {Object.entries(p.details).map(([type, stats]) => {
+                              const avgFormatted = stats.timedCount > 0 ? formatAvgTime(stats.totalHours / stats.timedCount) : null;
+                              const typeLabel = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                              return (
+                                <div key={type} style={{ fontSize: "0.7rem", background: "var(--cream)", padding: "0.3rem 0.5rem", borderRadius: "0.375rem", border: "1px solid var(--border-light)", display: "flex", flexDirection: "column", gap: "0.1rem" }}>
+                                  <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{typeLabel} × {stats.count}</span>
+                                  <span style={{ color: avgFormatted ? "var(--primary-brand)" : "var(--text-muted)", fontSize: "0.65rem", fontWeight: avgFormatted ? 600 : 400 }}>
+                                    {avgFormatted ? `⏱ avg ${avgFormatted}` : "no time tracked"}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </td>
+                      <td style={{ textTransform: "capitalize", whiteSpace: "nowrap" }}>{p.shift ?? "—"}</td>
+                      <td><span className="badge badge-technician">{p.activeTickets}</span></td>
+                      <td style={{ fontWeight: 600 }}>{p.tickets}</td>
+                      <td style={{ color: "#16a34a", fontWeight: 600 }}>{p.success}</td>
+                      <td style={{ color: "var(--accent)", fontWeight: 600 }}>{p.failed}</td>
+                      <td style={{ fontWeight: 700, color: "var(--primary-brand)" }}>{p.points} pts</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* ── Mobile cards (hidden on desktop) ── */}
+          <div className="admin-ticket-cards">
+            {rows.map((p, i) => (
+              <div key={p.id} className="card" style={{ display: "flex", flexDirection: "column", gap: "0.75rem", padding: "1rem" }}>
+                {/* Header row */}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
+                  <div>
+                    <div style={{ fontSize: "1rem", fontWeight: 700 }}>
+                      <span style={{ marginRight: "0.4rem" }}>
+                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
+                      </span>
+                      {p.name}
+                    </div>
+                    {p.shift && (
+                      <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.15rem", textTransform: "capitalize" }}>
+                        {p.shift} shift
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ fontWeight: 800, fontSize: "1.25rem", color: "var(--primary-brand)", whiteSpace: "nowrap" }}>
+                    {p.points} pts
+                  </div>
+                </div>
+
+                {/* Stats row */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
+                  {[
+                    { label: "Completed", value: p.tickets, color: "var(--text-primary)" },
+                    { label: "Success", value: p.success, color: "#16a34a" },
+                    { label: "Cancelled", value: p.failed, color: "var(--accent)" },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} style={{ background: "var(--cream)", borderRadius: "0.5rem", padding: "0.5rem", textAlign: "center" }}>
+                      <div style={{ fontWeight: 700, color, fontSize: "1.1rem" }}>{value}</div>
+                      <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Active tickets */}
+                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <span className="badge badge-technician">{p.activeTickets} active</span>
+                </div>
+
+                {/* Breakdown tags */}
+                {p.details && Object.keys(p.details).length > 0 && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
+                    {Object.entries(p.details).map(([type, stats]) => {
+                      const avgFormatted = stats.timedCount > 0 ? formatAvgTime(stats.totalHours / stats.timedCount) : null;
+                      const typeLabel = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
+                      return (
+                        <div key={type} style={{ fontSize: "0.75rem", background: "var(--cream-dark)", padding: "0.3rem 0.6rem", borderRadius: "0.375rem", border: "1px solid var(--border-light)", display: "flex", flexDirection: "column", gap: "0.1rem" }}>
+                          <span style={{ fontWeight: 600 }}>{typeLabel} × {stats.count}</span>
+                          {avgFormatted
+                            ? <span style={{ fontSize: "0.7rem", color: "var(--primary-brand)", fontWeight: 600 }}>⏱ avg {avgFormatted}</span>
+                            : <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>no time tracked</span>
+                          }
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

@@ -7,6 +7,16 @@ import PublicChat from "./PublicChat";
 
 export const metadata = { title: "Ticket Status — HNS IT Center" };
 
+// Statuses that carry visual proof uploads (image/video only shown on public page)
+const PROOF_STATUSES = new Set([
+  "done",
+  "completed",
+  "handed_to_courier",
+  "delivered",
+  "ready_for_pickup",
+  "waiting_pickup",
+]);
+
 export default async function PublicTicketPage({
   params,
 }: {
@@ -29,6 +39,10 @@ export default async function PublicTicketPage({
         include: { sender: { select: { name: true, role: true } } },
       },
       time_logs: { orderBy: { created_at: "asc" } },
+      attachments: {
+        orderBy: { created_at: "asc" },
+        where: { file_type: { in: ["image", "video"] } },
+      },
     },
   });
 
@@ -72,6 +86,20 @@ export default async function PublicTicketPage({
     if (hours > 0) return `${hours} Jam ${mins % 60} Menit`;
     return `${mins} Menit`;
   };
+
+  /**
+   * Match attachments to a status log entry by timestamp proximity.
+   * Attachments are created in the same server action as the status log,
+   * so their created_at will be within a few seconds of the log's created_at.
+   * We use a ±15-second window and only match image/video types.
+   */
+  function getProofMedia(logCreatedAt: Date) {
+    const WINDOW_MS = 15_000; // ±15 seconds
+    return ticket!.attachments.filter((a) => {
+      const diff = Math.abs(a.created_at.getTime() - logCreatedAt.getTime());
+      return diff <= WINDOW_MS;
+    });
+  }
 
   return (
     <div style={{
@@ -136,45 +164,112 @@ export default async function PublicTicketPage({
             <div style={{ fontWeight: 600, fontSize: "0.9375rem", color: "#111827", marginBottom: "1rem" }}>
               Riwayat Status
             </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-              {ticket.status_logs.map((log, i) => (
-                <div key={log.id} style={{ display: "flex", gap: "0.875rem", alignItems: "flex-start" }}>
-                  <div style={{
-                    width: "28px", height: "28px", borderRadius: "50%",
-                    background: i === ticket.status_logs.length - 1 ? "var(--primary)" : "#f3f4f6",
-                    display: "flex", alignItems: "center", justifyContent: "center",
-                    flexShrink: 0, marginTop: "2px",
-                    color: i === ticket.status_logs.length - 1 ? "white" : "#9ca3af",
-                    fontSize: "0.75rem", fontWeight: 700,
-                  }}>
-                    {i + 1}
-                  </div>
-                  <div>
-                    <div style={{ fontWeight: 600, color: "#374151", fontSize: "0.875rem", textTransform: "capitalize" }}>
-                      {log.new_status.replace(/_/g, " ")}
+            <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+              {ticket.status_logs.map((log, i) => {
+                const isLatest = i === ticket.status_logs.length - 1;
+                const showProof = PROOF_STATUSES.has(log.new_status);
+                const proofMedia = showProof ? getProofMedia(log.created_at) : [];
+
+                return (
+                  <div key={log.id} style={{ display: "flex", gap: "0", alignItems: "stretch" }}>
+                    {/* Timeline spine */}
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "28px", flexShrink: 0 }}>
+                      <div style={{
+                        width: "28px", height: "28px", borderRadius: "50%",
+                        background: isLatest ? "var(--primary, #16469d)" : "#f3f4f6",
+                        display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0,
+                        color: isLatest ? "white" : "#9ca3af",
+                        fontSize: "0.7rem", fontWeight: 700,
+                        zIndex: 1,
+                        border: isLatest ? "none" : "1px solid #e5e7eb",
+                        transition: "background 0.2s",
+                      }}>
+                        {i + 1}
+                      </div>
+                      {/* Connector line to next item */}
+                      {i < ticket.status_logs.length - 1 && (
+                        <div style={{
+                          width: "2px",
+                          flex: 1,
+                          minHeight: "1.25rem",
+                          background: "#e5e7eb",
+                          marginTop: "2px",
+                          marginBottom: "2px",
+                        }} />
+                      )}
                     </div>
-                    <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginTop: "2px" }}>
-                      {formatDateTime(log.created_at)}
+
+                    {/* Content */}
+                    <div style={{ paddingLeft: "0.875rem", paddingBottom: i < ticket.status_logs.length - 1 ? "1rem" : "0", flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600, color: isLatest ? "#111827" : "#374151", fontSize: "0.875rem", textTransform: "capitalize" }}>
+                        {log.new_status.replace(/_/g, " ")}
+                      </div>
+                      <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginTop: "2px" }}>
+                        {formatDateTime(log.created_at)}
+                      </div>
+
+                      {/* Proof media — images & videos attached to this status step */}
+                      {proofMedia.length > 0 && (
+                        <div style={{ marginTop: "0.625rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                          {proofMedia.map((media) => (
+                            <a
+                              key={media.id}
+                              href={media.file_url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                display: "block",
+                                borderRadius: "8px",
+                                overflow: "hidden",
+                                border: "1px solid #e5e7eb",
+                                width: "80px",
+                                height: "80px",
+                                flexShrink: 0,
+                                background: "#111",
+                                position: "relative",
+                              }}
+                              title="Lihat bukti"
+                            >
+                              {media.file_type === "image" ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img
+                                  src={media.file_url}
+                                  alt="Bukti"
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                />
+                              ) : (
+                                /* video thumbnail — browser renders first frame */
+                                <video
+                                  src={media.file_url}
+                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                                  muted
+                                  playsInline
+                                  preload="metadata"
+                                />
+                              )}
+                              {/* play icon overlay for video */}
+                              {media.file_type === "video" && (
+                                <div style={{
+                                  position: "absolute", inset: 0,
+                                  display: "flex", alignItems: "center", justifyContent: "center",
+                                  background: "rgba(0,0,0,0.35)",
+                                }}>
+                                  <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                                    <path d="M8 5v14l11-7z" />
+                                  </svg>
+                                </div>
+                              )}
+                            </a>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
-
-          {/* Progress Proof Image */}
-          {ticket.progress_proof_url && (
-            <div style={{ padding: "1.5rem 1.75rem", borderBottom: "1px solid #f3f4f6" }}>
-              <div style={{ fontWeight: 600, fontSize: "0.9375rem", color: "#111827", marginBottom: "1rem" }}>
-                Bukti Progress / Pengambilan
-              </div>
-              <img 
-                src={ticket.progress_proof_url} 
-                alt="Progress Proof" 
-                style={{ width: "100%", maxHeight: "300px", objectFit: "cover", borderRadius: "12px", border: "1px solid #e5e7eb" }}
-              />
-            </div>
-          )}
 
           {/* Share button */}
           <div style={{ padding: "1rem 1.75rem" }}>

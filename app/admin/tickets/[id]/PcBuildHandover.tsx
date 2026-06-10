@@ -1,8 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { UploadCloud, CheckCircle2, Clock, Lock, Camera, Eye } from "lucide-react";
-import { uploadRevisionBuildAction } from "@/app/actions/sales";
+import { useRouter } from "next/navigation";
+import { UploadCloud, CheckCircle2, Clock, Lock, Camera, Eye, RefreshCcw } from "lucide-react";
+import { uploadRevisionBuildAction, uploadFirstBuildAction } from "@/app/actions/sales";
 import toast from "react-hot-toast";
 
 interface PcBuildHandoverProps {
@@ -25,11 +26,20 @@ export default function PcBuildHandover({
   isAssignedTechnician,
 }: PcBuildHandoverProps) {
   const [isPending, startTransition] = useTransition();
+  const router = useRouter();
   const [dragActive, setDragActive] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [fileType, setFileType] = useState<"image" | "pdf" | null>(null);
   const [isReplacing, setIsReplacing] = useState(false);
+
+  // First build upload state
+  const [fbDragActive, setFbDragActive] = useState(false);
+  const [fbFile, setFbFile] = useState<File | null>(null);
+  const [fbPreviewUrl, setFbPreviewUrl] = useState<string | null>(null);
+  const [fbFileType, setFbFileType] = useState<"image" | "pdf" | null>(null);
+  const [fbIsReplacing, setFbIsReplacing] = useState(false);
+  const [fbIsPending, startFbTransition] = useTransition();
 
   const isCompletedState = !["waiting", "on_progress"].includes(status);
   const canUpload = userRole === "Administrator" || (userRole === "Sales" && isAssignedSales) || (userRole === "Technician" && isAssignedTechnician);
@@ -78,21 +88,58 @@ export default function PcBuildHandover({
 
   const handleUpload = async () => {
     if (!file) return;
-
     const formData = new FormData();
     formData.append("ticketId", ticketId);
     formData.append("file", file);
-
     startTransition(async () => {
       const res = await uploadRevisionBuildAction(formData);
       if (res.error) {
         toast.error(res.error);
       } else {
-        toast.success("Revision build file uploaded successfully!");
+        toast.success("Revision build uploaded successfully!");
         setFile(null);
         setPreviewUrl(null);
         setFileType(null);
         setIsReplacing(false);
+        router.refresh();
+      }
+    });
+  };
+
+  // ── First Build handlers ───────────────────────────────────────────────────
+  const handleFbFileSelect = (selected: File) => {
+    if (selected.type.startsWith("image/") || selected.type === "application/pdf") {
+      setFbFile(selected);
+      setFbPreviewUrl(URL.createObjectURL(selected));
+      setFbFileType(selected.type === "application/pdf" ? "pdf" : "image");
+    } else {
+      toast.error("Please upload an image or PDF file");
+    }
+  };
+
+  const handleFbDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setFbDragActive(false);
+    if (e.dataTransfer.files?.[0]) handleFbFileSelect(e.dataTransfer.files[0]);
+  };
+
+  const handleFbUpload = () => {
+    if (!fbFile) return;
+    const formData = new FormData();
+    formData.append("ticketId", ticketId);
+    formData.append("file", fbFile);
+    startFbTransition(async () => {
+      const res = await uploadFirstBuildAction(formData);
+      if (res.error) {
+        toast.error(res.error);
+      } else {
+        toast.success("First build layout uploaded!");
+        setFbFile(null);
+        setFbPreviewUrl(null);
+        setFbFileType(null);
+        setFbIsReplacing(false);
+        router.refresh();
       }
     });
   };
@@ -117,41 +164,64 @@ export default function PcBuildHandover({
           <h4 style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.375rem", color: "var(--text-secondary)" }}>
             <Camera size={16} /> First Build (Technician)
           </h4>
-          
-          {firstBuildUrl ? (
-            <div className="group" style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--border)", height: "220px", background: "#111" }}>
+
+          {firstBuildUrl && !fbIsReplacing ? (
+            <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--border)", height: "220px", background: "#111" }}>
               {isPdfUrl(firstBuildUrl) ? (
-                <iframe 
-                  src={firstBuildUrl} 
-                  style={{ width: "100%", height: "100%", border: "none", backgroundColor: "#fff" }}
-                  title="First Build PDF"
-                />
+                <iframe src={firstBuildUrl} style={{ width: "100%", height: "100%", border: "none", backgroundColor: "#fff" }} title="First Build PDF" />
               ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img 
-                  src={firstBuildUrl} 
-                  alt="First Build Layout" 
-                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                />
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={firstBuildUrl} alt="First Build Layout" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
               )}
               <div style={{ position: "absolute", top: "0.75rem", right: "0.75rem", background: "rgba(22, 163, 74, 0.9)", color: "white", padding: "0.25rem 0.625rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", backdropFilter: "blur(4px)" }}>
                 <CheckCircle2 size={12} /> Uploaded
               </div>
-              <a 
-                href={firstBuildUrl} 
-                target="_blank" 
-                rel="noopener noreferrer"
-                style={{ position: "absolute", bottom: "0.75rem", right: "0.75rem", background: "rgba(0, 0, 0, 0.6)", color: "white", width: "2rem", height: "2rem", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", backdropFilter: "blur(4px)", transition: "background 0.2s" }}
-                title="View Full Size"
-              >
-                <Eye size={14} />
-              </a>
+              <div style={{ position: "absolute", bottom: "0.75rem", right: "0.75rem", display: "flex", gap: "0.5rem" }}>
+                {canUpload && (
+                  <button onClick={() => setFbIsReplacing(true)} style={{ background: "rgba(255,255,255,0.9)", color: "#111", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600, border: "none", cursor: "pointer", backdropFilter: "blur(4px)" }}>
+                    Replace
+                  </button>
+                )}
+                <a href={firstBuildUrl} target="_blank" rel="noopener noreferrer" style={{ background: "rgba(0,0,0,0.6)", color: "white", width: "2rem", height: "2rem", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", backdropFilter: "blur(4px)" }} title="View Full Size">
+                  <Eye size={14} />
+                </a>
+              </div>
+            </div>
+          ) : fbPreviewUrl ? (
+            <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--primary)", height: "220px", background: "#f3f4f6", display: "flex", flexDirection: "column" }}>
+              {fbFileType === "pdf" ? (
+                <iframe src={fbPreviewUrl} style={{ width: "100%", height: "170px", border: "none", backgroundColor: "#fff" }} title="First Build Preview PDF" />
+              ) : (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={fbPreviewUrl} alt="First Build Preview" style={{ width: "100%", height: "170px", objectFit: "contain" }} />
+              )}
+              <div style={{ height: "50px", display: "flex", background: "var(--white)", borderTop: "1px solid var(--border-light)" }}>
+                <button onClick={() => { setFbFile(null); setFbPreviewUrl(null); setFbIsReplacing(false); }} className="btn btn-ghost btn-sm" style={{ flex: 1, borderRadius: 0, height: "100%", borderRight: "1px solid var(--border-light)" }} disabled={fbIsPending}>
+                  Cancel
+                </button>
+                <button onClick={handleFbUpload} className="btn btn-primary btn-sm" style={{ flex: 1, borderRadius: 0, height: "100%" }} disabled={fbIsPending}>
+                  {fbIsPending ? "Uploading..." : "Confirm Upload"}
+                </button>
+              </div>
+            </div>
+          ) : canUpload ? (
+            <div
+              onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setFbDragActive(true); }}
+              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setFbDragActive(true); }}
+              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setFbDragActive(false); }}
+              onDrop={handleFbDrop}
+              style={{ borderRadius: "12px", border: fbDragActive ? "2px dashed var(--primary)" : "1.5px dashed var(--border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "220px", background: fbDragActive ? "rgba(22,70,157,0.04)" : "var(--white)", color: "var(--text-muted)", gap: "0.5rem", cursor: "pointer", position: "relative", transition: "all 0.2s" }}
+            >
+              <input type="file" accept="image/*,application/pdf" onChange={(e) => e.target.files?.[0] && handleFbFileSelect(e.target.files[0])} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
+              <Camera size={32} style={{ color: "var(--primary)" }} />
+              <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>Upload first build layout</span>
+              <span style={{ fontSize: "0.75rem" }}>Drag & drop or click to browse</span>
             </div>
           ) : (
-            <div style={{ borderRadius: "12px", border: "1.5px dashed var(--border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "220px", background: "var(--cream-light)", color: "var(--text-muted)", gap: "0.5rem" }}>
-              <Clock size={32} style={{ opacity: 0.6, color: "var(--primary)" }} />
-              <span style={{ fontSize: "0.875rem", fontWeight: 500 }}>Awaiting first build</span>
-              <span style={{ fontSize: "0.75rem", opacity: 0.8 }}>Technician will upload upon marking done</span>
+            <div style={{ borderRadius: "12px", border: "1.5px dashed var(--border-light)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "220px", background: "#f9fafb", color: "var(--text-muted)", gap: "0.5rem", padding: "1rem", textAlign: "center" }}>
+              <Lock size={28} style={{ opacity: 0.4 }} />
+              <span style={{ fontSize: "0.8125rem", fontWeight: 500 }}>Awaiting first build upload</span>
+              <span style={{ fontSize: "0.75rem", opacity: 0.8 }}>Technician or admin can upload the layout here</span>
             </div>
           )}
         </div>

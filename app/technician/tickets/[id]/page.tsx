@@ -68,8 +68,30 @@ export default async function TechnicianTicketDetailPage({
   const isTeamLeader = currentUser?.is_team_leader || false;
 
   const isPaused = ticket.time_logs.length > 0 && ticket.time_logs[ticket.time_logs.length - 1].event === "PAUSE";
-  const isDone = ["done", "completed", "ready_for_pickup", "waiting_pickup", "handed_to_courier", "delivered", "cancelled", "rejected"].includes(ticket.status);
-  const serializedTimeLogs = ticket.time_logs.map(l => ({ event: l.event, created_at: l.created_at.toISOString() }));
+  // isDone = no more technician actions possible (fully terminal statuses only)
+  // ready_for_pickup and handed_to_courier still need proof upload actions, so NOT included here
+  const isDone = ["completed", "cancelled", "rejected"].includes(ticket.status);
+  const serializedTimeLogs = ticket.time_logs.map(l => ({ id: l.id, event: l.event, created_at: l.created_at.toISOString() }));
+
+  // ── Proof attachment detection ──────────────────────────────────────────────
+  // Files uploaded via updateTicketStatusAction are named: {prefix}_{ticket_code}_{name}.ext
+  // Prefixes: work-proof, courier-proof, pickup-proof, delivery-proof, cancel-proof
+  const PROOF_PREFIXES = ["work-proof", "courier-proof", "pickup-proof", "delivery-proof", "cancel-proof"];
+  const PROOF_LABELS: Record<string, { label: string; emoji: string; color: string; bg: string; border: string }> = {
+    "work-proof":     { label: "Work Completion",     emoji: "✅", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
+    "courier-proof":  { label: "Courier Handover",    emoji: "🚚", color: "#7c3aed", bg: "#faf5ff", border: "#e9d5ff" },
+    "pickup-proof":   { label: "Pickup Handover",     emoji: "🤝", color: "#0369a1", bg: "#eff6ff", border: "#bfdbfe" },
+    "delivery-proof": { label: "Delivery Confirmed",  emoji: "📬", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
+    "cancel-proof":   { label: "Cancellation",        emoji: "❌", color: "#be123c", bg: "#fff1f2", border: "#fecdd3" },
+  };
+
+  function getProofPrefix(url: string): string | null {
+    const filename = url.split("/").pop()?.split("?")[0] ?? "";
+    return PROOF_PREFIXES.find((p) => filename.startsWith(p)) ?? null;
+  }
+
+  const proofAttachments = ticket.attachments.filter((a) => getProofPrefix(a.file_url));
+  const regularAttachments = ticket.attachments.filter((a) => !getProofPrefix(a.file_url));
 
   const historyEvents = [
     ...ticket.status_logs
@@ -225,43 +247,12 @@ export default async function TechnicianTicketDetailPage({
             />
           )}
 
-          {/* Proof Attachments */}
-          {(ticket.payment_proof_url || ticket.progress_proof_url || ticket.delivery_proof_url || ticket.revision_proof_url) && (
+          {/* Regular Attachments */}
+          {regularAttachments.length > 0 && (
             <div className="card">
-              <h3 style={{ marginBottom: "1rem" }}>Proof Attachments</h3>
+              <h3 style={{ marginBottom: "1rem" }}>Attachments ({regularAttachments.length})</h3>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
-                {[
-                  { label: "Payment Proof", url: ticket.payment_proof_url },
-                  { label: "Progress Proof", url: ticket.progress_proof_url },
-                  { label: "Delivery Proof", url: ticket.delivery_proof_url },
-                  { label: "Revision Proof", url: ticket.revision_proof_url },
-                ].filter(p => p.url).map((proof, idx) => (
-                  <a
-                    key={idx}
-                    href={proof.url!}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={proof.label}
-                    style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.375rem", width: "100px", textDecoration: "none" }}
-                  >
-                    <div style={{ width: "100px", height: "80px", borderRadius: "0.5rem", overflow: "hidden", border: "1px solid var(--border)", background: "var(--cream)", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                      <img src={proof.url!} alt={proof.label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                    </div>
-                    <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", textAlign: "center", wordBreak: "break-all", maxWidth: "100px", lineHeight: 1.3, fontWeight: 500 }}>
-                      {proof.label}
-                    </span>
-                  </a>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Attachments */}
-          {ticket.attachments.length > 0 && (
-            <div className="card">
-              <h3 style={{ marginBottom: "1rem" }}>Attachments ({ticket.attachments.length})</h3>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem" }}>
-                {ticket.attachments.map((a) => {
+                {regularAttachments.map((a) => {
                   const filename = a.file_url.split("/").pop()?.split("?")[0] ?? "file";
                   const isImage = a.file_type === "image";
                   const isVideo = a.file_type === "video";
@@ -355,6 +346,63 @@ export default async function TechnicianTicketDetailPage({
           {/* Working Time Widget */}
           {ticket.time_logs.length > 0 && (
             <WorkingTimeDisplay timeLogs={serializedTimeLogs} isDone={isDone} />
+          )}
+
+          {/* Proof Attachments — shown below working time */}
+          {proofAttachments.length > 0 && (
+            <div className="card" style={{ padding: "1rem 1.25rem" }}>
+              <h3 style={{ marginBottom: "0.875rem", fontSize: "0.9375rem" }}>Proof Attachments</h3>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+                {proofAttachments.map((a) => {
+                  const pKey = getProofPrefix(a.file_url) ?? "work-proof";
+                  const meta = PROOF_LABELS[pKey];
+                  const filename = a.file_url.split("/").pop()?.split("?")[0] ?? "file";
+                  const isImage = a.file_type === "image";
+                  const isVideo = a.file_type === "video";
+                  return (
+                    <a
+                      key={a.id}
+                      href={a.file_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "0.75rem",
+                        padding: "0.625rem 0.75rem",
+                        background: meta.bg,
+                        border: `1px solid ${meta.border}`,
+                        borderRadius: "0.625rem",
+                        textDecoration: "none",
+                        transition: "opacity 0.15s",
+                      }}
+                    >
+                      {/* Thumbnail */}
+                      <div style={{ width: "52px", height: "52px", borderRadius: "0.375rem", overflow: "hidden", flexShrink: 0, background: "rgba(0,0,0,0.08)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                        {isImage ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={a.file_url} alt={filename} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : isVideo ? (
+                          <Film size={22} style={{ color: meta.color }} />
+                        ) : (
+                          <FileText size={22} style={{ color: meta.color }} />
+                        )}
+                      </div>
+                      {/* Info */}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        {/* Label tag */}
+                        <div style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: meta.color, color: "white", borderRadius: "999px", padding: "0.1rem 0.5rem", fontSize: "0.68rem", fontWeight: 700, marginBottom: "0.25rem", letterSpacing: "0.02em" }}>
+                          {meta.emoji} {meta.label}
+                        </div>
+                        <div style={{ fontSize: "0.78rem", color: "var(--text-secondary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                          {filename.length > 36 ? filename.slice(0, 33) + "..." : filename}
+                        </div>
+                      </div>
+                    </a>
+                  );
+                })}
+              </div>
+            </div>
           )}
 
           {/* Assignment panel (Admin & Store Coordinator only) */}

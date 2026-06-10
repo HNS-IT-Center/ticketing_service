@@ -125,7 +125,7 @@ export default function RequestsBell({ userId }: { userId: string }) {
         <div
           style={{
             position: "fixed",
-            right: "3.5rem",
+            right: "0.5rem",
             top: "calc(var(--topbar-height, 56px) + 0.5rem)",
             width: "min(380px, calc(100vw - 1rem))",
             background: "var(--white)",

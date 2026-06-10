@@ -39,11 +39,23 @@ export async function requestTicketAssignmentAction(ticketId: string) {
     return { error: "Another technician has already requested this ticket." };
   }
 
-  // Create Assignment Request
-  await db.ticketAssignmentRequest.create({
-    data: {
+  // Create Assignment Request (upsert handles the case where a prior rejected
+  // record already exists for this technician + ticket — avoids unique constraint crash)
+  await db.ticketAssignmentRequest.upsert({
+    where: {
+      ticket_id_technician_id: {
+        ticket_id: ticketId,
+        technician_id: session.userId,
+      },
+    },
+    create: {
       ticket_id: ticketId,
       technician_id: session.userId,
+      status: "pending",
+    },
+    update: {
+      status: "pending",
+      created_at: new Date(),
     },
   });
 
@@ -113,15 +125,18 @@ export async function updateTicketStatusAction(formData: FormData) {
     return { error: "You are not assigned to this ticket" };
   }
 
-  // Validation rules
+  // ── New Handover Chain ──────────────────────────────────────────────────────
+  // self-pickup path: done → ready_for_pickup → completed (proof of handover to customer)
+  // courier path:    done → handed_to_courier (proof: package given to courier)
+  //                       → delivered (proof: courier delivered to recipient)
+  //                       → completed (auto, no separate button)
   const HANDOVER_CHAIN: Record<string, string> = {
-    on_progress: "waiting",
-    done: "on_progress",
-    ready_for_pickup: "done",
-    waiting_pickup: "ready_for_pickup",
+    on_progress:       "waiting",
+    done:              "on_progress",
+    ready_for_pickup:  "done",
     handed_to_courier: "done",
-    delivered: "handed_to_courier",
-    completed: "waiting_pickup", // or "delivered" — checked below
+    delivered:         "handed_to_courier",
+    completed:         "ready_for_pickup", // self-pickup: upload proof → completed
   };
 
   const allowedPrevious = HANDOVER_CHAIN[newStatus];
@@ -129,11 +144,27 @@ export async function updateTicketStatusAction(formData: FormData) {
     newStatus === "cancelled" ||
     newStatus === "rejected" ||
     ticket.status === allowedPrevious ||
-    (newStatus === "completed" && (ticket.status === "waiting_pickup" || ticket.status === "delivered")) ||
-    (newStatus === "on_progress" && ticket.status === "on_progress"); // allow re-start after pause
+    // resume after pause stays on_progress (time log event only, status unchanged)
+    (newStatus === "on_progress" && ticket.status === "on_progress") ||
+    // legacy compatibility: allow completed from waiting_pickup or delivered (old records)
+    (newStatus === "completed" && (ticket.status === "waiting_pickup" || ticket.status === "delivered"));
 
   if (!isValidTransition) {
     return { error: `Cannot move to "${newStatus}" from "${ticket.status}"` };
+  }
+
+  // ── Proof file required for specific handover steps ──────────────────────
+  // handed_to_courier: photo of handing package to courier
+  // delivered:         receipt/photo confirming delivery to recipient
+  // completed (from ready_for_pickup): photo of handing item to customer at counter
+  const requiresProof =
+    newStatus === "handed_to_courier" ||
+    newStatus === "delivered" ||
+    (newStatus === "completed" && ticket.status === "ready_for_pickup");
+
+  const validFiles = files.filter((f) => f.size > 0);
+  if (requiresProof && validFiles.length === 0) {
+    return { error: "Proof attachment is required for this step." };
   }
 
   const oldStatus = ticket.status;
@@ -143,7 +174,7 @@ export async function updateTicketStatusAction(formData: FormData) {
   if (newStatus === "on_progress") ticketUpdateData.work_started_at = new Date();
   if (newStatus === "done") ticketUpdateData.work_completed_at = new Date();
 
-  // Run the core DB writes in parallel — none of them depend on each other
+  // Run the core DB writes in parallel
   const [, log] = await Promise.all([
     db.ticket.update({
       where: { id: ticketId },
@@ -165,13 +196,27 @@ export async function updateTicketStatusAction(formData: FormData) {
       : Promise.resolve(null),
   ]);
 
-  // Handle Attachments
-  if (files && files.length > 0) {
+  // ── Handle Attachments ────────────────────────────────────────────────────
+  if (validFiles.length > 0) {
     const { createServerSupabaseClient } = await import("@/lib/supabase");
     const supabase = createServerSupabaseClient();
-    const uploadOps = files.map(async (file) => {
-      const ext = file.name.split(".").pop();
-      const path = `${ticketId}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
+
+    // Derive a readable proof-type prefix so the file is self-describing in storage
+    const proofPrefix: Record<string, string> = {
+      done:              "work-proof",
+      handed_to_courier: "courier-proof",
+      completed:         "pickup-proof",   // completed from ready_for_pickup
+      delivered:         "delivery-proof",
+      cancelled:         "cancel-proof",
+      rejected:          "cancel-proof",
+    };
+    const prefix = proofPrefix[newStatus] ?? "attachment";
+
+    const uploadOps = validFiles.map(async (file) => {
+      const ext = file.name.split(".").pop() ?? "bin";
+      const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase().slice(0, 40);
+      const path = `${ticketId}/${prefix}_${ticket.ticket_code}_${baseName}.${ext}`;
+
 
       const { data, error } = await supabase.storage
         .from("attachments")
@@ -193,35 +238,36 @@ export async function updateTicketStatusAction(formData: FormData) {
 
       return { publicUrl, fileType };
     });
-    const uploadedFiles = await Promise.all(uploadOps);
-
-    // Save first image as first_build_url for PC build ticket when marked done
-    if (newStatus === "done" && ticket.ticket_type === "pc_build") {
-      const firstImage = uploadedFiles.find((f) => f && f.fileType === "image");
-      if (firstImage) {
-        await db.ticketPcBuildDetail.upsert({
-          where: { ticket_id: ticketId },
-          create: { ticket_id: ticketId, first_build_url: firstImage.publicUrl },
-          update: { first_build_url: firstImage.publicUrl },
-        });
-      }
-    }
+    await Promise.all(uploadOps);
   }
 
-  // Update workload + performance when terminal
+
+  // ── Auto-complete after courier delivery proof ────────────────────────────
+  // When "delivered" is confirmed (technician uploads delivery proof), the ticket
+  // is immediately auto-advanced to "completed" — no separate button needed.
+  if (newStatus === "delivered") {
+    await db.ticket.update({ where: { id: ticketId }, data: { status: "completed" } });
+    await db.ticketStatusLog.create({
+      data: {
+        ticket_id: ticketId,
+        old_status: "delivered",
+        new_status: "completed",
+        reason: "Auto-completed after delivery confirmation",
+        changed_by: session.userId,
+      },
+    });
+  }
+
+  // ── Performance tracking ──────────────────────────────────────────────────
   const isTerminal = ["done", "cancelled", "rejected"].includes(newStatus);
   if (isTerminal) {
     const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
 
-    // Bust leaderboard + tech-month-winner caches so next page load is fresh
     revalidateTag("leaderboard-techs", "max");
     revalidateTag("leaderboard-stores", "max");
     revalidateTag("tech-month-winner", "max");
     revalidateTag(`user-profile:${session.userId}`, "max");
 
-    // Workload reduction removed: tracked dynamically
-
-    // Update performance
     const isSuccess = newStatus === "done";
     await db.technicianPerformance.upsert({
       where: { technician_id: session.userId },
@@ -241,7 +287,7 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // Create notification for customer if ticket is tied to a user account
+  // ── Customer notification ─────────────────────────────────────────────────
   if (ticket.user_id && ticket.user_id !== session.userId) {
     await db.notification.create({
       data: {
@@ -253,11 +299,10 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // When done: notify the technician with points earned + send customer email
+  // When done: notify the technician with points earned
   if (newStatus === "done") {
     const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
     revalidateTag(`user-profile:${session.userId}`, "max");
-    // Fetch updated total to show current total
     const perf = await db.technicianPerformance.findUnique({
       where: { technician_id: session.userId },
       select: { total_points_completed: true },
@@ -273,9 +318,7 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // Fire email non-blocking — we do NOT await it.
-  // Resend can take 5-10s; the user should not wait for email delivery.
-  // The ticket has customer info already loaded in `ticket` — avoid a second DB round-trip.
+  // ── Fire email non-blocking ───────────────────────────────────────────────
   db.ticket.findUnique({
     where: { id: ticketId },
     select: { customer_email: true, customer_name: true, public_share_token: true, user: { select: { name: true, email: true } } },

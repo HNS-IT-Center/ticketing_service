@@ -20,15 +20,29 @@ interface Props {
   filterMonth: number | null;
   filterYear: number | null;
   monthLabel: string;
+  storeName: string | null;
 }
 
 const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
-export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel }: Props) {
+/** Converts decimal hours into compact human-readable string e.g. "2d 4h" */
+function formatAvgTime(hours: number): string {
+  if (hours < 1) return "< 1h";
+  const totalHours = Math.round(hours);
+  const days = Math.floor(totalHours / 24);
+  const remainHours = totalHours % 24;
+  if (days === 0) return `${remainHours}h`;
+  if (remainHours === 0) return `${days}d`;
+  return `${days}d ${remainHours}h`;
+}
+
+export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel, storeName }: Props) {
   const [open, setOpen] = useState(false);
 
   const handlePrint = () => {
     const period = monthLabel === "All Time" ? "All Time" : monthLabel;
+    const storeLabel = storeName ?? "All Stores";
+    const isAllStores = !storeName;
 
     const rankEmoji = (i: number) =>
       i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`;
@@ -53,15 +67,27 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
       </div>
     ` : "";
 
+    // Store identity banner
+    const storeBanner = `
+      <div style="display: flex; align-items: center; gap: 1rem; background: ${isAllStores ? "#f0f4ff" : "#eef6ff"}; border: 1.5px solid ${isAllStores ? "#c3cfe8" : "#93c5fd"}; border-radius: 12px; padding: 0.875rem 1.25rem; margin-bottom: 1.75rem;">
+        <div style="font-size: 1.5rem;">🏪</div>
+        <div>
+          <div style="font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; color: #4a5568; margin-bottom: 0.2rem;">Store Coverage</div>
+          <div style="font-size: 1rem; font-weight: 800; color: #16469d;">${storeLabel}</div>
+          ${isAllStores ? "<div style=\"font-size: 0.7rem; color: #718096; margin-top: 0.1rem;\">Showing aggregate data across all active stores</div>" : "<div style=\"font-size: 0.7rem; color: #718096; margin-top: 0.1rem;\">Report filtered to this store only</div>"}
+        </div>
+      </div>
+    `;
+
     const tableRows = rows
       .map(
         (p, i) => {
           let detailsHtml = "";
           if (p.details) {
             detailsHtml = `<div class="details-grid">` + Object.entries(p.details).map(([type, stats]) => {
-              const avg = stats.timedCount > 0 ? (stats.totalHours / stats.timedCount).toFixed(1) : null;
+              const avgFormatted = stats.timedCount > 0 ? formatAvgTime(stats.totalHours / stats.timedCount) : null;
               const typeLabel = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-              return `<div class="detail-box"><strong>${typeLabel}:</strong> ${stats.count} <span class="detail-avg">${avg ? `(Avg: ${avg} H)` : "(No time track)"}</span></div>`;
+              return `<div class="detail-box"><strong>${typeLabel}:</strong> ${stats.count} <span class="detail-avg">${avgFormatted ? `avg ${avgFormatted}` : "(no time track)"}</span></div>`;
             }).join("") + `</div>`;
           }
 
@@ -229,6 +255,8 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel 
       <div class="report-date">Generated: ${new Date().toLocaleString("id-ID", { dateStyle: "long", timeStyle: "short" })}</div>
     </div>
   </div>
+
+  ${storeBanner}
 
   ${topTechCard}
 

@@ -40,9 +40,15 @@ export async function uploadFirstBuildAction(formData: FormData) {
     const { createServerSupabaseClient } = await import("@/lib/supabase");
     const supabase = createServerSupabaseClient();
 
-    const ext = file.name.split(".").pop() ?? "jpg";
+    // Derive extension from MIME type (handles compressed camera files)
+    const mimeToExt: Record<string, string> = {
+      "image/webp": "webp", "image/jpeg": "jpg", "image/png": "png",
+      "image/gif": "gif", "video/webm": "webm", "video/mp4": "mp4",
+      "video/quicktime": "mov", "application/pdf": "pdf",
+    };
+    const ext = mimeToExt[file.type] || file.name.split(".").pop()?.toLowerCase() || "bin";
     const baseName = sanitizeName(file.name);
-    // e.g. first-build_HNS-NGW-001_layout.jpg
+    // e.g. first-build_HNS-NGW-001_layout.webp
     const fileName = `first-build_${ticket.ticket_code}_${baseName}.${ext}`;
     const path = `${ticketId}/${fileName}`;
 
@@ -130,9 +136,15 @@ export async function uploadRevisionBuildAction(formData: FormData) {
     });
     const revisionNumber = existingRevisionCount + 1;
 
-    const ext = file.name.split(".").pop() ?? "jpg";
+    // Derive extension from MIME type (handles compressed camera files)
+    const mimeToExt: Record<string, string> = {
+      "image/webp": "webp", "image/jpeg": "jpg", "image/png": "png",
+      "image/gif": "gif", "video/webm": "webm", "video/mp4": "mp4",
+      "video/quicktime": "mov", "application/pdf": "pdf",
+    };
+    const ext = mimeToExt[file.type] || file.name.split(".").pop()?.toLowerCase() || "bin";
     const baseName = sanitizeName(file.name);
-    // e.g. revision-2_HNS-NGW-001_updated-layout.jpg
+    // e.g. revision-2_HNS-NGW-001_updated-layout.webp
     const fileName = `revision-${revisionNumber}_${ticket.ticket_code}_${baseName}.${ext}`;
     const path = `${ticketId}/${fileName}`;
 

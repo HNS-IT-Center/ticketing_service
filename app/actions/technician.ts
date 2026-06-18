@@ -241,7 +241,22 @@ export async function updateTicketStatusAction(formData: FormData) {
     const prefix = proofPrefix[newStatus] ?? "attachment";
 
     const uploadOps = validFiles.map(async (file) => {
-      const ext = file.name.split(".").pop() ?? "bin";
+      // Derive extension from MIME type (reliable for camera files like HEIC/MOV)
+      // After client-side compression, images are WebP and videos are WebM
+      const mimeToExt: Record<string, string> = {
+        "image/webp": "webp",
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "video/webm": "webm",
+        "video/mp4": "mp4",
+        "video/quicktime": "mov",
+        "application/pdf": "pdf",
+      };
+      const ext =
+        mimeToExt[file.type] ||
+        file.name.split(".").pop()?.toLowerCase() ||
+        "bin";
       const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase().slice(0, 40);
       const path = `${ticketId}/${prefix}_${ticket.ticket_code}_${baseName}.${ext}`;
 

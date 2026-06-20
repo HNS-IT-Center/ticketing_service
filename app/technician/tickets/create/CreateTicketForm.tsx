@@ -72,8 +72,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     }
     if (step === 2) {
       if (!customerName.trim()) errs.customerName = "Customer name is required.";
-      if (!customerEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail))
-        errs.customerEmail = "Valid customer email is required.";
+      if (customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail))
+        errs.customerEmail = "Please enter a valid email address.";
       if (!phone.match(/^\d{9,13}$/)) errs.phone = "Enter valid phone number digits (9-13 digits).";
     }
     if (step === 3) {
@@ -245,7 +245,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
               {errors.customerName && <span className="form-error"><AlertCircle size={12} />{errors.customerName}</span>}
             </div>
             <div className="form-group">
-              <label className="form-label">Customer Email *</label>
+              <label className="form-label">Customer Email <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(optional)</span></label>
               <input
                 type="email"
                 className={`form-input ${errors.customerEmail ? "error" : ""}`}
@@ -255,7 +255,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
               />
               {errors.customerEmail && <span className="form-error"><AlertCircle size={12} />{errors.customerEmail}</span>}
               <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem", display: "block" }}>
-                Progress updates will be sent to this email address.
+                If provided, progress updates will be sent automatically to this email.
               </span>
             </div>
             <div className="form-group">
@@ -297,7 +297,13 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     <button
                       key={t.value}
                       type="button"
-                      onClick={() => setTicketType(t.value)}
+                      onClick={() => {
+                        setTicketType(t.value);
+                        // Auto-reset courier to self_pickup if switching away from pc_build
+                        if (t.value !== "pc_build" && pickupMethod === "courier") {
+                          setPickupMethod("self_pickup");
+                        }
+                      }}
                       style={{
                         padding: "0.875rem 1rem",
                         border: `2px solid ${ticketType === t.value ? "var(--primary)" : "var(--border)"}`,
@@ -340,10 +346,29 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             </div>
             <div className="form-group" style={{ marginTop: "1rem" }}>
               <label className="form-label">Pickup Method *</label>
-              <select className="form-input" value={pickupMethod} onChange={e => setPickupMethod(e.target.value)}>
+              <select
+                className="form-input"
+                value={pickupMethod}
+                onChange={e => {
+                  // Only allow courier for pc_build
+                  if (e.target.value === "courier" && ticketType !== "pc_build") return;
+                  setPickupMethod(e.target.value);
+                }}
+              >
                 <option value="self_pickup">Self Pickup</option>
-                <option value="courier">Courier / Delivery</option>
+                <option
+                  value="courier"
+                  disabled={ticketType !== "pc_build"}
+                  title={ticketType !== "pc_build" ? "Courier is only available for PC Build tickets" : ""}
+                >
+                  Courier / Delivery {ticketType !== "pc_build" ? "(PC Build only)" : ""}
+                </option>
               </select>
+              {ticketType !== "pc_build" && pickupMethod === "courier" && (
+                <span style={{ fontSize: "0.75rem", color: "var(--accent)", marginTop: "0.25rem", display: "block" }}>
+                  ⚠️ Courier option has been reset — only available for PC Build tickets.
+                </span>
+              )}
             </div>
           </div>
         )}

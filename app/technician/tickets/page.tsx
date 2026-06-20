@@ -4,11 +4,12 @@ import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
 
-function getTicketPoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
+function getTicketPoints(type: string, deviceType?: string | null, extraServices?: string[]): number {
+  let base = 2;
+  if (type === "pc_build") base = 4;
+  else if (type === "service") base = 5;
+  else if (type === "cleaning" && deviceType === "PC_Gaming") base = 4;
+  return base + (extraServices?.length ?? 0) * 3;
 }
 
 export const metadata = { title: "My Tickets — HNS IT Center" };
@@ -29,8 +30,27 @@ export default async function TechnicianTicketsPage({
   const skip = (page - 1) * PAGE_SIZE;
   const sortParam = params.sort || "priority";
 
+  // If coordinator, show all tickets in their stores; otherwise own tickets only
+  const currentUser = await db.user.findUnique({
+    where: { id: session.userId },
+    select: { is_team_leader: true },
+  });
+  const isCoordinator = currentUser?.is_team_leader ?? false;
+
+  let technicianWhere: object = { technician_id: session.userId };
+  if (isCoordinator) {
+    const assignments = await db.technicianStoreAssignment.findMany({
+      where: { technician_id: session.userId },
+      select: { store_id: true },
+    });
+    const storeIds = assignments.map((a) => a.store_id);
+    technicianWhere = storeIds.length > 0
+      ? { store_location_id: { in: storeIds } }
+      : {}; // no store → empty fallback
+  }
+
   const where = {
-    technician_id: session.userId,
+    ...technicianWhere,
     ...(statusFilter !== "all" ? { status: statusFilter as any } : {}),
     ...(query
       ? {
@@ -58,7 +78,12 @@ export default async function TechnicianTicketsPage({
 
   const allTickets = await db.ticket.findMany({
     where,
-    include: { user: { select: { name: true } } },
+    select: {
+      id: true, ticket_code: true, ticket_type: true, device_type: true,
+      status: true, technician_id: true, is_for_self: true, customer_name: true,
+      updated_at: true, extra_services: true,
+      user: { select: { name: true } },
+    },
   });
 
   allTickets.sort((a, b) => {
@@ -108,10 +133,10 @@ export default async function TechnicianTicketsPage({
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <h1>My Tickets</h1>
+          <h1>{isCoordinator ? "Store Tickets" : "My Tickets"}</h1>
           <div className="flex items-center gap-3 mt-1">
             <p className="text-gray-500">
-              Manage tickets assigned to you
+              {isCoordinator ? "All tickets in your assigned stores" : "Manage tickets assigned to you"}
             </p>
             <Link href="/technician/tickets/create" className="btn btn-primary btn-sm flex items-center gap-1.5" style={{ padding: "0.25rem 0.75rem" }}>
               <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span> New Ticket
@@ -189,7 +214,8 @@ export default async function TechnicianTicketsPage({
               <tbody>
                 {tickets.map((t) => {
                   const actualName = t.is_for_self ? t.user?.name : t.customer_name;
-                  const pts = getTicketPoints(t.ticket_type, t.device_type);
+                  const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
+                  const hasExtra = (t.extra_services as string[])?.length > 0;
                   return (
                     <tr key={t.id}>
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
@@ -200,15 +226,15 @@ export default async function TechnicianTicketsPage({
                       </td>
                       <td>
                         <span style={{
-                          display: "inline-flex", alignItems: "center",
+                          display: "inline-flex", alignItems: "center", gap: "0.25rem",
                           padding: "0.2rem 0.55rem", borderRadius: "999px",
                           fontSize: "0.75rem", fontWeight: 700,
-                          background: pts >= 4 ? "rgba(124,58,237,0.1)" : pts === 3 ? "rgba(22,70,157,0.1)" : "rgba(22,163,74,0.1)",
-                          color: pts >= 4 ? "#6d28d9" : pts === 3 ? "var(--primary)" : "#15803d",
-                          border: `1px solid ${pts >= 4 ? "rgba(124,58,237,0.25)" : pts === 3 ? "rgba(22,70,157,0.25)" : "rgba(22,163,74,0.25)"}`,
+                          background: pts >= 5 ? "rgba(234,179,8,0.12)" : pts >= 4 ? "rgba(124,58,237,0.1)" : "rgba(22,70,157,0.1)",
+                          color: pts >= 5 ? "#92400e" : pts >= 4 ? "#6d28d9" : "var(--primary)",
+                          border: `1px solid ${pts >= 5 ? "rgba(234,179,8,0.3)" : pts >= 4 ? "rgba(124,58,237,0.25)" : "rgba(22,70,157,0.25)"}`,
                           whiteSpace: "nowrap",
                         }}>
-                          ⭐ {pts} pts
+                          ⭐ {pts} pts{hasExtra && <span style={{ opacity: 0.65, fontWeight: 400, fontSize: "0.68rem" }}> (+extra)</span>}
                         </span>
                       </td>
                       <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
@@ -232,7 +258,8 @@ export default async function TechnicianTicketsPage({
           </div>
         ) : tickets.map((t) => {
           const actualName = t.is_for_self ? t.user?.name : t.customer_name;
-          const pts = getTicketPoints(t.ticket_type, t.device_type);
+          const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
+          const hasExtra = (t.extra_services as string[])?.length > 0;
           return (
             <Link key={t.id} href={`/technician/tickets/${t.id}`} style={{ textDecoration: "none" }}>
               <div className="mobile-ticket-card">

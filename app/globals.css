@@ -758,7 +758,70 @@ tbody td {
   border-top: 1px solid var(--border);
 }
 
+/* ─── File Upload ─────────────────────────────────────────────────────────── */
+.file-upload-area {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-lg);
+  padding: 2rem 1.5rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.375rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--cream);
+  user-select: none;
+  position: relative;
+}
+.file-upload-area:hover {
+  border-color: var(--primary);
+  background: rgba(22, 70, 157, 0.04);
+  box-shadow: 0 0 0 4px rgba(22, 70, 157, 0.06);
+  transform: translateY(-1px);
+}
+.file-upload-area:hover svg {
+  transform: scale(1.1) translateY(-2px);
+  color: var(--primary) !important;
+  transition: transform 0.2s ease;
+}
+.file-upload-area:active {
+  transform: translateY(0);
+  box-shadow: none;
+}
+.file-upload-area.dragover {
+  border-color: var(--primary);
+  background: rgba(22, 70, 157, 0.08);
+  box-shadow: 0 0 0 4px rgba(22, 70, 157, 0.12);
+  transform: scale(1.01);
+}
+
+.file-preview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.file-preview-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.875rem;
+  background: var(--white);
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-md);
+  transition: all 0.15s ease;
+  cursor: default;
+}
+.file-preview-item:hover {
+  border-color: var(--primary);
+  background: rgba(22, 70, 157, 0.02);
+  box-shadow: var(--shadow-sm);
+}
+
 /* ─── Workload Bar ────────────────────────────────────────────────────────── */
+
 .workload-bar {
   height: 8px;
   background: var(--border);

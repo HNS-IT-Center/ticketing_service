@@ -13,6 +13,14 @@ import CustomerWhatsAppActions from "@/app/admin/tickets/[id]/CustomerWhatsAppAc
 import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
+import ExtraPointsPanel from "./ExtraPointsPanel";
+
+function getTicketBasePoints(type: string, deviceType?: string | null): number {
+  if (type === "pc_build") return 4;
+  if (type === "service") return 5;
+  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
+  return 2;
+}
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -202,7 +210,7 @@ export default async function TechnicianTicketDetailPage({
                   </div>
                 </div>
               ))}
-              <PickupMethodSelector ticketId={ticket.id} initialMethod={ticket.pickup_method || "self_pickup"} />
+              <PickupMethodSelector ticketId={ticket.id} initialMethod={ticket.pickup_method || "self_pickup"} ticketType={ticket.ticket_type} />
             </div>
 
             <CustomerWhatsAppActions 
@@ -403,6 +411,15 @@ export default async function TechnicianTicketDetailPage({
                 })}
               </div>
             </div>
+          )}
+
+          {/* Extra Services / Bonus Points Panel (only for assigned technician) */}
+          {isAssigned && !isDone && (
+            <ExtraPointsPanel
+              ticketId={ticket.id}
+              initialServices={(ticket.extra_services || []) as string[]}
+              basePoints={getTicketBasePoints(ticket.ticket_type, ticket.device_type)}
+            />
           )}
 
           {/* Assignment panel (Admin & Store Coordinator only) */}

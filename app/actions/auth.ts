@@ -50,6 +50,11 @@ export async function loginAction(
     return { message: "Invalid email or password" };
   }
 
+  // Guard: deactivated accounts cannot log in
+  if (!user.is_active) {
+    return { message: "This account has been deactivated. Please contact an administrator." };
+  }
+
   await createSession(user.id, user.role, user.name);
 
   // Redirect based on role

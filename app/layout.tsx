@@ -7,7 +7,7 @@ import { cn } from "@/lib/utils";
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
 export const metadata: Metadata = {
-  title: "HNS IT Center — Service Ticket Management",
+  title: "HNS Service Center — Service Ticket Management",
   description:
     "Manage your computer service requests, warranty claims, upgrades, and PC builds with ease.",
 };

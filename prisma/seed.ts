@@ -19,7 +19,11 @@ async function main() {
   // ─── Admin ─────────────────────────────────────────────────────────────
   const admin = await db.user.upsert({
     where: { email: "admin@techserve.id" },
-    update: {},
+    update: {
+      // Ensure the account is always reactivated when re-seeding
+      is_active: true,
+      password: await hash("admin123"),
+    },
     create: {
       name: "Admin TechServe",
       email: "admin@techserve.id",
@@ -83,21 +87,6 @@ async function main() {
     },
   });
   console.log("✅ Sales:", sales.email);
-
-  // ─── Customer ──────────────────────────────────────────────────────────
-  const customer = await db.user.upsert({
-    where: { email: "customer@example.com" },
-    update: {},
-    create: {
-      name: "John Doe",
-      email: "customer@example.com",
-      phone_number: "+6281200000099",
-      address: "Jl. Pelanggan No. 10, Jakarta",
-      role: "Customer",
-      password: await hash("customer123"),
-    },
-  });
-  console.log("✅ Customer:", customer.email);
 
   // ─── Upgrades ──────────────────────────────────────────────────────────
   const upgradeItems = [

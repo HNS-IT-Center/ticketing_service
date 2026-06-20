@@ -627,6 +627,15 @@ END $$;
 
 **Why this is safe:** The app uses `SUPABASE_SERVICE_ROLE_KEY` in `lib/db.ts` (server-only). The service role bypasses RLS automatically, so no app code changes are needed. All writes go through server actions, never the anon key.
 
+### SPRINT 2026-06-20 SESSION - Quality of Life & Coordinator Visibility
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| Q1 | Optional Email | ✅ | Modified `CreateTicketForm.tsx` to allow empty emails. `updatePickupMethodAction` and db save empty strings as `null`. Resend API guards handle this gracefully. |
+| Q2 | Courier Restriction | ✅ | Courier option disabled in creation form and ticket view for all non-PC Build types. Added server-side guard in `updatePickupMethodAction`. |
+| Q3 | File Upload UI | ✅ | Added rich `.file-upload-area` styles with hover states, lift animations, and explicit click cues in `FileUpload.tsx`. |
+| Q4 | Extra Points Panel | ✅ | Added `extra_services String[]` to `Ticket` model. Added `toggleExtraServiceAction` and `ExtraPointsPanel.tsx` giving +3 points for each extra service. |
+| Q5 | Coordinator Visibility | ✅ | Coordinators now see all tickets across their assigned stores in both their dashboard ("Store Active Tickets") and "My Tickets" list. |
+
 ---
 
 ### HOW TO RESUME IN A NEW SESSION

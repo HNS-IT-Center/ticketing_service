@@ -60,7 +60,7 @@ export default async function TechnicianDashboard() {
 
   // All other queries fire immediately in parallel — no waiting
   const [
-    [userInfo, myTickets, performance, titles],
+    [userInfo, performance, titles],
     assignments,
     [unassigned, myPendingRequests, allPendingRequests],
   ] = await Promise.all([
@@ -68,12 +68,6 @@ export default async function TechnicianDashboard() {
       db.user.findUnique({
         where: { id: session.userId },
         select: { is_team_leader: true, active_title: true },
-      }),
-      db.ticket.findMany({
-        where: { technician_id: session.userId, status: { in: ["waiting", "on_progress"] } },
-        orderBy: { updated_at: "desc" },
-        take: 10,
-        select: { id: true, ticket_code: true, ticket_type: true, device_type: true, status: true, technician_id: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
       }),
       db.technicianPerformance.findUnique({ where: { technician_id: session.userId }, select: { tickets_handled: true, success_count: true } }),
       getUserTitles(session.userId),
@@ -84,6 +78,22 @@ export default async function TechnicianDashboard() {
 
   const isCoordinator  = userInfo?.is_team_leader ?? false;
   const storeIds       = assignments.map((a) => a.store_id);
+
+  // Fetch active tickets after we know isCoordinator & storeIds
+  // Coordinator sees all store tickets; regular tech sees only own
+  const activeTickets = await db.ticket.findMany({
+    where: isCoordinator && storeIds.length > 0
+      ? { store_location_id: { in: storeIds }, status: { in: ["waiting", "on_progress"] } }
+      : { technician_id: session.userId, status: { in: ["waiting", "on_progress"] } },
+    orderBy: { updated_at: "desc" },
+    take: 10,
+    select: {
+      id: true, ticket_code: true, ticket_type: true, device_type: true,
+      status: true, technician_id: true, is_for_self: true, customer_name: true,
+      user: { select: { name: true } },
+      technician: { select: { name: true } },
+    },
+  });
 
   // Find equipped title
   const activeTitle = titles.find((t) => t.title_key === userInfo?.active_title) ?? null;
@@ -139,13 +149,15 @@ export default async function TechnicianDashboard() {
         ))}
       </div>
 
-      {/* My Assigned Tickets */}
+      {/* My/Store Active Tickets */}
       <div className="card">
-        <h3 style={{ marginBottom: "1rem" }}>My Active Tickets</h3>
-        {myTickets.length === 0 ? (
+        <h3 style={{ marginBottom: "1rem" }}>
+          {isCoordinator ? "Store Active Tickets" : "My Active Tickets"}
+        </h3>
+        {activeTickets.length === 0 ? (
           <div className="empty-state" style={{ padding: "2rem" }}>
             <Ticket size={32} style={{ opacity: 0.3 }} />
-            <p>No active tickets assigned to you</p>
+            <p>{isCoordinator ? "No active tickets in your store" : "No active tickets assigned to you"}</p>
           </div>
         ) : (
           <>
@@ -154,14 +166,17 @@ export default async function TechnicianDashboard() {
               <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
                 <table>
                   <thead><tr>
-                    <th>Ticket Code</th><th>Type</th><th>Customer</th><th>Points</th><th>Status</th><th></th>
+                    <th>Ticket Code</th><th>Type</th><th>Customer</th>
+                    {isCoordinator && <th>Technician</th>}
+                    <th>Points</th><th>Status</th><th></th>
                   </tr></thead>
                   <tbody>
-                    {myTickets.map((t) => (
+                    {activeTickets.map((t) => (
                       <tr key={t.id}>
                         <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
                         <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
                         <td>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</td>
+                        {isCoordinator && <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{(t as any).technician?.name || <span style={{ opacity: 0.4 }}>Unassigned</span>}</td>}
                         <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type)} pts</span></td>
                         <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                         <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
@@ -174,7 +189,7 @@ export default async function TechnicianDashboard() {
 
             {/* Mobile cards */}
             <div className="admin-ticket-cards">
-              {myTickets.map((t) => (
+              {activeTickets.map((t) => (
                 <Link key={t.id} href={`/technician/tickets/${t.id}`} style={{ textDecoration: "none" }}>
                   <div className="mobile-ticket-card">
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -185,6 +200,11 @@ export default async function TechnicianDashboard() {
                       <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
                       <span>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</span>
                     </div>
+                    {isCoordinator && (t as any).technician?.name && (
+                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
+                        👨‍🔧 {(t as any).technician.name}
+                      </div>
+                    )}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type)} pts</span>
                       <span style={{ fontSize: "0.8125rem", color: "var(--primary)", fontWeight: 500 }}>Manage →</span>
@@ -196,6 +216,7 @@ export default async function TechnicianDashboard() {
           </>
         )}
       </div>
+
 
       {/* Unassigned Tickets */}
       <div className="card">

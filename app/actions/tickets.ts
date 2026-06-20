@@ -29,7 +29,7 @@ export async function createTicketAction(formData: FormData) {
   const notes = formData.get("notes") as string | null;
   const customer_type = (formData.get("customer_type") as string) || "User";
   const customer_name = formData.get("customer_name") as string | null;
-  const customer_email = formData.get("customer_email") as string | null;
+  const customer_email = (formData.get("customer_email") as string | null) || null;
   const customer_address = formData.get("customer_address") as string | null;
   const customer_phone = formData.get("phone") as string;
   const technician_id = (formData.get("technician_id") as string | null) || null;
@@ -396,6 +396,18 @@ export async function updatePickupMethodAction(ticketId: string, pickupMethod: "
     return { error: "Unauthorized" };
   }
 
+  // Server-side guard: courier is only allowed for pc_build tickets
+  if (pickupMethod === "courier") {
+    const ticket = await db.ticket.findUnique({
+      where: { id: ticketId },
+      select: { ticket_type: true },
+    });
+    if (!ticket) return { error: "Ticket not found" };
+    if (ticket.ticket_type !== "pc_build") {
+      return { error: "Courier delivery is only available for PC Build tickets." };
+    }
+  }
+
   await db.ticket.update({
     where: { id: ticketId },
     data: { pickup_method: pickupMethod },
@@ -406,3 +418,37 @@ export async function updatePickupMethodAction(ticketId: string, pickupMethod: "
   return { success: true };
 }
 
+// ─── Toggle Extra Service (Bonus Points) ──────────────────────────────────
+// Only the assigned technician can toggle extra services.
+// Each extra service adds +3 points to the ticket's effective point value.
+export async function toggleExtraServiceAction(ticketId: string, serviceName: string, isAdding: boolean) {
+  const session = await requireSession();
+  if (session.role !== "Technician" && session.role !== "Administrator") {
+    return { error: "Unauthorized" };
+  }
+
+  const ticket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    select: { technician_id: true, extra_services: true },
+  });
+
+  if (!ticket) return { error: "Ticket not found" };
+  // Only assigned technician or admin can modify
+  if (session.role === "Technician" && ticket.technician_id !== session.userId) {
+    return { error: "You are not assigned to this ticket" };
+  }
+
+  const current = ticket.extra_services as string[];
+  const updated = isAdding
+    ? [...new Set([...current, serviceName])]
+    : current.filter((s) => s !== serviceName);
+
+  await db.ticket.update({
+    where: { id: ticketId },
+    data: { extra_services: updated },
+  });
+
+  revalidatePath(`/technician/tickets/${ticketId}`);
+  revalidatePath(`/admin/tickets/${ticketId}`);
+  return { success: true, extra_services: updated };
+}

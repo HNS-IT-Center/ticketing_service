@@ -152,6 +152,9 @@ model User {
   // Achievement title inventory — stores which title_key is currently equipped
   active_title String?
 
+  // Soft-delete flag — false = deactivated (cannot log in, hidden from UI)
+  is_active    Boolean  @default(true)
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -225,6 +228,9 @@ model Ticket {
   delivery_proof_url  String?
   progress_proof_url  String?
   revision_proof_url  String?
+
+  // Extra services added during the ticket (e.g. "Repaste", "Upgrade") — each adds +3 bonus points
+  extra_services      String[]  @default([])
 
   // Public access
   public_chat_enabled Boolean @default(false)

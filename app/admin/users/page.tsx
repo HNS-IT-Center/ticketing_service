@@ -20,6 +20,7 @@ export default async function AdminUsersPage({
 
   const users = await db.user.findMany({
     where: {
+      is_active: true,
       ...(roleFilter !== "all" ? { role: roleFilter as any } : {}),
       ...(query ? { OR: [{ name: { contains: query, mode: "insensitive" } }, { email: { contains: query, mode: "insensitive" } }] } : {}),
     },

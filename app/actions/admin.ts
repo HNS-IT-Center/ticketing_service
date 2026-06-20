@@ -92,10 +92,59 @@ export async function updateUserAction(userId: string, formData: FormData) {
   return { success: true };
 }
 
-// ─── Delete User ───────────────────────────────────────────────────────────
-export async function deleteUserAction(userId: string) {
+// ─── Check User Deletion (pre-flight) ────────────────────────────────────────
+// Called before showing the delete modal to surface any active tickets that
+// need to be reassigned before the user can be deactivated.
+export async function checkUserDeletionAction(userId: string) {
   await requireRole("Administrator");
-  await db.user.delete({ where: { id: userId } });
+
+  const activeTickets = await db.ticket.findMany({
+    where: {
+      technician_id: userId,
+      status: { in: ["waiting", "on_progress"] },
+    },
+    select: { id: true, ticket_code: true, ticket_type: true, status: true },
+    orderBy: { created_at: "desc" },
+  });
+
+  return { activeTickets };
+}
+
+// ─── Deactivate (Soft-Delete) User ───────────────────────────────────────────
+// 1. Optionally bulk-reassigns active tickets to another technician.
+// 2. Soft-deletes the user (is_active = false, email scrambled).
+export async function deactivateUserAction(
+  userId: string,
+  reassignToTechnicianId?: string | null
+) {
+  const session = await requireRole("Administrator");
+
+  // Guard: admin cannot delete themselves
+  if (userId === session.userId) {
+    return { error: "You cannot deactivate your own account." };
+  }
+
+  // Step 1: Reassign active tickets if a replacement is specified
+  if (reassignToTechnicianId) {
+    await db.ticket.updateMany({
+      where: {
+        technician_id: userId,
+        status: { in: ["waiting", "on_progress"] },
+      },
+      data: { technician_id: reassignToTechnicianId },
+    });
+  }
+
+  // Step 2: Soft-delete — deactivate the account and free up the email slot
+  await db.user.update({
+    where: { id: userId },
+    data: {
+      is_active: false,
+      // Scramble email so the address can be re-registered if needed
+      email: `${userId}__deleted__@deactivated.local`,
+    },
+  });
+
   revalidatePath("/admin/users");
   return { success: true };
 }

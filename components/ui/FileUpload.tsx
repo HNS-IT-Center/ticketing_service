@@ -160,13 +160,22 @@ export default function FileUpload({
           </>
         ) : (
           <>
-            <Upload size={28} style={{ color: "var(--primary)", margin: "0 auto 0.5rem" }} />
-            <p style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
-              Drop files here or click to browse
+            <Upload size={32} style={{ color: "var(--primary)", margin: "0 auto 0.5rem", transition: "transform 0.2s ease" }} />
+            <p style={{ fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.125rem", fontSize: "0.9375rem" }}>
+              Drop files here or <span style={{ color: "var(--primary)", textDecoration: "underline", textDecorationStyle: "dotted" }}>click to browse</span>
             </p>
             <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
               Images, Videos, PDFs • Max {maxSizeMB}MB total • Camera photos supported
             </p>
+            <span style={{
+              display: "inline-flex", alignItems: "center", gap: "0.25rem",
+              marginTop: "0.5rem", padding: "0.2rem 0.6rem",
+              background: "rgba(22,70,157,0.08)", color: "var(--primary)",
+              borderRadius: "999px", fontSize: "0.72rem", fontWeight: 600,
+              border: "1px solid rgba(22,70,157,0.15)",
+            }}>
+              📎 Tap or click here
+            </span>
           </>
         )}
       </div>

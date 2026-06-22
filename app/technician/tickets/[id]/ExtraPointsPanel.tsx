@@ -7,15 +7,13 @@ import { Sparkles, CheckCircle2, Circle } from "lucide-react";
 
 /** Predefined extra services a technician can add to any ticket type */
 const EXTRA_SERVICES = [
-  { key: "repaste", label: "Thermal Repaste", emoji: "🌡️", desc: "CPU/GPU repaste with quality compound" },
-  { key: "deep_clean", label: "Deep Cleaning", emoji: "🧹", desc: "Full internal component cleaning" },
-  { key: "os_reinstall", label: "OS Reinstallation", emoji: "💿", desc: "Fresh OS install with drivers" },
-  { key: "data_backup", label: "Data Backup", emoji: "💾", desc: "Full data backup before work" },
-  { key: "stress_test", label: "Stress Test", emoji: "🔬", desc: "Burn-in test after repair" },
-  { key: "cable_management", label: "Cable Management", emoji: "🔌", desc: "Neat cable routing & tidy-up" },
+  { key: "repaste",          label: "Thermal Repaste",   emoji: "🌡️", desc: "CPU/GPU repaste with quality compound",    points: 2 },
+  { key: "deep_clean",       label: "Deep Cleaning",     emoji: "🧹", desc: "Full internal component cleaning",          points: 3 },
+  { key: "os_reinstall",     label: "OS Reinstallation", emoji: "💿", desc: "Fresh OS install with drivers",             points: 1 },
+  { key: "software_request", label: "Software Request",  emoji: "💻", desc: "Software installation or configuration",    points: 1 },
+  { key: "cable_management", label: "Cable Management",  emoji: "🔌", desc: "Neat cable routing & tidy-up",              points: 3 },
+  { key: "upgrade_part",     label: "Upgrade Part",      emoji: "⚙️", desc: "Hardware part upgrade or replacement",      points: 2 },
 ];
-
-const BONUS_PTS = 3;
 
 interface ExtraPointsPanelProps {
   ticketId: string;
@@ -28,7 +26,10 @@ export default function ExtraPointsPanel({ ticketId, initialServices, basePoints
   const [services, setServices] = useState<string[]>(initialServices);
   const [isPending, startTransition] = useTransition();
 
-  const totalPoints = basePoints + services.length * BONUS_PTS;
+  const extraPoints = services.reduce((sum, key) => {
+    return sum + (EXTRA_SERVICES.find((s) => s.key === key)?.points ?? 0);
+  }, 0);
+  const totalPoints = basePoints + extraPoints;
 
   const toggle = (key: string) => {
     const isAdding = !services.includes(key);
@@ -44,10 +45,11 @@ export default function ExtraPointsPanel({ ticketId, initialServices, basePoints
         toast.error(res.error);
         setServices(services); // revert
       } else {
+        const svc = EXTRA_SERVICES.find((s) => s.key === key);
         toast.success(
           isAdding
-            ? `Added "${EXTRA_SERVICES.find((s) => s.key === key)?.label}" +${BONUS_PTS} pts`
-            : `Removed "${EXTRA_SERVICES.find((s) => s.key === key)?.label}"`
+            ? `Added "${svc?.label}" +${svc?.points} pts`
+            : `Removed "${svc?.label}"`
         );
       }
     });
@@ -71,16 +73,16 @@ export default function ExtraPointsPanel({ ticketId, initialServices, basePoints
         }}>
           <Sparkles size={11} />
           {totalPoints} pts total
-          {services.length > 0 && (
+          {extraPoints > 0 && (
             <span style={{ fontWeight: 400, opacity: 0.7, fontSize: "0.72rem" }}>
-              ({basePoints} + {services.length * BONUS_PTS})
+              ({basePoints} + {extraPoints})
             </span>
           )}
         </div>
       </div>
 
       <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginBottom: "0.875rem", lineHeight: 1.5 }}>
-        Check any additional services performed — each adds <strong style={{ color: "#92400e" }}>+{BONUS_PTS} pts</strong> to this ticket.
+        Check any additional services performed — each adds bonus points to this ticket.
       </p>
 
       {/* Service Checkboxes */}
@@ -124,7 +126,7 @@ export default function ExtraPointsPanel({ ticketId, initialServices, basePoints
                 color: checked ? "#92400e" : "var(--text-muted)",
                 whiteSpace: "nowrap", opacity: checked ? 1 : 0.5,
               }}>
-                +{BONUS_PTS} pts
+                +{svc.points} pts
               </span>
             </button>
           );

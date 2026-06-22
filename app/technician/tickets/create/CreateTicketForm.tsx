@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { createTicketAction } from "@/app/actions/tickets";
 import { AlertCircle, ChevronLeft, ChevronRight, Check } from "lucide-react";
 import toast from "react-hot-toast";
+import FileUpload from "@/components/ui/FileUpload";
 
 type Props = {
   storeLocations: { id: string; name: string; code: string }[];
@@ -478,11 +479,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 
                 <div className="form-group" style={{ marginTop: "1rem" }}>
                   <label className="form-label">First Build Attachment *</label>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Upload proof or initial build setup.</p>
-                  <div style={{ background: "var(--bg)", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1rem" }}>
-                    <input type="file" onChange={e => setTicketFiles(Array.from(e.target.files || []))} className={`form-input ${errors.ticketFiles ? "error" : ""}`} style={{ border: "none", padding: 0 }} />
-                  </div>
-                  {errors.ticketFiles && <span className="form-error"><AlertCircle size={12} />{errors.ticketFiles}</span>}
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Upload proof or initial build setup (images, PDFs).</p>
+                  <FileUpload onChange={(files) => setTicketFiles(files)} maxFiles={5} />
+                  {errors.ticketFiles && <span className="form-error" style={{ marginTop: "0.25rem", display: "block" }}><AlertCircle size={12} />{errors.ticketFiles}</span>}
                 </div>
               </>
             )}
@@ -500,21 +499,18 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Ticket Attachments (Max 6)</label>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Photos or video of device condition before service.</p>
-                  <div style={{ background: "var(--bg)", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1rem" }}>
-                    <input type="file" multiple onChange={e => setTicketFiles(Array.from(e.target.files || []))} className="form-input" style={{ border: "none", padding: 0 }} />
-                  </div>
+                  <label className="form-label">Ticket Attachments</label>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Photos or video of device condition before service (up to 6 files).</p>
+                  <FileUpload onChange={(files) => setTicketFiles(files)} maxFiles={6} />
                 </div>
               </>
             )}
 
             {ticketType === "warranty_claim" && (
               <div className="form-group">
-                <label className="form-label">Invoice Attachment (Max 2 files)</label>
-                <div style={{ background: "var(--bg)", border: "1px dashed var(--border)", borderRadius: "8px", padding: "1rem" }}>
-                  <input type="file" multiple onChange={e => setTicketFiles(Array.from(e.target.files || []))} className="form-input" style={{ border: "none", padding: 0 }} />
-                </div>
+                <label className="form-label">Invoice / Proof of Purchase</label>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Upload invoice or proof of purchase (up to 2 files).</p>
+                <FileUpload onChange={(files) => setTicketFiles(files)} maxFiles={2} accept="image/*,.pdf,image/heic,image/heif" />
               </div>
             )}
           </div>

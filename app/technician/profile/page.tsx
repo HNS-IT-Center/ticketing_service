@@ -269,7 +269,7 @@ export default async function TechnicianProfilePage() {
       />
 
       {/* Change password */}
-      <ChangePasswordForm />
+      <ChangePasswordForm hasPassword={!!user.password} />
     </div>
   );
 }

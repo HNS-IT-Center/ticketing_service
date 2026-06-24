@@ -4,6 +4,7 @@ import { useActionState, useState } from "react";
 import { loginAction, type FormState } from "@/app/actions/auth";
 import { AlertCircle, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
+import NativeSSOLoginButton from "@/components/NativeSSOLoginButton";
 
 export default function LoginPage() {
   const [state, action, pending] = useActionState<FormState, FormData>(
@@ -134,6 +135,19 @@ export default function LoginPage() {
             )}
           </button>
         </form>
+
+        <div style={{ position: "relative", marginTop: "1.5rem", marginBottom: "1.5rem" }}>
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center" }}>
+            <div style={{ width: "100%", borderTop: "1px solid var(--border)", borderColor: "#e5e7eb" }}></div>
+          </div>
+          <div style={{ position: "relative", display: "flex", justifyContent: "center", fontSize: "0.875rem" }}>
+            <span style={{ padding: "0 0.5rem", background: "var(--background, #fff)", color: "var(--text-muted, #6b7280)" }}>
+              Or sign in with
+            </span>
+          </div>
+        </div>
+
+        <NativeSSOLoginButton />
 
         <p
           style={{

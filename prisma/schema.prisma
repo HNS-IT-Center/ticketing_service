@@ -140,7 +140,7 @@ model User {
   phone_number String
   address      String
   role         Role     @default(Customer)
-  password     String
+  password     String?
 
   // Technician-specific
   shift     Shift?

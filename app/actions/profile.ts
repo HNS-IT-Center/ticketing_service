@@ -114,8 +114,10 @@ export async function changePasswordAction(data: {
   });
   if (!user) return { error: "User not found." };
 
-  const isCorrect = await bcrypt.compare(data.currentPassword, user.password);
-  if (!isCorrect) return { error: "Current password is incorrect." };
+  if (user.password) {
+    const isCorrect = await bcrypt.compare(data.currentPassword, user.password);
+    if (!isCorrect) return { error: "Current password is incorrect." };
+  }
 
   const hashed = await bcrypt.hash(data.newPassword, 12);
   await db.user.update({

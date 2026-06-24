@@ -184,6 +184,7 @@ export function getTechnicianProfile(userId: string) {
             shift: true,
             is_team_leader: true,
             active_title: true,
+            password: true,
           },
         }),
         db.technicianPerformance.findUnique({

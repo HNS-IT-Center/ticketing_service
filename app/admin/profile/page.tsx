@@ -20,6 +20,7 @@ export default async function AdminProfilePage() {
         phone_number: true,
         address: true,
         created_at: true,
+        password: true,
       },
     }),
     db.ticket.count(),
@@ -88,7 +89,7 @@ export default async function AdminProfilePage() {
       />
 
       {/* Change password */}
-      <ChangePasswordForm />
+      <ChangePasswordForm hasPassword={!!user.password} />
     </div>
   );
 }

@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decrypt } from "@/lib/session";
 
-const PUBLIC_ROUTES = ["/login", "/register", "/ticket"];
+const PUBLIC_ROUTES = ["/login", "/register", "/ticket", "/unauthorized"];
 const ADMIN_ROUTES = ["/admin"];
 const TECHNICIAN_ROUTES = ["/technician"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Allow public ticket tracking route without redirecting authenticated users
-  if (pathname.startsWith("/ticket")) {
+  // Allow public ticket tracking route and unauthorized page without redirecting authenticated users
+  if (pathname.startsWith("/ticket") || pathname.startsWith("/unauthorized")) {
     return NextResponse.next();
   }
 

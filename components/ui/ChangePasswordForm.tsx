@@ -5,7 +5,7 @@ import { changePasswordAction } from "@/app/actions/profile";
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
 import toast from "react-hot-toast";
 
-export default function ChangePasswordForm() {
+export default function ChangePasswordForm({ hasPassword = true }: { hasPassword?: boolean }) {
   const [currentPassword, setCurrentPassword]   = useState("");
   const [newPassword, setNewPassword]           = useState("");
   const [confirmPassword, setConfirmPassword]   = useState("");
@@ -23,7 +23,7 @@ export default function ChangePasswordForm() {
 
     startTransition(async () => {
       const result = await changePasswordAction({
-        currentPassword,
+        currentPassword: hasPassword ? currentPassword : "",
         newPassword,
         confirmPassword,
       });
@@ -36,7 +36,7 @@ export default function ChangePasswordForm() {
         setCurrentPassword("");
         setNewPassword("");
         setConfirmPassword("");
-        toast.success("Password changed successfully!");
+        toast.success(hasPassword ? "Password changed successfully!" : "Password set successfully!");
       }
     });
   };
@@ -66,7 +66,7 @@ export default function ChangePasswordForm() {
     <div className="card" style={{ padding: "1.5rem" }}>
       <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
         <Lock size={18} style={{ color: "var(--primary)" }} />
-        <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0 }}>Change Password</h2>
+        <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0 }}>{hasPassword ? "Change Password" : "Set Local Password"}</h2>
       </div>
 
       {success && (
@@ -94,23 +94,25 @@ export default function ChangePasswordForm() {
       )}
 
       <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <div className="form-group">
-          <label className="form-label" htmlFor="current-password">Current Password</label>
-          <div style={{ position: "relative" }}>
-            <input
-              id="current-password"
-              type={showCurrent ? "text" : "password"}
-              className="form-input"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              style={inputStyle}
-              autoComplete="off"
-            />
-            <button type="button" onClick={() => setShowCurrent(v => !v)} style={toggleBtnStyle} tabIndex={-1}>
-              {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
+        {hasPassword && (
+          <div className="form-group">
+            <label className="form-label" htmlFor="current-password">Current Password</label>
+            <div style={{ position: "relative" }}>
+              <input
+                id="current-password"
+                type={showCurrent ? "text" : "password"}
+                className="form-input"
+                value={currentPassword}
+                onChange={(e) => setCurrentPassword(e.target.value)}
+                style={inputStyle}
+                autoComplete="off"
+              />
+              <button type="button" onClick={() => setShowCurrent(v => !v)} style={toggleBtnStyle} tabIndex={-1}>
+                {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
+              </button>
+            </div>
           </div>
-        </div>
+        )}
 
         <div className="form-group">
           <label className="form-label" htmlFor="new-password">New Password</label>
@@ -176,11 +178,11 @@ export default function ChangePasswordForm() {
 
         <button
           type="submit"
-          disabled={isPending || !currentPassword || !newPassword || !confirmPassword}
+          disabled={isPending || (hasPassword && !currentPassword) || !newPassword || !confirmPassword}
           className="btn btn-primary"
           style={{ marginTop: "0.25rem" }}
         >
-          {isPending ? <><span className="spinner spinner-sm" /> Saving...</> : "Change Password"}
+          {isPending ? <><span className="spinner spinner-sm" /> Saving...</> : (hasPassword ? "Change Password" : "Set Password")}
         </button>
       </form>
     </div>

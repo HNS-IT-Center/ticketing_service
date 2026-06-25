@@ -142,6 +142,28 @@ export default async function AdminTicketDetailPage({
           <p style={{ color: "var(--text-muted)", marginTop: "0.25rem", textTransform: "capitalize" }}>
             {ticket.ticket_type.replace(/_/g, " ")} &bull; {ticket.device_type.replace(/_/g, " ")}
           </p>
+          {ticket.device_name && (
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-primary)", marginTop: "0.15rem", fontWeight: 500 }}>
+              Device: {ticket.device_name}
+            </p>
+          )}
+          {ticket.device_sn && (
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-primary)", marginTop: "0.15rem", fontWeight: 500 }}>
+              SN: {ticket.device_sn}
+            </p>
+          )}
+          {ticket.accessories && (
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-primary)", marginTop: "0.15rem", fontWeight: 500 }}>
+              Kelengkapan: {ticket.accessories}
+            </p>
+          )}
+          {ticket.warranty_status && (
+            <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginTop: "0.35rem" }}>
+              {ticket.warranty_status.split(", ").map(w => (
+                <span key={w} style={{ fontSize: "0.7rem", background: "var(--cream)", border: "1px solid var(--border)", padding: "0.1rem 0.4rem", borderRadius: "4px", color: "var(--text-secondary)", fontWeight: 600 }}>{w}</span>
+              ))}
+            </div>
+          )}
           {ticket.store_location && (
             <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>📍 {ticket.store_location.name}</p>
           )}

@@ -2,7 +2,6 @@ import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import Badge from "@/components/ui/Badge";
 import { formatDateTime } from "@/lib/utils";
-import PublicShareButton from "./PublicShareButton";
 import PublicChat from "./PublicChat";
 
 export const metadata = { title: "Ticket Status — HNS IT Center" };
@@ -113,11 +112,13 @@ export default async function PublicTicketPage({
     }}>
       <div style={{ width: "100%", maxWidth: "600px", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
         {/* Header */}
-        <div style={{ textAlign: "center" }}>
+        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "0.875rem", marginBottom: "0.25rem" }}>
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-hns.jpg" alt="HNS IT Center" style={{ width: "48px", height: "48px", borderRadius: "10px", objectFit: "cover", marginBottom: "0.75rem" }} />
-          <div style={{ fontWeight: 700, fontSize: "1.125rem", color: "#1f2937" }}>HNS IT Center</div>
-          <div style={{ fontSize: "0.8125rem", color: "#6b7280", marginTop: "0.25rem" }}>Ticket Status Tracker</div>
+          <img src="/logo-hns.jpg" alt="HNS IT Center" style={{ width: "48px", height: "48px", borderRadius: "10px", objectFit: "cover" }} />
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+            <div style={{ fontWeight: 800, fontSize: "1.25rem", color: "#1f2937", letterSpacing: "-0.01em", lineHeight: "1.1" }}>HNS IT Center</div>
+            <div style={{ fontSize: "0.875rem", color: "#6b7280", fontWeight: 500, marginTop: "0.15rem" }}>Ticket Status Tracker</div>
+          </div>
         </div>
 
         {/* Ticket card */}
@@ -146,6 +147,10 @@ export default async function PublicTicketPage({
               {[
                 ["Tipe Layanan", ticket.ticket_type.replace(/_/g, " ")],
                 ["Perangkat", ticket.device_type.replace(/_/g, " ")],
+                ...(ticket.device_name ? [["Nama Perangkat", ticket.device_name]] : []),
+                ...(ticket.device_sn ? [["Nomor Seri (SN)", ticket.device_sn]] : []),
+                ...(ticket.accessories ? [["Kelengkapan", ticket.accessories]] : []),
+                ...(ticket.warranty_status ? [["Kondisi", ticket.warranty_status]] : []),
                 ["Dibuat", formatDateTime(ticket.created_at)],
                 ["Pengiriman", ticket.pickup_method === "courier" ? "Kurir" : ticket.pickup_method === "self_pickup" ? "Ambil Sendiri" : "—"],
                 ["Waktu Kerja Aktif", formatDuration(totalTimeMs)],
@@ -271,10 +276,7 @@ export default async function PublicTicketPage({
             </div>
           </div>
 
-          {/* Share button */}
-          <div style={{ padding: "1rem 1.75rem" }}>
-            <PublicShareButton url={shareUrl} />
-          </div>
+
         </div>
 
         {/* Public chat section */}

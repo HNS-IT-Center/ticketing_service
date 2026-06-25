@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { createTicketAction } from "@/app/actions/tickets";
 import { AlertCircle, ChevronLeft, ChevronRight, Check } from "lucide-react";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import FileUpload from "@/components/ui/FileUpload";
 
@@ -26,6 +27,7 @@ const TICKET_TYPES = [
 
 export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades, defaultStoreLocationId }: Props) {
   const [step, setStep] = useState(1);
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   // Step 1: Store & Assignment
@@ -38,15 +40,21 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [customerName, setCustomerName]       = useState("");
   const [customerEmail, setCustomerEmail]     = useState("");
   const [phone, setPhone]                     = useState("");
+  const [phoneFocused, setPhoneFocused]       = useState(false);
   const [customerAddress, setCustomerAddress] = useState("");
 
   // Step 3: Category
   const [ticketType, setTicketType] = useState("");
   const [deviceType, setDeviceType] = useState("");
+  const [deviceName, setDeviceName] = useState("");
+  const [deviceSn, setDeviceSn] = useState("");
+  const [conditions, setConditions] = useState<string[]>([]); // multiple checkboxes
   const [pickupMethod, setPickupMethod] = useState("self_pickup");
 
   // Step 4: Details
   const [accessories, setAccessories] = useState("");
+  const [selectedAccessories, setSelectedAccessories] = useState<string[]>([]);
+  const [customAccessory, setCustomAccessory] = useState("");
   const [notes, setNotes] = useState("");
   const [isOvernight, setIsOvernight] = useState(false);
   
@@ -118,8 +126,15 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       fd.append("ticket_type", ticketType);
       fd.append("device_type", deviceType);
       fd.append("pickup_method", pickupMethod);
+      if (deviceName) fd.append("device_name", deviceName);
+      if (deviceSn) fd.append("device_sn", deviceSn);
+      if (conditions.length > 0) fd.append("warranty_status", conditions.join(", "));
 
-      if (accessories) fd.append("accessories", accessories);
+      let accList = [...selectedAccessories];
+      if (customAccessory.trim()) accList.push(customAccessory.trim());
+      const finalAccessories = ticketType === "cleaning" ? accList.join(", ") : accessories;
+      if (finalAccessories) fd.append("accessories", finalAccessories);
+
       if (notes) fd.append("notes", notes);
       if (isOvernight) fd.append("is_overnight_check", "1");
 
@@ -137,10 +152,24 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       
       fd.append("is_for_self", "0"); // Technicians always make tickets on behalf of customers
 
-      const result = await createTicketAction(fd) as any;
-      if (result?.error) {
-        toast.error(result.error);
-        setErrors({ submit: result.error });
+      try {
+        const result = await createTicketAction(fd) as any;
+        if (result?.error) {
+          toast.error(result.error);
+          setErrors({ submit: result.error });
+        } else if (result?.redirectUrl) {
+          toast.success("Ticket created successfully!");
+          router.push(result.redirectUrl);
+        }
+      } catch (err: any) {
+        console.error("Action error:", err);
+        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
+          toast.error("Upload failed: File size is too large. Please limit to 10MB.");
+          setErrors({ submit: "File size is too large. Please limit to 10MB." });
+        } else {
+          toast.error("An unexpected error occurred. Please try again.");
+          setErrors({ submit: "An unexpected error occurred. Please try again." });
+        }
       }
     });
   };
@@ -154,6 +183,14 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
 
   const toggleUpgrade = (id: string) => {
     setSelectedUpgrades(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]);
+  };
+
+  const toggleCondition = (val: string) => {
+    setConditions(prev => prev.includes(val) ? prev.filter(c => c !== val) : [...prev, val]);
+  };
+
+  const toggleAccessory = (val: string) => {
+    setSelectedAccessories(prev => prev.includes(val) ? prev.filter(a => a !== val) : [...prev, val]);
   };
 
   return (
@@ -260,17 +297,32 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
               </span>
             </div>
             <div className="form-group">
-              <label className="form-label">Phone Number *</label>
+              <label className="form-label">Nomor HP / WhatsApp *</label>
               <div style={{ display: "flex", alignItems: "center", gap: "0" }}>
                 <span style={{ padding: "0.625rem 0.75rem", background: "var(--cream-dark)", border: "1.5px solid var(--border)", borderRight: "none", borderRadius: "var(--radius-md) 0 0 var(--radius-md)", fontSize: "0.9375rem", color: "var(--text-secondary)", fontWeight: 600, flexShrink: 0, lineHeight: "1.5" }}>+62</span>
                 <input
                   className={`form-input ${errors.phone ? "error" : ""}`}
                   style={{ borderLeft: "none", borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
                   value={phone}
-                  onChange={e => setPhone(e.target.value.replace(/\D/g, ""))}
+                  onFocus={() => setPhoneFocused(true)}
+                  onBlur={() => setPhoneFocused(false)}
+                  onChange={e => {
+                    let val = e.target.value.replace(/\D/g, "");
+                    if (val.startsWith("62")) val = val.substring(2);
+                    else if (val.startsWith("0")) val = val.substring(1);
+                    setPhone(val);
+                  }}
                   placeholder="8123456789"
                 />
               </div>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem", display: "block" }}>
+                Tidak perlu mengetik 0 atau 62 di depan.
+              </span>
+              {phoneFocused && !phone.match(/^\d{9,13}$/) && (
+                <span style={{ fontSize: "0.75rem", color: "var(--accent)", marginTop: "0.25rem", display: "block" }}>
+                  Masukkan digit nomor yang valid (9-13 digit).
+                </span>
+              )}
               {errors.phone && <span className="form-error"><AlertCircle size={12} />{errors.phone}</span>}
             </div>
             <div className="form-group">
@@ -341,8 +393,48 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   <option value="PC_Gaming">PC Gaming</option>
                   <option value="Laptop_Office">Laptop Office</option>
                   <option value="Laptop_Gaming">Laptop Gaming</option>
+                  <option value="Printer">Printer</option>
+                  <option value="Other_Device">Other Device</option>
                 </select>
                 {errors.deviceType && <span className="form-error"><AlertCircle size={12} />{errors.deviceType}</span>}
+              </div>
+
+              <div style={{ display: "flex", gap: "1rem" }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">Nama Perangkat (Device Name) <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(opsional)</span></label>
+                  <input 
+                    className="form-input" 
+                    value={deviceName} 
+                    onChange={e => setDeviceName(e.target.value)} 
+                    placeholder="Misal: ASUS ROG G15" 
+                  />
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">Serial Number (SN) <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(opsional)</span></label>
+                  <input 
+                    className="form-input" 
+                    value={deviceSn} 
+                    onChange={e => setDeviceSn(e.target.value)} 
+                    placeholder="Misal: 12345ABCD" 
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Kondisi Perangkat (Condition) <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(opsional)</span></label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.5rem" }}>
+                  {["Garansi Aktif", "Garansi Habis", "Segel Utuh", "Fisik Mulus"].map(cond => (
+                    <label key={cond} style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                      <input 
+                        type="checkbox" 
+                        checked={conditions.includes(cond)} 
+                        onChange={() => toggleCondition(cond)} 
+                        style={{ width: "1.1rem", height: "1.1rem" }}
+                      />
+                      {cond}
+                    </label>
+                  ))}
+                </div>
               </div>
             </div>
             <div className="form-group" style={{ marginTop: "1rem" }}>
@@ -400,13 +492,26 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             {ticketType === "cleaning" && (
               <>
                 <div className="form-group">
-                  <label className="form-label">Accessories Included</label>
-                  <input className="form-input" value={accessories} onChange={e => setAccessories(e.target.value)} placeholder="e.g. Charger, Bag" />
+                  <label className="form-label">Kelengkapan (Accessories) <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(opsional)</span></label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.25rem", marginBottom: "0.5rem" }}>
+                    {["Charger", "Kabel", "Bag"].map(acc => (
+                      <label key={acc} style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedAccessories.includes(acc)} 
+                          onChange={() => toggleAccessory(acc)} 
+                          style={{ width: "1.1rem", height: "1.1rem" }}
+                        />
+                        {acc}
+                      </label>
+                    ))}
+                  </div>
+                  <input className="form-input" value={customAccessory} onChange={e => setCustomAccessory(e.target.value)} placeholder="Kelengkapan lain (custom)..." />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Cleaning Package *</label>
+                  <label className="form-label">Paket Servis (Cleaning Package) *</label>
                   <select className={`form-input ${errors.cleaningPackage ? "error" : ""}`} value={cleaningPackage} onChange={e => setCleaningPackage(e.target.value)}>
-                    <option value="">Select Package</option>
+                    <option value="">Pilih Paket Servis</option>
                     <option value="Deep_Clean">Deep Clean</option>
                     <option value="Repaste">Repaste / Thermal Paste Replacement</option>
                   </select>

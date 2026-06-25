@@ -148,23 +148,17 @@ export async function updateTicketStatusAction(formData: FormData) {
   const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
   if (!ticket) return { error: "Ticket not found" };
 
-  // Only assigned technician can change status
   if (ticket.technician_id !== session.userId) {
     return { error: "You are not assigned to this ticket" };
   }
 
-  // ── New Handover Chain ──────────────────────────────────────────────────────
-  // self-pickup path: done → ready_for_pickup → completed (proof of handover to customer)
-  // courier path:    done → handed_to_courier (proof: package given to courier)
-  //                       → delivered (proof: courier delivered to recipient)
-  //                       → completed (auto, no separate button)
   const HANDOVER_CHAIN: Record<string, string> = {
     on_progress:       "waiting",
     done:              "on_progress",
     ready_for_pickup:  "done",
     handed_to_courier: "done",
     delivered:         "handed_to_courier",
-    completed:         "ready_for_pickup", // self-pickup: upload proof → completed
+    completed:         "ready_for_pickup",
   };
 
   const allowedPrevious = HANDOVER_CHAIN[newStatus];
@@ -172,19 +166,13 @@ export async function updateTicketStatusAction(formData: FormData) {
     newStatus === "cancelled" ||
     newStatus === "rejected" ||
     ticket.status === allowedPrevious ||
-    // resume after pause stays on_progress (time log event only, status unchanged)
     (newStatus === "on_progress" && ticket.status === "on_progress") ||
-    // legacy compatibility: allow completed from waiting_pickup or delivered (old records)
     (newStatus === "completed" && (ticket.status === "waiting_pickup" || ticket.status === "delivered"));
 
   if (!isValidTransition) {
     return { error: `Cannot move to "${newStatus}" from "${ticket.status}"` };
   }
 
-  // ── Proof file required for specific handover steps ──────────────────────
-  // handed_to_courier: photo of handing package to courier
-  // delivered:         receipt/photo confirming delivery to recipient
-  // completed (from ready_for_pickup): photo of handing item to customer at counter
   const requiresProof =
     newStatus === "handed_to_courier" ||
     newStatus === "delivered" ||
@@ -195,15 +183,71 @@ export async function updateTicketStatusAction(formData: FormData) {
     return { error: "Proof attachment is required for this step." };
   }
 
-  const oldStatus = ticket.status;
+  // ── Handle Attachments FIRST ──
+  let uploadedFiles: { publicUrl: string, fileType: "image" | "video" | "pdf" }[] = [];
+  
+  if (validFiles.length > 0) {
+    const { createServerSupabaseClient } = await import("@/lib/supabase");
+    const supabase = createServerSupabaseClient();
 
-  // Track performance timestamps
+    const proofPrefix: Record<string, string> = {
+      done:              "work-proof",
+      handed_to_courier: "courier-proof",
+      completed:         "pickup-proof",
+      delivered:         "delivery-proof",
+      cancelled:         "cancel-proof",
+      rejected:          "cancel-proof",
+    };
+    const prefix = proofPrefix[newStatus] ?? "attachment";
+
+    const uploadOps = validFiles.map(async (file) => {
+      const mimeToExt: Record<string, string> = {
+        "image/webp": "webp",
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "video/webm": "webm",
+        "video/mp4": "mp4",
+        "video/quicktime": "mov",
+        "application/pdf": "pdf",
+      };
+      const ext = mimeToExt[file.type] || file.name.split(".").pop()?.toLowerCase() || "bin";
+      const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase().slice(0, 40);
+      const path = `${ticketId}/${prefix}_${ticket.ticket_code}_${baseName}.${ext}`;
+
+      const { data, error } = await supabase.storage
+        .from("attachments")
+        .upload(path, file, { contentType: file.type });
+
+      if (error) {
+        throw new Error(`Upload failed for ${file.name}`);
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from("attachments").getPublicUrl(data.path);
+
+      let fileType: "image" | "video" | "pdf" = "pdf";
+      if (file.type.startsWith("image/")) fileType = "image";
+      if (file.type.startsWith("video/")) fileType = "video";
+
+      return { publicUrl, fileType };
+    });
+
+    try {
+      uploadedFiles = await Promise.all(uploadOps);
+    } catch (err) {
+      console.error("[UPLOAD ERROR]", err);
+      return { error: "Failed to upload proof attachment. Please check file size and try again." };
+    }
+  }
+
+  // ── Database Updates ──
+  const oldStatus = ticket.status;
   const ticketUpdateData: Record<string, unknown> = { status: newStatus };
   if (newStatus === "on_progress") ticketUpdateData.work_started_at = new Date();
   if (newStatus === "done") ticketUpdateData.work_completed_at = new Date();
 
-  // Run the core DB writes in parallel
-  const [, log] = await Promise.all([
+  // We write DB operations synchronously/in parallel once we know attachments are safe
+  const dbOps: Promise<unknown>[] = [
     db.ticket.update({
       where: { id: ticketId },
       data: ticketUpdateData as any,
@@ -216,78 +260,31 @@ export async function updateTicketStatusAction(formData: FormData) {
         reason: reason || null,
         changed_by: session.userId,
       },
-    }),
-    eventAction
-      ? db.ticketTimeLog.create({
-          data: { ticket_id: ticketId, event: eventAction, reason: reason || null },
-        })
-      : Promise.resolve(null),
-  ]);
+    })
+  ];
 
-  // ── Handle Attachments ────────────────────────────────────────────────────
-  if (validFiles.length > 0) {
-    const { createServerSupabaseClient } = await import("@/lib/supabase");
-    const supabase = createServerSupabaseClient();
-
-    // Derive a readable proof-type prefix so the file is self-describing in storage
-    const proofPrefix: Record<string, string> = {
-      done:              "work-proof",
-      handed_to_courier: "courier-proof",
-      completed:         "pickup-proof",   // completed from ready_for_pickup
-      delivered:         "delivery-proof",
-      cancelled:         "cancel-proof",
-      rejected:          "cancel-proof",
-    };
-    const prefix = proofPrefix[newStatus] ?? "attachment";
-
-    const uploadOps = validFiles.map(async (file) => {
-      // Derive extension from MIME type (reliable for camera files like HEIC/MOV)
-      // After client-side compression, images are WebP and videos are WebM
-      const mimeToExt: Record<string, string> = {
-        "image/webp": "webp",
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/gif": "gif",
-        "video/webm": "webm",
-        "video/mp4": "mp4",
-        "video/quicktime": "mov",
-        "application/pdf": "pdf",
-      };
-      const ext =
-        mimeToExt[file.type] ||
-        file.name.split(".").pop()?.toLowerCase() ||
-        "bin";
-      const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase().slice(0, 40);
-      const path = `${ticketId}/${prefix}_${ticket.ticket_code}_${baseName}.${ext}`;
-
-
-      const { data, error } = await supabase.storage
-        .from("attachments")
-        .upload(path, file, { contentType: file.type });
-
-      if (error) return null;
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("attachments").getPublicUrl(data.path);
-
-      let fileType: "image" | "video" | "pdf" = "pdf";
-      if (file.type.startsWith("image/")) fileType = "image";
-      if (file.type.startsWith("video/")) fileType = "video";
-
-      await db.ticketAttachment.create({
-        data: { ticket_id: ticketId, file_url: publicUrl, file_type: fileType },
-      });
-
-      return { publicUrl, fileType };
-    });
-    await Promise.all(uploadOps);
+  if (eventAction) {
+    dbOps.push(db.ticketTimeLog.create({
+      data: { ticket_id: ticketId, event: eventAction, reason: reason || null },
+    }));
   }
 
+  if (uploadedFiles.length > 0) {
+    dbOps.push(
+      db.ticketAttachment.createMany({
+        data: uploadedFiles.map(f => ({
+          ticket_id: ticketId,
+          file_url: f.publicUrl,
+          file_type: f.fileType,
+        }))
+      })
+    );
+  }
 
-  // ── Auto-complete after courier delivery proof ────────────────────────────
-  // When "delivered" is confirmed (technician uploads delivery proof), the ticket
-  // is immediately auto-advanced to "completed" — no separate button needed.
+  // Execute DB changes
+  const [updatedTicket, logResult] = await Promise.all(dbOps) as any;
+  const log = logResult; // Extract log from array positions 
+
   if (newStatus === "delivered") {
     await db.ticket.update({ where: { id: ticketId }, data: { status: "completed" } });
     await db.ticketStatusLog.create({
@@ -301,7 +298,6 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // ── Performance tracking ──────────────────────────────────────────────────
   const isTerminal = ["done", "cancelled", "rejected"].includes(newStatus);
   if (isTerminal) {
     const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
@@ -330,7 +326,6 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // ── Customer notification ─────────────────────────────────────────────────
   if (ticket.user_id && ticket.user_id !== session.userId) {
     await db.notification.create({
       data: {
@@ -342,7 +337,6 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // When done: notify the technician with points earned
   if (newStatus === "done") {
     const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
     revalidateTag(`user-profile:${session.userId}`, "max");
@@ -361,22 +355,27 @@ export async function updateTicketStatusAction(formData: FormData) {
     });
   }
 
-  // ── Fire email non-blocking ───────────────────────────────────────────────
-  // Always send to the customer_email field on the ticket (entered at creation).
-  // Never fall back to the staff member's account email.
   db.ticket.findUnique({
     where: { id: ticketId },
     select: { customer_email: true, customer_name: true, public_share_token: true },
-  }).then((fullTicket) => {
+  }).then(async (fullTicket) => {
     if (!fullTicket?.customer_email) return;
+
+    const { headers } = await import("next/headers");
+    const headersList = await headers();
+    const host = headersList.get("host") || "localhost:3000";
+    const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+    const appUrl = `${protocol}://${host}`;
+
     sendTicketStatusEmail({
       to: fullTicket.customer_email,
       customerName: fullTicket.customer_name || "Customer",
       ticketCode: ticket.ticket_code,
       status: newStatus,
       shareToken: fullTicket.public_share_token,
+      appUrl
     }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
-  }).catch(() => {/* non-fatal */});
+  }).catch(() => {});
 
   revalidatePath(`/technician/tickets/${ticketId}`);
   revalidatePath(`/customer/tickets/${ticketId}`);

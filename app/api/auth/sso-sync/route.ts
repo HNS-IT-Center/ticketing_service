@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { createSession } from "@/lib/session";
 
 export async function GET(request: NextRequest) {
+  // Read SSO token securely from cookies
   const token = request.cookies.get("sso_token")?.value;
   const ssoUrl = process.env.NEXT_PUBLIC_SSO_URL || "http://localhost:3000";
 
@@ -27,16 +28,7 @@ export async function GET(request: NextRequest) {
     const departmentName = payload.departmentName as string | undefined;
     const name = (payload.name as string) || "User";
 
-    // Check if the user already exists in the local database
-    let user = await db.user.findUnique({ where: { email } });
-
-    if (user) {
-      // User exists, just log them in using their local role
-      await createSession(user.id, user.role, user.name);
-      return NextResponse.redirect(new URL(getDashboardRoute(user.role), request.url));
-    }
-
-    // User DOES NOT exist, map their global role to a local role
+    // Map their global role to a local role
     let newRole = "Customer";
     let isStaff = false;
 
@@ -51,7 +43,38 @@ export async function GET(request: NextRequest) {
       isStaff = true;
     }
 
-    // If they aren't staff, we don't allow them in via SSO (per requirements)
+    // Check if the user already exists in the local database
+    let user = await db.user.findUnique({ where: { email } });
+
+    if (user) {
+      // If the user's new SSO role is no longer allowed in Ticketing
+      if (!isStaff) {
+        if (user.is_active) {
+          await db.user.update({
+            where: { id: user.id },
+            data: { is_active: false }
+          });
+        }
+        return NextResponse.redirect(new URL("/unauthorized", request.url));
+      }
+
+      // If they are staff but their role changed in SSO, update it
+      if (user.role !== newRole || !user.is_active) {
+        user = await db.user.update({
+          where: { id: user.id },
+          data: { 
+            role: newRole as any,
+            is_active: true // re-activate if they were previously deactivated
+          }
+        });
+      }
+
+      // Log them in using their synced role
+      await createSession(user.id, user.role, user.name);
+      return NextResponse.redirect(new URL(getDashboardRoute(user.role), request.url));
+    }
+
+    // If they aren't staff and don't have an account, block them
     if (!isStaff) {
       return NextResponse.redirect(new URL("/unauthorized", request.url));
     }
@@ -76,10 +99,8 @@ export async function GET(request: NextRequest) {
     console.error("=== SSO Sync Catch Error ===");
     console.error(err);
     
-    // Pass the error message back to the UI so we can see it
-    const errorMessage = err.message || "Unknown error";
     return NextResponse.redirect(
-      new URL(`/login?error=session_expired&detail=${encodeURIComponent(errorMessage)}`, request.url)
+      new URL(`/login?error=session_expired`, request.url)
     );
   }
 }

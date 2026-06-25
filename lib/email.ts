@@ -45,6 +45,7 @@ export async function sendTicketStatusEmail(opts: {
   status: string;
   shareToken?: string | null;
   message?: string | null;
+  appUrl?: string;
 }): Promise<void> {
   // Only send for milestone statuses — silently skip all others
   if (!EMAIL_MILESTONES.has(opts.status)) return;
@@ -56,8 +57,9 @@ export async function sendTicketStatusEmail(opts: {
   }
 
   const statusLabel = STATUS_LABELS[opts.status] ?? opts.status;
+  const baseUrl = opts.appUrl ?? APP_URL;
   const ticketUrl = opts.shareToken
-    ? `${APP_URL}/ticket/${opts.shareToken}`
+    ? `${baseUrl}/ticket/${opts.shareToken}`
     : null;
 
   const html = buildStatusEmailHtml({

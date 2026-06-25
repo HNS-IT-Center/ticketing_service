@@ -66,12 +66,21 @@ export default function AdminWorkflowPanel({ ticketId, currentStatus, pickupMeth
         fd.append("proofType", "progress");
       }
 
-      const res = await uploadDeliveryProofAction(fd);
-      if (res.error) toast.error(res.error);
-      else {
-        toast.success(activeDialog === "courier_handover" ? "Handed to courier successfully" : "Completed successfully");
-        setActiveDialog(null);
-        setFile(null);
+      try {
+        const res = await uploadDeliveryProofAction(fd);
+        if (res.error) toast.error(res.error);
+        else {
+          toast.success(activeDialog === "courier_handover" ? "Handed to courier successfully" : "Completed successfully");
+          setActiveDialog(null);
+          setFile(null);
+        }
+      } catch (err: any) {
+        console.error("Action error:", err);
+        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
+          toast.error("Upload failed: File size is too large. Please limit to 10MB.");
+        } else {
+          toast.error("An unexpected error occurred. Please try again.");
+        }
       }
     });
   };

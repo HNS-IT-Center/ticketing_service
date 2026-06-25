@@ -92,16 +92,25 @@ export default function PcBuildHandover({
     formData.append("ticketId", ticketId);
     formData.append("file", file);
     startTransition(async () => {
-      const res = await uploadRevisionBuildAction(formData);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success("Revision build uploaded successfully!");
-        setFile(null);
-        setPreviewUrl(null);
-        setFileType(null);
-        setIsReplacing(false);
-        router.refresh();
+      try {
+        const res = await uploadRevisionBuildAction(formData);
+        if (res.error) {
+          toast.error(res.error);
+        } else {
+          toast.success("Revision build uploaded successfully!");
+          setFile(null);
+          setPreviewUrl(null);
+          setFileType(null);
+          setIsReplacing(false);
+          router.refresh();
+        }
+      } catch (err: any) {
+        console.error("Action error:", err);
+        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
+          toast.error("Upload failed: File size is too large. Please limit to 10MB.");
+        } else {
+          toast.error("An unexpected error occurred. Please try again.");
+        }
       }
     });
   };
@@ -130,16 +139,25 @@ export default function PcBuildHandover({
     formData.append("ticketId", ticketId);
     formData.append("file", fbFile);
     startFbTransition(async () => {
-      const res = await uploadFirstBuildAction(formData);
-      if (res.error) {
-        toast.error(res.error);
-      } else {
-        toast.success("First build layout uploaded!");
-        setFbFile(null);
-        setFbPreviewUrl(null);
-        setFbFileType(null);
-        setFbIsReplacing(false);
-        router.refresh();
+      try {
+        const res = await uploadFirstBuildAction(formData);
+        if (res.error) {
+          toast.error(res.error);
+        } else {
+          toast.success("First build layout uploaded!");
+          setFbFile(null);
+          setFbPreviewUrl(null);
+          setFbFileType(null);
+          setFbIsReplacing(false);
+          router.refresh();
+        }
+      } catch (err: any) {
+        console.error("Action error:", err);
+        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
+          toast.error("Upload failed: File size is too large. Please limit to 10MB.");
+        } else {
+          toast.error("An unexpected error occurred. Please try again.");
+        }
       }
     });
   };

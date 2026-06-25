@@ -6,6 +6,7 @@ import dynamic from "next/dynamic";
 import TagInput from "@/components/ui/TagInput";
 import FileUpload from "@/components/ui/FileUpload";
 import { AlertCircle, ChevronRight, ChevronLeft } from "lucide-react";
+import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 const RichTextEditor = dynamic(() => import("@/components/ui/RichTextEditor"), { ssr: false });
@@ -25,10 +26,11 @@ const TICKET_TYPES = [
   { value: "pc_build", label: "PC Build", desc: "Custom PC assembly" },
 ];
 
-const DEVICE_TYPES = ["PC_Office", "PC_Gaming", "Laptop_Office", "Laptop_Gaming"];
+const DEVICE_TYPES = ["PC_Office", "PC_Gaming", "Laptop_Office", "Laptop_Gaming", "Printer", "Other_Device"];
 
 export default function CreateTicketForm({ upgrades, technicians, sales, userProfile }: CreateTicketFormProps) {
   const [step, setStep] = useState(1);
+  const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
   // For self / for others toggle
@@ -61,6 +63,9 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
   // Step 2 — Category
   const [ticketType, setTicketType] = useState("");
   const [deviceType, setDeviceType] = useState("");
+  const [deviceName, setDeviceName] = useState("");
+  const [deviceSn, setDeviceSn] = useState("");
+  const [conditions, setConditions] = useState<string[]>([]);
 
   // Step 3 — Category-specific
   const [notes, setNotes] = useState("");
@@ -70,7 +75,11 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
   const [components, setComponents] = useState<string[]>([]);
   const [selectedTechnician, setSelectedTechnician] = useState("");
   const [selectedSales, setSelectedSales] = useState("");
+  const [accessories, setAccessories] = useState("");
+  const [selectedAccessories, setSelectedAccessories] = useState<string[]>([]);
+  const [customAccessory, setCustomAccessory] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+  const [phoneFocused, setPhoneFocused] = useState(false);
 
   // Step 4 — Confirm
   const [checkCorrect, setCheckCorrect] = useState(false);
@@ -134,10 +143,43 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
       if (selectedTechnician) fd.append("technician_id", selectedTechnician);
       if (selectedSales) fd.append("sales_id", selectedSales);
       fd.append("phone", `+62${phone}`); // prepend +62 prefix
+      if (deviceName) fd.append("device_name", deviceName);
+      if (deviceSn) fd.append("device_sn", deviceSn);
+      if (conditions.length > 0) fd.append("warranty_status", conditions.join(", "));
 
-      const result = await createTicketAction(fd) as any;
-      if (result?.error) toast.error(result.error);
+      let accList = [...selectedAccessories];
+      if (customAccessory.trim()) accList.push(customAccessory.trim());
+      const finalAccessories = ticketType === "cleaning" ? accList.join(", ") : accessories;
+      if (finalAccessories) fd.append("accessories", finalAccessories);
+
+      // CRITICAL FIX: Append the selected files to the form data!
+      files.forEach(f => fd.append("ticket_files", f));
+
+      try {
+        const result = await createTicketAction(fd) as any;
+        if (result?.error) {
+          toast.error(result.error);
+        } else if (result?.redirectUrl) {
+          toast.success("Ticket created successfully!");
+          router.push(result.redirectUrl);
+        }
+      } catch (err: any) {
+        console.error("Action error:", err);
+        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
+          toast.error("Upload failed: File size is too large. Please limit to 10MB.");
+        } else {
+          toast.error("An unexpected error occurred. Please try again.");
+        }
+      }
     });
+  };
+
+  const toggleCondition = (val: string) => {
+    setConditions(prev => prev.includes(val) ? prev.filter(c => c !== val) : [...prev, val]);
+  };
+
+  const toggleAccessory = (val: string) => {
+    setSelectedAccessories(prev => prev.includes(val) ? prev.filter(a => a !== val) : [...prev, val]);
   };
 
   const STEPS = ["Personal Info", "Category", "Details", "Confirm"];
@@ -227,33 +269,32 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
               {errors.name && <span className="form-error"><AlertCircle size={12} />{errors.name}</span>}
             </div>
             <div className="form-group">
-              <label className="form-label">Phone Number *</label>
+              <label className="form-label">Nomor HP / WhatsApp *</label>
               <div style={{ display: "flex", alignItems: "center", gap: "0" }}>
-                <span style={{
-                  padding: "0.625rem 0.75rem",
-                  background: "var(--cream-dark)",
-                  border: "1.5px solid var(--border)",
-                  borderRight: "none",
-                  borderRadius: "var(--radius-md) 0 0 var(--radius-md)",
-                  fontSize: "0.9375rem",
-                  color: "var(--text-secondary)",
-                  fontWeight: 600,
-                  flexShrink: 0,
-                  lineHeight: "1.5",
-                }}>+62</span>
+                <span style={{ padding: "0.625rem 0.75rem", background: "var(--cream-dark)", border: "1.5px solid var(--border)", borderRight: "none", borderRadius: "var(--radius-md) 0 0 var(--radius-md)", fontSize: "0.9375rem", color: "var(--text-secondary)", fontWeight: 600, flexShrink: 0, lineHeight: "1.5" }}>+62</span>
                 <input
                   className={`form-input ${errors.phone ? "error" : ""}`}
+                  style={{ borderLeft: "none", borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
                   value={phone}
-                  onChange={(e) => {
-                    // Only allow digits
-                    setPhone(e.target.value.replace(/\D/g, ""));
+                  onFocus={() => setPhoneFocused(true)}
+                  onBlur={() => setPhoneFocused(false)}
+                  onChange={e => {
+                    let val = e.target.value.replace(/\D/g, "");
+                    if (val.startsWith("62")) val = val.substring(2);
+                    else if (val.startsWith("0")) val = val.substring(1);
+                    setPhone(val);
                   }}
-                  onWheel={(e) => (e.target as HTMLInputElement).blur()}
-                  inputMode="numeric"
-                  placeholder="81234567890"
-                  style={{ borderRadius: "0 var(--radius-md) var(--radius-md) 0" }}
+                  placeholder="8123456789"
                 />
               </div>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.25rem", display: "block" }}>
+                Tidak perlu mengetik 0 atau 62 di depan.
+              </span>
+              {phoneFocused && !phone.match(/^\d{9,13}$/) && (
+                <span style={{ fontSize: "0.75rem", color: "var(--accent)", marginTop: "0.25rem", display: "block" }}>
+                  Masukkan digit nomor yang valid (9-13 digit).
+                </span>
+              )}
               {errors.phone && <span className="form-error"><AlertCircle size={12} />{errors.phone}</span>}
             </div>
             <div className="form-group">
@@ -320,6 +361,44 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
               </select>
               {errors.deviceType && <span className="form-error"><AlertCircle size={12} />{errors.deviceType}</span>}
             </div>
+
+            <div style={{ display: "flex", gap: "1rem" }}>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">Nama Perangkat (Device Name) <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(opsional)</span></label>
+                  <input 
+                    className="form-input" 
+                    value={deviceName} 
+                    onChange={e => setDeviceName(e.target.value)} 
+                    placeholder="Misal: ASUS ROG G15" 
+                  />
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">Serial Number (SN) <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(opsional)</span></label>
+                  <input 
+                    className="form-input" 
+                    value={deviceSn} 
+                    onChange={e => setDeviceSn(e.target.value)} 
+                    placeholder="Misal: 12345ABCD" 
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Kondisi Perangkat (Condition) <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(opsional)</span></label>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.5rem" }}>
+                  {["Garansi Aktif", "Garansi Habis", "Segel Utuh", "Fisik Mulus"].map(cond => (
+                    <label key={cond} style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                      <input 
+                        type="checkbox" 
+                        checked={conditions.includes(cond)} 
+                        onChange={() => toggleCondition(cond)} 
+                        style={{ width: "1.1rem", height: "1.1rem" }}
+                      />
+                      {cond}
+                    </label>
+                  ))}
+                </div>
+              </div>
           </div>
         )}
 
@@ -352,31 +431,35 @@ export default function CreateTicketForm({ upgrades, technicians, sales, userPro
               </>
             )}
 
-            {/* Cleaning */}
             {ticketType === "cleaning" && (
-              <div className="form-group">
-                <label className="form-label">Service Package *</label>
-                <div style={{ display: "flex", gap: "0.75rem" }}>
-                  {["Deep_Clean", "Repaste"].map((pkg) => (
-                    <button
-                      key={pkg}
-                      type="button"
-                      onClick={() => setCleaningPackage(pkg)}
-                      className="btn"
-                      style={{
-                        flex: 1,
-                        background: cleaningPackage === pkg ? "var(--primary)" : "var(--white)",
-                        color: cleaningPackage === pkg ? "#fff" : "var(--text-primary)",
-                        border: `2px solid ${cleaningPackage === pkg ? "var(--primary)" : "var(--border)"}`,
-                        padding: "0.875rem",
-                      }}
-                    >
-                      {pkg.replace("_", " ")}
-                    </button>
-                  ))}
+              <>
+                <div className="form-group">
+                  <label className="form-label">Kelengkapan (Accessories) <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(opsional)</span></label>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem", marginTop: "0.25rem", marginBottom: "0.5rem" }}>
+                    {["Charger", "Kabel", "Bag"].map(acc => (
+                      <label key={acc} style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.9rem" }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedAccessories.includes(acc)} 
+                          onChange={() => toggleAccessory(acc)} 
+                          style={{ width: "1.1rem", height: "1.1rem" }}
+                        />
+                        {acc}
+                      </label>
+                    ))}
+                  </div>
+                  <input className="form-input" value={customAccessory} onChange={e => setCustomAccessory(e.target.value)} placeholder="Kelengkapan lain (custom)..." />
                 </div>
-                {errors.cleaningPackage && <span className="form-error"><AlertCircle size={12} />{errors.cleaningPackage}</span>}
-              </div>
+                <div className="form-group">
+                  <label className="form-label">Paket Servis (Cleaning Package) *</label>
+                  <select className={`form-input ${errors.cleaningPackage ? "error" : ""}`} value={cleaningPackage} onChange={e => setCleaningPackage(e.target.value)}>
+                    <option value="">Pilih Paket Servis</option>
+                    <option value="Deep_Clean">Deep Clean</option>
+                    <option value="Repaste">Repaste / Thermal Paste Replacement</option>
+                  </select>
+                  {errors.cleaningPackage && <span className="form-error"><AlertCircle size={12} />{errors.cleaningPackage}</span>}
+                </div>
+              </>
             )}
 
             {/* Upgrade */}

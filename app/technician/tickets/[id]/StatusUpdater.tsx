@@ -120,18 +120,27 @@ export default function StatusUpdater({
     }
 
     startTransition(async () => {
-      const fd = new FormData();
-      fd.append("ticketId", ticketId);
-      fd.append("newStatus", nextStatus);
-      if (eventAction) fd.append("eventAction", eventAction);
-      if (reason) fd.append("reason", reason);
-      files.forEach((f) => fd.append("files", f));
+      try {
+        const fd = new FormData();
+        fd.append("ticketId", ticketId);
+        fd.append("newStatus", nextStatus);
+        if (eventAction) fd.append("eventAction", eventAction);
+        if (reason) fd.append("reason", reason);
+        files.forEach((f) => fd.append("files", f));
 
-      const result = await updateTicketStatusAction(fd);
-      if (result?.error) toast.error(result.error);
-      else {
-        toast.success("Status updated!");
-        closeDialog();
+        const result = await updateTicketStatusAction(fd);
+        if (result?.error) toast.error(result.error);
+        else {
+          toast.success("Status updated!");
+          closeDialog();
+        }
+      } catch (err: any) {
+        console.error("Action error:", err);
+        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
+          toast.error("Upload failed: File size is too large. Please limit to 10MB.");
+        } else {
+          toast.error("An unexpected error occurred. Please try again.");
+        }
       }
     });
   };

@@ -9,14 +9,7 @@ export default function NativeSSOLoginButton() {
   }
 
   useEffect(() => {
-    // Listen for the SSO popup finishing the login and sending the success URL
-    const handleMessage = (event: MessageEvent) => {
-      if (event.data?.type === 'oauth_redirect' && event.data?.url) {
-        window.location.href = event.data.url;
-      }
-    };
-    window.addEventListener('message', handleMessage);
-    return () => window.removeEventListener('message', handleMessage);
+    // No popup listener needed anymore, we are using full page redirects
   }, []);
 
   const handleLoginClick = () => {
@@ -24,16 +17,8 @@ export default function NativeSSOLoginButton() {
     const targetUrl = encodeURIComponent(window.location.origin + '/api/auth/sso-sync');
     const authUrl = `${SSO_URL}/api/auth/google?redirectUrl=${targetUrl}`;
 
-    const width = 500, height = 600;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
-    
-    // Open the SSO API directly in a popup
-    const popup = window.open(authUrl, 'SSO_Login', `width=${width},height=${height},top=${top},left=${left}`);
-
-    if (!popup || popup.closed || typeof popup.closed === 'undefined') {
-      window.location.href = authUrl; // Fallback
-    }
+    // Perform a full-page redirect to the SSO portal
+    window.location.href = authUrl;
   };
 
   return (

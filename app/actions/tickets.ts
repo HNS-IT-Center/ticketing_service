@@ -40,6 +40,10 @@ export async function createTicketAction(formData: FormData) {
   const service_category = (formData.get("service_category") as string | null) || null;
   const accessories = (formData.get("accessories") as string | null) || null;
   const device_condition = (formData.get("device_condition") as string | null) || null;
+  const device_name = (formData.get("device_name") as string | null) || null;
+  const device_sn = (formData.get("device_sn") as string | null) || null;
+  const warranty_status = (formData.get("warranty_status") as string | null) || null;
+  
   const is_overnight = formData.get("is_overnight") === "1";
   const is_overnight_check = formData.get("is_overnight_check") === "1";
   const checking_fee = is_overnight_check ? 50000 : null;
@@ -47,7 +51,7 @@ export async function createTicketAction(formData: FormData) {
   const terms_accepted = formData.get("terms_accepted") === "1";
   const technician_notes = (formData.get("technician_notes") as string | null) || null;
 
-  // Generate ticket code — store-prefixed if store selected, else TKT-{nanoid}
+  // Generate ticket code
   let ticket_code: string;
   if (store_location_id) {
     const store = await db.storeLocation.findUnique({
@@ -64,13 +68,67 @@ export async function createTicketAction(formData: FormData) {
     ticket_code = `TKT-${nanoid()}`;
   }
 
-  // Auto-generate a secure public share token
   const public_share_token = randomBytes(24).toString("hex");
-  const points = getTicketPoints(ticket_type, device_type);
 
-  // Workload check removed in Phase 3
+  // ── Handle attachments FIRST ──
+  const ticketFiles = (formData.getAll("ticket_files") as File[]).filter(f => f.size > 0);
+  const progressFiles = (formData.getAll("progress_files") as File[]).filter(f => f.size > 0);
+  const files = [...ticketFiles, ...progressFiles];
+  
+  let uploadedFiles: { publicUrl: string, fileType: "image" | "video" | "pdf" }[] = [];
+  let firstUploadedUrl: string | null = null;
 
-  // Build the category-specific detail create operations for the transaction
+  if (files.length > 0) {
+    const supabase = createServerSupabaseClient();
+    const uploadOps = files.map(async (file) => {
+      if (file.size === 0) return null;
+
+      const mimeToExt: Record<string, string> = {
+        "image/webp": "webp",
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "image/gif": "gif",
+        "video/webm": "webm",
+        "video/mp4": "mp4",
+        "video/quicktime": "mov",
+        "application/pdf": "pdf",
+      };
+      
+      const ext = mimeToExt[file.type] || file.name.split(".").pop()?.toLowerCase() || "bin";
+      const filename = `${ticket_code}_${nanoid()}.${ext}`;
+      const path = `${session.userId}/${filename}`;
+
+      const { data, error } = await supabase.storage
+        .from("attachments")
+        .upload(path, file, {
+          contentType: file.type,
+          upsert: false
+        });
+
+      if (error) {
+        console.error("Supabase Upload Error:", error);
+        throw new Error(`Upload failed for ${file.name}: ${error.message}`);
+      }
+
+      const { data: { publicUrl } } = supabase.storage.from("attachments").getPublicUrl(data.path);
+
+      let fileType: "image" | "video" | "pdf" = "pdf";
+      if (file.type.startsWith("image/")) fileType = "image";
+      if (file.type.startsWith("video/")) fileType = "video";
+
+      return { publicUrl, fileType };
+    });
+
+    try {
+      uploadedFiles = (await Promise.all(uploadOps)).filter((f): f is { publicUrl: string, fileType: "image" | "video" | "pdf" } => f !== null);
+      firstUploadedUrl = uploadedFiles[0]?.publicUrl || null;
+    } catch (err: any) {
+      console.error("[UPLOAD ERROR]", err);
+      return { error: `Failed to upload attachments. ${err.message}` };
+    }
+  }
+
+  // ── Now it's safe to create the DB record ──
   const ticket = await db.ticket.create({
     data: {
       ticket_code,
@@ -87,11 +145,13 @@ export async function createTicketAction(formData: FormData) {
       sales_id: sales_id || null,
       notes: notes || null,
       status: "waiting",
-      // New fields
       store_location_id,
       service_category: service_category as any,
       accessories,
       device_condition,
+      device_name,
+      device_sn,
+      warranty_status,
       is_overnight,
       is_overnight_check,
       checking_fee,
@@ -103,61 +163,21 @@ export async function createTicketAction(formData: FormData) {
     select: { id: true },
   });
 
-  // Build all follow-up writes and run them in parallel
   const followUps: Promise<unknown>[] = [];
 
-  // Handle attachments
-  const ticketFiles = formData.getAll("ticket_files") as File[];
-  const progressFiles = formData.getAll("progress_files") as File[];
-  const files = [...ticketFiles, ...progressFiles];
-  let firstUploadedUrl: string | null = null;
-  if (files.length > 0) {
-    const supabase = createServerSupabaseClient();
-    const uploadOps = files.map(async (file) => {
-      // Derive extension from MIME type (reliable for camera files like HEIC/MOV)
-      // After client-side compression, images are WebP and videos are WebM
-      const mimeToExt: Record<string, string> = {
-        "image/webp": "webp",
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/gif": "gif",
-        "video/webm": "webm",
-        "video/mp4": "mp4",
-        "video/quicktime": "mov",
-        "application/pdf": "pdf",
-      };
-      const ext =
-        mimeToExt[file.type] ||
-        file.name.split(".").pop()?.toLowerCase() ||
-        "bin";
-      const path = `${ticket.id}/${Date.now()}-${Math.random().toString(36).slice(2)}.${ext}`;
-
-      const { data, error } = await supabase.storage
-        .from("attachments")
-        .upload(path, file, { contentType: file.type });
-
-      if (error) return null;
-
-      const {
-        data: { publicUrl },
-      } = supabase.storage.from("attachments").getPublicUrl(data.path);
-
-      let fileType: "image" | "video" | "pdf" = "pdf";
-      if (file.type.startsWith("image/")) fileType = "image";
-      if (file.type.startsWith("video/")) fileType = "video";
-
-      await db.ticketAttachment.create({
-        data: { ticket_id: ticket.id, file_url: publicUrl, file_type: fileType },
-      });
-      return publicUrl;
-    });
-    
-    // We await the uploads to get the first file URL for PC builds
-    const uploadedUrls = await Promise.all(uploadOps);
-    firstUploadedUrl = uploadedUrls.find(url => url != null) || null;
+  // Write attachment records
+  if (uploadedFiles.length > 0) {
+    followUps.push(
+      db.ticketAttachment.createMany({
+        data: uploadedFiles.map(f => ({
+          ticket_id: ticket.id,
+          file_url: f.publicUrl,
+          file_type: f.fileType,
+        }))
+      })
+    );
   }
 
-  // Status log
   followUps.push(
     db.ticketStatusLog.create({
       data: {
@@ -169,7 +189,6 @@ export async function createTicketAction(formData: FormData) {
     })
   );
 
-  // Category-specific detail
   switch (ticket_type) {
     case "service":
       followUps.push(db.ticketServiceDetail.create({ data: { ticket_id: ticket.id } }));
@@ -220,27 +239,30 @@ export async function createTicketAction(formData: FormData) {
     }
   }
 
-  // Workload update removed: workload is tracked dynamically.
-
-  // Run all follow-up writes in parallel
   await Promise.all(followUps);
 
-  // ── Fire creation email to customer (non-blocking) ────────────────────────
   if (customer_email) {
+    const { headers } = await import("next/headers");
+    const headersList = await headers();
+    const host = headersList.get("host") || "localhost:3000";
+    const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+    const appUrl = `${protocol}://${host}`;
+
     sendTicketStatusEmail({
       to: customer_email,
       customerName: customer_name || "Customer",
       ticketCode: ticket_code,
       status: "waiting",
       shareToken: public_share_token,
+      appUrl,
     }).catch((err) => console.error("[EMAIL CREATE ERROR]", err));
   }
 
-  if (session.role === "Administrator" || session.role === "Sales") {
-    redirect(`/admin/tickets`);
-  } else {
-    redirect(`/technician/tickets`);
-  }
+  const redirectUrl = (session.role === "Administrator" || session.role === "Sales") 
+    ? `/admin/tickets` 
+    : `/technician/tickets`;
+    
+  return { success: true, redirectUrl };
 }
 
 // ─── Send Message ──────────────────────────────────────────────────────────

@@ -141,7 +141,7 @@ export default async function PublicTicketPage({
             )}
           </div>
 
-          {/* Ticket info */}
+          {/* Ticket infos */}
           <div style={{ padding: "1.5rem 1.75rem", borderBottom: "1px solid #f3f4f6" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
               {[

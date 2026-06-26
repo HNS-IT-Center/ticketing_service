@@ -41,11 +41,17 @@ export async function loginAction(
   const { email, password } = validated.data;
 
   const user = await db.user.findUnique({ where: { email } });
-  if (!user) {
+  // Pastikan user ada dan password-nya tidak null
+  if (!user || !user.password) {
     return { message: "Invalid email or password" };
+    // Catatan: Jika user login dengan SSO, user.password pasti null.
+    // Kamu bisa menyesuaikan pesan error-nya, misalnya: "Please login using your SSO provider"
   }
 
+  // Karena sudah melewati pengecekan di atas, TypeScript sekarang yakin 
+  // bahwa user.password pasti sebuah 'string'
   const passwordMatch = await bcrypt.compare(password, user.password);
+
   if (!passwordMatch) {
     return { message: "Invalid email or password" };
   }

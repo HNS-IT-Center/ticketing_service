@@ -22,7 +22,8 @@ function getTicketPoints(type: string, deviceType?: string | null): number {
 
 // ─── Create Ticket ─────────────────────────────────────────────────────────
 export async function createTicketAction(formData: FormData) {
-  const session = await requireSession();
+  try {
+    const session = await requireSession();
 
   const ticket_type = formData.get("ticket_type") as string;
   const device_type = formData.get("device_type") as string;
@@ -56,11 +57,24 @@ export async function createTicketAction(formData: FormData) {
   if (store_location_id) {
     const store = await db.storeLocation.findUnique({
       where: { id: store_location_id },
-      select: { code: true },
+      select: { id: true, code: true },
     });
     if (store) {
-      const count = await db.ticket.count({ where: { store_location_id } });
-      ticket_code = `${store.code}-${String(count + 1).padStart(6, "0")}`;
+      const lastTicket = await db.ticket.findFirst({
+        where: { store_location_id: store.id },
+        orderBy: { created_at: 'desc' },
+      });
+      let nextNumber = 1;
+      if (lastTicket && lastTicket.ticket_code.startsWith(`${store.code}-`)) {
+        const lastNumber = parseInt(lastTicket.ticket_code.replace(`${store.code}-`, ""), 10);
+        if (!isNaN(lastNumber)) {
+          nextNumber = lastNumber + 1;
+        }
+      } else if (lastTicket) {
+         const count = await db.ticket.count({ where: { store_location_id } });
+         nextNumber = count + 1;
+      }
+      ticket_code = `${store.code}-${String(nextNumber).padStart(6, "0")}`;
     } else {
       ticket_code = `TKT-${nanoid()}`;
     }
@@ -160,7 +174,7 @@ export async function createTicketAction(formData: FormData) {
       technician_notes,
       public_share_token,
     },
-    select: { id: true },
+    select: { id: true, public_share_token: true },
   });
 
   const followUps: Promise<unknown>[] = [];
@@ -258,11 +272,15 @@ export async function createTicketAction(formData: FormData) {
     }).catch((err) => console.error("[EMAIL CREATE ERROR]", err));
   }
 
-  const redirectUrl = (session.role === "Administrator" || session.role === "Sales") 
+  const redirectUrl = session.role === "Administrator" || session.role === "Sales"
     ? `/admin/tickets` 
-    : `/technician/tickets`;
+    : (session.role === "Technician" ? `/technician/tickets` : `/ticket/${ticket.public_share_token}`);
     
-  return { success: true, redirectUrl };
+    return { success: true, redirectUrl };
+  } catch (err: any) {
+    console.error("[createTicketAction Error]:", err);
+    return { error: err.message || "An internal server error occurred" };
+  }
 }
 
 // ─── Send Message ──────────────────────────────────────────────────────────

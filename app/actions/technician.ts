@@ -135,15 +135,16 @@ export async function cancelTicketRequestAction(ticketId: string) {
 
 // ─── Update Ticket Status ──────────────────────────────────────────────────
 export async function updateTicketStatusAction(formData: FormData) {
-  const ticketId = formData.get("ticketId") as string;
-  const newStatus = formData.get("newStatus") as
-    | "on_progress" | "done" | "cancelled" | "rejected"
-    | "ready_for_pickup" | "waiting_pickup" | "handed_to_courier" | "delivered" | "completed";
-  const reason = formData.get("reason") as string | null;
-  const eventAction = formData.get("eventAction") as "START" | "PAUSE" | "RESUME" | "DONE" | null;
-  const files = formData.getAll("files") as File[];
+  try {
+    const ticketId = formData.get("ticketId") as string;
+    const newStatus = formData.get("newStatus") as
+      | "on_progress" | "done" | "cancelled" | "rejected"
+      | "ready_for_pickup" | "waiting_pickup" | "handed_to_courier" | "delivered" | "completed";
+    const reason = formData.get("reason") as string | null;
+    const eventAction = formData.get("eventAction") as "START" | "PAUSE" | "RESUME" | "DONE" | null;
+    const files = formData.getAll("files") as File[];
 
-  const session = await requireRole("Technician");
+    const session = await requireRole("Technician");
 
   const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
   if (!ticket) return { error: "Ticket not found" };
@@ -380,6 +381,10 @@ export async function updateTicketStatusAction(formData: FormData) {
   revalidatePath(`/technician/tickets/${ticketId}`);
   revalidatePath(`/customer/tickets/${ticketId}`);
   return { success: true };
+  } catch (err: any) {
+    console.error("[updateTicketStatusAction Error]:", err);
+    return { error: err.message || "An internal server error occurred" };
+  }
 }
 
 // ─── Update Ticket Notes ───────────────────────────────────────────────────

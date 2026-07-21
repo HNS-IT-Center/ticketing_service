@@ -258,9 +258,9 @@ export async function createTicketAction(formData: FormData) {
   if (customer_email) {
     const { headers } = await import("next/headers");
     const headersList = await headers();
-    const host = headersList.get("host") || "localhost:3000";
-    const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-    const appUrl = `${protocol}://${host}`;
+    const host = headersList.get("host");
+    const protocol = headersList.get("x-forwarded-proto") || "https";
+    const appUrl = host ? `${protocol}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || "");
 
     sendTicketStatusEmail({
       to: customer_email,

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
+import { headers } from "next/headers";
 import Badge from "@/components/ui/Badge";
 import { formatDateTime } from "@/lib/utils";
 import PublicChat from "./PublicChat";
@@ -19,12 +20,12 @@ const PROOF_STATUSES = new Set([
 export default async function PublicTicketPage({
   params,
 }: {
-  params: Promise<{ token: string }>;
+  params: Promise<{ date: string; ticketCode: string }>;
 }) {
-  const { token } = await params;
+  const { date, ticketCode } = await params;
 
   const ticket = await db.ticket.findUnique({
-    where: { public_share_token: token },
+    where: { ticket_code: ticketCode },
     include: {
       user: { select: { name: true } },
       store_location: { select: { name: true, code: true } },
@@ -57,9 +58,11 @@ export default async function PublicTicketPage({
     { key: "completed", label: "Selesai" },
   ];
 
-  const currentIdx = STATUS_STEPS.findIndex((s) => s.key === ticket.status);
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
-  const shareUrl = `${appUrl}/ticket/${token}`;
+  const headersList = await headers();
+  const host = headersList.get("host");
+  const protocol = headersList.get("x-forwarded-proto") || "https";
+  const appUrl = host ? `${protocol}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || "");
+  const shareUrl = `${appUrl}/${date}/${ticketCode}`;
 
   let totalTimeMs = 0;
   let lastStartTime: Date | null = null;
@@ -283,7 +286,7 @@ export default async function PublicTicketPage({
         {ticket.public_chat_enabled ? (
           <PublicChat
             ticketId={ticket.id}
-            shareToken={token}
+            shareToken={ticket.public_share_token || ""}
             messages={ticket.messages.map((m) => ({
               id: m.id,
               message: m.message,

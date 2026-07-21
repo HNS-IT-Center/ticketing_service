@@ -181,7 +181,7 @@ export default async function TechnicianTicketDetailPage({
           )}
           {ticket.public_share_token && (
             <Link
-              href={`/ticket/${ticket.public_share_token}`}
+              href={`/${ticket.created_at.toISOString().split("T")[0]}/${ticket.ticket_code}`}
               target="_blank"
               className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100"
             >
@@ -240,7 +240,7 @@ export default async function TechnicianTicketDetailPage({
               customerName={(ticket.is_for_self ? ticket.user?.name : ticket.customer_name) || "Customer"}
               ticketCode={ticket.ticket_code}
               status={ticket.status}
-              publicLink={ticket.public_share_token}
+              publicLink={ticket.public_share_token ? `${ticket.created_at.toISOString().split("T")[0]}/${ticket.ticket_code}` : null}
             />
           </div>
 

@@ -81,6 +81,14 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
   const [profileOpen, setProfileOpen] = useState(false);      // profile dropdown
   const profileRef = useRef<HTMLDivElement>(null);
 
+  // Swipe gesture state
+  const [swipeOffset, setSwipeOffset] = useState(0);
+  const touchStartX = useRef<number>(0);
+  const touchStartY = useRef<number>(0);
+  const touchCurrentX = useRef<number>(0);
+  const isSwiping = useRef(false);
+  const isScrolling = useRef(false);
+
   // Restore collapse state from localStorage
   useEffect(() => {
     const saved = localStorage.getItem("sidebar_collapsed");
@@ -105,6 +113,62 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handleTouchStart = (e: React.TouchEvent) => {
+    const target = e.target as HTMLElement;
+    if (
+      target.closest('[role="dialog"]') || 
+      target.closest('[role="alertdialog"]') || 
+      target.closest('input[type="range"]') || 
+      target.closest('.overflow-x-auto') ||
+      target.closest('[data-radix-scroll-area-viewport]')
+    ) {
+      return;
+    }
+
+    touchStartX.current = e.touches[0].clientX;
+    touchStartY.current = e.touches[0].clientY;
+    touchCurrentX.current = e.touches[0].clientX;
+    isScrolling.current = false;
+    isSwiping.current = true;
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isSwiping.current || isScrolling.current) return;
+    
+    const deltaX = e.touches[0].clientX - touchStartX.current;
+    const deltaY = e.touches[0].clientY - touchStartY.current;
+    
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 10) {
+      isScrolling.current = true;
+      isSwiping.current = false;
+      setSwipeOffset(0);
+      return;
+    }
+
+    touchCurrentX.current = e.touches[0].clientX;
+    
+    if (sidebarOpen) {
+      if (deltaX < 0) setSwipeOffset(Math.max(-260, deltaX));
+    } else {
+      if (deltaX > 0) setSwipeOffset(Math.min(260, deltaX));
+    }
+  };
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!isSwiping.current) return;
+    isSwiping.current = false;
+    
+    const endX = e.changedTouches[0].clientX;
+    const delta = endX - touchStartX.current;
+    
+    if (sidebarOpen && delta < -100) {
+      setSidebarOpen(false);
+    } else if (!sidebarOpen && delta > 100) {
+      setSidebarOpen(true);
+    }
+    setSwipeOffset(0);
+  };
+
   const navItems = NAV_ITEMS[role] || [];
   const initials = userName
     .split(" ")
@@ -120,7 +184,12 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
     navItems.find((n) => pathname === n.href || pathname.startsWith(n.href))?.label ?? "Dashboard";
 
   return (
-    <div className="dashboard-layout">
+    <div 
+      className="dashboard-layout relative overflow-x-hidden"
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+    >
       {/* Mobile overlay */}
       <div
         className={`sidebar-overlay ${sidebarOpen ? "open" : ""}`}
@@ -128,7 +197,13 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
       />
 
       {/* ── Sidebar ──────────────────────────────────────────── */}
-      <aside className={`sidebar ${sidebarOpen ? "open" : ""} ${collapsed ? "collapsed" : ""}`}>
+      <aside 
+        className={`sidebar ${sidebarOpen ? "open" : ""} ${collapsed ? "collapsed" : ""}`}
+        style={isSwiping.current && swipeOffset !== 0 ? {
+          transform: `translateX(${sidebarOpen ? swipeOffset : -260 + swipeOffset}px)`,
+          transition: "none"
+        } : {}}
+      >
         {/* Logo area */}
         <div className="sidebar-logo" style={{ justifyContent: collapsed ? "center" : "flex-start", gap: "0.5rem" }}>
           {/* Logo icon (always shown) */}

@@ -27,7 +27,7 @@ export default function CustomerWhatsAppActions({ customerPhone, customerName, t
     window.open(`https://wa.me/${phoneStr}?text=${encoded}`, "_blank");
   };
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3001";
+  const appUrl = typeof window !== "undefined" ? window.location.origin : (process.env.NEXT_PUBLIC_APP_URL || "");
 
   const templates = [
     {
@@ -36,15 +36,15 @@ export default function CustomerWhatsAppActions({ customerPhone, customerName, t
     },
     {
       label: "Tunggu Diambil",
-      text: `Halo kak ${customerName}, perangkat kakak dengan nomor tiket ${ticketCode} sudah selesai dikerjakan dan siap diambil di toko. Terima kasih!\n\nCek detail: ${publicLink ? `${appUrl}/ticket/${publicLink}` : ''}`
+      text: `Halo kak ${customerName}, perangkat kakak dengan nomor tiket ${ticketCode} sudah selesai dikerjakan dan siap diambil di toko. Terima kasih!\n\nCek detail: ${publicLink ? `${appUrl}/${publicLink}` : ''}`
     },
     {
       label: "Dikirim Kurir",
-      text: `Halo kak ${customerName}, perangkat kakak dengan nomor tiket ${ticketCode} sedang dalam perjalanan dikirim oleh kurir kami. Mohon ditunggu ya kak!\n\nCek detail: ${publicLink ? `${appUrl}/ticket/${publicLink}` : ''}`
+      text: `Halo kak ${customerName}, perangkat kakak dengan nomor tiket ${ticketCode} sedang dalam perjalanan dikirim oleh kurir kami. Mohon ditunggu ya kak!\n\nCek detail: ${publicLink ? `${appUrl}/${publicLink}` : ''}`
     },
     {
       label: "Minta Persetujuan (Approval)",
-      text: `Halo kak ${customerName}, terkait perangkat dengan nomor tiket ${ticketCode}, kami membutuhkan persetujuan kakak sebelum melanjutkan perbaikan. Mohon informasinya ya kak.\n\nCek detail: ${publicLink ? `${appUrl}/ticket/${publicLink}` : ''}`
+      text: `Halo kak ${customerName}, terkait perangkat dengan nomor tiket ${ticketCode}, kami membutuhkan persetujuan kakak sebelum melanjutkan perbaikan. Mohon informasinya ya kak.\n\nCek detail: ${publicLink ? `${appUrl}/${publicLink}` : ''}`
     }
   ];
 

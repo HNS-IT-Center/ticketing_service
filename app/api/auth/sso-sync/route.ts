@@ -6,7 +6,7 @@ import { createSession } from "@/lib/session";
 export async function GET(request: NextRequest) {
   // Read SSO token securely from cookies
   const token = request.cookies.get("sso_token")?.value;
-  const ssoUrl = process.env.NEXT_PUBLIC_SSO_URL || "http://localhost:3000";
+  const ssoUrl = process.env.NEXT_PUBLIC_SSO_URL || "";
 
   console.log("=== SSO SYNC CALLED ===");
   console.log("Token exists?", !!token);

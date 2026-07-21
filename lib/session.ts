@@ -36,18 +36,20 @@ export async function decrypt(
 export async function createSession(
   userId: string,
   role: string,
-  name: string
+  name: string,
+  rememberMe?: boolean
 ): Promise<void> {
   const session = await encrypt({ userId, role, name });
   const cookieStore = await cookies();
 
-  // No `expires` → session cookie: browser destroys it when closed.
+  // No `expires` by default → session cookie: browser destroys it when closed.
   // The JWT inside still carries a 7-day expiry as a safety guard.
   cookieStore.set("session", session, {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
+    ...(rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {}), // 30 days
   });
 }
 

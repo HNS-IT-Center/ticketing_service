@@ -11,6 +11,7 @@ import { createSession, deleteSession } from "@/lib/session";
 const LoginSchema = z.object({
   email: z.string().email("Invalid email address"),
   password: z.string().min(1, "Password is required"),
+  rememberMe: z.boolean().optional(),
 });
 
 export type FormState = {
@@ -31,6 +32,7 @@ export async function loginAction(
   const raw = {
     email: formData.get("email"),
     password: formData.get("password"),
+    rememberMe: formData.get("rememberMe") === "on",
   };
 
   const validated = LoginSchema.safeParse(raw);
@@ -38,7 +40,7 @@ export async function loginAction(
     return { errors: validated.error.flatten().fieldErrors };
   }
 
-  const { email, password } = validated.data;
+  const { email, password, rememberMe } = validated.data;
 
   const user = await db.user.findUnique({ where: { email } });
   // Pastikan user ada dan password-nya tidak null
@@ -61,7 +63,7 @@ export async function loginAction(
     return { message: "This account has been deactivated. Please contact an administrator." };
   }
 
-  await createSession(user.id, user.role, user.name);
+  await createSession(user.id, user.role, user.name, rememberMe);
 
   // Redirect based on role
   switch (user.role) {

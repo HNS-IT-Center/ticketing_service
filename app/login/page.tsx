@@ -119,6 +119,13 @@ export default function LoginPage() {
             )}
           </div>
 
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "-0.25rem", marginBottom: "0.5rem" }}>
+            <input type="checkbox" id="rememberMe" name="rememberMe" style={{ width: "auto", cursor: "pointer" }} />
+            <label htmlFor="rememberMe" style={{ fontSize: "0.875rem", color: "var(--text-secondary)", cursor: "pointer", userSelect: "none" }}>
+              Remember me
+            </label>
+          </div>
+
           <button
             type="submit"
             disabled={pending}

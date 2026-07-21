@@ -83,8 +83,8 @@ export default async function TechnicianDashboard() {
   // Coordinator sees all store tickets; regular tech sees only own
   const activeTickets = await db.ticket.findMany({
     where: isCoordinator && storeIds.length > 0
-      ? { store_location_id: { in: storeIds }, status: { in: ["waiting", "on_progress"] } }
-      : { technician_id: session.userId, status: { in: ["waiting", "on_progress"] } },
+      ? { store_location_id: { in: storeIds }, status: { notIn: ["completed", "cancelled", "rejected"] } }
+      : { technician_id: session.userId, status: { notIn: ["completed", "cancelled", "rejected"] } },
     orderBy: { updated_at: "desc" },
     take: 10,
     select: {

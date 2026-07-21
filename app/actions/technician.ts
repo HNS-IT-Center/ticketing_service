@@ -97,7 +97,7 @@ export async function requestTicketAssignmentAction(ticketId: string) {
     },
     select: { id: true },
   });
-  
+
   for (const admin of adminsAndLeaders) {
     await db.notification.create({
       data: {
@@ -146,241 +146,241 @@ export async function updateTicketStatusAction(formData: FormData) {
 
     const session = await requireRole("Technician");
 
-  const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
-  if (!ticket) return { error: "Ticket not found" };
+    const ticket = await db.ticket.findUnique({ where: { id: ticketId } });
+    if (!ticket) return { error: "Ticket not found" };
 
-  if (ticket.technician_id !== session.userId) {
-    return { error: "You are not assigned to this ticket" };
-  }
-
-  const HANDOVER_CHAIN: Record<string, string> = {
-    on_progress:       "waiting",
-    done:              "on_progress",
-    ready_for_pickup:  "done",
-    handed_to_courier: "done",
-    delivered:         "handed_to_courier",
-    completed:         "ready_for_pickup",
-  };
-
-  const allowedPrevious = HANDOVER_CHAIN[newStatus];
-  const isValidTransition =
-    newStatus === "cancelled" ||
-    newStatus === "rejected" ||
-    ticket.status === allowedPrevious ||
-    (newStatus === "on_progress" && ticket.status === "on_progress") ||
-    (newStatus === "completed" && (ticket.status === "waiting_pickup" || ticket.status === "delivered"));
-
-  if (!isValidTransition) {
-    return { error: `Cannot move to "${newStatus}" from "${ticket.status}"` };
-  }
-
-  const requiresProof =
-    newStatus === "handed_to_courier" ||
-    newStatus === "delivered" ||
-    (newStatus === "completed" && ticket.status === "ready_for_pickup");
-
-  const validFiles = files.filter((f) => f.size > 0);
-  if (requiresProof && validFiles.length === 0) {
-    return { error: "Proof attachment is required for this step." };
-  }
-
-  // ── Handle Attachments FIRST ──
-  let uploadedFiles: { publicUrl: string, fileType: "image" | "video" | "pdf" }[] = [];
-  
-  if (validFiles.length > 0) {
-    const { createServerSupabaseClient } = await import("@/lib/supabase");
-    const supabase = createServerSupabaseClient();
-
-    const proofPrefix: Record<string, string> = {
-      done:              "work-proof",
-      handed_to_courier: "courier-proof",
-      completed:         "pickup-proof",
-      delivered:         "delivery-proof",
-      cancelled:         "cancel-proof",
-      rejected:          "cancel-proof",
-    };
-    const prefix = proofPrefix[newStatus] ?? "attachment";
-
-    const uploadOps = validFiles.map(async (file) => {
-      const mimeToExt: Record<string, string> = {
-        "image/webp": "webp",
-        "image/jpeg": "jpg",
-        "image/png": "png",
-        "image/gif": "gif",
-        "video/webm": "webm",
-        "video/mp4": "mp4",
-        "video/quicktime": "mov",
-        "application/pdf": "pdf",
-      };
-      const ext = mimeToExt[file.type] || file.name.split(".").pop()?.toLowerCase() || "bin";
-      const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase().slice(0, 40);
-      const path = `${ticketId}/${prefix}_${ticket.ticket_code}_${baseName}.${ext}`;
-
-      const { data, error } = await supabase.storage
-        .from("attachments")
-        .upload(path, file, { contentType: file.type });
-
-      if (error) {
-        throw new Error(`Upload failed for ${file.name}`);
-      }
-
-      const { data: { publicUrl } } = supabase.storage.from("attachments").getPublicUrl(data.path);
-
-      let fileType: "image" | "video" | "pdf" = "pdf";
-      if (file.type.startsWith("image/")) fileType = "image";
-      if (file.type.startsWith("video/")) fileType = "video";
-
-      return { publicUrl, fileType };
-    });
-
-    try {
-      uploadedFiles = await Promise.all(uploadOps);
-    } catch (err) {
-      console.error("[UPLOAD ERROR]", err);
-      return { error: "Failed to upload proof attachment. Please check file size and try again." };
+    if (ticket.technician_id !== session.userId) {
+      return { error: "You are not assigned to this ticket" };
     }
-  }
 
-  // ── Database Updates ──
-  const oldStatus = ticket.status;
-  const ticketUpdateData: Record<string, unknown> = { status: newStatus };
-  if (newStatus === "on_progress") ticketUpdateData.work_started_at = new Date();
-  if (newStatus === "done") ticketUpdateData.work_completed_at = new Date();
+    const HANDOVER_CHAIN: Record<string, string> = {
+      on_progress: "waiting",
+      done: "on_progress",
+      ready_for_pickup: "done",
+      handed_to_courier: "done",
+      delivered: "handed_to_courier",
+      completed: "ready_for_pickup",
+    };
 
-  // We write DB operations synchronously/in parallel once we know attachments are safe
-  const dbOps: Promise<unknown>[] = [
-    db.ticket.update({
-      where: { id: ticketId },
-      data: ticketUpdateData as any,
-    }),
-    db.ticketStatusLog.create({
-      data: {
-        ticket_id: ticketId,
-        old_status: oldStatus,
-        new_status: newStatus,
-        reason: reason || null,
-        changed_by: session.userId,
-      },
-    })
-  ];
+    const allowedPrevious = HANDOVER_CHAIN[newStatus];
+    const isValidTransition =
+      newStatus === "cancelled" ||
+      newStatus === "rejected" ||
+      ticket.status === allowedPrevious ||
+      (newStatus === "on_progress" && ticket.status === "on_progress") ||
+      (newStatus === "completed" && (ticket.status === "waiting_pickup" || ticket.status === "delivered"));
 
-  if (eventAction) {
-    dbOps.push(db.ticketTimeLog.create({
-      data: { ticket_id: ticketId, event: eventAction, reason: reason || null },
-    }));
-  }
+    if (!isValidTransition) {
+      return { error: `Cannot move to "${newStatus}" from "${ticket.status}"` };
+    }
 
-  if (uploadedFiles.length > 0) {
-    dbOps.push(
-      db.ticketAttachment.createMany({
-        data: uploadedFiles.map(f => ({
+    const requiresProof =
+      newStatus === "handed_to_courier" ||
+      newStatus === "delivered" ||
+      (newStatus === "completed" && ticket.status === "ready_for_pickup");
+
+    const validFiles = files.filter((f) => f.size > 0);
+    if (requiresProof && validFiles.length === 0) {
+      return { error: "Proof attachment is required for this step." };
+    }
+
+    // ── Handle Attachments FIRST ──
+    let uploadedFiles: { publicUrl: string, fileType: "image" | "video" | "pdf" }[] = [];
+
+    if (validFiles.length > 0) {
+      const { createServerSupabaseClient } = await import("@/lib/supabase");
+      const supabase = createServerSupabaseClient();
+
+      const proofPrefix: Record<string, string> = {
+        done: "work-proof",
+        handed_to_courier: "courier-proof",
+        completed: "pickup-proof",
+        delivered: "delivery-proof",
+        cancelled: "cancel-proof",
+        rejected: "cancel-proof",
+      };
+      const prefix = proofPrefix[newStatus] ?? "attachment";
+
+      const uploadOps = validFiles.map(async (file) => {
+        const mimeToExt: Record<string, string> = {
+          "image/webp": "webp",
+          "image/jpeg": "jpg",
+          "image/png": "png",
+          "image/gif": "gif",
+          "video/webm": "webm",
+          "video/mp4": "mp4",
+          "video/quicktime": "mov",
+          "application/pdf": "pdf",
+        };
+        const ext = mimeToExt[file.type] || file.name.split(".").pop()?.toLowerCase() || "bin";
+        const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "-").toLowerCase().slice(0, 40);
+        const path = `${ticketId}/${prefix}_${ticket.ticket_code}_${baseName}.${ext}`;
+
+        const { data, error } = await supabase.storage
+          .from("attachments")
+          .upload(path, file, { contentType: file.type });
+
+        if (error) {
+          throw new Error(`Upload failed for ${file.name}`);
+        }
+
+        const { data: { publicUrl } } = supabase.storage.from("attachments").getPublicUrl(data.path);
+
+        let fileType: "image" | "video" | "pdf" = "pdf";
+        if (file.type.startsWith("image/")) fileType = "image";
+        if (file.type.startsWith("video/")) fileType = "video";
+
+        return { publicUrl, fileType };
+      });
+
+      try {
+        uploadedFiles = await Promise.all(uploadOps);
+      } catch (err) {
+        console.error("[UPLOAD ERROR]", err);
+        return { error: "Failed to upload proof attachment. Please check file size and try again." };
+      }
+    }
+
+    // ── Database Updates ──
+    const oldStatus = ticket.status;
+    const ticketUpdateData: Record<string, unknown> = { status: newStatus };
+    if (newStatus === "on_progress") ticketUpdateData.work_started_at = new Date();
+    if (newStatus === "done") ticketUpdateData.work_completed_at = new Date();
+
+    // We write DB operations synchronously/in parallel once we know attachments are safe
+    const dbOps: Promise<unknown>[] = [
+      db.ticket.update({
+        where: { id: ticketId },
+        data: ticketUpdateData as any,
+      }),
+      db.ticketStatusLog.create({
+        data: {
           ticket_id: ticketId,
-          file_url: f.publicUrl,
-          file_type: f.fileType,
-        }))
+          old_status: oldStatus,
+          new_status: newStatus,
+          reason: reason || null,
+          changed_by: session.userId,
+        },
       })
-    );
-  }
+    ];
 
-  // Execute DB changes
-  const [updatedTicket, logResult] = await Promise.all(dbOps) as any;
-  const log = logResult; // Extract log from array positions 
+    if (eventAction) {
+      dbOps.push(db.ticketTimeLog.create({
+        data: { ticket_id: ticketId, event: eventAction, reason: reason || null },
+      }));
+    }
 
-  if (newStatus === "delivered") {
-    await db.ticket.update({ where: { id: ticketId }, data: { status: "completed" } });
-    await db.ticketStatusLog.create({
-      data: {
-        ticket_id: ticketId,
-        old_status: "delivered",
-        new_status: "completed",
-        reason: "Auto-completed after delivery confirmation",
-        changed_by: session.userId,
-      },
-    });
-  }
+    if (uploadedFiles.length > 0) {
+      dbOps.push(
+        db.ticketAttachment.createMany({
+          data: uploadedFiles.map(f => ({
+            ticket_id: ticketId,
+            file_url: f.publicUrl,
+            file_type: f.fileType,
+          }))
+        })
+      );
+    }
 
-  const isTerminal = ["done", "cancelled", "rejected"].includes(newStatus);
-  if (isTerminal) {
-    const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
+    // Execute DB changes
+    const [updatedTicket, logResult] = await Promise.all(dbOps) as any;
+    const log = logResult; // Extract log from array positions 
 
-    revalidateTag("leaderboard-techs", "max");
-    revalidateTag("leaderboard-stores", "max");
-    revalidateTag("tech-month-winner", "max");
-    revalidateTag(`user-profile:${session.userId}`, "max");
+    if (newStatus === "delivered") {
+      await db.ticket.update({ where: { id: ticketId }, data: { status: "completed" } });
+      await db.ticketStatusLog.create({
+        data: {
+          ticket_id: ticketId,
+          old_status: "delivered",
+          new_status: "completed",
+          reason: "Auto-completed after delivery confirmation",
+          changed_by: session.userId,
+        },
+      });
+    }
 
-    const isSuccess = newStatus === "done";
-    await db.technicianPerformance.upsert({
-      where: { technician_id: session.userId },
-      create: {
-        technician_id: session.userId,
-        tickets_handled: 1,
-        success_count: isSuccess ? 1 : 0,
-        failed_count: isSuccess ? 0 : 1,
-        total_points_completed: isSuccess ? points : 0,
-      },
-      update: {
-        tickets_handled: { increment: 1 },
-        success_count: { increment: isSuccess ? 1 : 0 },
-        failed_count: { increment: isSuccess ? 0 : 1 },
-        total_points_completed: { increment: isSuccess ? points : 0 },
-      },
-    });
-  }
+    const isTerminal = ["done", "cancelled", "rejected"].includes(newStatus);
+    if (isTerminal) {
+      const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
 
-  if (ticket.user_id && ticket.user_id !== session.userId) {
-    await db.notification.create({
-      data: {
-        user_id: ticket.user_id,
-        ticket_id: ticketId,
-        type: "status_update",
-        reference_id: log.id,
-      },
-    });
-  }
+      revalidateTag("leaderboard-techs", "max");
+      revalidateTag("leaderboard-stores", "max");
+      revalidateTag("tech-month-winner", "max");
+      revalidateTag(`user-profile:${session.userId}`, "max");
 
-  if (newStatus === "done") {
-    const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
-    revalidateTag(`user-profile:${session.userId}`, "max");
-    const perf = await db.technicianPerformance.findUnique({
-      where: { technician_id: session.userId },
-      select: { total_points_completed: true },
-    });
-    const currentTotal = perf?.total_points_completed ?? points;
-    await db.notification.create({
-      data: {
-        user_id: session.userId,
-        ticket_id: ticketId,
-        type: "completed",
-        message: `🎉 Congratulations! You earned ${points} pts for ticket #${ticket.ticket_code}. Current total: ${currentTotal} pts`,
-      },
-    });
-  }
+      const isSuccess = newStatus === "done";
+      await db.technicianPerformance.upsert({
+        where: { technician_id: session.userId },
+        create: {
+          technician_id: session.userId,
+          tickets_handled: 1,
+          success_count: isSuccess ? 1 : 0,
+          failed_count: isSuccess ? 0 : 1,
+          total_points_completed: isSuccess ? points : 0,
+        },
+        update: {
+          tickets_handled: { increment: 1 },
+          success_count: { increment: isSuccess ? 1 : 0 },
+          failed_count: { increment: isSuccess ? 0 : 1 },
+          total_points_completed: { increment: isSuccess ? points : 0 },
+        },
+      });
+    }
 
-  db.ticket.findUnique({
-    where: { id: ticketId },
-    select: { customer_email: true, customer_name: true, public_share_token: true },
-  }).then(async (fullTicket) => {
-    if (!fullTicket?.customer_email) return;
+    if (ticket.user_id && ticket.user_id !== session.userId) {
+      await db.notification.create({
+        data: {
+          user_id: ticket.user_id,
+          ticket_id: ticketId,
+          type: "status_update",
+          reference_id: log.id,
+        },
+      });
+    }
 
-    const { headers } = await import("next/headers");
-    const headersList = await headers();
-    const host = headersList.get("host") || "localhost:3000";
-    const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
-    const appUrl = `${protocol}://${host}`;
+    if (newStatus === "done") {
+      const points = getTicketPoints(ticket.ticket_type, ticket.device_type);
+      revalidateTag(`user-profile:${session.userId}`, "max");
+      const perf = await db.technicianPerformance.findUnique({
+        where: { technician_id: session.userId },
+        select: { total_points_completed: true },
+      });
+      const currentTotal = perf?.total_points_completed ?? points;
+      await db.notification.create({
+        data: {
+          user_id: session.userId,
+          ticket_id: ticketId,
+          type: "completed",
+          message: `🎉 Congratulations! You earned ${points} pts for ticket #${ticket.ticket_code}. Current total: ${currentTotal} pts`,
+        },
+      });
+    }
 
-    sendTicketStatusEmail({
-      to: fullTicket.customer_email,
-      customerName: fullTicket.customer_name || "Customer",
-      ticketCode: ticket.ticket_code,
-      status: newStatus,
-      shareToken: fullTicket.public_share_token,
-      appUrl
-    }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
-  }).catch(() => {});
+    db.ticket.findUnique({
+      where: { id: ticketId },
+      select: { customer_email: true, customer_name: true, public_share_token: true },
+    }).then(async (fullTicket) => {
+      if (!fullTicket?.customer_email) return;
 
-  revalidatePath(`/technician/tickets/${ticketId}`);
-  revalidatePath(`/customer/tickets/${ticketId}`);
-  return { success: true };
+      const { headers } = await import("next/headers");
+      const headersList = await headers();
+      const host = headersList.get("host") || "localhost:3000";
+      const protocol = headersList.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+      const appUrl = `${protocol}://${host}`;
+
+      sendTicketStatusEmail({
+        to: fullTicket.customer_email,
+        customerName: fullTicket.customer_name || "Customer",
+        ticketCode: ticket.ticket_code,
+        status: newStatus,
+        shareToken: fullTicket.public_share_token,
+        appUrl
+      }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
+    }).catch(() => { });
+
+    revalidatePath(`/technician/tickets/${ticketId}`);
+    revalidatePath(`/customer/tickets/${ticketId}`);
+    return { success: true };
   } catch (err: any) {
     console.error("[updateTicketStatusAction Error]:", err);
     return { error: err.message || "An internal server error occurred" };

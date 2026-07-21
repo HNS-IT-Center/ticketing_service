@@ -120,7 +120,14 @@ export default function LoginPage() {
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "-0.25rem", marginBottom: "0.5rem" }}>
-            <input type="checkbox" id="rememberMe" name="rememberMe" style={{ width: "auto", cursor: "pointer" }} />
+            <input 
+              type="checkbox" 
+              id="rememberMe" 
+              name="rememberMe" 
+              defaultChecked={state?.rememberMe}
+              className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
+              style={{ width: "1rem", height: "1rem", cursor: "pointer", accentColor: "var(--primary)" }} 
+            />
             <label htmlFor="rememberMe" style={{ fontSize: "0.875rem", color: "var(--text-secondary)", cursor: "pointer", userSelect: "none" }}>
               Remember me
             </label>

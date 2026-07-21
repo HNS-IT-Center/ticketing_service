@@ -18,6 +18,7 @@ const LoginSchema = z.object({
 export type FormState = {
   errors?: Record<string, string[]>;
   message?: string;
+  rememberMe?: boolean;
 } | undefined;
 
 // ─── Register ──────────────────────────────────────────────────────────────
@@ -38,30 +39,25 @@ export async function loginAction(
 
   const validated = LoginSchema.safeParse(raw);
   if (!validated.success) {
-    return { errors: validated.error.flatten().fieldErrors };
+    return { errors: validated.error.flatten().fieldErrors, rememberMe: raw.rememberMe };
   }
 
   const { email, password, rememberMe } = validated.data;
 
-  const user = await db.user.findUnique({ where: { email } });
-  // Pastikan user ada dan password-nya tidak null
+  const user = await db.user.findUnique({ where: { email: email as string } });
   if (!user || !user.password) {
-    return { message: "Invalid email or password" };
-    // Catatan: Jika user login dengan SSO, user.password pasti null.
-    // Kamu bisa menyesuaikan pesan error-nya, misalnya: "Please login using your SSO provider"
+    return { message: "Invalid email or password", rememberMe };
   }
 
-  // Karena sudah melewati pengecekan di atas, TypeScript sekarang yakin 
-  // bahwa user.password pasti sebuah 'string'
-  const passwordMatch = await bcrypt.compare(password, user.password);
+  const passwordMatch = await bcrypt.compare(password as string, user.password);
 
   if (!passwordMatch) {
-    return { message: "Invalid email or password" };
+    return { message: "Invalid email or password", rememberMe };
   }
 
   // Guard: deactivated accounts cannot log in
   if (!user.is_active) {
-    return { message: "This account has been deactivated. Please contact an administrator." };
+    return { message: "This account has been deactivated. Please contact an administrator.", rememberMe };
   }
 
   await createSession(user.id, user.role, user.name, rememberMe);
@@ -76,7 +72,7 @@ export async function loginAction(
     case "Customer":
     default:
       await deleteSession();
-      return { message: "Customer login is disabled. Please use your ticket link." };
+      return { message: "Customer login is disabled. Please use your ticket link.", rememberMe };
   }
 }
 

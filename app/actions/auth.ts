@@ -3,6 +3,7 @@
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { createSession, deleteSession } from "@/lib/session";
 
@@ -83,5 +84,6 @@ export async function loginAction(
 
 export async function logoutAction(): Promise<void> {
   await deleteSession();
+  revalidatePath("/", "layout");
   redirect("/login");
 }

@@ -81,7 +81,7 @@ export default async function AdminPerformancePage({
     const [doneTickets, failedTickets] = await Promise.all([
       db.ticket.findMany({
         where: {
-          status: "done",
+          status: { in: ["done", "ready_for_pickup", "waiting_pickup", "handed_to_courier", "delivered", "completed"] },
           technician_id: { not: null },
           status_logs: {
             some: {
@@ -213,7 +213,7 @@ export default async function AdminPerformancePage({
   const completedTickets = await db.ticket.findMany({
     where: {
       technician_id: { in: techIds },
-      status: "done",
+      status: { in: ["done", "ready_for_pickup", "waiting_pickup", "handed_to_courier", "delivered", "completed"] },
       ...(startDate && endDate ? {
         status_logs: {
           some: {

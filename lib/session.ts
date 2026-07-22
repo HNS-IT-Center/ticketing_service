@@ -49,7 +49,7 @@ export async function createSession(
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    ...(rememberMe ? { maxAge: 60 * 60 * 24 * 30 } : {}), // 30 days
+    ...(rememberMe ? { maxAge: 60 * 60 * 24 * 7 } : {}), // 7 days
   });
 }
 

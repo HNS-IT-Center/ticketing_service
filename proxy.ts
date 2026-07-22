@@ -1,12 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decrypt } from "@/lib/session";
 
+function getBaseUrl(request: NextRequest) {
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (host) {
+    const protocol = request.headers.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+    return `${protocol}://${host}`;
+  }
+  return process.env.NEXT_PUBLIC_APP_URL || request.url;
+}
+
 const PUBLIC_ROUTES = ["/login", "/register", "/ticket", "/unauthorized"];
 const ADMIN_ROUTES = ["/admin"];
 const TECHNICIAN_ROUTES = ["/technician"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const baseUrl = getBaseUrl(request);
 
   // Allow public ticket tracking route and unauthorized page without redirecting authenticated users
   if (pathname.startsWith("/ticket") || pathname.startsWith("/unauthorized")) {
@@ -19,7 +29,7 @@ export async function proxy(request: NextRequest) {
     const session = await decrypt(sessionCookie);
     if (session) {
       return NextResponse.redirect(
-        new URL(getDashboardRoute(session.role), request.url)
+        new URL(getDashboardRoute(session.role), baseUrl)
       );
     }
     return NextResponse.next();
@@ -35,7 +45,7 @@ export async function proxy(request: NextRequest) {
   const session = await decrypt(sessionCookie);
 
   if (!session) {
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", baseUrl));
   }
 
   // Role-based access
@@ -45,7 +55,7 @@ export async function proxy(request: NextRequest) {
     session.role !== "Sales"
   ) {
     return NextResponse.redirect(
-      new URL(getDashboardRoute(session.role), request.url)
+      new URL(getDashboardRoute(session.role), baseUrl)
     );
   }
 
@@ -54,7 +64,7 @@ export async function proxy(request: NextRequest) {
     session.role !== "Technician"
   ) {
     return NextResponse.redirect(
-      new URL(getDashboardRoute(session.role), request.url)
+      new URL(getDashboardRoute(session.role), baseUrl)
     );
   }
 

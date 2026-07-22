@@ -3,7 +3,17 @@ import { jwtVerify } from "jose";
 import { db } from "@/lib/db";
 import { createSession } from "@/lib/session";
 
+function getBaseUrl(request: NextRequest) {
+  const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
+  if (host) {
+    const protocol = request.headers.get("x-forwarded-proto") || (host.includes("localhost") ? "http" : "https");
+    return `${protocol}://${host}`;
+  }
+  return process.env.NEXT_PUBLIC_APP_URL || request.url;
+}
+
 export async function GET(request: NextRequest) {
+  const baseUrl = getBaseUrl(request);
   // Read SSO token securely from cookies
   const token = request.cookies.get("sso_token")?.value;
   const ssoUrl = process.env.NEXT_PUBLIC_SSO_URL || "";
@@ -14,7 +24,7 @@ export async function GET(request: NextRequest) {
   // If there's no SSO token, redirect to login
   if (!token) {
     console.log("Redirecting to login: No token found in cookies.");
-    return NextResponse.redirect(new URL("/login", request.url));
+    return NextResponse.redirect(new URL("/login", baseUrl));
   }
 
   try {
@@ -55,7 +65,7 @@ export async function GET(request: NextRequest) {
             data: { is_active: false }
           });
         }
-        return NextResponse.redirect(new URL("/unauthorized", request.url));
+        return NextResponse.redirect(new URL("/unauthorized", baseUrl));
       }
 
       // If they are staff but their role changed in SSO, update it
@@ -71,12 +81,12 @@ export async function GET(request: NextRequest) {
 
       // Log them in using their synced role
       await createSession(user.id, user.role, user.name);
-      return NextResponse.redirect(new URL(getDashboardRoute(user.role), request.url));
+      return NextResponse.redirect(new URL(getDashboardRoute(user.role), baseUrl));
     }
 
     // If they aren't staff and don't have an account, block them
     if (!isStaff) {
-      return NextResponse.redirect(new URL("/unauthorized", request.url));
+      return NextResponse.redirect(new URL("/unauthorized", baseUrl));
     }
 
     // Create the new staff user in the local database
@@ -94,13 +104,13 @@ export async function GET(request: NextRequest) {
     // Log the newly created user in
     console.log("Creating local session for:", user.email);
     await createSession(user.id, user.role, user.name);
-    return NextResponse.redirect(new URL(getDashboardRoute(user.role), request.url));
+    return NextResponse.redirect(new URL(getDashboardRoute(user.role), baseUrl));
   } catch (err: any) {
     console.error("=== SSO Sync Catch Error ===");
     console.error(err);
     
     return NextResponse.redirect(
-      new URL(`/login?error=session_expired`, request.url)
+      new URL(`/login?error=session_expired`, baseUrl)
     );
   }
 }

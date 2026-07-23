@@ -64,8 +64,29 @@ export async function compressImage(file: File): Promise<File> {
   const mime = resolveMimeType(file);
   if (!mime.startsWith("image/")) return file;
 
+  let processFile = file;
+
+  // Convert HEIC/HEIF to JPEG first before canvas processing
+  if (mime === "image/heic" || mime === "image/heif") {
+    try {
+      // Dynamically import heic2any so it doesn't bloat the main bundle
+      const heic2any = (await import("heic2any")).default;
+      const convertedBlob = await heic2any({
+        blob: processFile,
+        toType: "image/jpeg",
+        quality: 1 // Quality is handled in the WebP step later
+      });
+      const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+      const baseName = processFile.name.replace(/\.[^/.]+$/, "");
+      processFile = new File([blob], `${baseName}.jpg`, { type: "image/jpeg" });
+    } catch (err) {
+      console.warn("[compressImage] HEIC conversion failed:", err);
+      return processFile; // Fallback to original if conversion fails
+    }
+  }
+
   return new Promise<File>((resolve) => {
-    const objectUrl = URL.createObjectURL(file);
+    const objectUrl = URL.createObjectURL(processFile);
     const img = new Image();
 
     img.onload = () => {
@@ -88,7 +109,7 @@ export async function compressImage(file: File): Promise<File> {
       canvas.height = h;
       const ctx = canvas.getContext("2d");
       if (!ctx) {
-        resolve(file); // fallback
+        resolve(processFile); // fallback
         return;
       }
 
@@ -97,11 +118,11 @@ export async function compressImage(file: File): Promise<File> {
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            resolve(file); // fallback
+            resolve(processFile); // fallback
             return;
           }
           // Derive a clean output filename
-          const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
+          const baseName = processFile.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
           const outName = `${baseName}.webp`;
           resolve(new File([blob], outName, { type: "image/webp" }));
         },
@@ -112,7 +133,7 @@ export async function compressImage(file: File): Promise<File> {
 
     img.onerror = () => {
       URL.revokeObjectURL(objectUrl);
-      resolve(file); // fallback — browser can't decode (e.g. HEIC on desktop)
+      resolve(processFile); // fallback — browser can't decode (e.g. HEIC on desktop)
     };
 
     img.src = objectUrl;

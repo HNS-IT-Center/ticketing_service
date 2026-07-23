@@ -27,6 +27,7 @@
     "bcryptjs": "^3.0.3",
     "clsx": "^2.1.1",
     "dotenv": "^17.4.2",
+    "heic2any": "^0.0.4",
     "jose": "^6.2.3",
     "lucide-react": "^1.16.0",
     "nanoid": "^5.1.9",

@@ -68,7 +68,11 @@ export default function FileUpload({
       const normalized = rawFiles.map(normalizeFileType);
 
       // Step 2: Compress each file (images → WebP, videos → WebM or fallback)
-      const compressed = await Promise.all(normalized.map(compressFile));
+      // Process sequentially to prevent mobile browsers from crashing due to memory limits (OOM)
+      const compressed: File[] = [];
+      for (const file of normalized) {
+        compressed.push(await compressFile(file));
+      }
 
       // Step 3: Validate total size AFTER compression (more accurate)
       const err = validate(compressed);

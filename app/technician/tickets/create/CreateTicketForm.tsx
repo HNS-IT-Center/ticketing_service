@@ -167,8 +167,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
           toast.error("Upload failed: File size is too large. Please limit to 10MB.");
           setErrors({ submit: "File size is too large. Please limit to 10MB." });
         } else {
-          toast.error("An unexpected error occurred. Please try again.");
-          setErrors({ submit: "An unexpected error occurred. Please try again." });
+          const errMsg = err.message ? `Error: ${err.message}` : "An unexpected error occurred.";
+          toast.error(errMsg + " (Please try again)");
+          setErrors({ submit: errMsg });
         }
       }
     });

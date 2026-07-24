@@ -1,9 +1,8 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
-import { unstable_cache } from "next/cache";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
-import { Users, Ticket, CheckCircle, Clock, AlertCircle, TrendingUp, ArrowRight, Store } from "lucide-react";
+import { Users, Ticket, CheckCircle, Clock, AlertCircle, ArrowRight, Store } from "lucide-react";
 
 export const metadata = { title: "Dashboard — HNS IT Center" };
 
@@ -12,46 +11,37 @@ export default async function AdminDashboard() {
   const isSales = session.role === "Sales";
   const salesFilter = isSales ? { sales_id: session.userId } : {};
 
-  // Cache semi-static counts for 30 seconds to avoid repeated DB hits
-  const getCounts = unstable_cache(
-    async () => Promise.all([
-      isSales ? Promise.resolve([]) : db.user.groupBy({ by: ["role"], _count: { role: true } }),
+  // Fire all queries in parallel
+  const [userGroups, totalTickets, assignedTickets, closedTickets, totalStores, recentTickets, topTechnicians] =
+    await Promise.all([
+      isSales
+        ? Promise.resolve([] as { role: string; _count: { role: number } }[])
+        : db.user.groupBy({ by: ["role"], _count: { role: true } }),
       db.ticket.count({ where: salesFilter }),
       db.ticket.count({ where: { ...salesFilter, technician_id: { not: null } } }),
       db.ticket.count({ where: { ...salesFilter, status: { in: ["done", "cancelled", "rejected"] } } }),
       db.storeLocation.count(),
-    ]),
-    ["admin-dashboard-counts", session.userId],
-    { revalidate: 30 }
-  );
+      db.ticket.findMany({
+        where: salesFilter,
+        orderBy: { created_at: "desc" },
+        take: 8,
+        select: {
+          id: true, ticket_code: true, ticket_type: true, status: true,
+          technician_id: true, is_for_self: true, customer_name: true,
+          user: { select: { name: true } },
+          technician: { select: { name: true } },
+        },
+      }),
+      db.technicianPerformance.findMany({
+        orderBy: { total_points_completed: "desc" },
+        take: 5,
+        select: { id: true, tickets_handled: true, total_points_completed: true, technician: { select: { id: true, name: true } } },
+      }),
+    ]);
 
-  // Fire counts + recent tickets + top technicians all in parallel
-  const [counts, recentTickets, topTechnicians] = await Promise.all([
-    getCounts(),
-    db.ticket.findMany({
-      where: salesFilter,
-      orderBy: { created_at: "desc" },
-      take: 8,
-      select: {
-        id: true, ticket_code: true, ticket_type: true, status: true,
-        technician_id: true, is_for_self: true, customer_name: true,
-        user: { select: { name: true } },
-        technician: { select: { name: true } },
-      },
-    }),
-    db.technicianPerformance.findMany({
-      orderBy: { total_points_completed: "desc" },
-      take: 5,
-      select: { id: true, tickets_handled: true, total_points_completed: true, technician: { select: { id: true, name: true } } },
-    }),
-  ]);
-
-  const [totalUsersRaw, totalTickets, assignedTickets, closedTickets, totalStores] = counts;
-  const totalUsers = totalUsersRaw as Awaited<ReturnType<typeof db.user.groupBy>>;
-
-
+  const totalUsersRaw = userGroups;
   const countByRole = Object.fromEntries(
-    (totalUsers as { role: string; _count: { role: number } }[]).map((u) => [u.role, u._count.role])
+    (totalUsersRaw as { role: string; _count: { role: number } }[]).map((u) => [u.role, u._count.role])
   );
 
   const statCards = [

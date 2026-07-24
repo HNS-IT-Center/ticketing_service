@@ -8,7 +8,6 @@ import { db } from "@/lib/db";
 import { createSession, deleteSession } from "@/lib/session";
 
 // ─── Schemas ───────────────────────────────────────────────────────────────
-// Force recompilation for stale action hashes
 
 const LoginSchema = z.object({
   email: z.string().email("Invalid email address"),
@@ -45,7 +44,17 @@ export async function loginAction(
 
   const { email, password, rememberMe } = validated.data;
 
-  const user = await db.user.findUnique({ where: { email: email as string } });
+  let user;
+  try {
+    user = await db.user.findUnique({ where: { email: email as string } });
+  } catch (err) {
+    console.error("[loginAction] DB error:", err);
+    return {
+      message: "A server error occurred. Please try again later.",
+      rememberMe,
+    };
+  }
+
   if (!user || !user.password) {
     return { message: "Invalid email or password", rememberMe };
   }
@@ -61,9 +70,19 @@ export async function loginAction(
     return { message: "This account has been deactivated. Please contact an administrator.", rememberMe };
   }
 
-  await createSession(user.id, user.role, user.name, rememberMe);
+  try {
+    await createSession(user.id, user.role, user.name, rememberMe);
+  } catch (err) {
+    console.error("[loginAction] createSession error:", err);
+    return {
+      message: "Failed to create session. Please check server configuration.",
+      rememberMe,
+    };
+  }
 
-  // Redirect based on role
+  // Redirect based on role.
+  // NOTE: redirect() throws a special Next.js error (NEXT_REDIRECT) — this is intentional.
+  // It must NOT be inside a try/catch that re-throws generic errors.
   switch (user.role) {
     case "Administrator":
     case "Sales":

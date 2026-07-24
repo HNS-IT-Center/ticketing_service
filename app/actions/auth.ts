@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { createSession, deleteSession } from "@/lib/session";
 
 // ─── Schemas ───────────────────────────────────────────────────────────────
+// Force recompilation for stale action hashes
 
 const LoginSchema = z.object({
   email: z.string().email("Invalid email address"),

@@ -51,10 +51,16 @@ let rmaUserId: string;
 let adminId: string;
 
 /** A fresh warranty_claim ticket assigned to `technicianId` and in progress. */
+const intakeInvoiceUrl = (ticketId: string) => `https://r2.test/intake-invoice-${ticketId}.pdf`;
+
 async function makeTicket(
-  overrides: { status?: "waiting" | "on_progress"; ticket_type?: "warranty_claim" | "service" } = {}
+  overrides: {
+    status?: "waiting" | "on_progress";
+    ticket_type?: "warranty_claim" | "service";
+    withInvoice?: boolean;
+  } = {}
 ) {
-  return db.ticket.create({
+  const ticket = await db.ticket.create({
     data: {
       ticket_code: `${RUN}_${Math.random().toString(36).slice(2, 10)}`,
       ticket_type: overrides.ticket_type ?? "warranty_claim",
@@ -66,6 +72,15 @@ async function makeTicket(
     },
     select: { id: true, ticket_code: true },
   });
+
+  // Intake attaches the invoice through the normal attachment mechanism, which
+  // is what the handover form later points at.
+  if (overrides.withInvoice !== false) {
+    await db.ticketAttachment.create({
+      data: { ticket_id: ticket.id, file_url: intakeInvoiceUrl(ticket.id), file_type: "pdf" },
+    });
+  }
+  return ticket;
 }
 
 /** Service form payload that passes every validation. */
@@ -77,7 +92,7 @@ function validForm(ticketId: string, extra: Record<string, string> = {}) {
   fd.append("physical_condition", "Lecet ringan di sudut kiri");
   fd.append("fault_description", "Layar berkedip saat booting");
   fd.append("test_result", "Reproduksi konsisten pada 3 kali percobaan");
-  fd.append("purchase_invoice_url", "https://r2.test/intake-invoice.pdf");
+  fd.append("purchase_invoice_url", intakeInvoiceUrl(ticketId));
   for (const [k, v] of Object.entries(extra)) fd.set(k, v);
   return fd;
 }
@@ -235,7 +250,7 @@ describe("handoverToRmaAction — service form validation", () => {
       select: { purchase_invoice_url: true },
     });
     // reused the intake URL, no new upload
-    expect(rmaCase?.purchase_invoice_url).toBe("https://r2.test/intake-invoice.pdf");
+    expect(rmaCase?.purchase_invoice_url).toBe(intakeInvoiceUrl(ticket.id));
   });
 
   it("uploads a new invoice only when intake did not provide one", async () => {
@@ -255,7 +270,33 @@ describe("handoverToRmaAction — service form validation", () => {
 
     // also surfaced in the ticket's normal attachment list
     const attachments = await db.ticketAttachment.count({ where: { ticket_id: ticket.id } });
-    expect(attachments).toBe(1);
+    expect(attachments).toBe(2); // intake invoice + the newly uploaded one
+  });
+
+  it("refuses an invoice URL that belongs to a different ticket", async () => {
+    const mine = await makeTicket();
+    const theirs = await makeTicket();
+
+    const fd = validForm(mine.id);
+    fd.set("purchase_invoice_url", intakeInvoiceUrl(theirs.id));
+
+    const result = await handoverToRmaAction(fd);
+    expect(result).toMatchObject({
+      error: expect.stringContaining("not an attachment of this ticket"),
+    });
+    expect(await db.rmaCase.count({ where: { ticket_id: mine.id } })).toBe(0);
+  });
+
+  it("refuses an arbitrary invoice URL the client made up", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.set("purchase_invoice_url", "https://evil.test/not-ours.pdf");
+
+    const result = await handoverToRmaAction(fd);
+    expect(result).toMatchObject({
+      error: expect.stringContaining("not an attachment of this ticket"),
+    });
+    expect(await db.rmaCase.count({ where: { ticket_id: ticket.id } })).toBe(0);
   });
 
   it("refuses a store stock unit with no stock origin", async () => {
@@ -348,6 +389,88 @@ describe("handoverToRmaAction — effects and idempotence", () => {
     if ("rmaCode" in ra && "rmaCode" in rb && ra.rmaCode && rb.rmaCode) {
       expect(seq(rb.rmaCode)).toBe(seq(ra.rmaCode) + 1);
     }
+  });
+});
+
+describe("handoverToRmaAction — notifications", () => {
+  it("notifies every active RMA and Administrator user, and no one else", async () => {
+    const inactive = await db.user.create({
+      data: {
+        name: `${RUN} rma-inactive`,
+        email: `${RUN}.rma-inactive@test.local`,
+        phone_number: "+628100000000",
+        address: "Test",
+        role: "RMA",
+        password: "x",
+        is_active: false,
+      },
+      select: { id: true },
+    });
+
+    const ticket = await makeTicket();
+    expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
+
+    const notified = await db.notification.findMany({
+      where: { ticket_id: ticket.id, type: "rma_update" },
+      select: { user_id: true, message: true },
+    });
+    const notifiedIds = notified.map((n) => n.user_id);
+
+    expect(notifiedIds).toContain(rmaUserId);
+    expect(notifiedIds).toContain(adminId);
+    expect(notifiedIds).not.toContain(inactive.id);
+    expect(notifiedIds).not.toContain(technicianId);
+    expect(notified[0].message).toContain(ticket.ticket_code);
+
+    await db.notification.deleteMany({ where: { user_id: inactive.id } });
+    await db.user.delete({ where: { id: inactive.id } });
+  });
+
+  it("writes no notification when the handover is refused", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.set("sn_verified", "0");
+    await handoverToRmaAction(fd);
+
+    expect(await db.notification.count({ where: { ticket_id: ticket.id } })).toBe(0);
+  });
+});
+
+describe("handoverToRmaAction — concurrent rma_code allocation", () => {
+  it("gives two parallel handovers in the same store distinct codes", async () => {
+    const a = await makeTicket();
+    const b = await makeTicket();
+
+    const [ra, rb] = await Promise.all([
+      handoverToRmaAction(validForm(a.id)),
+      handoverToRmaAction(validForm(b.id)),
+    ]);
+
+    expect(ra).toMatchObject({ success: true });
+    expect(rb).toMatchObject({ success: true });
+
+    const codes = await db.rmaCase.findMany({
+      where: { ticket_id: { in: [a.id, b.id] } },
+      select: { rma_code: true },
+    });
+    expect(codes).toHaveLength(2);
+    expect(new Set(codes.map((c) => c.rma_code)).size).toBe(2);
+    for (const c of codes) {
+      expect(c.rma_code).toMatch(/^RMA-[A-Z0-9]+-\d{4}-\d{4}$/);
+    }
+  });
+
+  it("gives four parallel handovers in the same store four distinct codes", async () => {
+    const tickets = await Promise.all([makeTicket(), makeTicket(), makeTicket(), makeTicket()]);
+    const results = await Promise.all(tickets.map((t) => handoverToRmaAction(validForm(t.id))));
+
+    for (const r of results) expect(r).toMatchObject({ success: true });
+
+    const codes = await db.rmaCase.findMany({
+      where: { ticket_id: { in: tickets.map((t) => t.id) } },
+      select: { rma_code: true },
+    });
+    expect(new Set(codes.map((c) => c.rma_code)).size).toBe(4);
   });
 });
 

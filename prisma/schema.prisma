@@ -334,6 +334,12 @@ model TicketWarrantyDetail {
   ticket_id     String   @unique
   ticket        Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   purchase_date DateTime
+
+  // Set by the server when a technician closes a claim as ineligible. The
+  // ticket still goes to `done` so the normal handover chain can return the
+  // unit to the customer — see docs/rma-test-checklist.md.
+  claim_eligible       Boolean @default(true)
+  ineligibility_reason String?
 }
 
 model TicketCleaningDetail {

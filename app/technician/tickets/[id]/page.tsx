@@ -14,6 +14,7 @@ import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
 import ExtraPointsPanel from "./ExtraPointsPanel";
+import RmaStatusCard from "@/components/rma/RmaStatusCard";
 
 function getTicketBasePoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
@@ -54,6 +55,43 @@ export default async function TechnicianTicketDetailPage({
           include: { changer: { select: { name: true } } },
         },
         warranty_detail: true,
+        rma_case: {
+          select: {
+            rma_code: true,
+            status: true,
+            unit_ownership: true,
+            stock_origin: true,
+            sn_verified: true,
+            physical_condition: true,
+            fault_description: true,
+            test_result: true,
+            hold_reason: true,
+            vendor_name: true,
+            vendor_rma_number: true,
+            shipping_tracking: true,
+            submitted_at: true,
+            decision: true,
+            decision_notes: true,
+            replacement_sn: true,
+            decided_at: true,
+            unit_received_at: true,
+            closed_at: true,
+            handed_over_at: true,
+            handed_over_by: { select: { id: true, name: true } },
+            handler: { select: { id: true, name: true } },
+            events: {
+              orderBy: { created_at: "asc" },
+              select: {
+                id: true,
+                from_status: true,
+                to_status: true,
+                note: true,
+                created_at: true,
+                actor: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
         cleaning_detail: true,
         upgrade_details: { include: { upgrade: true } },
         pc_components: true,
@@ -271,6 +309,8 @@ export default async function TechnicianTicketDetailPage({
           )}
 
           {/* PC Build Handover Verification */}
+          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} />}
+
           {ticket.ticket_type === "pc_build" && (
             <PcBuildHandover
               ticketId={ticket.id}

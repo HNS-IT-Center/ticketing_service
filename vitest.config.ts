@@ -6,5 +6,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["lib/**/*.test.ts", "app/**/*.test.ts"],
+    // Aborts the run if DATABASE_URL points at anything but this machine.
+    setupFiles: ["./vitest.setup.ts"],
   },
 });

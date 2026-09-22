@@ -5,9 +5,11 @@ import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
+// Mirrors lib/db.ts: unset DATABASE_SSL keeps the Supabase behaviour (TLS on,
+// verification off); DATABASE_SSL=false targets a plain-TCP local container.
 const adapter = new PrismaPg({
   connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
+  ssl: process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false },
 });
 const db = new PrismaClient({ adapter });
 

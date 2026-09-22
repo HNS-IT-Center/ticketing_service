@@ -14,6 +14,7 @@ import PcBuildHandover from "./PcBuildHandover";
 import CustomerWhatsAppActions from "./CustomerWhatsAppActions";
 import WorkingTimeDisplay from "./WorkingTimeDisplay";
 import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
+import RmaStatusCard from "@/components/rma/RmaStatusCard";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -48,6 +49,43 @@ export default async function AdminTicketDetailPage({
           include: { changer: { select: { name: true } } },
         },
         warranty_detail: true,
+        rma_case: {
+          select: {
+            rma_code: true,
+            status: true,
+            unit_ownership: true,
+            stock_origin: true,
+            sn_verified: true,
+            physical_condition: true,
+            fault_description: true,
+            test_result: true,
+            hold_reason: true,
+            vendor_name: true,
+            vendor_rma_number: true,
+            shipping_tracking: true,
+            submitted_at: true,
+            decision: true,
+            decision_notes: true,
+            replacement_sn: true,
+            decided_at: true,
+            unit_received_at: true,
+            closed_at: true,
+            handed_over_at: true,
+            handed_over_by: { select: { id: true, name: true } },
+            handler: { select: { id: true, name: true } },
+            events: {
+              orderBy: { created_at: "asc" },
+              select: {
+                id: true,
+                from_status: true,
+                to_status: true,
+                note: true,
+                created_at: true,
+                actor: { select: { id: true, name: true } },
+              },
+            },
+          },
+        },
         cleaning_detail: true,
         upgrade_details: { include: { upgrade: true } },
         pc_components: true,
@@ -262,6 +300,8 @@ export default async function AdminTicketDetailPage({
           )}
 
           {/* Warranty detail */}
+          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} />}
+
           {ticket.warranty_detail && (
             <div className="card">
               <h3 style={{ marginBottom: "0.5rem" }}>Warranty Information</h3>

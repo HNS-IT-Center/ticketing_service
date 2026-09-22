@@ -2,11 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { updateTicketStatusAction } from "@/app/actions/technician";
+import { handoverToRmaAction } from "@/app/actions/rma";
 import FileUpload from "@/components/ui/FileUpload";
 import toast from "react-hot-toast";
 import {
   Play, Pause, CheckCircle, XCircle,
   PackageCheck, Truck, ArrowRight, HandshakeIcon,
+  ShieldCheck, ShieldX, FileText,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 
@@ -77,6 +79,7 @@ export default function StatusUpdater({
   pickupMethod = "self_pickup",
   isSalesMode = false,
   ticketType = "service",
+  attachments = [],
 }: {
   ticketId: string;
   currentStatus: Status;
@@ -84,6 +87,8 @@ export default function StatusUpdater({
   pickupMethod?: "self_pickup" | "courier" | null;
   isSalesMode?: boolean;
   ticketType?: string;
+  /** Existing ticket attachments, so the handover form can reuse the intake invoice. */
+  attachments?: { id: string; file_url: string; file_type: string }[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [activeDialog, setActiveDialog] = useState<
@@ -93,10 +98,49 @@ export default function StatusUpdater({
     | "pickup_proof"     // self-pickup: proof of handing item to customer
     | "courier_proof"    // courier: proof of handing package to courier
     | "delivery_proof"   // courier: proof from courier that item was delivered
+    | "rma_handover"     // warranty claim: service form before handing to the RMA desk
+    | "claim_ineligible" // warranty claim: technician found the claim not eligible
     | null
   >(null);
   const [reason, setReason] = useState("");
   const [files, setFiles] = useState<File[]>([]);
+
+  // ── Warranty claim: RMA service form ──
+  const isWarrantyClaim = ticketType === "warranty_claim";
+  const [unitOwnership, setUnitOwnership] = useState<"customer" | "store_stock">("customer");
+  const [stockOrigin, setStockOrigin] = useState("");
+  const [snVerified, setSnVerified] = useState(false);
+  const [physicalCondition, setPhysicalCondition] = useState("");
+  const [faultDescription, setFaultDescription] = useState("");
+  const [testResult, setTestResult] = useState("");
+  const [invoiceUrl, setInvoiceUrl] = useState("");
+
+  const handleHandover = () => {
+    startTransition(async () => {
+      const fd = new FormData();
+      fd.append("ticketId", ticketId);
+      fd.append("unit_ownership", unitOwnership);
+      if (snVerified) fd.append("sn_verified", "1");
+      fd.append("physical_condition", physicalCondition);
+      fd.append("fault_description", faultDescription);
+      fd.append("test_result", testResult);
+      if (unitOwnership === "store_stock") fd.append("stock_origin", stockOrigin);
+      if (unitOwnership === "customer" && invoiceUrl) fd.append("purchase_invoice_url", invoiceUrl);
+      files.forEach((f) => fd.append("invoice_files", f));
+
+      const result = await handoverToRmaAction(fd);
+      if ("error" in result && result.error) {
+        toast.error(result.error);
+        return;
+      }
+      toast.success(
+        "rmaCode" in result && result.rmaCode
+          ? `Unit diserahkan ke RMA — ${result.rmaCode}`
+          : "Unit diserahkan ke RMA"
+      );
+      closeDialog();
+    });
+  };
 
   const isPaused =
     timeLogs.length > 0 &&
@@ -444,14 +488,34 @@ export default function StatusUpdater({
             >
               <Pause className="mr-2 h-4 w-4" /> Pause
             </button>
-            <button
-              onClick={() => setActiveDialog("done")}
-              disabled={isPending}
-              style={{ background: "#16a34a", color: "white" }}
-              className="btn px-5 py-2.5"
-            >
-              <CheckCircle className="mr-2 h-4 w-4" /> Mark Done
-            </button>
+            {isWarrantyClaim ? (
+              <>
+                <button
+                  onClick={() => setActiveDialog("rma_handover")}
+                  disabled={isPending}
+                  style={{ background: "#16469d", color: "white" }}
+                  className="btn px-5 py-2.5"
+                >
+                  <ShieldCheck className="mr-2 h-4 w-4" /> Serahkan ke RMA
+                </button>
+                <button
+                  onClick={() => setActiveDialog("claim_ineligible")}
+                  disabled={isPending}
+                  className="btn btn-secondary px-4 py-2.5"
+                >
+                  <ShieldX className="mr-2 h-4 w-4" /> Tidak layak klaim
+                </button>
+              </>
+            ) : (
+              <button
+                onClick={() => setActiveDialog("done")}
+                disabled={isPending}
+                style={{ background: "#16a34a", color: "white" }}
+                className="btn px-5 py-2.5"
+              >
+                <CheckCircle className="mr-2 h-4 w-4" /> Mark Done
+              </button>
+            )}
             <button
               onClick={() => setActiveDialog("cancel")}
               disabled={isPending}
@@ -597,6 +661,231 @@ export default function StatusUpdater({
               disabled={isPending}
             >
               {isPending ? "Cancelling..." : "Confirm Cancellation"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Warranty claim: service form before handing the unit to the RMA desk */}
+      <Modal
+        open={activeDialog === "rma_handover"}
+        onClose={closeDialog}
+        title="Serahkan Unit ke RMA"
+        maxWidth="640px"
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <ProofStepInfo
+            step={1}
+            total={1}
+            icon={<ShieldCheck size={18} />}
+            title="Service Form"
+            description="Isi hasil pemeriksaan unit. Data ini yang diverifikasi tim RMA sebelum klaim diajukan ke vendor."
+          />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+            <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              Kepemilikan Unit <span style={{ color: "var(--accent-brand)" }}>*</span>
+            </label>
+            <select
+              className="form-input"
+              value={unitOwnership}
+              onChange={(e) => setUnitOwnership(e.target.value as "customer" | "store_stock")}
+            >
+              <option value="customer">Milik Customer</option>
+              <option value="store_stock">Stok Toko</option>
+            </select>
+          </div>
+
+          {unitOwnership === "store_stock" ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+              <label htmlFor="rma-stock-origin" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                Asal Stok <span style={{ color: "var(--accent-brand)" }}>*</span>
+              </label>
+              <input
+                id="rma-stock-origin"
+                className="form-input"
+                value={stockOrigin}
+                onChange={(e) => setStockOrigin(e.target.value)}
+                placeholder="Misal: Gudang Nagoya rak B3"
+              />
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+              <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                Nota Pembelian <span style={{ color: "var(--accent-brand)" }}>*</span>
+              </label>
+              {attachments.length > 0 ? (
+                <select
+                  className="form-input"
+                  value={invoiceUrl}
+                  onChange={(e) => setInvoiceUrl(e.target.value)}
+                >
+                  <option value="">Pilih lampiran tiket</option>
+                  {attachments.map((a, i) => (
+                    <option key={a.id} value={a.file_url}>
+                      {"Lampiran " + (i + 1) + " (" + a.file_type + ")"}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                  Tiket ini belum punya lampiran. Unggah nota di bawah.
+                </p>
+              )}
+              {!invoiceUrl && (
+                <div style={{ marginTop: "0.5rem" }}>
+                  <span
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.375rem",
+                      fontSize: "0.8125rem",
+                      color: "var(--text-muted)",
+                      marginBottom: "0.375rem",
+                    }}
+                  >
+                    <FileText size={14} /> Unggah nota baru
+                  </span>
+                  <FileUpload onChange={setFiles} />
+                </div>
+              )}
+            </div>
+          )}
+
+          <label
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "0.625rem",
+              cursor: "pointer",
+              padding: "0.75rem",
+              border: "1px solid var(--border)",
+              borderRadius: "var(--radius-md)",
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={snVerified}
+              onChange={(e) => setSnVerified(e.target.checked)}
+              style={{ width: "1.1rem", height: "1.1rem", marginTop: "0.125rem" }}
+            />
+            <span style={{ fontSize: "0.875rem" }}>
+              <strong>Serial number sudah saya cocokkan</strong> dengan fisik unit dan nota.
+              <span style={{ display: "block", color: "var(--text-muted)", fontSize: "0.8125rem" }}>
+                Wajib dicentang. RMA menolak klaim tanpa verifikasi SN.
+              </span>
+            </span>
+          </label>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+            <label htmlFor="rma-physical" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              Kondisi Fisik <span style={{ color: "var(--accent-brand)" }}>*</span>
+            </label>
+            <textarea
+              id="rma-physical"
+              className="form-input"
+              rows={2}
+              value={physicalCondition}
+              onChange={(e) => setPhysicalCondition(e.target.value)}
+              placeholder="Misal: lecet ringan di sudut kiri, segel utuh"
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+            <label htmlFor="rma-fault" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              Deskripsi Kerusakan <span style={{ color: "var(--accent-brand)" }}>*</span>
+            </label>
+            <textarea
+              id="rma-fault"
+              className="form-input"
+              rows={2}
+              value={faultDescription}
+              onChange={(e) => setFaultDescription(e.target.value)}
+              placeholder="Misal: layar berkedip saat booting"
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+            <label htmlFor="rma-test" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              Hasil Tes <span style={{ color: "var(--accent-brand)" }}>*</span>
+            </label>
+            <textarea
+              id="rma-test"
+              className="form-input"
+              rows={2}
+              value={testResult}
+              onChange={(e) => setTestResult(e.target.value)}
+              placeholder="Misal: reproduksi konsisten pada 3 kali percobaan"
+            />
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <button className="btn btn-ghost" onClick={closeDialog} disabled={isPending}>
+              Batal
+            </button>
+            <button
+              className="btn"
+              style={{ background: "#16469d", color: "white" }}
+              onClick={handleHandover}
+              disabled={isPending}
+            >
+              {isPending ? "Menyerahkan..." : "Serahkan ke RMA"}
+            </button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Warranty claim: technician found the claim not eligible */}
+      <Modal
+        open={activeDialog === "claim_ineligible"}
+        onClose={closeDialog}
+        title="Tandai Tidak Layak Klaim"
+        maxWidth="560px"
+      >
+        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+          <ProofStepInfo
+            step={1}
+            total={1}
+            icon={<ShieldX size={18} />}
+            title="Klaim tidak memenuhi syarat"
+            description="Tiket ditutup sebagai selesai dan unit tetap dikembalikan ke customer lewat alur serah terima biasa. Alasan ini tercatat pada tiket."
+          />
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+            <label htmlFor="ineligible-reason" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              Alasan Tidak Layak <span style={{ color: "var(--accent-brand)" }}>*</span>
+            </label>
+            <textarea
+              id="ineligible-reason"
+              className="form-input"
+              rows={3}
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Misal: kerusakan akibat cairan, di luar cakupan garansi"
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+            <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              Bukti Pemeriksaan{" "}
+              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 400 }}>
+                (opsional)
+              </span>
+            </label>
+            <FileUpload onChange={setFiles} />
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
+            <button className="btn btn-ghost" onClick={closeDialog} disabled={isPending}>
+              Batal
+            </button>
+            <button
+              className="btn"
+              style={{ background: "var(--destructive)", color: "white" }}
+              onClick={() => handleAction("done", "DONE", { requireReason: true })}
+              disabled={isPending}
+            >
+              {isPending ? "Menyimpan..." : "Tandai Tidak Layak"}
             </button>
           </div>
         </div>

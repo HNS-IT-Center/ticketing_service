@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decrypt } from "@/lib/session";
+import { canEnter, dashboardPathForRoleName } from "@/lib/routes";
 
 function getBaseUrl(request: NextRequest) {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
@@ -11,9 +12,6 @@ function getBaseUrl(request: NextRequest) {
 }
 
 const PUBLIC_ROUTES = ["/login", "/register", "/ticket", "/unauthorized"];
-const ADMIN_ROUTES = ["/admin"];
-const TECHNICIAN_ROUTES = ["/technician"];
-const SALES_ROUTES = ["/sales"];
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -30,7 +28,7 @@ export async function proxy(request: NextRequest) {
     const session = await decrypt(sessionCookie);
     if (session) {
       return NextResponse.redirect(
-        new URL(getDashboardRoute(session.role), baseUrl)
+        new URL(dashboardPathForRoleName(session.role), baseUrl)
       );
     }
     return NextResponse.next();
@@ -49,48 +47,16 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", baseUrl));
   }
 
-  // Role-based access
-  if (
-    ADMIN_ROUTES.some((r) => pathname.startsWith(r)) &&
-    session.role !== "Administrator"
-  ) {
+  // Role-based access. Portal ownership and the role → dashboard mapping both
+  // come from lib/routes.ts, so a redirect can never target a route the same
+  // role would be bounced out of again.
+  if (!canEnter(pathname, session.role)) {
     return NextResponse.redirect(
-      new URL(getDashboardRoute(session.role), baseUrl)
-    );
-  }
-
-  if (
-    TECHNICIAN_ROUTES.some((r) => pathname.startsWith(r)) &&
-    session.role !== "Technician"
-  ) {
-    return NextResponse.redirect(
-      new URL(getDashboardRoute(session.role), baseUrl)
-    );
-  }
-
-  if (
-    SALES_ROUTES.some((r) => pathname.startsWith(r)) &&
-    session.role !== "Sales"
-  ) {
-    return NextResponse.redirect(
-      new URL(getDashboardRoute(session.role), baseUrl)
+      new URL(dashboardPathForRoleName(session.role), baseUrl)
     );
   }
 
   return NextResponse.next();
-}
-
-function getDashboardRoute(role: string): string {
-  switch (role) {
-    case "Administrator":
-      return "/admin/dashboard";
-    case "Sales":
-      return "/sales/dashboard";
-    case "Technician":
-      return "/technician/dashboard";
-    default:
-      return "/login";
-  }
 }
 
 export const config = {

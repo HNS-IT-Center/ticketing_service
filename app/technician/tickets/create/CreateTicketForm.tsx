@@ -48,6 +48,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [deviceType, setDeviceType] = useState(""); // actual Prisma enum: Laptop_Office, PC_Office, etc.
   const [deviceName, setDeviceName] = useState(""); // "Device Type (Optional)" in user terms
   const [deviceSn, setDeviceSn] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState("");
   const [conditions, setConditions] = useState<string[]>([]); // Garansi Aktif, Garansi Habis, Segel Utuh, Fisik Mulus
   const [selectedAccessories, setSelectedAccessories] = useState<string[]>([]);
   const [customAccessory, setCustomAccessory] = useState("");
@@ -97,6 +98,12 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
         if (!deviceType) errs.deviceType = "Device category specification is required.";
       }
       if (ticketType === "service" && !notes.trim()) errs.notes = "Problem description is required.";
+      if (ticketType === "warranty_claim") {
+        // The RMA desk verifies the unit against both, so intake must capture them.
+        if (!deviceSn.trim()) errs.deviceSn = "SN wajib diisi untuk klaim garansi.";
+        if (!purchaseDate) errs.purchaseDate = "Tanggal pembelian wajib diisi untuk klaim garansi.";
+        if (!notes.trim()) errs.notes = "Deskripsi keluhan wajib diisi untuk klaim garansi.";
+      }
       if (ticketType === "cleaning" && !cleaningPackage) errs.cleaningPackage = "Cleaning package is required.";
       if (ticketType === "upgrade" && selectedUpgrades.length === 0) errs.selectedUpgrades = "Please select at least one upgrade.";
     }
@@ -163,6 +170,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       fd.append("pickup_method", pickupMethod);
       if (deviceName) fd.append("device_name", deviceName);
       if (deviceSn) fd.append("device_sn", deviceSn);
+      if (ticketType === "warranty_claim") fd.append("purchase_date", purchaseDate);
       if (pcComponents.length > 0) {
         pcComponents.forEach((c) => fd.append("pcComponents", c));
       }
@@ -442,12 +450,79 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             )}
             {errors.ticketType && <span className="form-error" style={{ marginTop: "-1rem" }}><AlertCircle size={12} />{errors.ticketType}</span>}
 
-            {/* Claim (TBA) */}
+            {/* Warranty Claim */}
             {ticketType === "warranty_claim" && (
-              <div style={{ textAlign: "center", padding: "3rem 1rem", background: "var(--cream)", borderRadius: "12px", color: "var(--text-muted)" }}>
-                <Cpu size={48} style={{ margin: "0 auto 1rem", opacity: 0.5 }} />
-                <h3>Coming Soon</h3>
-                <p>This flow is currently being updated. Check back later!</p>
+              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
+                  <div className="form-group">
+                    <label className="form-label">
+                      Nama Perangkat{" "}
+                      <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
+                    </label>
+                    <input
+                      className="form-input"
+                      value={deviceName}
+                      onChange={e => setDeviceName(e.target.value)}
+                      placeholder="Misal: ASUS ROG G15"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">
+                      SN <span style={{ color: "var(--accent)" }}>*</span>
+                    </label>
+                    <input
+                      className={`form-input ${errors.deviceSn ? "error" : ""}`}
+                      value={deviceSn}
+                      onChange={e => setDeviceSn(e.target.value)}
+                      placeholder="Misal: 12345ABCD"
+                    />
+                    <p className="form-help">Diverifikasi ulang oleh RMA sebelum diajukan ke vendor.</p>
+                    {errors.deviceSn && <span className="form-error"><AlertCircle size={12} />{errors.deviceSn}</span>}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Tanggal Pembelian <span style={{ color: "var(--accent)" }}>*</span>
+                  </label>
+                  <input
+                    type="date"
+                    className={`form-input ${errors.purchaseDate ? "error" : ""}`}
+                    value={purchaseDate}
+                    max={new Date().toISOString().slice(0, 10)}
+                    onChange={e => setPurchaseDate(e.target.value)}
+                  />
+                  <p className="form-help">Sesuai tanggal pada nota pembelian.</p>
+                  {errors.purchaseDate && <span className="form-error"><AlertCircle size={12} />{errors.purchaseDate}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Deskripsi Keluhan <span style={{ color: "var(--accent)" }}>*</span>
+                  </label>
+                  <textarea
+                    className={`form-input ${errors.notes ? "error" : ""}`}
+                    rows={4}
+                    value={notes}
+                    onChange={e => setNotes(e.target.value)}
+                    placeholder="Jelaskan kerusakan yang diklaim customer..."
+                  />
+                  {errors.notes && <span className="form-error"><AlertCircle size={12} />{errors.notes}</span>}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Nota Pembelian{" "}
+                    <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional saat intake)</span>
+                  </label>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                    Unggah foto/scan nota sekarang agar teknisi dapat memilihnya saat menyerahkan
+                    unit ke RMA. Nota wajib ada sebelum klaim unit milik customer diserahkan ke RMA.
+                  </p>
+                  <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                  {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
+                </div>
               </div>
             )}
 

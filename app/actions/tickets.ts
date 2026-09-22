@@ -58,6 +58,21 @@ export async function createTicketAction(formData: FormData) {
   const terms_accepted = formData.get("terms_accepted") === "1";
   const technician_notes = (formData.get("technician_notes") as string | null) || null;
 
+  // ── Warranty claim intake requirements ──
+  // Enforced here rather than in the form alone: the RMA desk verifies the unit
+  // against its serial number and purchase date, so a claim cannot be opened
+  // without both. Other ticket types are unaffected.
+  if (ticket_type === "warranty_claim") {
+    if (!device_sn?.trim()) {
+      return { error: "Serial number (SN) wajib diisi untuk tiket klaim garansi." };
+    }
+    const purchaseDateRaw = (formData.get("purchase_date") as string | null) || "";
+    const purchaseDate = new Date(purchaseDateRaw);
+    if (!purchaseDateRaw.trim() || Number.isNaN(purchaseDate.getTime())) {
+      return { error: "Tanggal pembelian wajib diisi untuk tiket klaim garansi." };
+    }
+  }
+
   // Generate ticket code
   let ticket_code: string;
   if (store_location_id) {

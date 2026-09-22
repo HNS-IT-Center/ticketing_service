@@ -163,6 +163,38 @@ export async function updateTicketStatusAction(formData: FormData) {
       return { error: "You are not assigned to this ticket" };
     }
 
+    // ── Guard 1: a ticket sitting with the RMA desk is driven from the RMA
+    // portal only. The technician regains control once the case closes and the
+    // ticket returns to `done`.
+    if (ticket.status === "rma_process") {
+      return {
+        error:
+          "Tiket ini sedang diproses RMA. Status hanya dapat diubah dari portal RMA sampai case-nya ditutup.",
+      };
+    }
+
+    // ── Guard 2: rejecting always needs a reason, enforced server side rather
+    // than trusting the dialog to have asked for one.
+    if (newStatus === "rejected" && !reason?.trim()) {
+      return { error: "Alasan wajib diisi saat menolak tiket." };
+    }
+
+    // ── Guard 3: a warranty claim has exactly two ways out of `on_progress` —
+    // handover to RMA (handoverToRmaAction), or a finding that the claim is not
+    // eligible. So `done` here always means "not eligible", and needs a reason.
+    // The flag is never taken from the client: the server decides it.
+    const isIneligibleClaim =
+      ticket.ticket_type === "warranty_claim" &&
+      ticket.status === "on_progress" &&
+      newStatus === "done";
+
+    if (isIneligibleClaim && !reason?.trim()) {
+      return {
+        error:
+          "Untuk tiket klaim, isi alasan bila unit tidak layak klaim — atau serahkan ke RMA.",
+      };
+    }
+
     const HANDOVER_CHAIN: Record<string, string> = {
       on_progress: "waiting",
       done: "on_progress",
@@ -232,6 +264,21 @@ export async function updateTicketStatusAction(formData: FormData) {
     const ticketUpdateData: Record<string, unknown> = { status: newStatus };
     if (newStatus === "on_progress") ticketUpdateData.work_started_at = new Date();
     if (newStatus === "done") ticketUpdateData.work_completed_at = new Date();
+
+    // Server-written outcome of guard 3. upsert because a legacy warranty ticket
+    // may predate its detail row.
+    if (isIneligibleClaim) {
+      await db.ticketWarrantyDetail.upsert({
+        where: { ticket_id: ticketId },
+        create: {
+          ticket_id: ticketId,
+          purchase_date: new Date(),
+          claim_eligible: false,
+          ineligibility_reason: reason!.trim(),
+        },
+        update: { claim_eligible: false, ineligibility_reason: reason!.trim() },
+      });
+    }
 
     // We write DB operations synchronously/in parallel once we know attachments are safe
     const dbOps: Promise<unknown>[] = [

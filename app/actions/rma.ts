@@ -14,12 +14,31 @@ import type { RmaStatus, RmaDecision, UnitOwnership } from "@prisma/client";
 
 // ─── RMA code generator ────────────────────────────────────────────────────
 // RMA-{STORECODE}-{YYMM}-{0001}, sequence restarting each month per store.
-async function generateRmaCode(storeCode: string | null): Promise<string> {
+
+type TxClient = Parameters<Parameters<typeof db.$transaction>[0]>[0];
+
+function rmaCodePrefix(storeCode: string | null): string {
   const now = new Date();
   const yymm = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, "0")}`;
-  const prefix = `RMA-${storeCode ?? "HNS"}-${yymm}-`;
+  return `RMA-${storeCode ?? "HNS"}-${yymm}-`;
+}
 
-  const last = await db.rmaCase.findFirst({
+/**
+ * Allocates the next code INSIDE a transaction, serialised per store+month by a
+ * Postgres advisory lock that is released when the transaction ends.
+ *
+ * Reading the highest existing code without the lock is a lost-update race:
+ * concurrent handovers at one store all read the same maximum and then fight
+ * over the same number. The lock makes allocation deterministic; the P2002
+ * retry around the transaction remains only as a safety net.
+ *
+ * NOTE: pg_advisory_xact_lock is Postgres-specific. A MariaDB port needs
+ * GET_LOCK()/RELEASE_LOCK() or an equivalent here.
+ */
+async function allocateRmaCode(tx: TxClient, prefix: string): Promise<string> {
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${prefix}))`;
+
+  const last = await tx.rmaCase.findFirst({
     where: { rma_code: { startsWith: prefix } },
     orderBy: { rma_code: "desc" },
     select: { rma_code: true },
@@ -28,6 +47,27 @@ async function generateRmaCode(storeCode: string | null): Promise<string> {
   const lastSeq = last ? parseInt(last.rma_code.slice(prefix.length), 10) : 0;
   const next = Number.isNaN(lastSeq) ? 1 : lastSeq + 1;
   return `${prefix}${String(next).padStart(4, "0")}`;
+}
+
+/**
+ * True when the error is a unique-constraint violation on rma_code specifically.
+ *
+ * Prisma reports the offending key differently depending on version and driver
+ * — `meta.target` as a field array, `meta.constraint` as the index name, or only
+ * in the message — so all three are inspected. A collision on ticket_id (a
+ * second handover for the same ticket) must NOT match here: it is a real error
+ * and retrying it would loop.
+ */
+function isRmaCodeCollision(err: unknown): boolean {
+  if (typeof err !== "object" || err === null) return false;
+  const e = err as { code?: string; message?: string; meta?: Record<string, unknown> };
+
+  const isUniqueViolation =
+    e.code === "P2002" || (e.message ?? "").includes("Unique constraint failed");
+  if (!isUniqueViolation) return false;
+
+  const haystack = `${JSON.stringify(e.meta ?? {})} ${e.message ?? ""}`;
+  return haystack.includes("rma_code");
 }
 
 // ─── Handover: technician → RMA desk ───────────────────────────────────────
@@ -105,6 +145,19 @@ export async function handoverToRmaAction(formData: FormData) {
       return { error: "A purchase invoice is required for a customer-owned unit." };
     }
 
+    // ── The chosen invoice must be an attachment of THIS ticket ──
+    // The URL arrives from the client, so it is never trusted on its own: an
+    // arbitrary URL, or one belonging to another ticket, is rejected.
+    if (existingInvoiceUrl) {
+      const owned = await db.ticketAttachment.findFirst({
+        where: { ticket_id: ticketId, file_url: existingInvoiceUrl },
+        select: { id: true },
+      });
+      if (!owned) {
+        return { error: "The selected invoice is not an attachment of this ticket." };
+      }
+    }
+
     // ── Upload the invoice only when intake did not already attach one ──
     let invoiceUrl: string | null = existingInvoiceUrl || null;
     if (!invoiceUrl && invoiceFiles.length > 0) {
@@ -128,68 +181,92 @@ export async function handoverToRmaAction(formData: FormData) {
       });
     }
 
-    const rmaCode = await generateRmaCode(ticket.store_location?.code ?? null);
-
-    const created = await db.$transaction(async (tx) => {
-      const rmaCase = await tx.rmaCase.create({
-        data: {
-          rma_code: rmaCode,
-          ticket_id: ticketId,
-          status: "pending_verification",
-          unit_ownership: unitOwnership,
-          stock_origin: unitOwnership === "store_stock" ? stockOrigin : null,
-          purchase_invoice_url: invoiceUrl,
-          sn_verified: snVerified,
-          physical_condition: physicalCondition,
-          fault_description: faultDescription,
-          test_result: testResult,
-          handed_over_by_id: session.userId,
-        },
-        select: { id: true, rma_code: true },
-      });
-
-      await tx.rmaEvent.create({
-        data: {
-          rma_case_id: rmaCase.id,
-          from_status: null,
-          to_status: "pending_verification",
-          note: `Unit handed over to RMA (${rmaCode})`,
-          actor_id: session.userId,
-        },
-      });
-
-      await tx.ticket.update({
-        where: { id: ticketId },
-        data: { status: "rma_process", work_completed_at: new Date() },
-      });
-
-      await tx.ticketStatusLog.create({
-        data: {
-          ticket_id: ticketId,
-          old_status: "on_progress",
-          new_status: "rma_process",
-          reason: `Handed over to RMA (${rmaCode})`,
-          changed_by: session.userId,
-        },
-      });
-
-      return rmaCase;
-    });
-
-    // Let the RMA desk know a case is waiting for verification.
+    // Staff at the same store can hand over at the same instant and compute the
+    // same next sequence, so a unique-violation on rma_code is retried with a
+    // freshly generated code rather than surfaced to the technician.
     const rmaStaff = await db.user.findMany({
-      where: { OR: [{ role: "RMA" }, { role: "Administrator" }] },
+      where: { is_active: true, OR: [{ role: "RMA" }, { role: "Administrator" }] },
       select: { id: true },
     });
-    if (rmaStaff.length > 0) {
-      await db.notification.createMany({
-        data: rmaStaff.map((u) => ({
-          user_id: u.id,
-          ticket_id: ticketId,
-          type: "rma_update" as const,
-          message: `📦 Klaim baru menunggu verifikasi — ${created.rma_code} (#${ticket.ticket_code})`,
-        })),
-      });
+
+    let created: { id: string; rma_code: string } | null = null;
+    let lastError: unknown = null;
+
+    const codePrefix = rmaCodePrefix(ticket.store_location?.code ?? null);
+
+    for (let attempt = 0; attempt < 3 && created === null; attempt++) {
+      try {
+        created = await db.$transaction(async (tx) => {
+          const rmaCode = await allocateRmaCode(tx, codePrefix);
+
+          const rmaCase = await tx.rmaCase.create({
+            data: {
+              rma_code: rmaCode,
+              ticket_id: ticketId,
+              status: "pending_verification",
+              unit_ownership: unitOwnership,
+              stock_origin: unitOwnership === "store_stock" ? stockOrigin : null,
+              purchase_invoice_url: invoiceUrl,
+              sn_verified: snVerified,
+              physical_condition: physicalCondition,
+              fault_description: faultDescription,
+              test_result: testResult,
+              handed_over_by_id: session.userId,
+            },
+            select: { id: true, rma_code: true },
+          });
+
+          await tx.rmaEvent.create({
+            data: {
+              rma_case_id: rmaCase.id,
+              from_status: null,
+              to_status: "pending_verification",
+              note: `Unit handed over to RMA (${rmaCode})`,
+              actor_id: session.userId,
+            },
+          });
+
+          await tx.ticket.update({
+            where: { id: ticketId },
+            data: { status: "rma_process", work_completed_at: new Date() },
+          });
+
+          await tx.ticketStatusLog.create({
+            data: {
+              ticket_id: ticketId,
+              old_status: "on_progress",
+              new_status: "rma_process",
+              reason: `Handed over to RMA (${rmaCode})`,
+              changed_by: session.userId,
+            },
+          });
+
+          // Inside the transaction: if the handover rolls back, so do the alerts.
+          if (rmaStaff.length > 0) {
+            await tx.notification.createMany({
+              data: rmaStaff.map((u) => ({
+                user_id: u.id,
+                ticket_id: ticketId,
+                type: "rma_update" as const,
+                message: `📦 Klaim baru menunggu verifikasi — ${rmaCode} (#${ticket.ticket_code})`,
+              })),
+            });
+          }
+
+          return rmaCase;
+        });
+      } catch (err) {
+        if (isRmaCodeCollision(err)) {
+          lastError = err;
+          continue;
+        }
+        throw err;
+      }
+    }
+
+    if (created === null) {
+      console.error("[RMA CODE COLLISION] exhausted retries", lastError);
+      return { error: "Failed to allocate an RMA number. Please try again." };
     }
 
     revalidatePath(`/technician/tickets/${ticketId}`);

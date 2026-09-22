@@ -7,27 +7,24 @@ Cara menerapkan perubahan schema branch `feat/rma-warranty-claim` ke Supabase.
 
 ---
 
-## 1. Bagaimana perubahan schema Fase 1 dibuat
+## 1. Bagaimana perubahan schema dibuat
 
-**Tidak dengan `migrate dev`, dan tidak dengan `db push`.** Tidak ada database yang disentuh
-sama sekali.
+**Tidak dengan `migrate dev`, dan tidak dengan `db push` ke Supabase.** Satu-satunya database
+yang pernah disentuh adalah container Postgres lokal (`hns-ticketing-pg`, `127.0.0.1:5433`),
+yang dibuat kosong dan diisi `npm run seed` — nol baris disalin dari Supabase.
 
-Repo ini tidak punya `.env.local`, jadi tidak ada koneksi DB yang tersedia. Yang dijalankan
-hanya dua perintah yang murni bekerja di atas file:
+Terhadap file, hanya dua perintah ini yang dijalankan:
 
 ```powershell
-DATABASE_URL="postgresql://u:p@127.0.0.1:1/db" npx prisma validate   # parse + cek relasi
-DATABASE_URL="postgresql://u:p@127.0.0.1:1/db" npx prisma generate   # tulis ulang Prisma Client
+npx prisma validate    # parse + cek relasi
+npx prisma generate    # tulis ulang Prisma Client
 ```
 
-`DATABASE_URL` palsu itu diperlukan karena `prisma.config.ts` memanggil `env("DATABASE_URL")`
-saat memuat config — bahkan `validate` gagal tanpanya. URL itu menunjuk port 1 di localhost
-dan tidak pernah dikoneksi.
+> Catatan: sebelum `.env.local` ada, kedua perintah itu butuh `DATABASE_URL` diisi apa pun
+> karena `prisma.config.ts` memanggil `env("DATABASE_URL")` saat memuat config. Yang dipakai
+> adalah URL palsu ke `127.0.0.1:1` yang tidak pernah dikoneksi.
 
-Artinya: **`prisma/schema.prisma` saat ini adalah satu-satunya sumber kebenaran, dan belum
-tercermin di database mana pun** — baik lokal maupun Supabase.
-
----
+**`prisma/schema.prisma` belum tercermin di Supabase sama sekali.**
 
 ## 2. Kondisi awal yang perlu dipahami
 
@@ -35,17 +32,31 @@ tercermin di database mana pun** — baik lokal maupun Supabase.
   `prisma db push`, yang tidak meninggalkan riwayat.
 - Karena itu `prisma migrate deploy` **tidak bisa langsung dipakai**. Tanpa baseline, Prisma
   menganggap database kosong dan akan mencoba membuat ulang semua tabel yang sudah ada.
-- Langkahnya wajib dua tahap: **baseline dulu** (menandai schema yang sudah ada sebagai
-  "sudah diterapkan"), **baru migration RMA**.
+- Langkahnya wajib dua tahap: **baseline dulu**, **baru migration RMA**.
+
+### ⚠️ Baseline WAJIB diambil dari `origin/main`, bukan `main` lokal
+
+`main` lokal bisa tertinggal jauh dari remote tanpa terlihat. Ini pernah terjadi di proyek
+ini: sebuah branch dibuat dari `main` lokal yang tertinggal **40 commit**, dan akibatnya
+schema-nya salah (menambahkan kolom `device_sn` yang sebenarnya sudah ada di `Ticket`).
+
+Baseline yang diambil dari schema yang salah akan menghasilkan migration yang salah, dan
+`migrate resolve --applied` akan menandainya sebagai sudah diterapkan — sehingga selisihnya
+**tidak akan pernah terdeteksi lagi**. Karena itu setiap sesi deploy wajib dimulai dengan:
+
+```powershell
+git fetch origin
+git rev-parse main origin/main          # kedua hash HARUS sama
+git log --oneline main..origin/main     # HARUS kosong
+```
+
+Kalau tidak sama, **berhenti**, `git pull --ff-only` dulu, dan pastikan branch fitur sudah
+di-rebase ke `origin/main`.
 
 ### Peringatan MariaDB
 
 Kalau rencana pindah ke MariaDB jadi dilakukan, SQL hasil baseline ini **akan terbuang** —
 sintaksnya Postgres. Pertimbangkan menunda baseline sampai keputusan database final.
-Alternatif jangka pendek: terapkan perubahan RMA ke Supabase dengan `db push` (sama seperti
-selama ini), dan baseline dikerjakan sekali saja setelah database final ditentukan.
-
----
 
 ## 3. Langkah deploy
 
@@ -67,10 +78,12 @@ salinan production).
 ### Langkah 1 — Siapkan schema `main` sebagai titik acuan
 
 ```powershell
-git show main:prisma/schema.prisma | Out-File -Encoding utf8 .\main-schema.prisma
+git fetch origin
+git show origin/main:prisma/schema.prisma | Out-File -Encoding utf8 .\main-schema.prisma
 ```
 
-Ini adalah schema yang **sudah** ada di Supabase sekarang.
+Gunakan `origin/main`, **bukan** `main` lokal — lihat peringatan di bagian 2. Ini adalah
+schema yang seharusnya sudah ada di Supabase sekarang; bagian berikutnya membuktikannya.
 
 ### Langkah 2 — Buat baseline migration
 
@@ -83,8 +96,38 @@ npx prisma migrate diff `
   --script | Out-File -Encoding utf8 prisma\migrations\00000000000000_baseline\migration.sql
 ```
 
-Tandai sebagai sudah diterapkan — **ini hanya menulis ke tabel `_prisma_migrations`, tidak
-mengubah tabel apa pun:**
+#### Langkah 2b — VERIFIKASI SEBELUM `migrate resolve` (jangan dilewati)
+
+`migrate resolve --applied` adalah pernyataan sepihak: ia memberi tahu Prisma "schema ini
+sudah ada di sana" tanpa memeriksa apa pun. Kalau pernyataan itu keliru, selisih antara
+schema asli Supabase dan baseline akan tersembunyi permanen.
+
+Buktikan dulu bahwa `origin/main` benar-benar sama dengan Supabase. Perintah berikut
+**hanya membaca** database:
+
+```powershell
+npx prisma migrate diff `
+  --from-url "<DATABASE_URL_SUPABASE>" `
+  --to-schema-datamodel .\main-schema.prisma `
+  --script
+```
+
+**Hasilnya harus kosong** (atau hanya komentar, tanpa satu pun pernyataan DDL).
+
+- **Kosong** → `origin/main` cocok dengan Supabase. Lanjut.
+- **Ada isinya** → **BERHENTI dan laporkan.** Artinya Supabase menyimpang dari `origin/main`:
+  ada `db push` yang tidak pernah masuk git, migration manual lewat SQL Editor, atau commit
+  yang belum ter-deploy. Selisihnya harus dipahami dan diselesaikan dulu. **Jangan**
+  menjalankan `migrate resolve`, dan jangan "membetulkan" dengan `db push` — itu justru
+  menghapus buktinya.
+
+Gunakan kredensial read-only kalau ada. `migrate diff --from-url` tidak menulis apa pun,
+tapi tetap pakai hak akses seminimal mungkin.
+
+#### Langkah 2c — Tandai baseline sebagai sudah diterapkan
+
+Hanya setelah Langkah 2b menghasilkan output kosong. **Ini hanya menulis ke tabel
+`_prisma_migrations`, tidak mengubah tabel apa pun:**
 
 ```powershell
 npx prisma migrate resolve --applied 00000000000000_baseline
@@ -127,7 +170,7 @@ ALTER TYPE "NotificationType" ADD VALUE IF NOT EXISTS 'rma_update';
 New-Item -ItemType Directory -Force prisma\migrations\20260922000200_rma_tables
 
 npx prisma migrate diff `
-  --from-schema-datamodel .\main-schema.prisma `
+  --from-schema-datamodel .\main-schema.prisma `   # dari origin/main
   --to-schema-datamodel .\prisma\schema.prisma `
   --script | Out-File -Encoding utf8 prisma\migrations\20260922000200_rma_tables\migration.sql
 ```
@@ -139,7 +182,6 @@ ditangani di 3a. Sisanya harus berisi, dan hanya berisi:
 - `CREATE TABLE "RmaCase"` + `CREATE TABLE "RmaEvent"`
 - `CREATE UNIQUE INDEX` untuk `rma_code` dan `ticket_id`, `CREATE INDEX` untuk `status`,
   `handler_id`, `rma_case_id`
-- `ALTER TABLE "TicketWarrantyDetail" ADD COLUMN "device_sn" TEXT`
 - `ALTER TABLE ... ADD CONSTRAINT ... FOREIGN KEY` untuk relasi RmaCase/RmaEvent
 
 **Kalau ada `DROP` apa pun di file ini, berhenti dan laporkan.** Semua perubahan branch ini
@@ -199,7 +241,6 @@ DROP TABLE IF EXISTS "RmaCase";
 DROP TYPE  IF EXISTS "RmaDecision";
 DROP TYPE  IF EXISTS "RmaStatus";
 DROP TYPE  IF EXISTS "UnitOwnership";
-ALTER TABLE "TicketWarrantyDetail" DROP COLUMN IF EXISTS "device_sn";
 DELETE FROM "_prisma_migrations" WHERE migration_name LIKE '%rma%';
 ```
 

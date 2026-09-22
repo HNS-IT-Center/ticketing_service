@@ -59,6 +59,37 @@ describe("public routes", () => {
   });
 });
 
+describe("/unauthorized is exempt from every guard", () => {
+  const PATHS = ["/unauthorized", "/unauthorized/", "/unauthorized?from=%2Fadmin"];
+
+  // It is the redirect target for a denied role. If any guard touched it, that
+  // role would bounce between the guard and this page forever.
+  it.each([...ALL_ROLES, "bogus", ""])("serves it for role %s", async (role) => {
+    for (const path of PATHS) {
+      expect(await visit(path, role), `${role} on ${path}`).toEqual({ kind: "next" });
+    }
+  });
+
+  it("serves it with no session at all", async () => {
+    for (const path of PATHS) {
+      expect(await visit(path, null)).toEqual({ kind: "next" });
+    }
+  });
+
+  it("serves it even though /admin would be refused for the same session", async () => {
+    // Same session, two paths: the guard fires on one and not the other.
+    expect((await visit("/admin/dashboard", "RMA")).kind).toBe("redirect");
+    expect(await visit("/unauthorized", "RMA")).toEqual({ kind: "next" });
+  });
+
+  it("is where a denied role is sent, and it terminates there", async () => {
+    const landing = await visit("/login", "Customer");
+    expect(landing).toEqual({ kind: "redirect", to: DENIED_DESTINATION });
+    // following that redirect must settle, not bounce
+    expect(await visit(DENIED_DESTINATION, "Customer")).toEqual({ kind: "next" });
+  });
+});
+
 describe("unauthenticated access", () => {
   it.each(["/admin/dashboard", "/technician/dashboard", "/sales/dashboard", "/rma/dashboard", "/"])(
     "sends %s to /login",

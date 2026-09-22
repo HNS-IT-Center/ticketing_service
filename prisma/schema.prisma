@@ -18,6 +18,7 @@ enum Role {
   Technician
   Sales
   Customer
+  RMA          // Handles warranty claims sent to vendors
 }
 
 enum Shift {
@@ -59,6 +60,7 @@ enum TicketStatus {
   completed          // Final state for both pickup paths
   cancelled
   rejected
+  rma_process        // Warranty claim handed over to RMA — see RmaCase for the detailed state
 }
 
 enum DeviceType {
@@ -95,6 +97,7 @@ enum NotificationType {
   status_update
   assigned    // Technician was assigned a ticket
   completed   // Technician completed a ticket (includes points earned)
+  rma_update  // RMA case moved to a new state
 }
 
 enum CleaningPackage {
@@ -103,6 +106,34 @@ enum CleaningPackage {
   Basic_Cleaning
   Full_Repaste
   Full_Repaste_CPU_GPU
+}
+
+// ── RMA (warranty claim sent to vendor) ──
+// Kept as its own enum instead of flooding TicketStatus: the ticket only ever
+// sees `rma_process`, while the detailed vendor workflow lives on RmaCase.
+
+enum UnitOwnership {
+  customer     // unit belongs to the customer
+  store_stock  // unit came from store stock
+}
+
+enum RmaStatus {
+  pending_verification
+  on_hold
+  verified
+  submitted_to_vendor
+  in_vendor_process
+  vendor_decided
+  unit_received
+  closed
+  cancelled
+}
+
+enum RmaDecision {
+  repaired
+  replaced
+  refund
+  rejected
 }
 
 // ─────────────────────────────────────────────
@@ -179,6 +210,9 @@ model User {
   overriding_shifts  ShiftOverride[]       @relation("OverrideShift")
   assignment_requests TicketAssignmentRequest[]
   titles             UserTitle[]
+  rma_handovers      RmaCase[]             @relation("RmaHandedOverBy")
+  rma_cases_handled  RmaCase[]             @relation("RmaHandler")
+  rma_events         RmaEvent[]
 
   @@index([email])
 }
@@ -264,6 +298,7 @@ model Ticket {
   pc_build_detail  TicketPcBuildDetail?
   pc_components    TicketPcBuildComponent[]
   assignment_requests TicketAssignmentRequest[]
+  rma_case         RmaCase?
 
   @@index([user_id])
   @@index([technician_id])
@@ -503,4 +538,75 @@ model UserTitle {
 
   @@unique([user_id, title_key])
   @@index([user_id])
+}
+
+// ─────────────────────────────────────────────
+// RMA — WARRANTY CLAIM SENT TO VENDOR
+// ─────────────────────────────────────────────
+
+// One case per warranty_claim ticket, created when the technician hands the
+// unit over to the RMA desk. The parent ticket sits at `rma_process` for the
+// whole vendor round-trip and returns to `done` when the case closes, so the
+// existing handover chain (ready_for_pickup / handed_to_courier -> completed)
+// keeps working untouched.
+model RmaCase {
+  id        String    @id @default(cuid())
+  rma_code  String    @unique          // RMA-{STORECODE}-{YYMM}-{0001}
+  ticket_id String    @unique
+  ticket    Ticket    @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  status    RmaStatus @default(pending_verification)
+
+  // ── Service form — filled by the technician at handover ──
+  unit_ownership       UnitOwnership
+  stock_origin         String?   // free text, required when unit_ownership = store_stock
+  purchase_invoice_url String?   // required when unit_ownership = customer
+  sn_verified          Boolean   @default(false)
+  physical_condition   String
+  fault_description    String
+  test_result          String
+  handed_over_by_id    String
+  handed_over_by       User      @relation("RmaHandedOverBy", fields: [handed_over_by_id], references: [id])
+  handed_over_at       DateTime  @default(now())
+
+  // ── Handling ──
+  handler_id  String?
+  handler     User?   @relation("RmaHandler", fields: [handler_id], references: [id])
+  hold_reason String?
+
+  // ── Vendor ──
+  vendor_name       String?
+  vendor_rma_number String?   // internal only — never shown on the public page
+  shipping_tracking String?
+  submitted_at      DateTime?
+
+  // ── Outcome ──
+  decision         RmaDecision?
+  decision_notes   String?
+  replacement_sn   String?     // required when decision = replaced
+  decided_at       DateTime?
+  unit_received_at DateTime?
+  closed_at        DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  events RmaEvent[]
+
+  @@index([status])
+  @@index([handler_id])
+}
+
+// Append-only audit trail of every RMA state change.
+model RmaEvent {
+  id          String     @id @default(cuid())
+  rma_case_id String
+  rma_case    RmaCase    @relation(fields: [rma_case_id], references: [id], onDelete: Cascade)
+  from_status RmaStatus?
+  to_status   RmaStatus
+  note        String?
+  actor_id    String
+  actor       User       @relation(fields: [actor_id], references: [id])
+  created_at  DateTime   @default(now())
+
+  @@index([rma_case_id])
 }

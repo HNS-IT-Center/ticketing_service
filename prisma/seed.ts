@@ -88,6 +88,21 @@ async function main() {
   });
   console.log("✅ Sales:", sales.email);
 
+  // ─── RMA ───────────────────────────────────────────────────────────────
+  const rma = await db.user.upsert({
+    where: { email: "rma@techserve.id" },
+    update: {},
+    create: {
+      name: "RMA TechServe",
+      email: "rma@techserve.id",
+      phone_number: "+6281200000030",
+      address: "Jl. Klaim No. 7, Jakarta",
+      role: "RMA",
+      password: await hash("rma123"),
+    },
+  });
+  console.log("✅ RMA:", rma.email);
+
   // ─── Upgrades ──────────────────────────────────────────────────────────
   const upgradeItems = [
     { name: "RAM Upgrade", points: 2 },
@@ -111,6 +126,7 @@ async function main() {
   console.log("  Admin:      admin@techserve.id    / admin123");
   console.log("  Technician: budi@techserve.id     / tech123");
   console.log("  Sales:      sales@techserve.id    / sales123");
+  console.log("  RMA:        rma@techserve.id      / rma123");
   console.log("  Customer:   customer@example.com  / customer123");
 }
 

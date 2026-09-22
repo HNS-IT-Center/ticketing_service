@@ -53,7 +53,7 @@ export default function CreateUserForm() {
         <div className="form-group">
           <label className="form-label">Role</label>
           <select name="role" className="form-input" value={role} onChange={(e) => setRole(e.target.value)}>
-            {["Administrator", "Technician", "Sales", "Customer"].map((r) => (
+            {["Administrator", "Technician", "Sales", "RMA", "Customer"].map((r) => (
               <option key={r} value={r}>{r}</option>
             ))}
           </select>

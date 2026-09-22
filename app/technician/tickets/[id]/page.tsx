@@ -177,6 +177,12 @@ export default async function TechnicianTicketDetailPage({
               currentStatus={ticket.status}
               timeLogs={ticket.time_logs}
               pickupMethod={(ticket.pickup_method as "self_pickup" | "courier" | null) ?? "self_pickup"}
+              ticketType={ticket.ticket_type}
+              attachments={regularAttachments.map((a) => ({
+                id: a.id,
+                file_url: a.file_url,
+                file_type: a.file_type,
+              }))}
             />
           )}
           {ticket.public_share_token && (

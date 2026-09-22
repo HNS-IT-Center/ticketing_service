@@ -3,6 +3,7 @@
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
+import { destinationForRoleName } from "@/lib/routes";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { createSession, deleteSession } from "@/lib/session";
@@ -83,17 +84,13 @@ export async function loginAction(
   // Redirect based on role.
   // NOTE: redirect() throws a special Next.js error (NEXT_REDIRECT) — this is intentional.
   // It must NOT be inside a try/catch that re-throws generic errors.
-  switch (user.role) {
-    case "Administrator":
-    case "Sales":
-      redirect("/admin/dashboard");
-    case "Technician":
-      redirect("/technician/dashboard");
-    case "Customer":
-    default:
-      await deleteSession();
-      return { message: "Customer login is disabled. Please use your ticket link.", rememberMe };
+  // Destination comes from lib/routes.ts so every entry point agrees on it.
+  const destination = destinationForRoleName(user.role);
+  if (!destination.allowed) {
+    await deleteSession();
+    return { message: destination.reason, rememberMe };
   }
+  redirect(destination.dashboard);
 }
 
 // ─── Logout ────────────────────────────────────────────────────────────────

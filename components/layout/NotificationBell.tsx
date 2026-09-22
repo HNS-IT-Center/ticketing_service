@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Bell } from "lucide-react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase";
+import { ticketHrefForPortal, type Portal } from "@/lib/routes";
 
 interface Notification {
   id: string;
@@ -202,12 +203,7 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
               </div>
             ) : (
               notifications.slice(0, 10).map((n) => {
-                const ticketLink =
-                  role === "technician"
-                    ? `/technician/tickets/${n.ticket_id}`
-                    : role === "admin"
-                    ? `/admin/tickets/${n.ticket_id}`
-                    : `/customer/tickets/${n.ticket_id}`;
+                const ticketLink = ticketHrefForPortal(role as Portal, n.ticket_id);
 
                 const notifLabel =
                   n.type === "message"

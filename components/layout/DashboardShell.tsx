@@ -20,6 +20,7 @@ import {
   Settings,
   Activity,
   Store,
+  ShieldCheck,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import NotificationBell from "./NotificationBell";
@@ -49,7 +50,11 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
     { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
     { href: "/admin/logs", label: "Logs", icon: <Activity size={18} /> },
+    { href: "/rma/dashboard", label: "RMA", icon: <ShieldCheck size={18} /> },
     { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
+  ],
+  rma: [
+    { href: "/rma/dashboard", label: "Antrean RMA", icon: <ShieldCheck size={18} /> },
   ],
   sales: [
     { href: "/sales/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
@@ -63,11 +68,12 @@ const ROLE_LABELS: Record<string, string> = {
   technician: "Technician",
   admin: "Administrator",
   sales: "Sales",
+  rma: "RMA",
 };
 
 interface DashboardShellProps {
   children: React.ReactNode;
-  role: "customer" | "technician" | "admin" | "sales";
+  role: "customer" | "technician" | "admin" | "sales" | "rma";
   userName: string;
   userId: string;
   isCoordinator?: boolean;
@@ -184,6 +190,9 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
 
   const profileHref = role === "sales" ? "/admin/profile" : `/${role}/profile`;
   const ticketsHref = role === "admin" || role === "sales" ? "/admin/tickets" : `/${role}/tickets`;
+  // The RMA portal has neither a profile page nor a ticket list, so those two
+  // dropdown entries are hidden rather than pointed at a route that 404s.
+  const showPersonalLinks = role !== "rma";
 
   const currentLabel =
     navItems.find((n) => pathname === n.href || pathname.startsWith(n.href))?.label ?? "Dashboard";
@@ -369,6 +378,8 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
 
                   {/* Menu items */}
                   <div style={{ padding: "0.375rem" }}>
+                    {showPersonalLinks && (
+                      <>
                     <Link
                       href={profileHref}
                       onClick={() => setProfileOpen(false)}
@@ -399,6 +410,8 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
                     </Link>
 
                     <div style={{ borderTop: "1px solid var(--border-light)", margin: "0.375rem 0" }} />
+                      </>
+                    )}
 
                     <form action={logoutAction}>
                       <button

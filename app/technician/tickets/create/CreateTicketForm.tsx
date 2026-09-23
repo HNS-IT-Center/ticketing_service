@@ -44,7 +44,10 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [gridDevice, setGridDevice] = useState("");
 
   // Step 3: Service Details (Case)
-  const [ticketType, setTicketType] = useState("service"); // default active
+  // No default: the case must be chosen explicitly. Pre-selecting "service"
+  // silently produced service tickets whenever someone did not notice the
+  // chips, which made warranty claims practically unreachable.
+  const [ticketType, setTicketType] = useState("");
   const [deviceType, setDeviceType] = useState(""); // actual Prisma enum: Laptop_Office, PC_Office, etc.
   const [deviceName, setDeviceName] = useState(""); // "Device Type (Optional)" in user terms
   const [deviceSn, setDeviceSn] = useState("");
@@ -377,8 +380,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   type="button"
                   onClick={() => {
                     setGridDevice(d.id);
-                    if (d.id === "Build PC") setTicketType("pc_build");
-                    else setTicketType("service");
+                    // Build PC has exactly one case, so it can be implied.
+                    // Everything else waits for an explicit choice.
+                    setTicketType(d.id === "Build PC" ? "pc_build" : "");
                   }}
                   style={{
                     flex: "1 1 140px",
@@ -412,7 +416,11 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             
             {/* Case Selection Tabs */}
             {gridDevice !== "Build PC" && (
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
+              <div>
+                <label className="form-label" style={{ display: "block", marginBottom: "0.5rem" }}>
+                  Jenis Kasus <span style={{ color: "var(--accent)" }}>*</span>
+                </label>
+                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
                 {getAvailableCases().map(caseType => {
                   const labels: Record<string, string> = { service: "Service", cleaning: "Cleaning", upgrade: "Upgrade Part", pc_build: "Build PC", warranty_claim: "Warranty Claim" };
                   return (
@@ -451,6 +459,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     </button>
                   );
                 })}
+                </div>
               </div>
             )}
             {errors.ticketType && <span className="form-error" style={{ marginTop: "-1rem" }}><AlertCircle size={12} />{errors.ticketType}</span>}

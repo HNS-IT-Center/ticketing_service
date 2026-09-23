@@ -5,7 +5,8 @@ import { requireRole } from "@/lib/session";
 import { formatDateTime } from "@/lib/utils";
 import RmaStatusCard, { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import RmaActionPanel from "./RmaActionPanel";
-import { ArrowLeft, FileText } from "lucide-react";
+import FilePreview from "@/components/ui/FilePreview";
+import { ArrowLeft } from "lucide-react";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
 
@@ -134,15 +135,13 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             </div>
 
             {rmaCase.purchase_invoice_url && (
-              <a
-                href={rmaCase.purchase_invoice_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn btn-secondary"
-                style={{ marginTop: "1.25rem", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
-              >
-                <FileText size={15} /> Lihat Nota Pembelian
-              </a>
+              <div style={{ marginTop: "1.25rem" }}>
+                <FilePreview
+                  url={rmaCase.purchase_invoice_url}
+                  label="Lihat Nota Pembelian"
+                  title={`Nota Pembelian — ${ticket.ticket_code}`}
+                />
+              </div>
             )}
           </div>
 

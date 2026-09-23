@@ -12,17 +12,12 @@ import path from "path";
  * end without R2 credentials; without it, every upload fails a TLS handshake
  * against the placeholder endpoint.
  *
- * The local driver refuses to run under NODE_ENV=production, so a stray env var
- * can never quietly redirect real uploads onto a server's filesystem.
+ * The local driver refuses to WRITE under NODE_ENV=production, so a stray env
+ * var can never quietly redirect real uploads onto a server's filesystem. The
+ * check sits on the write, not on import, so it does not break `next build`.
  */
 
 const USE_LOCAL_STORAGE = process.env.STORAGE_DRIVER === "local";
-
-if (USE_LOCAL_STORAGE && process.env.NODE_ENV === "production") {
-  throw new Error(
-    "STORAGE_DRIVER=local is a development-only setting and must not be used in production."
-  );
-}
 
 // Public prefix and on-disk root for the local driver.
 const LOCAL_URL_PREFIX = "/uploads";
@@ -75,6 +70,16 @@ function resolveLocalPath(key: string): string {
 }
 
 async function writeLocal(key: string, body: Buffer): Promise<string> {
+  // Checked here rather than at import: `next build` runs with
+  // NODE_ENV=production, so throwing on import would break the build for any
+  // developer who has the local driver enabled. Guarding the write itself still
+  // stops a production server from ever storing an upload on its filesystem.
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "STORAGE_DRIVER=local is a development-only setting and must not be used in production."
+    );
+  }
+
   const target = resolveLocalPath(key);
   await mkdir(path.dirname(target), { recursive: true });
   await writeFile(target, body);

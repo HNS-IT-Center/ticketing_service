@@ -54,7 +54,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
   ],
   rma: [
-    { href: "/rma/dashboard", label: "Antrean RMA", icon: <ShieldCheck size={18} /> },
+    { href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/rma/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
   ],
   sales: [

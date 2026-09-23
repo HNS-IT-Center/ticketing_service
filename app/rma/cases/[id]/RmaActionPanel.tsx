@@ -111,23 +111,23 @@ export default function RmaActionPanel({
 
   if (!canActOnRma(role)) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <p className="flex items-center gap-2 text-sm text-slate-500">
-          <Lock className="h-4 w-4" />
+      <div className="card">
+        <p style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
+          <Lock size={16} />
           Hanya tim RMA dan Administrator yang dapat mengubah status case ini.
         </p>
-      </section>
+      </div>
     );
   }
 
   if (isTerminalRmaStatus(currentStatus)) {
     return (
-      <section className="rounded-xl border border-slate-200 bg-white p-5">
-        <h3 className="mb-1 text-base font-bold text-slate-900">Aksi</h3>
-        <p className="text-sm text-slate-500">
+      <div className="card">
+        <h3 style={{ margin: "0 0 0.5rem" }}>Aksi</h3>
+        <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
           Case sudah {currentStatus === "closed" ? "ditutup" : "dibatalkan"} dan tidak dapat diubah lagi.
         </p>
-      </section>
+      </div>
     );
   }
 
@@ -145,13 +145,13 @@ export default function RmaActionPanel({
     : [];
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-5">
-      <h3 className="mb-1 text-base font-bold text-slate-900">Aksi</h3>
-      <p className="mb-4 text-xs text-slate-500">
+    <div className="card">
+      <h3 style={{ margin: "0 0 0.35rem" }}>Aksi</h3>
+      <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 1rem" }}>
         Hanya perpindahan status yang sah untuk kondisi saat ini yang ditampilkan.
       </p>
 
-      <div className="flex flex-col gap-2">
+      <div style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
         {allowed.map((transition) => (
           <button
             key={transition.to}
@@ -161,29 +161,31 @@ export default function RmaActionPanel({
               setValues({});
             }}
             disabled={isPending}
-            className="flex items-start justify-between gap-3 rounded-lg border border-slate-200 px-4 py-3 text-left transition-colors hover:border-indigo-300 hover:bg-indigo-50/50 disabled:opacity-50"
+            className="rma-action-btn"
           >
-            <span className="flex flex-col gap-0.5">
-              <span className="text-sm font-semibold text-slate-900">{transition.label}</span>
-              <span className="text-xs text-slate-500">{transition.description}</span>
+            <span style={{ display: "flex", flexDirection: "column", gap: "0.15rem", minWidth: 0 }}>
+              <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{transition.label}</span>
+              <span style={{ fontSize: "0.75rem", color: "var(--text-muted)", whiteSpace: "normal" }}>
+                {transition.description}
+              </span>
             </span>
-            <ArrowRight className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" />
+            <ArrowRight size={16} style={{ flexShrink: 0, color: "var(--text-muted)", marginTop: "0.15rem" }} />
           </button>
         ))}
       </div>
 
       <Modal open={active !== null} onClose={close} title={active?.label ?? ""} maxWidth="560px">
         {active && (
-          <div className="flex flex-col gap-4">
-            <p className="rounded-lg bg-slate-50 px-4 py-3 text-sm text-slate-600">
+          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
+            <p style={{ background: "var(--cream)", borderRadius: "var(--radius-md)", padding: "0.75rem 1rem", fontSize: "0.875rem", color: "var(--text-secondary)", margin: 0 }}>
               {active.description}
             </p>
 
             {requiredFields.map((field) =>
               field === "decision" ? (
-                <div key={field} className="flex flex-col gap-1.5">
-                  <label htmlFor={`rma-${field}`} className="text-sm font-semibold text-slate-800">
-                    {FIELD_INPUTS[field].label} <span className="text-rose-600">*</span>
+                <div key={field} style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                  <label htmlFor={`rma-${field}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                    {FIELD_INPUTS[field].label} <span style={{ color: "var(--accent)" }}>*</span>
                   </label>
                   <select
                     id={`rma-${field}`}
@@ -200,9 +202,9 @@ export default function RmaActionPanel({
                   </select>
                 </div>
               ) : (
-                <div key={field} className="flex flex-col gap-1.5">
-                  <label htmlFor={`rma-${field}`} className="text-sm font-semibold text-slate-800">
-                    {FIELD_INPUTS[field].label} <span className="text-rose-600">*</span>
+                <div key={field} style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                  <label htmlFor={`rma-${field}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                    {FIELD_INPUTS[field].label} <span style={{ color: "var(--accent)" }}>*</span>
                   </label>
                   {FIELD_INPUTS[field].multiline ? (
                     <textarea
@@ -227,9 +229,9 @@ export default function RmaActionPanel({
             )}
 
             {optionalFields.includes("shipping_tracking") && (
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="rma-tracking" className="text-sm font-semibold text-slate-800">
-                  Resi Pengiriman <span className="font-normal text-slate-500">(opsional)</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                <label htmlFor="rma-tracking" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                  Resi Pengiriman <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(opsional)</span>
                 </label>
                 <input
                   id="rma-tracking"
@@ -242,9 +244,9 @@ export default function RmaActionPanel({
             )}
 
             {optionalFields.includes("decision_notes") && (
-              <div className="flex flex-col gap-1.5">
-                <label htmlFor="rma-decision-notes" className="text-sm font-semibold text-slate-800">
-                  Catatan Keputusan <span className="font-normal text-slate-500">(opsional)</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                <label htmlFor="rma-decision-notes" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                  Catatan Keputusan <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(opsional)</span>
                 </label>
                 <textarea
                   id="rma-decision-notes"
@@ -257,9 +259,9 @@ export default function RmaActionPanel({
               </div>
             )}
 
-            <div className="flex flex-col gap-1.5">
-              <label htmlFor="rma-note" className="text-sm font-semibold text-slate-800">
-                Catatan Internal <span className="font-normal text-slate-500">(opsional)</span>
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+              <label htmlFor="rma-note" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                Catatan Internal <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(opsional)</span>
               </label>
               <input
                 id="rma-note"
@@ -270,7 +272,7 @@ export default function RmaActionPanel({
               />
             </div>
 
-            <div className="flex justify-end gap-2">
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
               <button type="button" className="btn btn-ghost" onClick={close} disabled={isPending}>
                 Batal
               </button>
@@ -286,6 +288,6 @@ export default function RmaActionPanel({
           </div>
         )}
       </Modal>
-    </section>
+    </div>
   );
 }

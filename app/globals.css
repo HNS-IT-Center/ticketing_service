@@ -1447,3 +1447,42 @@ tbody td {
     @apply w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold transition-all;
   }
 }
+/* ─── RMA ─────────────────────────────────────────────────────────────────── */
+.rma-action-btn {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  color: var(--text-primary);
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.rma-action-btn:hover:not(:disabled) {
+  background: var(--cream);
+  border-color: var(--primary);
+}
+.rma-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.rma-queue-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 1rem;
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-md);
+  background: var(--white);
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.rma-queue-card:hover {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-sm);
+}

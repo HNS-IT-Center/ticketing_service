@@ -3,11 +3,24 @@ import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { formatDateTime } from "@/lib/utils";
-import RmaStatusCard from "@/components/rma/RmaStatusCard";
+import RmaStatusCard, { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import RmaActionPanel from "./RmaActionPanel";
-import { ArrowLeft, Ticket as TicketIcon } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
+
+/** Label + value pair, matching the ticket detail pages. */
+function Field({ label, value, mono = false }: { label: string; value: string | null | undefined; mono?: boolean }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className="font-medium" style={{ wordBreak: "break-word", fontFamily: mono ? "ui-monospace, monospace" : undefined }}>
+        {value}
+      </p>
+    </div>
+  );
+}
 
 export default async function RmaCasePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireRole("RMA", "Administrator");
@@ -76,26 +89,30 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
   const { ticket } = rmaCase;
 
   return (
-    <div className="flex flex-col gap-5">
-      <div className="flex flex-col gap-2">
-        <Link
-          href="/rma/dashboard"
-          className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-slate-600 hover:text-slate-900"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Kembali ke antrean
-        </Link>
-        <h1 className="page-title font-mono">{rmaCase.rma_code}</h1>
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
+        <div>
+          <Link
+            href="/rma/dashboard"
+            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8125rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}
+          >
+            <ArrowLeft size={14} /> Kembali ke antrean
+          </Link>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
+            <h1 style={{ fontSize: "1.25rem", fontFamily: "ui-monospace, monospace" }}>{rmaCase.rma_code}</h1>
+            <RmaStatusBadge status={rmaCase.status} />
+          </div>
+          <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>
+            Tiket #{ticket.ticket_code} • {ticket.device_type.replace(/_/g, " ")}
+          </p>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="flex flex-col gap-5">
-          <section className="rounded-xl border border-slate-200 bg-white p-5">
-            <h2 className="mb-4 flex items-center gap-2 text-base font-bold text-slate-900">
-              <TicketIcon className="h-4 w-4" />
-              Tiket Asal
-            </h2>
-            <dl className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      <div className="ticket-detail-grid">
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          <div className="card">
+            <h3 style={{ margin: "0 0 1rem" }}>Tiket Asal</h3>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem" }}>
               <Field label="Kode Tiket" value={ticket.ticket_code} mono />
               <Field label="Status Tiket" value={ticket.status.replace(/_/g, " ")} />
               <Field label="Customer" value={ticket.customer_name} />
@@ -114,49 +131,28 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
               <Field label="Toko" value={ticket.store_location?.name} />
               <Field label="Teknisi" value={ticket.technician?.name} />
               <Field label="Tiket Dibuat" value={formatDateTime(ticket.created_at)} />
-            </dl>
+            </div>
 
             {rmaCase.purchase_invoice_url && (
               <a
                 href={rmaCase.purchase_invoice_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700 hover:bg-indigo-100"
+                className="btn btn-secondary"
+                style={{ marginTop: "1.25rem", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
               >
-                Lihat Nota Pembelian
+                <FileText size={15} /> Lihat Nota Pembelian
               </a>
             )}
-          </section>
+          </div>
 
           <RmaStatusCard rmaCase={rmaCase} />
         </div>
 
-        <div className="flex flex-col gap-5">
-          <RmaActionPanel
-            rmaCaseId={rmaCase.id}
-            currentStatus={rmaCase.status}
-            role={session.role}
-          />
+        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+          <RmaActionPanel rmaCaseId={rmaCase.id} currentStatus={rmaCase.status} role={session.role} />
         </div>
       </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string | null | undefined;
-  mono?: boolean;
-}) {
-  if (!value) return null;
-  return (
-    <div className="flex flex-col gap-0.5">
-      <dt className="text-[0.7rem] font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd className={`text-sm text-slate-800 break-words ${mono ? "font-mono" : ""}`}>{value}</dd>
     </div>
   );
 }

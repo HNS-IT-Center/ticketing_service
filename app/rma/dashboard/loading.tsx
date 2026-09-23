@@ -1,16 +1,16 @@
 export default function Loading() {
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-2">
-        <div className="skeleton h-8 w-48 rounded" />
-        <div className="skeleton h-4 w-72 rounded" />
+    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <div>
+        <div className="skeleton" style={{ height: "1.5rem", width: "12rem", borderRadius: "6px" }} />
+        <div className="skeleton" style={{ height: "0.9rem", width: "18rem", borderRadius: "6px", marginTop: "0.5rem" }} />
       </div>
       {[0, 1, 2].map((section) => (
-        <div key={section} className="rounded-xl border border-slate-200 bg-white p-5">
-          <div className="skeleton mb-4 h-5 w-56 rounded" />
-          <div className="flex flex-col gap-3">
+        <div key={section} className="card">
+          <div className="skeleton" style={{ height: "1.1rem", width: "14rem", borderRadius: "6px", marginBottom: "1rem" }} />
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
             {[0, 1].map((row) => (
-              <div key={row} className="skeleton h-24 w-full rounded-lg" />
+              <div key={row} className="skeleton" style={{ height: "6rem", width: "100%", borderRadius: "var(--radius-md)" }} />
             ))}
           </div>
         </div>

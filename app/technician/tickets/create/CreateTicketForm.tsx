@@ -73,8 +73,13 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const getAvailableCases = () => {
-    if (gridDevice === "Laptop" || gridDevice === "Computer") return ["service", "cleaning", "upgrade"];
-    if (gridDevice === "Printer" || gridDevice === "Others") return ["service", "cleaning"];
+    // "warranty_claim" opens the claim intake and, later, the handover to RMA.
+    // It applies to any physical unit still under warranty; a Build PC is a
+    // service we perform, not a unit that gets claimed.
+    if (gridDevice === "Laptop" || gridDevice === "Computer")
+      return ["service", "cleaning", "upgrade", "warranty_claim"];
+    if (gridDevice === "Printer" || gridDevice === "Others")
+      return ["service", "cleaning", "warranty_claim"];
     if (gridDevice === "Build PC") return ["pc_build"];
     return [];
   };
@@ -409,7 +414,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             {gridDevice !== "Build PC" && (
               <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
                 {getAvailableCases().map(caseType => {
-                  const labels: Record<string, string> = { service: "Service", cleaning: "Cleaning", upgrade: "Upgrade Part", pc_build: "Build PC", warranty_claim: "Claim" };
+                  const labels: Record<string, string> = { service: "Service", cleaning: "Cleaning", upgrade: "Upgrade Part", pc_build: "Build PC", warranty_claim: "Warranty Claim" };
                   return (
                     <button
                       key={caseType}

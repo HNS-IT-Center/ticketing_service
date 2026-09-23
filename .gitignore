@@ -42,3 +42,6 @@ next-env.d.ts
 
 # local working notes (not committed)
 *.local.md
+
+# locally-stored uploads (STORAGE_DRIVER=local)
+/public/uploads

@@ -60,5 +60,10 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|public/|_vercel|script\\.js).*)" ],
+  // `uploads/` is excluded for the local storage driver (STORAGE_DRIVER=local),
+  // which serves files from public/uploads. Without it the auth guard redirects
+  // them to /login, breaking proof media on the public tracking page, which has
+  // no session by design. Inert in production: R2 returns absolute URLs on
+  // another host, so /uploads is never requested there.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|public/|uploads/|_vercel|script\\.js).*)" ],
 };

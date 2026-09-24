@@ -15,6 +15,12 @@ import path from "path";
  * The local driver refuses to WRITE under NODE_ENV=production, so a stray env
  * var can never quietly redirect real uploads onto a server's filesystem. The
  * check sits on the write, not on import, so it does not break `next build`.
+ *
+ * A third option sits between the two: point R2_ENDPOINT at an S3-compatible
+ * server such as MinIO. Unlike STORAGE_DRIVER=local, that runs the real S3 code
+ * path -- the same SDK, keys, content types and public URLs as production -- so
+ * a bug in the R2 path actually shows up in development instead of waiting for
+ * deploy. See docs/minio-local-storage.md.
  */
 
 const USE_LOCAL_STORAGE = process.env.STORAGE_DRIVER === "local";
@@ -28,13 +34,36 @@ const LOCAL_ROOT = path.join(process.cwd(), "public", "uploads");
 let r2Client: S3Client | null = null;
 function getR2Client(): S3Client {
   if (!r2Client) {
+    // Unset means Cloudflare R2, exactly as before. Set, it points at any
+    // S3-compatible server -- MinIO locally, for instance.
+    const endpoint =
+      process.env.R2_ENDPOINT ||
+      `https://${process.env.R2_ACCOUNT_ID || "dummy"}.r2.cloudflarestorage.com`;
+
+    // A plaintext endpoint in production would send the upload, and the signed
+    // credentials with it, over the wire unencrypted. Refused rather than
+    // trusted to be a deliberate choice. Checked here and not at import, for
+    // the same reason as the local driver's guard: `next build` sets
+    // NODE_ENV=production.
+    if (process.env.NODE_ENV === "production" && !endpoint.startsWith("https://")) {
+      throw new Error(
+        `R2_ENDPOINT must use https in production (got "${endpoint}"). ` +
+          "A plaintext S3 endpoint is a development-only setting."
+      );
+    }
+
     r2Client = new S3Client({
       region: "auto",
-      endpoint: `https://${process.env.R2_ACCOUNT_ID || "dummy"}.r2.cloudflarestorage.com`,
+      endpoint,
       credentials: {
         accessKeyId: process.env.R2_ACCESS_KEY_ID || "dummy",
         secretAccessKey: process.env.R2_SECRET_ACCESS_KEY || "dummy",
       },
+      // MinIO and most self-hosted S3 servers cannot do virtual-host style,
+      // because `bucket.localhost` does not resolve. Tied to R2_ENDPOINT rather
+      // than left on for everyone: R2 does accept path style, but there is no
+      // reason to change how production addresses its bucket.
+      forcePathStyle: Boolean(process.env.R2_ENDPOINT),
     });
   }
   return r2Client;

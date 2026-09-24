@@ -82,7 +82,15 @@ Gunakan dua jendela browser (normal + incognito) agar bisa login sebagai dua rol
 2. `npm run dev` berjalan tanpa error.
 3. Terminal dev server terlihat selama pengujian (pesan error server muncul di sini, bukan di browser).
 4. Tersedia satu file gambar/PDF kecil sebagai nota pembelian.
-5. **`STORAGE_DRIVER=local` ada di `.env.local`.** Tanpa ini setiap upload gagal dengan error TLS, karena kredensial R2 tidak tersedia di lokal.
+5. **Penyimpanan file lokal sudah aktif.** Tanpa ini setiap upload gagal dengan error TLS,
+   karena kredensial R2 tidak tersedia di lokal. Dua pilihan:
+   - **MinIO (dipakai sekarang).** `docker start hns-minio`, lalu pastikan `.env.local` punya
+     `R2_ENDPOINT`, `R2_BUCKET_NAME`, dan `NEXT_PUBLIC_R2_PUBLIC_URL` — lihat
+     `docs/minio-local-storage.md`. Ini menjalankan jalur kode S3 yang sama dengan produksi,
+     jadi bug soal content-type atau URL publik ikut terdeteksi saat QC. Isi bucket bisa
+     dilihat di http://localhost:9001.
+   - **Fallback:** set `STORAGE_DRIVER=local` untuk menulis ke `public/uploads/`. Lebih
+     sederhana, tapi melewati kode S3 sepenuhnya.
 6. Minimal ada satu Store Location. Bila belum: login admin → Stores → Create. Teknisi penguji harus di-assign ke store itu agar tiket muncul di dashboard-nya.
 
 ## 5. Ringkasan status

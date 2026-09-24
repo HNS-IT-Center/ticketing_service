@@ -237,6 +237,8 @@ export default async function AdminPerformancePage({
     select: {
       technician_id: true,
       ticket_type: true,
+      // Splits the two kinds of finished claim apart in the breakdown below.
+      warranty_detail: { select: { claim_eligible: true } },
       time_logs: { select: { event: true, created_at: true }, orderBy: { created_at: "asc" } }
     }
   });
@@ -255,9 +257,19 @@ export default async function AdminPerformancePage({
     if (!row) continue;
 
     if (!row.details) row.details = {};
-    if (!row.details[t.ticket_type]) row.details[t.ticket_type] = { count: 0, totalHours: 0, timedCount: 0 };
-    
-    const det = row.details[t.ticket_type];
+
+    // A claim turned down after examination earns the same as one handed to the
+    // RMA desk, so it belongs in the success figures — but it is a different
+    // outcome, and lumping both under "Warranty Claim" would hide that. Every
+    // claim report has to separate them; see FLOW.md § 5.
+    const detailKey =
+      t.ticket_type === "warranty_claim" && t.warranty_detail?.claim_eligible === false
+        ? "warranty_claim_ineligible"
+        : t.ticket_type;
+
+    if (!row.details[detailKey]) row.details[detailKey] = { count: 0, totalHours: 0, timedCount: 0 };
+
+    const det = row.details[detailKey];
     det.count++;
 
     let totalMs = 0;

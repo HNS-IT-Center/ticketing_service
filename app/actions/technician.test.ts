@@ -266,7 +266,7 @@ describe("guard 3 — a warranty claim leaves on_progress only two ways", () => 
   });
 });
 
-describe("KPI — an ineligible claim counts as neither success nor failure", () => {
+describe("KPI — an ineligible claim is credited like a handover", () => {
   async function perf() {
     const row = await db.technicianPerformance.findUnique({
       where: { technician_id: technicianId },
@@ -277,7 +277,7 @@ describe("KPI — an ineligible claim counts as neither success nor failure", ()
     );
   }
 
-  it("leaves every counter untouched when a claim is closed as not eligible", async () => {
+  it("credits one success when a claim is closed as not eligible", async () => {
     const before = await perf();
     const ticket = await makeTicket();
     const result = await updateTicketStatusAction(
@@ -285,8 +285,22 @@ describe("KPI — an ineligible claim counts as neither success nor failure", ()
     );
     expect(result).toMatchObject({ success: true });
 
-    // The examination was correct, so no failed_count; the claim never reached
-    // the RMA desk, so no success either. See lib/kpi.ts.
+    // The examination is real work and the conclusion was right, so it pays the
+    // same as a handover: warranty_claim is worth 2 — see lib/points.ts.
+    const after = await perf();
+    expect(after.tickets_handled).toBe(before.tickets_handled + 1);
+    expect(after.success_count).toBe(before.success_count + 1);
+    expect(after.failed_count).toBe(before.failed_count);
+    expect(after.total_points_completed).toBe(before.total_points_completed + 2);
+  });
+
+  it("credits nothing when the ineligible marking is refused", async () => {
+    const before = await perf();
+    const ticket = await makeTicket();
+    expect(await updateTicketStatusAction(statusForm(ticket.id, "done"))).toMatchObject({
+      error: expect.any(String),
+    });
+
     expect(await perf()).toEqual(before);
   });
 
@@ -324,6 +338,7 @@ describe("KPI — an ineligible claim counts as neither success nor failure", ()
       )
     ).toMatchObject({ success: true });
 
+    // Snapshot AFTER the one credit, so anything the chain adds shows up.
     const before = await perf();
     expect(await updateTicketStatusAction(statusForm(ticket.id, "ready_for_pickup"))).toMatchObject({
       success: true,

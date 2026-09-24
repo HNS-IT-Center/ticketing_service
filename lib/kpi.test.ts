@@ -82,12 +82,51 @@ describe("performanceEffect — warranty claims", () => {
   });
 
   it("ignores the done written when the RMA case closes", () => {
-    expect(performanceEffect("warranty_claim", "done")).toBe("ignore");
+    // The case was handed over, so claim_eligible stayed true.
+    expect(performanceEffect("warranty_claim", "done", true)).toBe("ignore");
   });
 
-  it("ignores the done of a claim closed as not eligible", () => {
-    // Same status as the line above — the point is that neither can credit.
+  it("ignores a done whose eligibility is unknown", () => {
+    // The safe default: an unqualified `done` on a claim is the return from a
+    // closed case, which the handover already paid for.
     expect(performanceEffect("warranty_claim", "done")).toBe("ignore");
+    expect(performanceEffect("warranty_claim", "done", null)).toBe("ignore");
+  });
+
+  it("credits the done of a claim turned down after examination", () => {
+    expect(performanceEffect("warranty_claim", "done", false)).toBe("success");
+  });
+
+  it("pays an ineligible claim exactly what a handover pays", () => {
+    expect(performanceEffect("warranty_claim", "done", false)).toBe(
+      performanceEffect("warranty_claim", "rma_process"),
+    );
+  });
+
+  it("does not let claim_eligible turn other statuses into credits", () => {
+    for (const status of [
+      "waiting",
+      "on_progress",
+      "ready_for_pickup",
+      "waiting_pickup",
+      "handed_to_courier",
+      "delivered",
+      "completed",
+    ] as const) {
+      expect(performanceEffect("warranty_claim", status, false), status).toBe("ignore");
+    }
+  });
+
+  it("does not let claim_eligible rescue a cancellation", () => {
+    expect(performanceEffect("warranty_claim", "cancelled", false)).toBe("failure");
+    expect(performanceEffect("warranty_claim", "rejected", false)).toBe("failure");
+  });
+
+  it("ignores claim_eligible entirely for other ticket types", () => {
+    for (const type of NON_CLAIM_TYPES) {
+      expect(performanceEffect(type, "done", false), type).toBe("success");
+      expect(performanceEffect(type, "completed", false), type).toBe("ignore");
+    }
   });
 
   it("ignores the handover chain that returns the unit", () => {
@@ -125,7 +164,10 @@ describe("performanceEffect — a claim is credited exactly once", () => {
     expect(successes).toEqual(["rma_process"]);
   });
 
-  it("credits nothing for a claim found ineligible", () => {
+  it("credits one success for a claim found ineligible, and only at done", () => {
+    // claim_eligible is false from the moment the technician records it, so it
+    // is false for every later step too — the handover chain must still not
+    // credit again.
     const journey: TicketStatus[] = [
       "waiting",
       "on_progress",
@@ -133,10 +175,35 @@ describe("performanceEffect — a claim is credited exactly once", () => {
       "ready_for_pickup",
       "completed",
     ];
-    const effects = new Set(
-      journey.map((s) => performanceEffect("warranty_claim", s)),
+    const successes = journey.filter(
+      (s) => performanceEffect("warranty_claim", s, false) === "success",
     );
-    expect(effects).toEqual(new Set(["ignore"]));
+    expect(successes).toEqual(["done"]);
+  });
+
+  it("never credits a claim twice, whichever exit it took", () => {
+    const handedOver: TicketStatus[] = [
+      "waiting",
+      "on_progress",
+      "rma_process",
+      "done", // written by rma.ts when the case closes
+      "ready_for_pickup",
+      "completed",
+    ];
+    const turnedDown: TicketStatus[] = [
+      "waiting",
+      "on_progress",
+      "done",
+      "ready_for_pickup",
+      "completed",
+    ];
+
+    const count = (journey: TicketStatus[], eligible: boolean) =>
+      journey.filter((s) => performanceEffect("warranty_claim", s, eligible) === "success")
+        .length;
+
+    expect(count(handedOver, true)).toBe(1);
+    expect(count(turnedDown, false)).toBe(1);
   });
 
   it("credits one success for an ordinary ticket across its journey", () => {

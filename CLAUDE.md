@@ -141,11 +141,14 @@ breakdown in `FLOW.md` § 4.
 ```
 count it if  (type != 'warranty_claim' && new_status == 'done')
           || (type == 'warranty_claim' && new_status == 'rma_process')
+          || (type == 'warranty_claim' && new_status == 'done'
+                                       && claim_eligible == false)
 ```
 
-A warranty claim earns at handover to RMA, because the `done` written when the case closes
-would otherwise credit it a second time. A claim closed as "not eligible" earns nothing and
-costs nothing — neither `success_count` nor `failed_count`. `cancelled` and `rejected` add a
+A warranty claim has two paid exits, worth the same: handover to RMA, and being turned down
+after examination. The `done` that `rma.ts` writes when a case closes earns nothing — the
+handover already did — and `claim_eligible` is the only thing separating those two `done`s,
+so `performanceEffect()` takes it as a third argument. `cancelled` and `rejected` add a
 `failed_count` for every type. Full reasoning in `FLOW.md` § 4 and § 5.
 
 Max workload per technician: **Removed**. Technicians can request any number of tickets, which are then approved by an Admin or Store Coordinator. Workload is dynamically tracked as "Active Tickets" (tickets in `waiting` or `on_progress` status).

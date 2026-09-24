@@ -17,12 +17,20 @@
 Fase 1–5 sudah selesai. **Fase 6 sedang dikerjakan.** Test case berikut menguji fitur
 yang belum ada, jadi **LEWATI** — kegagalannya bukan bug:
 
-| Test case | Kenapa dilewati |
-|---|---|
-| **H-05** | Aturan KPI anti-double-count belum diterapkan di `lib/leaderboard.ts` dan `lib/performance.ts`. Poin klaim masih dihitung dengan cara lama |
+**Tidak ada lagi test case yang dilewati.** Fase 6 sudah dikerjakan: halaman publik mengenal
+`rma_process` dan membedakan ketiga hasil akhir klaim, dan aturan KPI anti-double-count sudah
+berlaku di seluruh jalur poin.
 
-**D-05 dan G-01–G-03 sudah bisa diuji.** Halaman publik kini mengenal `rma_process` dan
-membedakan ketiga hasil akhir klaim lewat banner di atas rincian tiket.
+Satu perubahan angka yang perlu diketahui penguji sebelum membandingkan dengan catatan lama:
+
+- Tiket yang sudah diambil customer tidak lagi hilang dari perhitungan bulanannya. Leaderboard
+  dan winner bulanan sekarang dihitung dari `TicketStatusLog`, bukan dari status tiket saat
+  ini, jadi tiket yang sudah `completed` tetap terhitung di bulan ia selesai.
+
+**Besaran poin per tiket TIDAK diubah di branch ini.** Angka yang tampil di badge, leaderboard
+dan laporan performance tetap seperti sebelumnya. Penyatuan tabel poin — yang memang akan
+menggeser angka cleaning dan service `Other_Device` — ada di branch terpisah
+`fix/points-table-unification` dan belum masuk.
 
 Dua ekspektasi yang perlu dikoreksi sebelum diuji:
 
@@ -185,7 +193,9 @@ menyalin URL-nya. Uji di jendela incognito supaya benar-benar tanpa session.
 | H-02 | Tiket cleaning | Idem | Normal | | |
 | H-03 | Tiket PC build | Idem | Normal | | |
 | H-04 | Cancel tiket | Batalkan tiket non-klaim dengan alasan | Normal | | |
-| H-05 | ~~Leaderboard~~ | **LEWATI — Fase 6** | — | SKIP | — |
+| H-05 | Leaderboard tidak menghitung klaim dua kali | Catat poin teknisi di leaderboard → serahkan satu tiket klaim ke RMA → catat lagi → proses case sampai `closed` → catat lagi | Poin naik 2 saat handover. Saat case ditutup (tiket balik ke `done`) poin **tidak** naik lagi | | |
+| H-05b | Klaim tidak layak tidak menambah apa pun | Tutup satu tiket klaim lewat "Tidak layak klaim" → buka profil teknisi | `success_count` dan `failed_count` sama-sama tidak berubah; poin tidak bertambah | | |
+| H-05c | Admin menutup tiket tidak menambah kredit kedua | Sebagai admin, ubah tiket non-klaim dari `ready_for_pickup` ke `completed` → buka profil teknisi | `tickets_handled` dan poin **tidak** bertambah (dulu bertambah untuk kedua kalinya) | | |
 | H-06 | Detail tiket lama | Buka tiket non-klaim di portal admin, teknisi, sales | Tidak error meski tiket tidak punya case RMA | | |
 | H-07 | Login role lain | Login admin, teknisi, sales bergantian | Semua mendarat di dashboard masing-masing, tidak ada redirect loop | | |
 

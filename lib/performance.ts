@@ -1,18 +1,20 @@
 import { db } from "@/lib/db";
 import { unstable_cache } from "next/cache";
+import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
 
-const MONTHS = [
-  "January","February","March","April","May","June",
-  "July","August","September","October","November","December",
-];
-
-// ─── Point calculator (consistent with tickets.ts) ─────────────────────────
+// NOTE: disagrees with the writers' table in app/actions/technician.ts.
+// Pre-existing since 2026-07-27; unifying it is fix/points-table-unification.
 function getTicketPoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
   if (type === "service") return 5;
   if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
   return 2;
 }
+
+const MONTHS = [
+  "January","February","March","April","May","June",
+  "July","August","September","October","November","December",
+];
 
 // ─── Top Technician of a Month ──────────────────────────────────────────────
 // Excludes coordinators (is_team_leader: true). Cached per month+year.
@@ -28,19 +30,30 @@ export const getTopTechnicianOfMonth = unstable_cache(
     });
     const eligibleIds = new Set(eligibleTechs.map((t) => t.id));
 
-    const doneTickets = await db.ticket.findMany({
+    // Driven by the status log, not by the ticket's current status. Reading
+    // `status: "done"` dropped a ticket out of the month the moment the
+    // customer picked it up, and it credited a warranty claim on the `done`
+    // that rma.ts writes when the case closes. Same filter the leaderboard
+    // uses -- see lib/kpi.ts.
+    const earningLogs = await db.ticketStatusLog.findMany({
       where: {
-        status: "done",
-        technician_id: { not: null, in: Array.from(eligibleIds) },
-        status_logs: {
-          some: { new_status: "done", created_at: { gte: startDate, lt: endDate } },
+        ...EARNING_STATUS_LOG_FILTER,
+        created_at: { gte: startDate, lt: endDate },
+        ticket: { technician_id: { in: Array.from(eligibleIds) } },
+      },
+      select: {
+        ticket: {
+          select: {
+            ticket_type: true,
+            device_type: true,
+            technician_id: true,
+          },
         },
       },
-      select: { ticket_type: true, device_type: true, technician_id: true },
     });
 
     const pointsMap = new Map<string, number>();
-    for (const t of doneTickets) {
+    for (const { ticket: t } of earningLogs) {
       if (!t.technician_id || !eligibleIds.has(t.technician_id)) continue;
       const pts = getTicketPoints(t.ticket_type, t.device_type);
       pointsMap.set(t.technician_id, (pointsMap.get(t.technician_id) ?? 0) + pts);
@@ -64,20 +77,26 @@ export const getTopStoreOfMonth = unstable_cache(
     const startDate = new Date(year, month - 1, 1);
     const endDate   = new Date(year, month, 1);
 
-    const doneTickets = await db.ticket.findMany({
+    const earningLogs = await db.ticketStatusLog.findMany({
       where: {
-        status: "done",
-        technician_id: { not: null },
-        status_logs: {
-          some: { new_status: "done", created_at: { gte: startDate, lt: endDate } },
+        ...EARNING_STATUS_LOG_FILTER,
+        created_at: { gte: startDate, lt: endDate },
+        ticket: { technician_id: { not: null } },
+      },
+      select: {
+        ticket: {
+          select: {
+            ticket_type: true,
+            device_type: true,
+            technician_id: true,
+          },
         },
       },
-      select: { ticket_type: true, device_type: true, technician_id: true },
     });
 
     // Build techId → points map
     const techPoints = new Map<string, number>();
-    for (const t of doneTickets) {
+    for (const { ticket: t } of earningLogs) {
       if (!t.technician_id) continue;
       const pts = getTicketPoints(t.ticket_type, t.device_type);
       techPoints.set(t.technician_id, (techPoints.get(t.technician_id) ?? 0) + pts);

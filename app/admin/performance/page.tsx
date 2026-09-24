@@ -3,17 +3,21 @@ import { db } from "@/lib/db";
 import { TrendingUp } from "lucide-react";
 import ExportToPDF from "./ExportToPDF";
 import SharePerformance from "./SharePerformance";
+import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
 
-export const metadata = { title: "Performance — HNS IT Center" };
-
-const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-
+// NOTE: disagrees with the writers' table in app/actions/technician.ts.
+// Pre-existing since 2026-07-27; unifying it is fix/points-table-unification.
 function getTicketPoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
   if (type === "service") return 5;
   if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
   return 2;
 }
+
+export const metadata = { title: "Performance — HNS IT Center" };
+
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
 
 /** Converts decimal hours → human-readable "X Days Y Hours" (or just "Y Hours" / "< 1 Hour") */
 function formatAvgTime(hours: number): string {
@@ -78,19 +82,26 @@ export default async function AdminPerformancePage({
 
     // Fetch done + failed tickets in parallel, then batch-resolve users
     // Collect all unique technician IDs from both done and failed tickets in parallel
-    const [doneTickets, failedTickets] = await Promise.all([
-      db.ticket.findMany({
+    const [earningLogs, failedTickets] = await Promise.all([
+      // One row per earning event, not per ticket: a warranty claim earns at
+      // handover to RMA, and the `done` written when its case closes earns
+      // nothing. Same filter as the leaderboard -- see lib/kpi.ts.
+      db.ticketStatusLog.findMany({
         where: {
-          status: { in: ["done", "ready_for_pickup", "waiting_pickup", "handed_to_courier", "delivered", "completed"] },
-          technician_id: { not: null },
-          status_logs: {
-            some: {
-              new_status: "done",
-              created_at: { gte: startDate, lt: endDate },
+          ...EARNING_STATUS_LOG_FILTER,
+          created_at: { gte: startDate, lt: endDate },
+          ticket: { technician_id: { not: null } },
+        },
+        select: {
+          ticket: {
+            select: {
+              id: true,
+              ticket_type: true,
+              device_type: true,
+              technician_id: true,
             },
           },
         },
-        select: { id: true, ticket_type: true, device_type: true, technician_id: true },
       }),
       db.ticket.findMany({
         where: {
@@ -109,7 +120,7 @@ export default async function AdminPerformancePage({
 
     // Batch-fetch all relevant users in ONE query (eliminates N+1)
     const allTechIds = [...new Set([
-      ...doneTickets.map((t) => t.technician_id!),
+      ...earningLogs.map((l) => l.ticket.technician_id!),
       ...failedTickets.map((t) => t.technician_id!),
     ].filter(Boolean))];
 
@@ -136,7 +147,7 @@ export default async function AdminPerformancePage({
       return techMap.get(techId)!;
     };
 
-    for (const t of doneTickets) {
+    for (const { ticket: t } of earningLogs) {
       if (!t.technician_id) continue;
       const row = getOrCreate(t.technician_id);
       row.tickets++;

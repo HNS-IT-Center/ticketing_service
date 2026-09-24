@@ -2,7 +2,12 @@
 
 import { db } from "@/lib/db";
 import { unstable_cache } from "next/cache";
+import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
 
+// NOTE: this table disagrees with the one the writers use in
+// app/actions/technician.ts. Pre-existing since 2026-07-27 and deliberately
+// left alone here — unifying it changes displayed figures, which is its own
+// branch (fix/points-table-unification).
 export function getTicketPointsLocal(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
   if (type === "service") return 5;
@@ -55,9 +60,11 @@ export function getLeaderboardData(month: number | null, year: number) {
           where: { is_active: true },
           include: { technician_stores: { select: { technician_id: true } } },
         }),
+        // A warranty claim earns its points at handover to RMA, not at the
+        // `done` written when the case closes — see lib/kpi.ts.
         db.ticketStatusLog.findMany({
           where: {
-            new_status: "done",
+            ...EARNING_STATUS_LOG_FILTER,
             created_at: { gte: startDate, lt: endDate },
           },
           include: {

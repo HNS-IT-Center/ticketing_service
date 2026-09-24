@@ -12,20 +12,6 @@ import { sendTicketStatusEmail } from "@/lib/email";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
-// ─── Ticket Point Calculator ───────────────────────────────────────────────
-function getTicketPoints(type: string, deviceType?: string | null, cleaningPackage?: string | null): number {
-  if (type === "service") {
-    if (deviceType === "Other_Device") return 3;
-    return 5;
-  }
-  if (type === "cleaning") {
-    if (cleaningPackage === "Full_Repaste" || cleaningPackage === "Full_Repaste_CPU_GPU") return 5;
-    return 3;
-  }
-  if (type === "pc_build") return 4;
-  return 2;
-}
-
 // ─── Create Ticket ─────────────────────────────────────────────────────────
 export async function createTicketAction(formData: FormData) {
   try {

@@ -58,10 +58,11 @@ The system tracks the actual active working time of a technician without SLA inf
 
 ### The point table
 
-**What is actually credited** — `lib/points.ts`, used by `app/actions/tickets.ts`,
-`app/actions/technician.ts` and `app/actions/rma.ts`:
+Defined once, in `lib/points.ts`. Do not restate it in a component — import it. Every
+display and every writer reads that one function, so a badge can no longer promise a number
+the leaderboard will not award.
 
-| Ticket type | Points credited |
+| Ticket type | Points |
 |---|---|
 | Service | 5 (3 when the device is `Other_Device`) |
 | PC Build | 4 |
@@ -69,30 +70,15 @@ The system tracks the actual active working time of a technician without SLA inf
 | Warranty claim | 2 |
 | Upgrade / anything else | 2 |
 
-> #### ⚠️ This is not yet the only table in the codebase
->
-> Three other tables are still live, and they disagree. Read this before quoting a number to
-> anyone.
->
-> | Where | What it uses | Disagrees on |
-> |---|---|---|
-> | `lib/leaderboard.ts`, `lib/performance.ts`, `app/admin/performance/page.tsx`, the two technician dashboards | cleaning 2, or 4 on `PC_Gaming`; service always 5 | cleaning, and service on `Other_Device` |
-> | `app/technician/tickets/page.tsx`, `app/sales/tickets/page.tsx` (the "⭐ N pts" badge) | same as above, **plus 3 per `extra_service`** | the above, plus extras that nothing credits |
-> | `app/actions/admin.ts` (credits when an admin or Sales closes a ticket) | service 4, cleaning 4 only for `Deep_Clean` else 3, upgrade 3 | service, cleaning, upgrade |
->
-> The divergence dates from 2026-07-27 (`0fed3b9`), when the writers' table was changed and
-> nothing else followed. So the leaderboard has been rendering figures that no writer credits
-> for about two months, and a ticket closed by an admin is worth a different number than the
-> same ticket closed by a technician.
->
-> Unifying them moves figures on screen and changes credited points for admin-closed tickets,
-> so it is deliberately its own branch: **`fix/points-table-unification`**. Until that lands,
-> do not assume a badge and the leaderboard agree, and do not add a fifth table — import from
-> `lib/points.ts`.
+Until this was unified there were four tables across nine copies, diverging since 2026-07-27
+(`0fed3b9`): the leaderboard and the performance report scored cleaning 2 (4 on `PC_Gaming`)
+and service always 5, the ticket-list badges did the same plus 3 per `extra_service`, and
+`admin.ts` had a fourth for tickets closed by an admin or Sales.
 
-`extra_services` earns nothing. Only the two ticket-list badges add +3 per extra; no writer
-has ever credited it, so the badge overstates the reward. Whether extras should earn is an
-open question, and it belongs with the unification branch.
+`extra_services` earns nothing. The two ticket-list badges used to add +3 per extra, but no
+writer ever credited it, so the badge overstated the reward; the badge now shows "(ada extra)"
+without inflating the number. Whether extras should earn is still an open question — one line
+in `lib/points.ts`, and it would apply everywhere at once.
 
 ### When the points are awarded
 

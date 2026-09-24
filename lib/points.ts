@@ -1,23 +1,22 @@
 /**
- * The ticket point table used by the writers.
+ * The ticket point table — one copy, for the whole application.
  *
- * This is the table `app/actions/tickets.ts` and `app/actions/technician.ts`
- * have credited since 2026-07-27 (`0fed3b9`) — the only one that knows the
- * `Other_Device` and `Full_Repaste*` enum values, and the one the stored
- * `TechnicianPerformance` totals were built from. `app/actions/rma.ts` credits
- * the handover of a warranty claim from here, so that the claim is worth the
- * same as any other credited ticket of its type.
+ * There used to be four, across nine copies of this function, and the one the
+ * leaderboard rendered was not the one any writer credited: a `Basic_Cleaning`
+ * ticket showed 2 pts on the technician dashboard, credited 5 when a technician
+ * closed it, and 4 when an administrator did. The divergence dated from
+ * 2026-07-27 (`0fed3b9`), when the writers' table changed and nothing else
+ * followed.
  *
- * It is NOT yet the only copy. The leaderboard, the performance report and the
- * ticket-list badges each still carry their own table, which disagrees with
- * this one for cleaning and for `Other_Device` service. Unifying them changes
- * figures on screen and credited points for admin-closed tickets, so it is its
- * own branch — `fix/points-table-unification` — and deliberately not part of
- * the RMA work.
+ * This is the writers' table — the only one that knew the `Other_Device` and
+ * `Full_Repaste*` enum values, and the one the stored `TechnicianPerformance`
+ * totals were built from. Every display and every writer now reads it, so a
+ * badge can no longer promise a number the leaderboard will not award.
  *
- * `extra_services` deliberately does not appear here. Two list pages add +3 per
- * extra service to the badge they render, but no writer has ever credited it.
- * That discrepancy also belongs to the unification branch.
+ * `extra_services` deliberately does not appear. Two list pages added +3 per
+ * extra service to the badge they rendered, but no writer ever credited it, so
+ * the badge overstated the reward. Making extras earn is a change here, and it
+ * would then apply to every display and every writer at once.
  */
 
 export function getTicketPoints(

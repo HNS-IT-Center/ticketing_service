@@ -6,15 +6,10 @@ import AvailableTickets from "./AvailableTickets";
 import RefreshButton from "./RefreshButton";
 import { Ticket, CheckCircle, Trophy, PlusCircle } from "lucide-react";
 import { getUserTitles } from "@/lib/performance";
+import { getTicketPoints } from "@/lib/points";
 
 export const metadata = { title: "Technician Dashboard — HNS IT Center" };
 
-function getTicketPoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
 
 export default async function TechnicianDashboard() {
   const session = await requireRole("Technician");
@@ -45,7 +40,7 @@ export default async function TechnicianDashboard() {
         },
         orderBy: { created_at: "asc" },
         take: 20,
-        select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
+        select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, is_for_self: true, customer_name: true, user: { select: { name: true } }, cleaning_detail: { select: { service_package: true } } },
       }),
       db.ticketAssignmentRequest.findMany({
         where: { technician_id: session.userId, status: "pending" },
@@ -92,6 +87,7 @@ export default async function TechnicianDashboard() {
       status: true, technician_id: true, is_for_self: true, customer_name: true,
       user: { select: { name: true } },
       technician: { select: { name: true } },
+      cleaning_detail: { select: { service_package: true } },
     },
   });
 
@@ -182,7 +178,7 @@ export default async function TechnicianDashboard() {
                         <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
                         <td>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</td>
                         {isCoordinator && <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{(t as any).technician?.name || <span style={{ opacity: 0.4 }}>Unassigned</span>}</td>}
-                        <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type)} pts</span></td>
+                        <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package)} pts</span></td>
                         <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                         <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
                       </tr>
@@ -211,7 +207,7 @@ export default async function TechnicianDashboard() {
                       </div>
                     )}
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type)} pts</span>
+                      <span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package)} pts</span>
                       <span style={{ fontSize: "0.8125rem", color: "var(--primary)", fontWeight: 500 }}>Manage →</span>
                     </div>
                   </div>

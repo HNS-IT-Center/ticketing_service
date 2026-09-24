@@ -436,12 +436,10 @@ describe("the guard is narrow — every other status still moves", () => {
     });
 
     const after = await perf();
-    // 4, not the 5 that lib/points.ts would give: this action still carries its
-    // own point table, and unifying that is fix/points-table-unification. The
-    // assertion is deliberately written against what is credited today, so it
-    // will fail loudly when that branch lands.
+    // 5 now: this action reads lib/points.ts like every other surface. It
+    // credited 4 before this branch, from a table of its own.
     expect(after.success_count).toBe(before.success_count + 1);
-    expect(after.total_points_completed).toBe(before.total_points_completed + 4);
+    expect(after.total_points_completed).toBe(before.total_points_completed + 5);
   });
 
   it("credits an ineligible claim once, here as in the technician action", async () => {

@@ -3,14 +3,8 @@ import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
+import { getTicketPoints } from "@/lib/points";
 
-function getTicketPoints(type: string, deviceType?: string | null, extraServices?: string[]): number {
-  let base = 2;
-  if (type === "pc_build") base = 4;
-  else if (type === "service") base = 5;
-  else if (type === "cleaning" && deviceType === "PC_Gaming") base = 4;
-  return base + (extraServices?.length ?? 0) * 3;
-}
 
 export const metadata = { title: "My Tickets — HNS IT Center" };
 
@@ -63,6 +57,7 @@ export default async function SalesTicketsPage({
       id: true, ticket_code: true, ticket_type: true, device_type: true,
       status: true, technician_id: true, is_for_self: true, customer_name: true,
       updated_at: true, extra_services: true,
+      cleaning_detail: { select: { service_package: true } },
       user: { select: { name: true } },
     },
   });
@@ -195,7 +190,7 @@ export default async function SalesTicketsPage({
               <tbody>
                 {tickets.map((t) => {
                   const actualName = t.is_for_self ? t.user?.name : t.customer_name;
-                  const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
+                  const pts = getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package);
                   const hasExtra = (t.extra_services as string[])?.length > 0;
                   return (
                     <tr key={t.id}>
@@ -215,7 +210,7 @@ export default async function SalesTicketsPage({
                           border: `1px solid ${pts >= 5 ? "rgba(234,179,8,0.3)" : pts >= 4 ? "rgba(124,58,237,0.25)" : "rgba(22,70,157,0.25)"}`,
                           whiteSpace: "nowrap",
                         }}>
-                          ⭐ {pts} pts{hasExtra && <span style={{ opacity: 0.65, fontWeight: 400, fontSize: "0.68rem" }}> (+extra)</span>}
+                          ⭐ {pts} pts{hasExtra && <span style={{ opacity: 0.65, fontWeight: 400, fontSize: "0.68rem" }}> (ada extra)</span>}
                         </span>
                       </td>
                       <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
@@ -239,8 +234,7 @@ export default async function SalesTicketsPage({
           </div>
         ) : tickets.map((t) => {
           const actualName = t.is_for_self ? t.user?.name : t.customer_name;
-          const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
-          const hasExtra = (t.extra_services as string[])?.length > 0;
+          const pts = getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package);
           return (
               <Link key={t.id} href={`/sales/tickets/${t.id}`} style={{ textDecoration: "none" }}>
               <div className="mobile-ticket-card">

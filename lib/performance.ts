@@ -1,15 +1,7 @@
 import { db } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
-
-// NOTE: disagrees with the writers' table in app/actions/technician.ts.
-// Pre-existing since 2026-07-27; unifying it is fix/points-table-unification.
-function getTicketPoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
+import { getTicketPoints } from "@/lib/points";
 
 const MONTHS = [
   "January","February","March","April","May","June",
@@ -47,6 +39,7 @@ export const getTopTechnicianOfMonth = unstable_cache(
             ticket_type: true,
             device_type: true,
             technician_id: true,
+            cleaning_detail: { select: { service_package: true } },
           },
         },
       },
@@ -55,7 +48,11 @@ export const getTopTechnicianOfMonth = unstable_cache(
     const pointsMap = new Map<string, number>();
     for (const { ticket: t } of earningLogs) {
       if (!t.technician_id || !eligibleIds.has(t.technician_id)) continue;
-      const pts = getTicketPoints(t.ticket_type, t.device_type);
+      const pts = getTicketPoints(
+        t.ticket_type,
+        t.device_type,
+        t.cleaning_detail?.service_package,
+      );
       pointsMap.set(t.technician_id, (pointsMap.get(t.technician_id) ?? 0) + pts);
     }
 
@@ -89,6 +86,7 @@ export const getTopStoreOfMonth = unstable_cache(
             ticket_type: true,
             device_type: true,
             technician_id: true,
+            cleaning_detail: { select: { service_package: true } },
           },
         },
       },
@@ -98,7 +96,11 @@ export const getTopStoreOfMonth = unstable_cache(
     const techPoints = new Map<string, number>();
     for (const { ticket: t } of earningLogs) {
       if (!t.technician_id) continue;
-      const pts = getTicketPoints(t.ticket_type, t.device_type);
+      const pts = getTicketPoints(
+        t.ticket_type,
+        t.device_type,
+        t.cleaning_detail?.service_package,
+      );
       techPoints.set(t.technician_id, (techPoints.get(t.technician_id) ?? 0) + pts);
     }
 

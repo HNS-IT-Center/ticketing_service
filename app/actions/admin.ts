@@ -7,6 +7,7 @@ import { db } from "@/lib/db";
 import { requireRole, requireSession } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
 import { performanceEffect } from "@/lib/kpi";
+import { getTicketPoints } from "@/lib/points";
 
 // ─── Create User ───────────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
@@ -347,25 +348,19 @@ export async function adminUpdateTicketStatusAction(
   // disagreed with every other one in the codebase. An administrator moving a
   // ticket `ready_for_pickup` -> `completed` therefore credited the technician
   // a second time, for every ticket type, on top of the credit they already
-  // got at `done`. The extra credit is gone; the rule now lives in lib/kpi.ts.
+  // got at `done`. Both the extra credit and the private table are gone; the
+  // rule now lives in lib/kpi.ts and the table in lib/points.ts.
   const effect = performanceEffect(
     ticket.ticket_type,
     newStatus,
     isIneligibleClaim ? false : undefined,
   );
   if (effect !== "ignore" && ticket.technician_id) {
-    // This table is this action's own, and disagrees with both the writers' one
-    // in technician.ts and the display one in lib/leaderboard.ts. Left as it is
-    // deliberately: changing it changes credited points, which belongs to
-    // fix/points-table-unification, not to this branch.
-    let points = 3; // default 'others'
-    if (ticket.ticket_type === "service" || ticket.ticket_type === "pc_build") {
-      points = 4;
-    } else if (ticket.ticket_type === "warranty_claim") {
-      points = 2;
-    } else if (ticket.ticket_type === "cleaning" && ticket.cleaning_detail?.service_package === "Deep_Clean") {
-      points = 4;
-    }
+    const points = getTicketPoints(
+      ticket.ticket_type,
+      ticket.device_type,
+      ticket.cleaning_detail?.service_package,
+    );
     const isSuccess = effect === "success";
     await db.technicianPerformance.update({
       where: { technician_id: ticket.technician_id },

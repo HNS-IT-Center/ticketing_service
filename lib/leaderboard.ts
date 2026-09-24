@@ -3,17 +3,10 @@
 import { db } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
+import { getTicketPoints } from "@/lib/points";
 
-// NOTE: this table disagrees with the one the writers use in
-// app/actions/technician.ts. Pre-existing since 2026-07-27 and deliberately
-// left alone here — unifying it changes displayed figures, which is its own
-// branch (fix/points-table-unification).
-export function getTicketPointsLocal(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
+/** @deprecated Import `getTicketPoints` from `@/lib/points` instead. */
+export const getTicketPointsLocal = getTicketPoints;
 
 export const MONTH_COLORS: Record<number, { bg: string; text: string }> = {
   1:  { bg: "#dbeafe", text: "#1e40af" },
@@ -68,7 +61,14 @@ export function getLeaderboardData(month: number | null, year: number) {
             created_at: { gte: startDate, lt: endDate },
           },
           include: {
-            ticket: { select: { technician_id: true, ticket_type: true, device_type: true } },
+            ticket: {
+              select: {
+                technician_id: true,
+                ticket_type: true,
+                device_type: true,
+                cleaning_detail: { select: { service_package: true } },
+              },
+            },
           },
         }),
       ]);
@@ -79,7 +79,11 @@ export function getLeaderboardData(month: number | null, year: number) {
         const techId = log.ticket.technician_id;
         if (!techId) continue;
         if (!techMap[techId]) techMap[techId] = { points: 0, tickets: 0 };
-        techMap[techId].points  += getTicketPointsLocal(log.ticket.ticket_type, log.ticket.device_type);
+        techMap[techId].points  += getTicketPoints(
+          log.ticket.ticket_type,
+          log.ticket.device_type,
+          log.ticket.cleaning_detail?.service_package,
+        );
         techMap[techId].tickets += 1;
       }
 

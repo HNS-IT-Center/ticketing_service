@@ -4,15 +4,8 @@ import { TrendingUp } from "lucide-react";
 import ExportToPDF from "./ExportToPDF";
 import SharePerformance from "./SharePerformance";
 import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
+import { getTicketPoints } from "@/lib/points";
 
-// NOTE: disagrees with the writers' table in app/actions/technician.ts.
-// Pre-existing since 2026-07-27; unifying it is fix/points-table-unification.
-function getTicketPoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
 
 export const metadata = { title: "Performance — HNS IT Center" };
 
@@ -99,6 +92,7 @@ export default async function AdminPerformancePage({
               ticket_type: true,
               device_type: true,
               technician_id: true,
+              cleaning_detail: { select: { service_package: true } },
             },
           },
         },
@@ -152,7 +146,11 @@ export default async function AdminPerformancePage({
       const row = getOrCreate(t.technician_id);
       row.tickets++;
       row.success++;
-      row.points += getTicketPoints(t.ticket_type, t.device_type);
+      row.points += getTicketPoints(
+        t.ticket_type,
+        t.device_type,
+        t.cleaning_detail?.service_package,
+      );
     }
     for (const t of failedTickets) {
       if (!t.technician_id) continue;

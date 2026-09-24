@@ -24,10 +24,11 @@ Satu perubahan angka yang perlu diketahui penguji sebelum membandingkan dengan c
   dan winner bulanan sekarang dihitung dari `TicketStatusLog`, bukan dari status tiket saat
   ini, jadi tiket yang sudah `completed` tetap terhitung di bulan ia selesai.
 
-**Besaran poin per tiket TIDAK diubah di branch ini.** Angka yang tampil di badge, leaderboard
-dan laporan performance tetap seperti sebelumnya. Penyatuan tabel poin — yang memang akan
-menggeser angka cleaning dan service `Other_Device` — ada di branch terpisah
-`fix/points-table-unification` dan belum masuk.
+**Besaran poin BERUBAH di branch ini.** Cleaning yang dulu tampil 2 pts (atau 4 pada
+`PC_Gaming`) sekarang 3 pts, dan 5 pts untuk `Full_Repaste` / `Full_Repaste_CPU_GPU`. Service
+pada `Other_Device` turun dari 5 ke 3. `extra_services` tidak lagi menambah poin; penandanya
+berubah dari "(+extra)" jadi "(ada extra)". Tiket yang ditutup admin juga berubah, karena
+`admin.ts` dulu memakai tabel sendiri. Rincian lengkap: `docs/points-change-announcement.md`.
 
 ### Batasan yang sudah diketahui — JANGAN dilaporkan sebagai bug
 

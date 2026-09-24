@@ -116,7 +116,7 @@ DATABASE_SSL="false"
 
 ### Point System
 
-**What is credited: `lib/points.ts`** — used by `tickets.ts`, `technician.ts`, `rma.ts`.
+**One copy: `lib/points.ts`.** Import `getTicketPoints()`; never restate the table in a component.
 
 | Ticket Type / Condition                            | Points |
 | -------------------------------------------------- | ------ |
@@ -127,14 +127,10 @@ DATABASE_SSL="false"
 | all other `cleaning`                               | 3      |
 | `warranty_claim` / `upgrade` / anything else       | 2      |
 
-⚠️ **Three other tables are still live and disagree with it.** The leaderboard, the
-performance report and the technician dashboards score cleaning 2 (4 on `PC_Gaming`) and
-service always 5; the two ticket-list badges do the same and add +3 per `extra_service`; and
-`admin.ts` has a fourth table of its own for tickets closed by an admin or Sales. Divergent
-since `0fed3b9` (2026-07-27). Unifying them shifts displayed figures and admin-credited
-points, so it is its own branch — `fix/points-table-unification`. Until then: import from
-`lib/points.ts` for anything new, and never assume a badge matches the leaderboard. Full
-breakdown in `FLOW.md` § 4.
+`extra_services` adds nothing. It was only ever rendered on two badges, never credited.
+
+Before this was unified there were four tables across nine copies (divergent since `0fed3b9`,
+2026-07-27) and the leaderboard rendered one that no writer used. See `FLOW.md` § 4.
 
 **When the points land — one copy: `lib/kpi.ts`.**
 
@@ -737,7 +733,7 @@ Branch `feat/rma-warranty-claim`. 343 tests, `tsc` clean, production build passe
 - **`session.ts`** has `import "server-only"` — never import it from client components
 - **Stat cards:** Use `.stat-card > .stat-card-icon + .stat-card-body > (.stat-card-value + .stat-card-label)` — vertical column layout
 - **Leaderboard data:** Comes from `TicketStatusLog`, NOT from the `Leaderboard` snapshot table (which is legacy). Filter with `EARNING_STATUS_LOG_FILTER` from `lib/kpi.ts`, never with a bare `new_status: "done"` — that credits a warranty claim twice
-- **Point system:** `lib/points.ts` is what gets CREDITED; the leaderboard, the badges and `admin.ts` still carry three other tables that disagree (see `FLOW.md` § 4, branch `fix/points-table-unification`). Import from `lib/points.ts` for anything new — do not add a fifth. Not stored on `Ticket`
+- **Point system:** One copy, `lib/points.ts`. Import `getTicketPoints()`; do not write the table into a component. Not stored on `Ticket`
 - **KPI rule:** One copy, `lib/kpi.ts`. `performanceEffect(type, status)` decides success / failure / ignore for `TechnicianPerformance`; `EARNING_STATUS_LOG_FILTER` is the same rule as a Prisma filter
 - **Role → route:** One copy, `lib/routes.ts`. Exhaustive `switch` over `Role` with `const _exhaustive: never`, so a new role without a destination fails `tsc` instead of silently falling through to `/login` — which is what the redirect loop was. Used by `proxy.ts`, `app/actions/auth.ts`, `app/page.tsx`, `NotificationBell.tsx`
 - **Public page secrecy:** `/{date}/{ticketCode}` must never render `vendor_rma_number`, `hold_reason`, `decision_notes`, `stock_origin` or `RmaEvent.note`. It selects RMA fields one by one; keep it that way

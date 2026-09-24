@@ -5,6 +5,7 @@ import TakeTicketButton from "./TakeTicketButton";
 import { CheckCircle, ArrowUp, ArrowDown, Clock, XCircle, Lock } from "lucide-react";
 import { cancelTicketRequestAction } from "@/app/actions/technician";
 import toast from "react-hot-toast";
+import { getTicketPoints } from "@/lib/points";
 
 type UnassignedTicket = {
   id: string;
@@ -13,16 +14,11 @@ type UnassignedTicket = {
   device_type: string;
   created_at: Date;
   user: { name: string };
+  cleaning_detail?: { service_package: string } | null;
 };
 
 type SortType = "asc" | "desc" | "default";
 
-function getTicketPoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
 
 export default function AvailableTickets({
   tickets,
@@ -193,7 +189,7 @@ export default function AvailableTickets({
                   </td>
                   <td>
                     <span className="badge badge-technician">
-                      {getTicketPoints(t.ticket_type, t.device_type)} pts
+                      {getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package)} pts
                     </span>
                   </td>
                   <td>
@@ -209,7 +205,7 @@ export default function AvailableTickets({
       {/* Mobile cards */}
       <div className="admin-ticket-cards">
         {sortedTickets.map((t) => {
-          const pts = getTicketPoints(t.ticket_type, t.device_type);
+          const pts = getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package);
           return (
             <div
               key={t.id}

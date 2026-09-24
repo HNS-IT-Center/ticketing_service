@@ -25,6 +25,13 @@ vi.mock("@/lib/r2", () => ({
   getFileType: () => "pdf" as const,
 }));
 
+// updateTicketStatusAction, imported below for the credit-parity test, fires
+// this without awaiting it. rma.ts itself sends no email.
+vi.mock("@/lib/email", () => ({
+  sendTicketStatusEmail: vi.fn(async () => undefined),
+  EMAIL_MILESTONES: [],
+}));
+
 // Mutable session the tests swap between roles.
 const session = { userId: "", role: "", name: "Test User" };
 vi.mock("@/lib/session", () => ({
@@ -38,6 +45,7 @@ vi.mock("@/lib/session", () => ({
 
 const { db } = await import("@/lib/db");
 const { handoverToRmaAction, transitionRmaAction } = await import("./rma");
+const { updateTicketStatusAction } = await import("./technician");
 
 const RUN = `rmatest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 // Store codes are alphanumeric in production (e.g. "NGW") and feed straight into
@@ -456,6 +464,117 @@ describe("handoverToRmaAction — technician KPI", () => {
 
     const after = await perf();
     expect(after.success_count).toBe(before.success_count + 1);
+  });
+});
+
+describe("KPI parity — both exits from a claim pay the same", () => {
+  /** The stored counters for the assigned technician, or zeros. */
+  async function perf() {
+    const row = await db.technicianPerformance.findUnique({
+      where: { technician_id: technicianId },
+      select: { tickets_handled: true, success_count: true, failed_count: true, total_points_completed: true },
+    });
+    return (
+      row ?? { tickets_handled: 0, success_count: 0, failed_count: 0, total_points_completed: 0 }
+    );
+  }
+
+  /** Difference in the counters caused by running `act`. */
+  async function creditedBy(act: () => Promise<unknown>) {
+    const before = await perf();
+    await act();
+    const after = await perf();
+    return {
+      tickets_handled: after.tickets_handled - before.tickets_handled,
+      success_count: after.success_count - before.success_count,
+      failed_count: after.failed_count - before.failed_count,
+      total_points_completed:
+        after.total_points_completed - before.total_points_completed,
+    };
+  }
+
+  function ineligibleForm(ticketId: string) {
+    const fd = new FormData();
+    fd.append("ticketId", ticketId);
+    fd.append("newStatus", "done");
+    fd.append("reason", "Kerusakan akibat cairan, di luar garansi");
+    return fd;
+  }
+
+  it("pays a claim turned down exactly what it pays a handover", async () => {
+    const handedOver = await makeTicket();
+    const fromHandover = await creditedBy(async () => {
+      expect(await handoverToRmaAction(validForm(handedOver.id))).toMatchObject({
+        success: true,
+      });
+    });
+
+    const turnedDown = await makeTicket();
+    const fromIneligible = await creditedBy(async () => {
+      expect(await updateTicketStatusAction(ineligibleForm(turnedDown.id))).toMatchObject({
+        success: true,
+      });
+    });
+
+    expect(fromIneligible).toEqual(fromHandover);
+    // and it really is one credit, not zero on both sides
+    expect(fromHandover).toEqual({
+      tickets_handled: 1,
+      success_count: 1,
+      failed_count: 0,
+      total_points_completed: 2,
+    });
+  });
+
+  it("pays each of them exactly once across the ticket's whole life", async () => {
+    // Handover, vendor decides, case closes, ticket returns to `done`.
+    const ticket = await makeTicket();
+    const total = await creditedBy(async () => {
+      expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
+
+      const rmaCase = await db.rmaCase.findUnique({
+        where: { ticket_id: ticket.id },
+        select: { id: true },
+      });
+
+      session.userId = rmaUserId;
+      session.role = "RMA";
+      for (const to of ["verified", "submitted_to_vendor", "in_vendor_process"] as const) {
+        const fd = new FormData();
+        fd.append("rmaCaseId", rmaCase!.id);
+        fd.append("toStatus", to);
+        if (to === "submitted_to_vendor") {
+          fd.append("vendor_name", "Vendor Uji");
+          fd.append("vendor_rma_number", "V-001");
+        }
+        expect(await transitionRmaAction(fd), to).toMatchObject({ success: true });
+      }
+      for (const to of ["vendor_decided", "unit_received", "closed"] as const) {
+        const fd = new FormData();
+        fd.append("rmaCaseId", rmaCase!.id);
+        fd.append("toStatus", to);
+        if (to === "vendor_decided") fd.append("decision", "repaired");
+        expect(await transitionRmaAction(fd), to).toMatchObject({ success: true });
+      }
+
+      session.userId = technicianId;
+      session.role = "Technician";
+    });
+
+    // The closing `done` written by rma.ts must add nothing on top of the
+    // handover credit.
+    expect(total).toEqual({
+      tickets_handled: 1,
+      success_count: 1,
+      failed_count: 0,
+      total_points_completed: 2,
+    });
+
+    const after = await db.ticket.findUnique({
+      where: { id: ticket.id },
+      select: { status: true },
+    });
+    expect(after?.status).toBe("done");
   });
 });
 

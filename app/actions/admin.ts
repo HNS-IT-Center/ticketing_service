@@ -339,7 +339,11 @@ export async function adminUpdateTicketStatusAction(
   // ticket `ready_for_pickup` -> `completed` therefore credited the technician
   // a second time, for every ticket type, on top of the credit they already
   // got at `done`. The extra credit is gone; the rule now lives in lib/kpi.ts.
-  const effect = performanceEffect(ticket.ticket_type, newStatus);
+  const effect = performanceEffect(
+    ticket.ticket_type,
+    newStatus,
+    isIneligibleClaim ? false : undefined,
+  );
   if (effect !== "ignore" && ticket.technician_id) {
     // This table is this action's own, and disagrees with both the writers' one
     // in technician.ts and the display one in lib/leaderboard.ts. Left as it is

@@ -392,12 +392,58 @@ describe("the guard is narrow — every other status still moves", () => {
     expect(after.total_points_completed).toBe(before.total_points_completed + 4);
   });
 
-  it("credits nothing for a claim closed as done, here as in the technician action", async () => {
+  it("credits an ineligible claim once, here as in the technician action", async () => {
     const before = await perf();
     const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
     expect(
       await adminUpdateTicketStatusAction(ticket.id, "done", "Di luar garansi"),
     ).toMatchObject({ success: true });
+
+    // warranty_claim is worth 2 in this action's table as well, so both exits
+    // and both portals pay the same.
+    const after = await perf();
+    expect(after.tickets_handled).toBe(before.tickets_handled + 1);
+    expect(after.success_count).toBe(before.success_count + 1);
+    expect(after.failed_count).toBe(before.failed_count);
+    expect(after.total_points_completed).toBe(before.total_points_completed + 2);
+  });
+
+  it("does not credit again as the ineligible claim goes back to the customer", async () => {
+    const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
+    await adminUpdateTicketStatusAction(ticket.id, "done", "Di luar garansi");
+
+    // Snapshot after the one credit, so anything the chain adds shows up.
+    const before = await perf();
+    await adminUpdateTicketStatusAction(ticket.id, "ready_for_pickup");
+    await adminUpdateTicketStatusAction(ticket.id, "completed");
+
+    expect(await perf()).toEqual(before);
+  });
+
+  it("credits nothing when the reason is missing, so the refusal costs nothing", async () => {
+    const before = await perf();
+    const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
+    await adminUpdateTicketStatusAction(ticket.id, "done");
+
+    expect(await perf()).toEqual(before);
+  });
+
+  it("does not credit a claim that merely passes through done from the RMA desk", async () => {
+    // rma.ts writes this `done` itself when a case closes; the handover was
+    // already paid for. Simulated here by a claim already sitting at `done`
+    // with claim_eligible left at its default of true.
+    const ticket = await makeTicket({ type: "warranty_claim", status: "done" });
+    await db.ticketWarrantyDetail.create({
+      data: { ticket_id: ticket.id, purchase_date: new Date("2026-01-01") },
+    });
+
+    const before = await perf();
+    expect(await adminUpdateTicketStatusAction(ticket.id, "ready_for_pickup")).toMatchObject({
+      success: true,
+    });
+    expect(await adminUpdateTicketStatusAction(ticket.id, "completed")).toMatchObject({
+      success: true,
+    });
 
     expect(await perf()).toEqual(before);
   });

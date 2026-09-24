@@ -101,12 +101,24 @@ Defined once, in `lib/kpi.ts`:
 ```
 count it if  (type != 'warranty_claim' && new_status == 'done')
           || (type == 'warranty_claim' && new_status == 'rma_process')
+          || (type == 'warranty_claim' && new_status == 'done'
+                                       && claim_eligible == false)
 ```
 
-An ordinary ticket earns at `done`. A warranty claim earns at handover to the RMA desk,
-because that is where the technician's work on it ends — see section 6. Nothing is awarded
-again further down the handover chain: `ready_for_pickup`, `waiting_pickup`,
-`handed_to_courier`, `delivered` and `completed` all credit zero.
+An ordinary ticket earns at `done`.
+
+A warranty claim has two paid exits and they are worth the same. Handing the unit to the RMA
+desk earns, because that is where the technician's work on it ends. Turning the claim down
+after examination earns too: the examination is real work and the conclusion was correct.
+Paying the second less than the first would reward pushing a hopeless unit to the RMA desk
+instead of turning it down, which is exactly what the desk does not need.
+
+The third `done` a claim can reach — the one `rma.ts` writes when a case closes — earns
+nothing, because the handover already paid for it. `claim_eligible` is the only thing telling
+those two `done`s apart, which is why the rule cannot be read from type and status alone.
+
+Nothing is awarded further down the handover chain: `ready_for_pickup`, `waiting_pickup`,
+`handed_to_courier`, `delivered` and `completed` all credit zero, for every type.
 
 `cancelled` and `rejected` add a `failed_count` instead, for every ticket type.
 
@@ -170,10 +182,17 @@ warranty claim.** Every claim metric must filter on `claim_eligible` and `decisi
 
 ### KPI
 
-The technician is credited at handover (exit 1), never at the `done` that the RMA desk writes
-when the case closes — see section 4. A claim taken down exit 2 credits nothing at all:
-neither a success nor a failure. Charging a `failed_count` for correctly turning down a claim
-would make it expensive to do the right thing.
+Both exits are credited, and by the same amount — see section 4. Exit 1 pays at the handover,
+never at the `done` the RMA desk writes when the case closes. Exit 2 pays at that `done`,
+identified by `claim_eligible = false`.
+
+Neither exit is ever a `failed_count`. Charging a failure for correctly turning down a claim
+would make it expensive to do the right thing, and paying exit 2 less than exit 1 would push
+units that plainly do not qualify onto the RMA desk.
+
+Every claim report must still keep the two apart — equal pay is not the same as equal
+outcome. The Admin → Performance breakdown shows them as separate categories, "Warranty
+Claim" and "Warranty Claim Ineligible".
 
 ### What the customer sees
 

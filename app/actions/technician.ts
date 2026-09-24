@@ -331,10 +331,15 @@ export async function updateTicketStatusAction(formData: FormData) {
       revalidateTag(`user-profile:${session.userId}`, "max");
     }
 
-    // A warranty claim is credited when it is handed to the RMA desk, not here
-    // -- so the `done` of a claim found ineligible counts as neither a success
-    // nor a failure. See lib/kpi.ts.
-    const effect = performanceEffect(ticket.ticket_type, newStatus);
+    // A claim turned down after examination is credited exactly like a handover
+    // to RMA; a claim merely passing through `done` on its way back from the
+    // desk is not. `isIneligibleClaim` is what separates the two, and the
+    // server decided it above. See lib/kpi.ts.
+    const effect = performanceEffect(
+      ticket.ticket_type,
+      newStatus,
+      isIneligibleClaim ? false : undefined,
+    );
     if (effect !== "ignore") {
       const points = getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package);
 

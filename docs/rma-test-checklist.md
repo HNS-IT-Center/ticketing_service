@@ -216,7 +216,10 @@ menyalin URL-nya. Uji di jendela incognito supaya benar-benar tanpa session.
 | H-03 | Tiket PC build | Idem | Normal | | |
 | H-04 | Cancel tiket | Batalkan tiket non-klaim dengan alasan | Normal | | |
 | H-05 | Leaderboard tidak menghitung klaim dua kali | Catat poin teknisi di leaderboard → serahkan satu tiket klaim ke RMA → catat lagi → proses case sampai `closed` → catat lagi | Poin naik 2 saat handover. Saat case ditutup (tiket balik ke `done`) poin **tidak** naik lagi | | |
-| H-05b | Klaim tidak layak tidak menambah apa pun | Tutup satu tiket klaim lewat "Tidak layak klaim" → buka profil teknisi | `success_count` dan `failed_count` sama-sama tidak berubah; poin tidak bertambah | | |
+| H-05b | Klaim tidak layak dibayar sama dengan handover | Catat poin & `success_count` teknisi → tutup satu tiket klaim lewat "Tidak Layak Klaim" dengan alasan → catat lagi | Poin **naik 2** dan `success_count` naik 1, persis sama dengan satu handover ke RMA. `failed_count` tidak berubah | | |
+| H-05e | Tidak dobel saat unit dikembalikan | Lanjutkan tiket H-05b: `done` → `ready_for_pickup` → `completed` | Poin dan `success_count` **tidak** bertambah lagi | | |
+| H-05f | Kedua jalur bernilai sama | Bandingkan kenaikan poin dari H-05b dengan kenaikan poin saat satu tiket klaim lain diserahkan ke RMA | Kenaikannya identik (2 poin, 1 success) | | |
+| H-05g | Penanda di laporan performance | Admin → Performance, bulan berjalan | Tiket dari H-05b ikut terhitung sebagai sukses, dan di rincian per kategori muncul chip terpisah **"Warranty Claim Ineligible"** — bukan tergabung ke "Warranty Claim" | | |
 | H-05c | Admin menutup tiket tidak menambah kredit kedua | Sebagai admin, ubah tiket non-klaim dari `ready_for_pickup` ke `completed` → buka profil teknisi | `tickets_handled` dan poin **tidak** bertambah (dulu bertambah untuk kedua kalinya) | | |
 | H-06 | Detail tiket lama | Buka tiket non-klaim di portal admin, teknisi, sales | Tidak error meski tiket tidak punya case RMA | | |
 | H-07 | Login role lain | Login admin, teknisi, sales bergantian | Semua mendarat di dashboard masing-masing, tidak ada redirect loop | | |

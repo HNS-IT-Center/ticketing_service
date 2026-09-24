@@ -14,9 +14,6 @@
 
 ## ⚠️ STATUS IMPLEMENTASI — BACA SEBELUM MULAI
 
-Fase 1–5 sudah selesai. **Fase 6 sedang dikerjakan.** Test case berikut menguji fitur
-yang belum ada, jadi **LEWATI** — kegagalannya bukan bug:
-
 **Tidak ada lagi test case yang dilewati.** Fase 6 sudah dikerjakan: halaman publik mengenal
 `rma_process` dan membedakan ketiga hasil akhir klaim, dan aturan KPI anti-double-count sudah
 berlaku di seluruh jalur poin.
@@ -31,6 +28,23 @@ Satu perubahan angka yang perlu diketahui penguji sebelum membandingkan dengan c
 dan laporan performance tetap seperti sebelumnya. Penyatuan tabel poin — yang memang akan
 menggeser angka cleaning dan service `Other_Device` — ada di branch terpisah
 `fix/points-table-unification` dan belum masuk.
+
+### Batasan yang sudah diketahui — JANGAN dilaporkan sebagai bug
+
+Tiga hal di bawah ini sudah diperiksa dan sengaja dibiarkan. Kalau penguji menemukannya,
+catat di bagian 10 (Catatan penguji) sebagai konfirmasi, bukan sebagai laporan bug.
+
+| # | Batasan | Kenapa dibiarkan |
+|---|---|---|
+| L-01 | **Laporan rata-rata durasi di Admin → Performance melewatkan klaim yang sedang di `rma_process`.** Kolom "rata-rata waktu pengerjaan" per kategori dihitung dari tiket yang status-nya sudah `done` ke atas, jadi tiket klaim yang masih di tangan RMA belum ikut terhitung — padahal poinnya sudah masuk sejak handover. Akibatnya jumlah tiket di tabel durasi bisa lebih kecil daripada jumlah tiket di kolom poin | Laporan itu mengukur **lama kerja teknisi**, bukan kredit poin. Untuk klaim, waktu kerja memang belum final selama unit masih di vendor. Menyamakannya dengan aturan poin akan mencampur dua hal berbeda — keputusan terpisah, bukan bagian dari Fase 6 |
+| L-02 | **Tiket yang dikembalikan ke `on_progress` lalu di-`done` lagi dihitung dua kali.** Admin/Sales bisa mengubah status tiket ke status mana pun tanpa batasan urutan, termasuk dari `done` kembali ke `on_progress`. Setiap `done` menulis satu baris log, jadi poin dan `tickets_handled` bertambah untuk kedua kalinya | Bug lama, ada jauh sebelum fitur klaim, dan menyentuhnya berarti menambahkan guard transisi ke `adminUpdateTicketStatusAction` — itu mengubah perilaku semua tipe tiket yang sedang dipakai di produksi. Di luar scope branch ini |
+| L-03 | **Angka `TechnicianPerformance` lama tidak dikoreksi.** Teknisi yang tiketnya pernah ditutup admin lewat `completed` sebelum perbaikan ini masih membawa poin dan `tickets_handled` yang terlanjur terhitung ganda | Disepakati dengan pemilik: data historis tidak disentuh. Yang diperbaiki hanya perhitungan ke depan |
+
+**Cara menguji L-01 secara sadar (opsional).** Serahkan satu tiket klaim ke RMA, lalu buka
+Admin → Performance untuk bulan berjalan. Poin teknisi sudah naik 2, tetapi tiket itu belum
+muncul di rincian durasi per kategori. Itu perilaku yang diharapkan.
+
+---
 
 Dua ekspektasi yang perlu dikoreksi sebelum diuji:
 
@@ -203,10 +217,12 @@ menyalin URL-nya. Uji di jendela incognito supaya benar-benar tanpa session.
 
 ## 7. Kriteria lulus
 
-- Seluruh test case bagian A sampai F berstatus PASS (kecuali yang ditandai SKIP).
+- Seluruh test case bagian A sampai G berstatus PASS. Tidak ada lagi yang ditandai SKIP.
 - Tidak ada bug severity **Critical** atau **High** yang masih terbuka.
 - Bagian H (regresi) seluruhnya PASS — syarat mutlak, karena tipe tiket lain sedang dipakai di produksi.
 - Tidak ada error di terminal dev server selama pengujian.
+- **L-01, L-02 dan L-03 tidak memblokir kelulusan.** Ketiganya batasan yang sudah diketahui
+  dan disetujui — lihat "Batasan yang sudah diketahui" di bagian atas dokumen.
 
 ## 8. Klasifikasi severity
 

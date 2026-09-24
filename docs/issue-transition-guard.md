@@ -4,6 +4,11 @@
 **Scope:** deliberately *not* fixed on `feat/rma-warranty-claim`. Needs its own branch.
 **Found:** 2026-09-24, while unifying the KPI rules.
 
+> ⛔ **One part of this issue is a blocker:** `delivery.ts:50` swallows this action's
+> return value and reports success anyway. It must be fixed **before any new caller of
+> `adminUpdateTicketStatusAction` is added**, independently of when the transition guard
+> itself gets built. See [the blocker section](#-blocker--fix-before-adding-any-new-caller-of-adminupdateticketstatusaction).
+
 ---
 
 ## What is wrong
@@ -111,7 +116,10 @@ existing agreement is that historical rows are left alone.
    `AdminWorkflowPanel.tsx` gates each handover button on a specific status. The hole is in
    the server action, which is callable directly and is the thing to fix.
 
-### Side finding while checking the callers
+### ⛔ BLOCKER — fix before adding any new caller of `adminUpdateTicketStatusAction`
+
+**This is not optional and not "nice to have". It must be fixed before anyone wires up a new
+call site for this action, or adds a handover button that targets a different status.**
 
 [`app/actions/delivery.ts:50`](../app/actions/delivery.ts#L50) — `uploadDeliveryProofAction`
 calls `adminUpdateTicketStatusAction` and **discards its return value**, then returns
@@ -122,10 +130,31 @@ await adminUpdateTicketStatusAction(ticketId, status);
 return { success: true };
 ```
 
-Any refusal from the action is swallowed: the proof file is stored, the user is told it
-worked, and the status never moves. Not reachable today — the panels do not offer a handover
-button for the statuses the action refuses — but it will hide the next guard someone adds.
-One line to fix, and it belongs with this issue.
+Any refusal from the action is swallowed. The proof file is stored, the toast says the update
+worked, and the status never moves.
+
+**Why it is a blocker rather than a latent nit.** It is dormant purely by accident: no panel
+currently offers a handover button for a status this action refuses. The moment one does — a
+new step in the chain, a status added to `AdminWorkflowPanel.tsx`, a new caller anywhere —
+the bug is live on day one, with no code change to `delivery.ts` required to activate it.
+
+**And the symptom actively misleads.** A refusal looks identical to a success from the user's
+side, so the report will be "status tidak berubah, padahal saya sudah klik dan muncul tulisan
+berhasil". Nobody will suspect the upload action, because the upload genuinely worked. The
+guard doing the refusing will look like the broken thing, and whoever added the new caller
+will spend their debugging time on the wrong file. Fixing the swallow first means the very
+first person to trip a guard sees the actual reason.
+
+**The fix, one line:**
+
+```ts
+const result = await adminUpdateTicketStatusAction(ticketId, status);
+if (result?.error) return { error: result.error };
+return { success: true };
+```
+
+Worth a quick sweep for the same shape elsewhere while in there — any `await someAction(...)`
+whose result is dropped before an unconditional `{ success: true }`.
 
 ## Not in scope here
 

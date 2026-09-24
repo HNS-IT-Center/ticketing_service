@@ -60,6 +60,14 @@ SUPABASE_SERVICE_ROLE_KEY="your-supabase-service-role-key"
 
 SESSION_SECRET="generate-a-random-32+-char-string-here"
 NEXT_PUBLIC_APP_URL="http://localhost:3000"
+
+# Where uploads go. "local" writes to public/uploads and needs no credentials —
+# use it for local development, where R2 keys are not available. Anything else
+# uses Cloudflare R2 via lib/r2.ts.
+STORAGE_DRIVER="local"
+
+# Set false when DATABASE_URL points at a plain local Postgres (no TLS).
+DATABASE_SSL="false"
 ```
 
 > **Important:** `sslmode=no-verify` is intentional — the Supabase session pooler uses a self-signed cert chain. Using `sslmode=require` causes a TLS error.
@@ -72,11 +80,11 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 
 | Model                    | Purpose                                                        |
 | ------------------------ | -------------------------------------------------------------- |
-| `User`                   | All roles: Administrator, Technician, Sales, Customer          |
+| `User`                   | All roles: Administrator, Technician, Sales, Customer, RMA     |
 | `Ticket`                 | Core ticket with FK to user, technician, sales                 |
 | `TicketServiceDetail`    | Exists for `service` type tickets                              |
-| `TicketWarrantyDetail`   | Has `purchase_date` for `warranty_claim` tickets               |
-| `TicketCleaningDetail`   | Has `service_package` (Deep_Clean / Repaste)                   |
+| `TicketWarrantyDetail`   | `purchase_date` for `warranty_claim`, plus `claim_eligible` + `ineligibility_reason` written by the server when a technician closes a claim as not eligible |
+| `TicketCleaningDetail`   | Has `service_package` (see `CleaningPackage` below)            |
 | `TicketUpgradeDetail`    | Join table — ticket ↔ Upgrade items                            |
 | `Upgrade`                | Catalog of upgrade types with point cost (`name` is `@unique`) |
 | `TicketPcBuildDetail`    | Header for `pc_build` tickets                                  |
@@ -90,25 +98,55 @@ NEXT_PUBLIC_APP_URL="http://localhost:3000"
 | `Notification`           | In-app alerts for status updates and messages                  |
 | `UserTitle`              | Achievement title inventory for users (equipped via profile)   |
 | `TicketAssignmentRequest`| Pending requests by technicians to claim waiting tickets        |
+| `RmaCase`                | One per `warranty_claim` ticket handed to the RMA desk. Service form, vendor fields, outcome. `rma_code` is `RMA-{STORECODE}-{YYMM}-{0001}` |
+| `RmaEvent`               | Audit trail of every `RmaCase` state change, with actor and note |
 
 ### Enums
 
-- `Role`: `Administrator | Technician | Sales | Customer`
+- `Role`: `Administrator | Technician | Sales | Customer | RMA`
 - `Shift`: `morning | noon`
 - `TicketType`: `service | warranty_claim | pc_build | cleaning | upgrade`
-- `TicketStatus`: `waiting | on_progress | done | ready_for_pickup | waiting_pickup | handed_to_courier | delivered | completed | cancelled | rejected`
-- `DeviceType`: `PC_Office | PC_Gaming | Laptop_Office | Laptop_Gaming`
-- `CleaningPackage`: `Deep_Clean | Repaste`
-- `NotificationType`: `message | status_update | assigned | completed`
+- `TicketStatus`: `waiting | on_progress | rma_process | done | ready_for_pickup | waiting_pickup | handed_to_courier | delivered | completed | cancelled | rejected`
+- `DeviceType`: `PC_Office | PC_Gaming | Laptop_Office | Laptop_Gaming | Printer | Other_Device`
+- `CleaningPackage`: `Deep_Clean | Repaste | Basic_Cleaning | Full_Repaste | Full_Repaste_CPU_GPU`
+- `NotificationType`: `message | status_update | assigned | completed | rma_update`
+- `RmaStatus`: `pending_verification | on_hold | verified | submitted_to_vendor | in_vendor_process | vendor_decided | unit_received | closed | cancelled`
+- `RmaDecision`: `repaired | replaced | refund | rejected`
+- `UnitOwnership`: `customer | store_stock`
 
 ### Point System
 
-| Ticket Type / Condition             | Points |
-| ---------------------------------- | ------ |
-| `pc_build`                         | 4      |
-| `service`                          | 5      |
-| `cleaning` + `PC_Gaming` device    | 4      |
-| all other `cleaning` / `upgrade` / other | 2 |
+**What is credited: `lib/points.ts`** — used by `tickets.ts`, `technician.ts`, `rma.ts`.
+
+| Ticket Type / Condition                            | Points |
+| -------------------------------------------------- | ------ |
+| `service`                                          | 5      |
+| `service` + `Other_Device`                         | 3      |
+| `pc_build`                                         | 4      |
+| `cleaning` + `Full_Repaste` / `Full_Repaste_CPU_GPU` | 5    |
+| all other `cleaning`                               | 3      |
+| `warranty_claim` / `upgrade` / anything else       | 2      |
+
+⚠️ **Three other tables are still live and disagree with it.** The leaderboard, the
+performance report and the technician dashboards score cleaning 2 (4 on `PC_Gaming`) and
+service always 5; the two ticket-list badges do the same and add +3 per `extra_service`; and
+`admin.ts` has a fourth table of its own for tickets closed by an admin or Sales. Divergent
+since `0fed3b9` (2026-07-27). Unifying them shifts displayed figures and admin-credited
+points, so it is its own branch — `fix/points-table-unification`. Until then: import from
+`lib/points.ts` for anything new, and never assume a badge matches the leaderboard. Full
+breakdown in `FLOW.md` § 4.
+
+**When the points land — one copy: `lib/kpi.ts`.**
+
+```
+count it if  (type != 'warranty_claim' && new_status == 'done')
+          || (type == 'warranty_claim' && new_status == 'rma_process')
+```
+
+A warranty claim earns at handover to RMA, because the `done` written when the case closes
+would otherwise credit it a second time. A claim closed as "not eligible" earns nothing and
+costs nothing — neither `success_count` nor `failed_count`. `cancelled` and `rejected` add a
+`failed_count` for every type. Full reasoning in `FLOW.md` § 4 and § 5.
 
 Max workload per technician: **Removed**. Technicians can request any number of tickets, which are then approved by an Admin or Store Coordinator. Workload is dynamically tracked as "Active Tickets" (tickets in `waiting` or `on_progress` status).
 
@@ -650,6 +688,31 @@ END $$;
 
 ---
 
+### SPRINT 2026-09-24 SESSION — RMA Phase 6: public page, KPI, docs
+Branch `feat/rma-warranty-claim`. 343 tests, `tsc` clean, production build passes.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| T1 | Public page understands `rma_process` | ✅ | `STATUS_STEPS` in `app/[date]/[ticketCode]/page.tsx` turned out to be dead code — declared, never read — so the timeline was rendering `log.new_status.replace(/_/g," ")` and showing customers the line "rma process". New pure module `lib/rma/public-status.ts` holds a label per `TicketStatus`. `Badge` learned `rma_process` too; it was falling through to a class-less "rma process" in the staff portals. |
+| T2 | Three claim endings look different | ✅ | `getPublicClaimOutcome()` renders a verdict banner above the ticket details. Not eligible / rejected by vendor / repaired-replaced-refund all finish `done` → `completed`, so without it they were indistinguishable. It takes only status, decision and the ineligibility reason as arguments, so no internal field can reach the page through it. 21 tests, one walking every `TicketStatus`. |
+| T3 | Warranty claim credited once | ✅ | `lib/kpi.ts` holds the rule `(type != warranty_claim && done) \|\| (type == warranty_claim && rma_process)` as both a predicate and a Prisma filter. `handoverToRmaAction` now credits `TechnicianPerformance` inside the handover transaction. The `done` that `rma.ts` writes when a case closes credits nothing. |
+| T4 | Admin double-count fixed | ✅ | `adminUpdateTicketStatusAction` had `completed` in `isTerminal` plus a private point table, so an admin closing any ticket credited the technician a second time. Both gone. Historical inflated rows left alone. |
+| T5 | Point tables — diagnosed, split out | ⚠️ | Found nine copies of `getTicketPoints` with four different tables: a `Basic_Cleaning` ticket shows 2 pts, credits 5 when a technician closes it and 4 when an admin does. Divergent since `0fed3b9` (2026-07-27). **Not unified here** — doing so shifts displayed figures and admin-credited points, which is outside this branch's "no effect on other ticket types" rule. `lib/points.ts` was added but is used only by `tickets.ts` / `technician.ts` / `rma.ts`, which already used exactly that table, so no figure moves. Unification parked on `fix/points-table-unification`. |
+| T6 | Ineligible claim costs nothing | ✅ | Decided with the user: a claim closed as not eligible adds neither `success_count` nor `failed_count`. The examination was correct; charging a failure would make it expensive to turn down a bad claim. `cancelled`/`rejected` still count as failures. |
+| T7 | Monthly winners read the log | ✅ | `getTopTechnicianOfMonth` / `getTopStoreOfMonth` / the admin performance report queried `ticket.status == "done"`, so a ticket dropped out of its month the moment the customer picked it up. All three are log-based now, on the same filter as the leaderboard. |
+| T8 | `FLOW.md` | ✅ | New § 5 "Warranty Claim & RMA Flow" with the two legal exits and, explicitly, that **every claim statistic must filter on `claim_eligible` and `decision`** — otherwise a vendor rejection counts as a successful claim. § 4 point table corrected (it held a fifth, wrong copy). |
+| T9 | QC plan | ✅ | Nothing is SKIP any more. D-05 and G-01–G-03 reopened, G-04–G-06 and H-05b–H-05d added, and the changed point figures flagged so a tester does not report them as bugs. |
+
+**Still open after this sprint**
+
+- [ ] Branch is **not pushed**. It will crash against Supabase until `RmaCase` / `RmaEvent` / the new enum values exist there — three ticket detail pages already `select: { rma_case: ... }`. Migration steps: `docs/rma-deploy.md`
+- [ ] Demo data NGW-000004…NGW-000009 still in the local database
+- [ ] `fix/sales-redirect` — `ticketHrefForPortal("sales")` still points at `/customer/...`, which 404s. Deliberately left for its own branch off `origin/main`
+- [ ] RLS still not enabled anywhere, now including `RmaCase` and `RmaEvent`
+- [ ] The average-duration report (`completedTickets` in `app/admin/performance/page.tsx`) is still ticket-status based, so it misses claims sitting at `rma_process`. It measures elapsed work time rather than credit, so it was left alone
+
+---
+
 ### HOW TO RESUME IN A NEW SESSION
 
 1. Read this file (`CLAUDE.md`) — it is the source of truth
@@ -670,8 +733,12 @@ END $$;
 - **Logo:** Always use plain `<img src="/logo-hns.jpg">` — NOT Next.js `<Image>` component (causes hydration issues in sidebar/auth pages)
 - **`session.ts`** has `import "server-only"` — never import it from client components
 - **Stat cards:** Use `.stat-card > .stat-card-icon + .stat-card-body > (.stat-card-value + .stat-card-label)` — vertical column layout
-- **Leaderboard data:** Comes from `TicketStatusLog` where `new_status = "done"`, NOT from the `Leaderboard` snapshot table (which is legacy)
-- **Point system:** `pc_build = 4pts, service = 5pts, cleaning + PC_Gaming = 4pts, all others = 2pts` — computed in page/actions helper (`getTicketPoints`), not stored on `Ticket`
+- **Leaderboard data:** Comes from `TicketStatusLog`, NOT from the `Leaderboard` snapshot table (which is legacy). Filter with `EARNING_STATUS_LOG_FILTER` from `lib/kpi.ts`, never with a bare `new_status: "done"` — that credits a warranty claim twice
+- **Point system:** `lib/points.ts` is what gets CREDITED; the leaderboard, the badges and `admin.ts` still carry three other tables that disagree (see `FLOW.md` § 4, branch `fix/points-table-unification`). Import from `lib/points.ts` for anything new — do not add a fifth. Not stored on `Ticket`
+- **KPI rule:** One copy, `lib/kpi.ts`. `performanceEffect(type, status)` decides success / failure / ignore for `TechnicianPerformance`; `EARNING_STATUS_LOG_FILTER` is the same rule as a Prisma filter
+- **Role → route:** One copy, `lib/routes.ts`. Exhaustive `switch` over `Role` with `const _exhaustive: never`, so a new role without a destination fails `tsc` instead of silently falling through to `/login` — which is what the redirect loop was. Used by `proxy.ts`, `app/actions/auth.ts`, `app/page.tsx`, `NotificationBell.tsx`
+- **Public page secrecy:** `/{date}/{ticketCode}` must never render `vendor_rma_number`, `hold_reason`, `decision_notes`, `stock_origin` or `RmaEvent.note`. It selects RMA fields one by one; keep it that way
+- **Local uploads:** `STORAGE_DRIVER=local` writes to `public/uploads` so uploads work without R2 credentials. Without it, every upload fails with a TLS error locally
 - **Phone numbers:** Always stored as `+62XXXXXXXXX` format. The `+62` prefix widget is used in `CreateTicketForm` and `register/page.tsx`
 - **Notification bell:** Uses `position: fixed` (not `absolute`) to prevent mobile overflow
 - **Component Spacing & Padding:** Always provide appropriate gaps and paddings depending on the components. If elements belong tightly together, use a small gap (e.g., `gap-2`). If separating distinct sections or larger components, use a wider gap (e.g., `gap-4` or `gap-6`). **ALWAYS remember to add padding** inside components (e.g. `p-4`, `p-5`, or `px-6 py-4`) based on the component's visual needs. Never leave components without adequate internal padding.

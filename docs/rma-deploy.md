@@ -214,8 +214,57 @@ npx prisma migrate deploy
 
 ```powershell
 Remove-Item .\main-schema.prisma
-$env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed    # menambah user rma@techserve.id
+npm run create-user        # buat satu akun RMA, interaktif
 ```
+
+> ### ⛔ JANGAN pernah menjalankan `npm run seed` terhadap Supabase
+>
+> `prisma/seed.ts` membuat enam akun dengan password yang tertulis terbuka di repo ini:
+> `admin@techserve.id` / `admin123`, tiga teknisi / `tech123`, `sales@techserve.id` /
+> `sales123`, `rma@techserve.id` / `rma123`.
+>
+> Dan bukan cuma membuat. Seed memakai `upsert` yang **juga menulis password di blok
+> `update`** (`prisma/seed.ts:21-36`):
+>
+> ```ts
+> await db.user.upsert({
+>   where:  { email: "admin@techserve.id" },
+>   update: { is_active: true, password: await hash("admin123") },   // ← ini
+>   create: { ... },
+> });
+> ```
+>
+> Jadi kalau produksi sudah punya `admin@techserve.id`, menjalankan seed akan **me-reset
+> password administrator itu menjadi `admin123` dan mengaktifkan kembali akunnya** —
+> sekalipun akun tersebut sebelumnya sengaja dinonaktifkan. Seed hanya untuk database lokal
+> yang boleh dibuang.
+>
+> `npm run create-user` (`scripts/create-user.ts`) adalah penggantinya: satu user, password
+> diketik saat itu juga, menolak menimpa email yang sudah ada, dan tidak pernah mencetak
+> password ke terminal.
+
+> ### ⛔ JANGAN memakai `NODE_TLS_REJECT_UNAUTHORIZED="0"`
+>
+> Variabel itu berlaku **se-proses**, bukan hanya untuk koneksi Postgres. Menyalakannya
+> mematikan verifikasi sertifikat untuk **semua** koneksi TLS keluar di proses itu — termasuk
+> panggilan ke Resend dan Supabase Storage — sehingga sambungan apa pun bisa di-MITM selama
+> skrip berjalan.
+>
+> Untuk Postgres variabel itu juga **tidak memberi apa-apa**: `lib/db.ts` dan
+> `scripts/create-user.ts` sudah meneruskan `ssl: { rejectUnauthorized: false }` langsung ke
+> driver-nya, yang cakupannya hanya koneksi database. Jadi flag ini murni kerugian.
+>
+> Kalau tetap muncul error sertifikat, itu harus diselesaikan, bukan dimatikan:
+>
+> | Gejala | Tindakan |
+> |---|---|
+> | `SELF_SIGNED_CERT_IN_CHAIN` ke pooler Supabase | Sudah tertangani oleh `rejectUnauthorized: false` di level driver. Kalau masih muncul, berarti ada klien lain yang tidak lewat `lib/db.ts` — cari klien itu |
+> | `UNABLE_TO_VERIFY_LEAF_SIGNATURE` | Unduh CA bundle Supabase dari dashboard, lalu `ssl: { ca: fs.readFileSync(...) }`. Ini yang seharusnya dituju untuk produksi |
+> | Error TLS ke Resend / Storage | Bukan soal Postgres. Biasanya jam sistem meleset atau proxy korporat menyuntik sertifikat. Perbaiki di sana |
+>
+> **Utang teknis yang sudah diketahui:** `rejectUnauthorized: false` di `lib/db.ts` juga
+> bukan tujuan akhir. Targetnya adalah memasang CA bundle Supabase yang benar — tercatat di
+> `CLAUDE.md` bagian "Remaining / Suggested Work" sebagai langkah produksi.
 
 Cek cepat di Supabase SQL Editor:
 

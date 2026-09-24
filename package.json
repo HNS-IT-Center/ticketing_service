@@ -8,6 +8,7 @@
     "start": "next start",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
+    "create-user": "tsx scripts/create-user.ts",
     "postinstall": "prisma generate",
     "test": "vitest run",
     "test:watch": "vitest"

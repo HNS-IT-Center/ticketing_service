@@ -147,6 +147,11 @@ Kolom **Hasil** diisi PASS / FAIL. Kolom **Bukti** diisi nama file screenshot.
 | D-02 | Penandaan berhasil | Isi alasan → submit | Status jadi `done`, tiket ditandai tidak layak klaim beserta alasannya | | |
 | D-03 | Unit bisa dikembalikan | `done` → `ready_for_pickup` atau `handed_to_courier` → `completed` | Alur pengembalian normal seperti tiket biasa | | |
 | D-04 | Tidak masuk antrean RMA | Login RMA → dashboard | Tiket ini tidak muncul | | |
+| D-06 | **Admin juga wajib memberi alasan** | Login admin → buka tiket klaim `on_progress` → tombolnya berbunyi "Tidak Layak Klaim", bukan "Mark Done" → klik → kosongkan alasan → submit | Tombol submit nonaktif selama alasan kosong. Kalau dipaksa lewat server, ditolak dengan pesan "Untuk tiket klaim, isi alasan…". Status tetap `on_progress`, tidak ada baris Status History baru | | |
+| D-07 | Penandaan oleh admin berhasil | Isi alasan → submit | Status jadi `done`, tiket ditandai tidak layak beserta alasannya, dan alasan itu tercatat di Status History | | |
+| D-08 | Sales juga terikat | Ulangi D-06 sebagai Sales | Ditolak dengan pesan yang sama | | |
+| D-09 | Hasilnya identik dengan jalur teknisi | Bandingkan tiket dari D-07 dengan tiket dari D-02 (ditandai teknisi) | Keduanya `claim_eligible = false` dengan alasan tersimpan, dan halaman publiknya menampilkan banner kuning yang sama | | |
+| D-10 | Tipe lain tidak terpengaruh | Sebagai admin, tutup tiket Service `on_progress` jadi `done` | Tetap bisa tanpa alasan, seperti sebelumnya | | |
 | D-05 | Tampilan publik jujur | Buka halaman publik tiket ini (`/{tanggal}/{kode}`) | Banner kuning "Klaim tidak memenuhi syarat garansi" beserta alasan teknisi. Tidak tertulis "Selesai Dikerjakan" saja | | |
 
 ### E. Akses & navigasi portal RMA

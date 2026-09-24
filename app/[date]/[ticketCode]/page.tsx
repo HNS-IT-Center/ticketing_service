@@ -3,6 +3,10 @@ import { notFound } from "next/navigation";
 import { headers } from "next/headers";
 import Badge from "@/components/ui/Badge";
 import { formatDateTime } from "@/lib/utils";
+import {
+  getPublicClaimOutcome,
+  publicStatusLabel,
+} from "@/lib/rma/public-status";
 import PublicChat from "./PublicChat";
 
 export const metadata = { title: "Ticket Status — HNS IT Center" };
@@ -43,20 +47,35 @@ export default async function PublicTicketPage({
         orderBy: { created_at: "asc" },
         where: { file_type: { in: ["image", "video"] } },
       },
+      // Warranty claims only. Selected field by field on purpose: the rest of
+      // RmaCase (vendor_rma_number, hold_reason, decision_notes, stock_origin)
+      // is internal and must never reach this page.
+      warranty_detail: {
+        select: { claim_eligible: true, ineligibility_reason: true },
+      },
+      rma_case: { select: { status: true, decision: true } },
     },
   });
 
   if (!ticket) notFound();
 
-  const STATUS_STEPS = [
-    { key: "waiting", label: "Diterima" },
-    { key: "on_progress", label: "Sedang Dikerjakan" },
-    { key: "done", label: "Selesai Dikerjakan" },
-    { key: "ready_for_pickup", label: "Siap Diambil" },
-    { key: "handed_to_courier", label: "Ke Kurir" },
-    { key: "delivered", label: "Terkirim" },
-    { key: "completed", label: "Selesai" },
-  ];
+  // A claim can end three different ways and all three finish `done` →
+  // `completed`. Without this banner the customer cannot tell them apart.
+  const claimOutcome = getPublicClaimOutcome({
+    ticketType: ticket.ticket_type,
+    ticketStatus: ticket.status,
+    claimEligible: ticket.warranty_detail?.claim_eligible ?? null,
+    ineligibilityReason: ticket.warranty_detail?.ineligibility_reason ?? null,
+    rmaStatus: ticket.rma_case?.status ?? null,
+    rmaDecision: ticket.rma_case?.decision ?? null,
+  });
+
+  const OUTCOME_STYLES = {
+    progress: { bg: "#eff6ff", border: "#bfdbfe", text: "#1e40af", icon: "🔧" },
+    success: { bg: "#ecfdf5", border: "#a7f3d0", text: "#065f46", icon: "✅" },
+    warning: { bg: "#fffbeb", border: "#fde68a", text: "#92400e", icon: "⚠️" },
+    neutral: { bg: "#f9fafb", border: "#e5e7eb", text: "#374151", icon: "ℹ️" },
+  } as const;
 
   const headersList = await headers();
   const host = headersList.get("host");
@@ -144,6 +163,52 @@ export default async function PublicTicketPage({
             )}
           </div>
 
+          {/* Claim outcome — warranty claims only */}
+          {claimOutcome && (
+            <div
+              style={{
+                margin: "1.25rem 1.75rem 0",
+                padding: "1rem 1.125rem",
+                borderRadius: "12px",
+                background: OUTCOME_STYLES[claimOutcome.tone].bg,
+                border: `1px solid ${OUTCOME_STYLES[claimOutcome.tone].border}`,
+                display: "flex",
+                gap: "0.75rem",
+                alignItems: "flex-start",
+              }}
+            >
+              <span style={{ fontSize: "1.125rem", lineHeight: 1.35, flexShrink: 0 }}>
+                {OUTCOME_STYLES[claimOutcome.tone].icon}
+              </span>
+              <div style={{ minWidth: 0 }}>
+                <div
+                  style={{
+                    fontWeight: 600,
+                    fontSize: "0.9375rem",
+                    color: OUTCOME_STYLES[claimOutcome.tone].text,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  {claimOutcome.headline}
+                </div>
+                {claimOutcome.detail && (
+                  <div
+                    style={{
+                      marginTop: "0.375rem",
+                      fontSize: "0.8125rem",
+                      color: OUTCOME_STYLES[claimOutcome.tone].text,
+                      opacity: 0.85,
+                      lineHeight: 1.5,
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {claimOutcome.detail}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Ticket infos */}
           <div style={{ padding: "1.5rem 1.75rem", borderBottom: "1px solid #f3f4f6" }}>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
@@ -210,8 +275,8 @@ export default async function PublicTicketPage({
 
                     {/* Content */}
                     <div style={{ paddingLeft: "0.875rem", paddingBottom: i < ticket.status_logs.length - 1 ? "1rem" : "0", flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: isLatest ? "#111827" : "#374151", fontSize: "0.875rem", textTransform: "capitalize" }}>
-                        {log.new_status.replace(/_/g, " ")}
+                      <div style={{ fontWeight: 600, color: isLatest ? "#111827" : "#374151", fontSize: "0.875rem" }}>
+                        {publicStatusLabel(log.new_status)}
                       </div>
                       <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginTop: "2px" }}>
                         {formatDateTime(log.created_at)}

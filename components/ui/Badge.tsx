@@ -1,6 +1,7 @@
 type BadgeVariant =
   | "waiting"
   | "on_progress"
+  | "rma_process"
   | "done"
   | "ready_for_pickup"
   | "waiting_pickup"
@@ -17,6 +18,7 @@ type BadgeVariant =
 const BADGE_LABELS: Record<string, string> = {
   waiting: "⏳ Waiting",
   on_progress: "🔵 On Progress",
+  rma_process: "🛡️ RMA Process",
   done: "✅ Done",
   ready_for_pickup: "📦 Ready Pickup",
   waiting_pickup: "🔔 Waiting Pickup",
@@ -34,6 +36,7 @@ const BADGE_LABELS: Record<string, string> = {
 const BADGE_CLASSES: Record<string, string> = {
   waiting: "badge badge-waiting",
   on_progress: "badge badge-on_progress",
+  rma_process: "badge badge-on_progress",
   done: "badge badge-done",
   ready_for_pickup: "badge badge-done",
   waiting_pickup: "badge badge-on_progress",

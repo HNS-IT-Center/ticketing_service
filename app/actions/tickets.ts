@@ -6,11 +6,14 @@ import { revalidatePath } from "next/cache";
 import { customAlphabet } from "nanoid";
 import { randomBytes } from "crypto";
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
+import { nextStoreTicketCode, isTicketCodeCollision } from "@/lib/ticket-code";
 import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { sendTicketStatusEmail } from "@/lib/email";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
+
 
 // ─── Ticket Point Calculator ───────────────────────────────────────────────
 function getTicketPoints(type: string, deviceType?: string | null, cleaningPackage?: string | null): number {
@@ -74,34 +77,17 @@ export async function createTicketAction(formData: FormData) {
   }
 
   // Generate ticket code
-  let ticket_code: string;
-  if (store_location_id) {
-    const store = await db.storeLocation.findUnique({
-      where: { id: store_location_id },
-      select: { id: true, code: true },
-    });
-    if (store) {
-      const lastTicket = await db.ticket.findFirst({
-        where: { store_location_id: store.id },
-        orderBy: { created_at: 'desc' },
-      });
-      let nextNumber = 1;
-      if (lastTicket && lastTicket.ticket_code.startsWith(`${store.code}-`)) {
-        const lastNumber = parseInt(lastTicket.ticket_code.replace(`${store.code}-`, ""), 10);
-        if (!isNaN(lastNumber)) {
-          nextNumber = lastNumber + 1;
-        }
-      } else if (lastTicket) {
-         const count = await db.ticket.count({ where: { store_location_id } });
-         nextNumber = count + 1;
-      }
-      ticket_code = `${store.code}-${String(nextNumber).padStart(6, "0")}`;
-    } else {
-      ticket_code = `TKT-${nanoid()}`;
-    }
-  } else {
-    ticket_code = `TKT-${nanoid()}`;
-  }
+  const store = store_location_id
+    ? await db.storeLocation.findUnique({
+        where: { id: store_location_id },
+        select: { id: true, code: true },
+      })
+    : null;
+
+  const allocateCode = () =>
+    store ? nextStoreTicketCode(store.code) : Promise.resolve(`TKT-${nanoid()}`);
+
+  const ticket_code = await allocateCode();
 
   const public_share_token = randomBytes(24).toString("hex");
 
@@ -156,8 +142,13 @@ export async function createTicketAction(formData: FormData) {
   }
 
   // ── Now it's safe to create the DB record ──
-  const ticket = await db.ticket.create({
-    data: {
+  //
+  // Two people at the same counter can allocate the same number in the gap
+  // between reading the highest code and inserting, so a duplicate is retried
+  // with a freshly read code rather than thrown at whoever pressed Save second.
+  // Only a collision on `ticket_code` is retried; any other unique violation is
+  // a real error and is rethrown.
+  const ticketData: Prisma.TicketUncheckedCreateInput = {
       ticket_code,
       user_id: session.userId,
       ticket_type: ticket_type as any,
@@ -186,9 +177,28 @@ export async function createTicketAction(formData: FormData) {
       terms_accepted,
       technician_notes,
       public_share_token,
-    },
-    select: { id: true, public_share_token: true },
-  });
+  };
+
+  let ticket: { id: string; public_share_token: string | null } | null = null;
+  let lastError: unknown = null;
+
+  for (let attempt = 0; attempt < 3 && ticket === null; attempt++) {
+    try {
+      ticket = await db.ticket.create({
+        data: ticketData,
+        select: { id: true, public_share_token: true },
+      });
+    } catch (err) {
+      if (!isTicketCodeCollision(err)) throw err;
+      lastError = err;
+      ticketData.ticket_code = await allocateCode();
+    }
+  }
+
+  if (ticket === null) {
+    console.error("[TICKET CODE COLLISION] exhausted retries", lastError);
+    return { error: "Gagal membuat nomor tiket. Silakan coba lagi." };
+  }
 
   const followUps: Promise<unknown>[] = [];
 

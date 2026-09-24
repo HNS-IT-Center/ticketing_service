@@ -162,3 +162,33 @@ whose result is dropped before an unconditional `{ success: true }`.
 `RmaCase` cannot be moved from the admin portal or the technician portal; the only way out is
 `transitionRmaAction` reaching `closed` or `cancelled`, which returns the ticket to `done`
 itself. Tests: `app/actions/admin.test.ts`, QC plan C-09a–C-09c.
+
+`adminUpdateTicketStatusAction` also now requires a reason for a `warranty_claim` moving
+`on_progress` -> `done`, and writes `claim_eligible = false` itself. Tests: same file, QC plan
+D-06–D-10.
+
+### Residual hole that only a transition guard can close
+
+Both claim guards — the technician's and the admin's — key on the ticket being at
+`on_progress`:
+
+```ts
+ticket.ticket_type === "warranty_claim" &&
+ticket.status === "on_progress" &&          // <- here
+newStatus === "done"
+```
+
+The technician action is safe anyway: its `HANDOVER_CHAIN` refuses `waiting -> done`. The
+admin action has no such chain, so **an administrator or Sales can still take a claim from
+`waiting` straight to `done`**, and it lands with no reason and no `claim_eligible = false`
+marker — exactly the state the guard exists to prevent, reached one status earlier.
+
+It is narrower than it sounds: `AdminStatusPanel` offers only Approve and Reject at
+`waiting`, so nothing in the UI does this today. It is reachable by calling the server action
+directly.
+
+Broadening the guard to "any `warranty_claim` -> `done` that is not coming from
+`rma_process`" would close it in one line, but the deliberate decision was to mirror the
+technician guard exactly and add no transition rules beyond it. The proper fix is the
+transition table this issue is about: once `waiting -> done` is illegal for every ticket
+type, the hole closes without special-casing claims.

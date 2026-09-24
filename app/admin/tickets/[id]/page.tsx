@@ -210,7 +210,7 @@ export default async function AdminTicketDetailPage({
           </p>
         </div>
         <div className="flex flex-col gap-3 items-start md:items-end mt-2 md:mt-0">
-          <AdminStatusPanel ticketId={ticket.id} currentStatus={ticket.status} />
+          <AdminStatusPanel ticketId={ticket.id} currentStatus={ticket.status} ticketType={ticket.ticket_type} />
           <div className="flex items-center gap-4 bg-gray-50 px-4 py-2 rounded-xl border border-gray-100">
             {ticket.public_share_token && (
               <>

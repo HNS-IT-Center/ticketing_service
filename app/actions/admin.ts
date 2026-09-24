@@ -255,7 +255,8 @@ export async function snapshotLeaderboardAction(month: number, year: number) {
 export async function adminUpdateTicketStatusAction(
   ticketId: string,
   newStatus: "waiting" | "on_progress" | "cancelled" | "rejected" | "done" |
-             "ready_for_pickup" | "waiting_pickup" | "handed_to_courier" | "delivered" | "completed"
+             "ready_for_pickup" | "waiting_pickup" | "handed_to_courier" | "delivered" | "completed",
+  reason?: string
 ) {
   const session = await requireRole("Administrator", "Sales");
 
@@ -281,6 +282,40 @@ export async function adminUpdateTicketStatusAction(
     };
   }
 
+  // Mirrors guard 3 in updateTicketStatusAction. A warranty claim has exactly
+  // two ways out of `on_progress` — handover to RMA, or a finding that the
+  // claim is not eligible — so `done` here always means "not eligible" and
+  // needs a reason. Without this the admin portal could close a claim as `done`
+  // with no marker at all, leaving it indistinguishable from a claim that came
+  // back from the RMA desk.
+  //
+  // The flag is never taken from the caller: the server decides it.
+  const isIneligibleClaim =
+    ticket.ticket_type === "warranty_claim" &&
+    ticket.status === "on_progress" &&
+    newStatus === "done";
+
+  if (isIneligibleClaim && !reason?.trim()) {
+    return {
+      error:
+        "Untuk tiket klaim, isi alasan bila unit tidak layak klaim — atau serahkan ke RMA.",
+    };
+  }
+
+  // upsert because a legacy warranty ticket may predate its detail row.
+  if (isIneligibleClaim) {
+    await db.ticketWarrantyDetail.upsert({
+      where: { ticket_id: ticketId },
+      create: {
+        ticket_id: ticketId,
+        purchase_date: new Date(),
+        claim_eligible: false,
+        ineligibility_reason: reason!.trim(),
+      },
+      update: { claim_eligible: false, ineligibility_reason: reason!.trim() },
+    });
+  }
+
   await db.$transaction([
     db.ticket.update({
       where: { id: ticketId },
@@ -291,6 +326,7 @@ export async function adminUpdateTicketStatusAction(
         ticket_id: ticketId,
         old_status: ticket.status,
         new_status: newStatus,
+        reason: reason?.trim() || null,
         changed_by: session.userId,
       },
     }),

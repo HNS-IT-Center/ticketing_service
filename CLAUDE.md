@@ -366,12 +366,42 @@ When cloning the project to a new device, you will need to reconfigure the envir
    npx prisma db push
    ```
 
-4. **Seed the Database (Optional but recommended)**
-   If this is a fresh database, you need to populate it with initial dummy accounts, tickets, and upgrades:
+4. **Seed the Database — LOCAL DATABASES ONLY**
+
+   > ### ⛔ Never run `npm run seed` against a shared or production database
+   >
+   > The seed creates six accounts whose passwords are written in this file:
+   > `admin@techserve.id` / `admin123` (a full Administrator), three technicians / `tech123`,
+   > `sales@techserve.id` / `sales123`.
+   >
+   > It does not only create them. It uses `upsert` and **sets the password in the `update`
+   > branch too** (`prisma/seed.ts`):
+   >
+   > ```ts
+   > await db.user.upsert({
+   >   where:  { email: "admin@techserve.id" },
+   >   update: { is_active: true, password: await hash("admin123") },   // ← this
+   >   create: { ... },
+   > });
+   > ```
+   >
+   > So against a database that already has `admin@techserve.id`, seeding **resets that
+   > administrator's password to `admin123` and re-enables the account**, even if it had been
+   > deliberately deactivated. Run it only against a throwaway local database.
+
+   For a local database, populate it with dummy accounts, tickets and upgrades:
    ```bash
-   $env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed
+   npm run seed
    ```
-   *(Note: The `NODE_TLS_REJECT_UNAUTHORIZED="0"` flag is required to bypass self-signed certificate errors from the Supabase session pooler during the seed script).*
+
+   Set `DATABASE_SSL=false` in `.env.local` when `DATABASE_URL` points at a local Postgres
+   that speaks plain TCP — `lib/db.ts` and the seed both read it.
+
+   > **Do not use `NODE_TLS_REJECT_UNAUTHORIZED="0"`.** It is process-wide, so it disables
+   > certificate verification for every outbound TLS connection, not just Postgres. It also
+   > achieves nothing for the database: `lib/db.ts` and `prisma/seed.ts` already pass
+   > `ssl: { rejectUnauthorized: false }` straight to the driver, which is scoped to that one
+   > connection. If a certificate error persists, fix it — do not switch verification off.
 
 5. **Start the Development Server**
    ```bash

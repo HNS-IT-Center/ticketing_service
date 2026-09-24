@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireRole, requireSession } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
+import { performanceEffect } from "@/lib/kpi";
 
 // ─── Create User ───────────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
@@ -282,9 +283,19 @@ export async function adminUpdateTicketStatusAction(
     }),
   ]);
 
-  // Update technician performance if closing a ticket
-  const isTerminal = ["done", "cancelled", "rejected", "completed"].includes(newStatus);
-  if (isTerminal && ticket.technician_id) {
+  // Update technician performance if closing a ticket.
+  //
+  // `completed` used to be in this list, with a point table of its own that
+  // disagreed with every other one in the codebase. An administrator moving a
+  // ticket `ready_for_pickup` -> `completed` therefore credited the technician
+  // a second time, for every ticket type, on top of the credit they already
+  // got at `done`. The extra credit is gone; the rule now lives in lib/kpi.ts.
+  const effect = performanceEffect(ticket.ticket_type, newStatus);
+  if (effect !== "ignore" && ticket.technician_id) {
+    // This table is this action's own, and disagrees with both the writers' one
+    // in technician.ts and the display one in lib/leaderboard.ts. Left as it is
+    // deliberately: changing it changes credited points, which belongs to
+    // fix/points-table-unification, not to this branch.
     let points = 3; // default 'others'
     if (ticket.ticket_type === "service" || ticket.ticket_type === "pc_build") {
       points = 4;
@@ -293,20 +304,20 @@ export async function adminUpdateTicketStatusAction(
     } else if (ticket.ticket_type === "cleaning" && ticket.cleaning_detail?.service_package === "Deep_Clean") {
       points = 4;
     }
+    const isSuccess = effect === "success";
     await db.technicianPerformance.update({
       where: { technician_id: ticket.technician_id },
       data: {
         tickets_handled: { increment: 1 },
-        success_count: newStatus === "done" || newStatus === "completed" ? { increment: 1 } : undefined,
-        failed_count: newStatus !== "done" && newStatus !== "completed" ? { increment: 1 } : undefined,
-        total_points_completed: (newStatus === "done" || newStatus === "completed") ? { increment: points } : undefined,
+        success_count: isSuccess ? { increment: 1 } : undefined,
+        failed_count: isSuccess ? undefined : { increment: 1 },
+        total_points_completed: isSuccess ? { increment: points } : undefined,
       },
     });
     // Workload decrement removed
   }
 
-  // Notify customer if they have a user account
-  if (isTerminal && ticket.technician_id) {
+  if (effect !== "ignore" && ticket.technician_id) {
     revalidateTag("leaderboard-techs", "max");
     revalidateTag("leaderboard-stores", "max");
     revalidateTag("tech-month-winner", "max");

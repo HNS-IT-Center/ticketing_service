@@ -266,6 +266,76 @@ describe("guard 3 — a warranty claim leaves on_progress only two ways", () => 
   });
 });
 
+describe("KPI — an ineligible claim counts as neither success nor failure", () => {
+  async function perf() {
+    const row = await db.technicianPerformance.findUnique({
+      where: { technician_id: technicianId },
+      select: { tickets_handled: true, success_count: true, failed_count: true, total_points_completed: true },
+    });
+    return (
+      row ?? { tickets_handled: 0, success_count: 0, failed_count: 0, total_points_completed: 0 }
+    );
+  }
+
+  it("leaves every counter untouched when a claim is closed as not eligible", async () => {
+    const before = await perf();
+    const ticket = await makeTicket();
+    const result = await updateTicketStatusAction(
+      statusForm(ticket.id, "done", { reason: "Segel rusak, garansi hangus" })
+    );
+    expect(result).toMatchObject({ success: true });
+
+    // The examination was correct, so no failed_count; the claim never reached
+    // the RMA desk, so no success either. See lib/kpi.ts.
+    expect(await perf()).toEqual(before);
+  });
+
+  it("still counts a cancelled claim as a failure", async () => {
+    const before = await perf();
+    const ticket = await makeTicket();
+    const result = await updateTicketStatusAction(
+      statusForm(ticket.id, "cancelled", { reason: "Customer menarik klaim" })
+    );
+    expect(result).toMatchObject({ success: true });
+
+    const after = await perf();
+    expect(after.failed_count).toBe(before.failed_count + 1);
+    expect(after.success_count).toBe(before.success_count);
+    expect(after.total_points_completed).toBe(before.total_points_completed);
+  });
+
+  it("credits an ordinary ticket at done, as before", async () => {
+    const before = await perf();
+    const ticket = await makeTicket({ type: "service" });
+    const result = await updateTicketStatusAction(statusForm(ticket.id, "done"));
+    expect(result).toMatchObject({ success: true });
+
+    const after = await perf();
+    // service on a Laptop_Gaming is worth 5 -- see lib/points.ts.
+    expect(after.success_count).toBe(before.success_count + 1);
+    expect(after.total_points_completed).toBe(before.total_points_completed + 5);
+  });
+
+  it("does not credit again when the ineligible claim is handed back to the customer", async () => {
+    const ticket = await makeTicket();
+    expect(
+      await updateTicketStatusAction(
+        statusForm(ticket.id, "done", { reason: "Bukan cakupan garansi" })
+      )
+    ).toMatchObject({ success: true });
+
+    const before = await perf();
+    expect(await updateTicketStatusAction(statusForm(ticket.id, "ready_for_pickup"))).toMatchObject({
+      success: true,
+    });
+    const completing = statusForm(ticket.id, "completed");
+    completing.append("files", new File(["img"], "serah-terima.jpg", { type: "image/jpeg" }));
+    expect(await updateTicketStatusAction(completing)).toMatchObject({ success: true });
+
+    expect(await perf()).toEqual(before);
+  });
+});
+
 describe("guard 3 — no effect on other ticket types", () => {
   it.each(["service", "cleaning"] as const)(
     "lets a %s ticket go on_progress → done with no reason",

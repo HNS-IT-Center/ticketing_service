@@ -174,6 +174,11 @@ afterAll(async () => {
     await db.ticketAttachment.deleteMany({ where: { ticket_id: { in: ticketIds } } });
     await db.ticket.deleteMany({ where: { id: { in: ticketIds } } });
   }
+  // Handover credits the technician, so a performance row now points at the
+  // fixture user and blocks the delete.
+  await db.technicianPerformance.deleteMany({
+    where: { technician_id: { in: userIds } },
+  });
   await db.user.deleteMany({ where: { id: { in: userIds } } });
   await db.storeLocation.deleteMany({ where: { id: storeId } });
   await db.$disconnect();
@@ -389,6 +394,68 @@ describe("handoverToRmaAction — effects and idempotence", () => {
     if ("rmaCode" in ra && "rmaCode" in rb && ra.rmaCode && rb.rmaCode) {
       expect(seq(rb.rmaCode)).toBe(seq(ra.rmaCode) + 1);
     }
+  });
+});
+
+describe("handoverToRmaAction — technician KPI", () => {
+  /** The stored counters for the assigned technician, or zeros. */
+  async function perf() {
+    const row = await db.technicianPerformance.findUnique({
+      where: { technician_id: technicianId },
+      select: { tickets_handled: true, success_count: true, failed_count: true, total_points_completed: true },
+    });
+    return (
+      row ?? { tickets_handled: 0, success_count: 0, failed_count: 0, total_points_completed: 0 }
+    );
+  }
+
+  it("credits the assigned technician at handover, not when the case closes", async () => {
+    const before = await perf();
+    const ticket = await makeTicket();
+    expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
+
+    const after = await perf();
+    // warranty_claim is worth 2 points -- see lib/points.ts.
+    expect(after.tickets_handled).toBe(before.tickets_handled + 1);
+    expect(after.success_count).toBe(before.success_count + 1);
+    expect(after.failed_count).toBe(before.failed_count);
+    expect(after.total_points_completed).toBe(before.total_points_completed + 2);
+  });
+
+  it("credits nothing when the handover is refused", async () => {
+    const before = await perf();
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.set("sn_verified", "0");
+    expect(await handoverToRmaAction(fd)).toMatchObject({ error: expect.any(String) });
+
+    expect(await perf()).toEqual(before);
+  });
+
+  it("credits a claim exactly once even if handover is attempted twice", async () => {
+    const before = await perf();
+    const ticket = await makeTicket();
+    expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
+    expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({
+      error: expect.any(String),
+    });
+
+    const after = await perf();
+    expect(after.success_count).toBe(before.success_count + 1);
+    expect(after.total_points_completed).toBe(before.total_points_completed + 2);
+  });
+
+  it("credits the assigned technician even when an Administrator does the handover", async () => {
+    const before = await perf();
+    const ticket = await makeTicket();
+    session.userId = adminId;
+    session.role = "Administrator";
+    expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
+    session.userId = technicianId;
+    session.role = "Technician";
+
+    const after = await perf();
+    expect(after.success_count).toBe(before.success_count + 1);
   });
 });
 

@@ -1,9 +1,10 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
+import { getTicketPoints } from "@/lib/points";
 import {
   canActOnRma,
   releasesTicket,
@@ -100,6 +101,7 @@ export async function handoverToRmaAction(formData: FormData) {
         id: true,
         ticket_code: true,
         ticket_type: true,
+        device_type: true,
         status: true,
         technician_id: true,
         store_location: { select: { code: true } },
@@ -193,6 +195,7 @@ export async function handoverToRmaAction(formData: FormData) {
     let lastError: unknown = null;
 
     const codePrefix = rmaCodePrefix(ticket.store_location?.code ?? null);
+    const claimPoints = getTicketPoints(ticket.ticket_type, ticket.device_type);
 
     for (let attempt = 0; attempt < 3 && created === null; attempt++) {
       try {
@@ -241,6 +244,29 @@ export async function handoverToRmaAction(formData: FormData) {
             },
           });
 
+          // The technician's work on a claim finishes here, so this is where
+          // the claim is credited. The `done` written when the case closes --
+          // possibly months later, by the RMA desk -- credits nothing; see
+          // lib/kpi.ts. Inside the transaction, so a retried handover cannot
+          // credit twice.
+          if (ticket.technician_id) {
+            await tx.technicianPerformance.upsert({
+              where: { technician_id: ticket.technician_id },
+              create: {
+                technician_id: ticket.technician_id,
+                tickets_handled: 1,
+                success_count: 1,
+                failed_count: 0,
+                total_points_completed: claimPoints,
+              },
+              update: {
+                tickets_handled: { increment: 1 },
+                success_count: { increment: 1 },
+                total_points_completed: { increment: claimPoints },
+              },
+            });
+          }
+
           // Inside the transaction: if the handover rolls back, so do the alerts.
           if (rmaStaff.length > 0) {
             await tx.notification.createMany({
@@ -273,6 +299,15 @@ export async function handoverToRmaAction(formData: FormData) {
     revalidatePath(`/admin/tickets/${ticketId}`);
     revalidatePath(`/sales/tickets/${ticketId}`);
     revalidatePath("/rma/dashboard");
+
+    // The handover is what puts the claim on the leaderboard, so the cached
+    // scores are stale from this moment.
+    revalidateTag("leaderboard-techs", "max");
+    revalidateTag("leaderboard-stores", "max");
+    revalidateTag("tech-month-winner", "max");
+    if (ticket.technician_id) {
+      revalidateTag(`user-profile:${ticket.technician_id}`, "max");
+    }
 
     return { success: true, rmaCaseId: created.id, rmaCode: created.rma_code };
   } catch (err) {

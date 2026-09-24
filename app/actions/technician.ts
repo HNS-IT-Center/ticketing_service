@@ -5,19 +5,9 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
+import { performanceEffect } from "@/lib/kpi";
+import { getTicketPoints } from "@/lib/points";
 
-function getTicketPoints(type: string, deviceType?: string | null, cleaningPackage?: string | null): number {
-  if (type === "service") {
-    if (deviceType === "Other_Device") return 3;
-    return 5;
-  }
-  if (type === "cleaning") {
-    if (cleaningPackage === "Full_Repaste" || cleaningPackage === "Full_Repaste_CPU_GPU") return 5;
-    return 3;
-  }
-  if (type === "pc_build") return 4;
-  return 2;
-}
 
 // ─── Request Ticket Assignment (Technician) ────────────────────────────────
 export async function requestTicketAssignmentAction(ticketId: string) {
@@ -334,14 +324,21 @@ export async function updateTicketStatusAction(formData: FormData) {
 
     const isTerminal = ["done", "cancelled", "rejected"].includes(newStatus);
     if (isTerminal) {
-      const points = getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package);
-
+      // The active-ticket count on the profile changes whatever the verdict is.
       revalidateTag("leaderboard-techs", "max");
       revalidateTag("leaderboard-stores", "max");
       revalidateTag("tech-month-winner", "max");
       revalidateTag(`user-profile:${session.userId}`, "max");
+    }
 
-      const isSuccess = newStatus === "done";
+    // A warranty claim is credited when it is handed to the RMA desk, not here
+    // -- so the `done` of a claim found ineligible counts as neither a success
+    // nor a failure. See lib/kpi.ts.
+    const effect = performanceEffect(ticket.ticket_type, newStatus);
+    if (effect !== "ignore") {
+      const points = getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package);
+
+      const isSuccess = effect === "success";
       await db.technicianPerformance.upsert({
         where: { technician_id: session.userId },
         create: {
@@ -371,7 +368,7 @@ export async function updateTicketStatusAction(formData: FormData) {
       });
     }
 
-    if (newStatus === "done") {
+    if (effect === "success") {
       const points = getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package);
       revalidateTag(`user-profile:${session.userId}`, "max");
       const perf = await db.technicianPerformance.findUnique({

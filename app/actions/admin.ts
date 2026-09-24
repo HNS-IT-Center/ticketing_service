@@ -283,16 +283,25 @@ export async function adminUpdateTicketStatusAction(
   }
 
   // Mirrors guard 3 in updateTicketStatusAction. A warranty claim has exactly
-  // two ways out of `on_progress` — handover to RMA, or a finding that the
-  // claim is not eligible — so `done` here always means "not eligible" and
-  // needs a reason. Without this the admin portal could close a claim as `done`
-  // with no marker at all, leaving it indistinguishable from a claim that came
-  // back from the RMA desk.
+  // two ways out — handover to RMA, or a finding that the claim is not eligible
+  // — so `done` here always means "not eligible" and needs a reason. Without
+  // this the admin portal could close a claim as `done` with no marker at all,
+  // leaving it indistinguishable from a claim that came back from the RMA desk.
+  //
+  // `waiting` is included where the technician guard only names `on_progress`.
+  // That guard does not need it: updateTicketStatusAction's HANDOVER_CHAIN
+  // rejects `waiting -> done` before it is reached. This action has no such
+  // chain, so without `waiting` here the whole guard is sidestepped by closing
+  // the claim one status earlier.
+  //
+  // A claim already past `done` is excluded on purpose: moving one along the
+  // handover chain is not an eligibility decision. `rma_process` never reaches
+  // this line at all — the guard above returns first.
   //
   // The flag is never taken from the caller: the server decides it.
   const isIneligibleClaim =
     ticket.ticket_type === "warranty_claim" &&
-    ticket.status === "on_progress" &&
+    (ticket.status === "waiting" || ticket.status === "on_progress") &&
     newStatus === "done";
 
   if (isIneligibleClaim && !reason?.trim()) {

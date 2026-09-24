@@ -330,6 +330,58 @@ describe("a warranty claim closed from the admin portal must say why", () => {
     expect(await detail(ticket.id)).toBeNull();
   });
 
+  it("refuses `done` from `waiting` too, not just from `on_progress`", async () => {
+    // The technician action does not need `waiting` in its guard because
+    // HANDOVER_CHAIN rejects waiting -> done first. This action has no chain,
+    // so without it the guard is sidestepped by closing the claim one status
+    // earlier.
+    const ticket = await makeTicket({ type: "warranty_claim", status: "waiting" });
+    const result = await adminUpdateTicketStatusAction(ticket.id, "done");
+
+    expect(result).toMatchObject({ error: expect.stringContaining("tidak layak klaim") });
+
+    const after = await db.ticket.findUnique({
+      where: { id: ticket.id },
+      select: { status: true },
+    });
+    expect(after?.status).toBe("waiting");
+    expect(await db.ticketStatusLog.count({ where: { ticket_id: ticket.id } })).toBe(0);
+    expect(await detail(ticket.id)).toBeNull();
+  });
+
+  it("marks the claim properly when closed from `waiting` with a reason", async () => {
+    const ticket = await makeTicket({ type: "warranty_claim", status: "waiting" });
+    expect(
+      await adminUpdateTicketStatusAction(ticket.id, "done", "Sudah lewat masa garansi"),
+    ).toMatchObject({ success: true });
+
+    expect(await detail(ticket.id)).toEqual({
+      claim_eligible: false,
+      ineligibility_reason: "Sudah lewat masa garansi",
+    });
+  });
+
+  it("still lets a non-claim ticket go waiting -> done without a reason", async () => {
+    const ticket = await makeTicket({ type: "service", status: "waiting" });
+    expect(await adminUpdateTicketStatusAction(ticket.id, "done")).toMatchObject({
+      success: true,
+    });
+  });
+
+  it("leaves the other approach to `waiting` alone", async () => {
+    // Approve and Reject are what the panel actually offers at `waiting`;
+    // neither is an eligibility decision and neither should start asking.
+    const a = await makeTicket({ type: "warranty_claim", status: "waiting" });
+    expect(await adminUpdateTicketStatusAction(a.id, "on_progress")).toMatchObject({
+      success: true,
+    });
+
+    const b = await makeTicket({ type: "warranty_claim", status: "waiting" });
+    expect(await adminUpdateTicketStatusAction(b.id, "rejected")).toMatchObject({
+      success: true,
+    });
+  });
+
   it("applies to Sales too", async () => {
     session.role = "Sales";
     const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });

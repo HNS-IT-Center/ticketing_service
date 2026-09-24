@@ -268,6 +268,19 @@ export async function adminUpdateTicketStatusAction(
   });
   if (!ticket) return { error: "Ticket not found" };
 
+  // A ticket sitting with the RMA desk is driven from the RMA portal only. The
+  // same guard exists in updateTicketStatusAction for technicians; without it
+  // here, that one is trivially bypassed by asking an administrator, and the
+  // ticket would drift out of `rma_process` while its RmaCase is still open.
+  // The legitimate way to abandon a claim is transitionRmaAction -> cancelled,
+  // which closes the case and returns the ticket to `done` itself.
+  if (ticket.status === "rma_process") {
+    return {
+      error:
+        "Tiket ini sedang diproses RMA. Status hanya dapat diubah dari portal RMA sampai case-nya ditutup.",
+    };
+  }
+
   await db.$transaction([
     db.ticket.update({
       where: { id: ticketId },

@@ -152,6 +152,8 @@ Kolom **Hasil** diisi PASS / FAIL. Kolom **Bukti** diisi nama file screenshot.
 | D-08 | Sales juga terikat | Ulangi D-06 sebagai Sales | Ditolak dengan pesan yang sama | | |
 | D-09 | Hasilnya identik dengan jalur teknisi | Bandingkan tiket dari D-07 dengan tiket dari D-02 (ditandai teknisi) | Keduanya `claim_eligible = false` dengan alasan tersimpan, dan halaman publiknya menampilkan banner kuning yang sama | | |
 | D-10 | Tipe lain tidak terpengaruh | Sebagai admin, tutup tiket Service `on_progress` jadi `done` | Tetap bisa tanpa alasan, seperti sebelumnya | | |
+| D-11 | **Tidak bisa dipintas dari `waiting`** | Buat tiket klaim baru, biarkan `waiting` (jangan di-approve) → sebagai admin paksa statusnya jadi `done` | Ditolak dengan pesan yang sama. Status tetap `waiting`, tidak ada Status History baru, tiket tidak ditandai apa pun. Diisi alasan → baru berhasil, dan penandanya ikut tertulis | | |
+| D-12 | Approve & Reject di `waiting` tidak ikut terkunci | Pada tiket klaim `waiting`, klik Approve, lalu pada tiket klaim lain klik Reject | Keduanya tetap jalan tanpa diminta alasan tidak-layak (Reject tetap punya alur alasannya sendiri) | | |
 | D-05 | Tampilan publik jujur | Buka halaman publik tiket ini (`/{tanggal}/{kode}`) | Banner kuning "Klaim tidak memenuhi syarat garansi" beserta alasan teknisi. Tidak tertulis "Selesai Dikerjakan" saja | | |
 
 ### E. Akses & navigasi portal RMA

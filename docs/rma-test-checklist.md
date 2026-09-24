@@ -14,14 +14,15 @@
 
 ## ⚠️ STATUS IMPLEMENTASI — BACA SEBELUM MULAI
 
-Fase 1–5 sudah selesai. **Fase 6 belum dikerjakan.** Test case berikut menguji fitur
+Fase 1–5 sudah selesai. **Fase 6 sedang dikerjakan.** Test case berikut menguji fitur
 yang belum ada, jadi **LEWATI** — kegagalannya bukan bug:
 
 | Test case | Kenapa dilewati |
 |---|---|
-| **D-05** | Label hasil klaim di halaman publik belum dibuat |
-| **G-01, G-02, G-03** | Seluruh penyesuaian halaman publik belum dibuat. Halaman tracking belum mengenal status `rma_process` sama sekali, sehingga timeline akan tampak kosong untuk tiket yang sedang di RMA |
 | **H-05** | Aturan KPI anti-double-count belum diterapkan di `lib/leaderboard.ts` dan `lib/performance.ts`. Poin klaim masih dihitung dengan cara lama |
+
+**D-05 dan G-01–G-03 sudah bisa diuji.** Halaman publik kini mengenal `rma_process` dan
+membedakan ketiga hasil akhir klaim lewat banner di atas rincian tiket.
 
 Dua ekspektasi yang perlu dikoreksi sebelum diuji:
 
@@ -40,7 +41,7 @@ Memastikan tiket bertipe `warranty_claim` hanya bisa keluar dari status `on_prog
 
 **Termasuk:** pembuatan tiket klaim, pemeriksaan teknisi, serah terima ke RMA, verifikasi RMA, pengajuan ke vendor, keputusan vendor, penutupan case, pengembalian unit ke customer, hak akses per role.
 
-**Tidak termasuk:** mutasi stok gudang, approval kepala toko/gudang, integrasi WhatsApp, portal customer (nonaktif), halaman publik (Fase 6).
+**Tidak termasuk:** mutasi stok gudang, approval kepala toko/gudang, integrasi WhatsApp, portal customer (nonaktif).
 
 ## 3. Akun uji
 
@@ -121,7 +122,7 @@ Kolom **Hasil** diisi PASS / FAIL. Kolom **Bukti** diisi nama file screenshot.
 | D-02 | Penandaan berhasil | Isi alasan → submit | Status jadi `done`, tiket ditandai tidak layak klaim beserta alasannya | | |
 | D-03 | Unit bisa dikembalikan | `done` → `ready_for_pickup` atau `handed_to_courier` → `completed` | Alur pengembalian normal seperti tiket biasa | | |
 | D-04 | Tidak masuk antrean RMA | Login RMA → dashboard | Tiket ini tidak muncul | | |
-| D-05 | ~~Tampilan publik jujur~~ | **LEWATI — Fase 6** | — | SKIP | — |
+| D-05 | Tampilan publik jujur | Buka halaman publik tiket ini (`/{tanggal}/{kode}`) | Banner kuning "Klaim tidak memenuhi syarat garansi" beserta alasan teknisi. Tidak tertulis "Selesai Dikerjakan" saja | | |
 
 ### E. Akses & navigasi portal RMA
 
@@ -162,13 +163,19 @@ Kolom **Hasil** diisi PASS / FAIL. Kolom **Bukti** diisi nama file screenshot.
 | F-17 | Timeline dashboard | Lihat "Aktivitas Terbaru" di dashboard RMA | Perpindahan terakhir dari semua case tampil, tiap baris menuju case yang benar | | |
 | F-18 | Preview nota | Detail case → "Lihat Nota Pembelian" | Terbuka di modal, bukan tab baru; ada opsi Unduh dan Buka di Tab Baru | | |
 
-### G. Halaman publik — **SELURUHNYA LEWATI, FASE 6**
+### G. Halaman publik
 
-| ID | Skenario | Hasil | Bukti |
-|---|---|---|---|
-| G-01 | ~~Tracking saat di RMA~~ | SKIP | — |
-| G-02 | ~~Data internal tidak bocor~~ | SKIP | — |
-| G-03 | ~~Tiga hasil akhir berbeda~~ | SKIP | — |
+Halaman publik dibuka tanpa login di `/{tanggal}/{kode-tiket}` — tombol Share di detail tiket
+menyalin URL-nya. Uji di jendela incognito supaya benar-benar tanpa session.
+
+| ID | Skenario | Langkah | Hasil yang diharapkan | Hasil | Bukti |
+|---|---|---|---|---|---|
+| G-01 | Tracking saat di RMA | Buka halaman publik tiket ber-status `rma_process` | Timeline TIDAK kosong; langkah terakhir berbunyi "Proses Klaim Garansi", bukan "rma process". Banner biru sesuai tahap case: `pending_verification`/`on_hold`/`verified` → "Klaim sedang diverifikasi"; `submitted_to_vendor`/`in_vendor_process` → "Klaim sedang diproses vendor"; `vendor_decided`/`unit_received` → "Keputusan vendor sudah keluar" | | |
+| G-02 | Data internal tidak bocor | Di halaman yang sama, tekan Ctrl+U (view source) lalu cari nomor RMA vendor, alasan on hold, catatan keputusan, asal stok, dan isi catatan timeline case | Tidak satu pun muncul — termasuk di HTML mentah, bukan hanya di tampilan | | |
+| G-03 | Tiga hasil akhir berbeda | Buka halaman publik dari tiga tiket: (a) tidak layak klaim, (b) case ditutup dengan keputusan `rejected`, (c) case ditutup dengan `repaired`/`replaced`/`refund` | Tiga banner berbeda: "Klaim tidak memenuhi syarat garansi" (kuning) / "Klaim ditolak vendor" (kuning) / "Unit diperbaiki oleh vendor" — "Unit diganti oleh vendor" — "Dana dikembalikan" (hijau). Ketiganya sama-sama ber-status `completed`, jadi banner-lah satu-satunya pembeda | | |
+| G-04 | Keputusan belum diumumkan | Buka halaman publik case ber-status `vendor_decided` dengan keputusan `rejected` | Hanya "Keputusan vendor sudah keluar". Isi keputusan belum dibocorkan selama unit masih di vendor | | |
+| G-05 | Case dibatalkan | Batalkan sebuah case (`cancelled`), buka halaman publiknya | "Proses klaim dihentikan" (abu-abu), bukan "Klaim ditolak vendor". Alasan pembatalan tidak tampil | | |
+| G-06 | Tiket non-klaim | Buka halaman publik tiket Service yang sudah `completed` | Tidak ada banner klaim sama sekali. Label timeline berbahasa Indonesia ("Selesai Dikerjakan", "Siap Diambil"), bukan enum mentah | | |
 
 ### H. Regresi tipe tiket lain
 

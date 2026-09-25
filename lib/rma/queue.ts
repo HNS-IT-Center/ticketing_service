@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import type { RmaStatus } from "@prisma/client";
 import { cleanVendorName, vendorKey } from "@/lib/rma/vendor";
+import { countByBrand, DEVICE_TYPE_LABELS } from "@/lib/rma/device";
 
 /**
  * Data for the RMA dashboard: the queue and its headline numbers.
@@ -82,8 +83,16 @@ export async function getRmaQueue() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [cases, closedCount, cancelledCount, closedThisMonth, openedThisMonth, closedCases, decisions] =
-    await Promise.all([
+  const [
+    cases,
+    closedCount,
+    cancelledCount,
+    closedThisMonth,
+    openedThisMonth,
+    claimTickets,
+    closedCases,
+    decisions,
+  ] = await Promise.all([
       db.rmaCase.findMany({
         where: { status: { in: [...RMA_QUEUE_STATUSES] } },
         orderBy: { created_at: "asc" },
@@ -120,6 +129,13 @@ export async function getRmaQueue() {
       db.rmaCase.count({ where: { status: "cancelled" } }),
       db.rmaCase.count({ where: { status: "closed", closed_at: { gte: monthStart } } }),
       db.rmaCase.count({ where: { created_at: { gte: monthStart } } }),
+      // Every warranty claim ever raised, for the brand and device-type mix.
+      // Deliberately all of them, open and closed: the question "which brand
+      // gets claimed most" is not about the current backlog.
+      db.ticket.findMany({
+        where: { ticket_type: "warranty_claim" },
+        select: { device_name: true, device_type: true },
+      }),
       // Every closed case, for the average turnaround and its trend.
       db.rmaCase.findMany({
         where: { status: "closed", closed_at: { not: null } },
@@ -246,6 +262,27 @@ export async function getRmaQueue() {
       }
       return [...byKey.values()].sort((a, b) => b.oldestDays - a.oldestDays || b.open - a.open);
     })(),
+
+    /** Claims per manufacturer, across every claim ever raised. */
+    brands: countByBrand(claimTickets.map((t) => t.device_name)),
+
+    /** Claims per device category, using the enum rather than free text. */
+    deviceTypes: (() => {
+      const counts = new Map<string, number>();
+      for (const t of claimTickets) {
+        counts.set(t.device_type, (counts.get(t.device_type) ?? 0) + 1);
+      }
+      return [...counts.entries()]
+        .map(([type, count]) => ({
+          type,
+          label: DEVICE_TYPE_LABELS[type as keyof typeof DEVICE_TYPE_LABELS] ?? type,
+          count,
+        }))
+        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    })(),
+
+    /** Denominator for both breakdowns above. */
+    totalClaims: claimTickets.length,
   };
 
   return { rows, stats, closedCount, cancelledCount };

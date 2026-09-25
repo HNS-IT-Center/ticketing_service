@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { getTicketPoints } from "@/lib/points";
+import { canonicalVendorName, cleanVendorName } from "@/lib/rma/vendor";
 import {
   canActOnRma,
   releasesTicket,
@@ -337,9 +338,26 @@ export async function transitionRmaAction(formData: FormData) {
     }
     if (!rmaCaseId || !toStatus) return { error: "RMA case not found" };
 
+    // Fold a newly typed vendor onto one already in use when they differ only
+    // by case or spacing, so per-vendor figures do not split. See lib/rma/vendor.ts.
+    const typedVendor = (formData.get("vendor_name") as string | null) || "";
+    let vendorName: string | null = null;
+    if (cleanVendorName(typedVendor)) {
+      const known = await db.rmaCase.findMany({
+        where: { vendor_name: { not: null } },
+        distinct: ["vendor_name"],
+        select: { vendor_name: true },
+      });
+      vendorName =
+        canonicalVendorName(
+          typedVendor,
+          known.map((k) => k.vendor_name!).filter(Boolean)
+        ) || null;
+    }
+
     const input: RmaTransitionInput = {
       hold_reason: ((formData.get("hold_reason") as string | null) || "").trim() || null,
-      vendor_name: ((formData.get("vendor_name") as string | null) || "").trim() || null,
+      vendor_name: vendorName,
       vendor_rma_number: ((formData.get("vendor_rma_number") as string | null) || "").trim() || null,
       shipping_tracking: ((formData.get("shipping_tracking") as string | null) || "").trim() || null,
       decision: ((formData.get("decision") as string | null) || "").trim() as RmaDecision | null,

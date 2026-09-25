@@ -3,7 +3,7 @@ import { requireRole } from "@/lib/session";
 import { getRmaQueue, RMA_STAGE_SLA, VENDOR_OVERDUE_DAYS } from "@/lib/rma/queue";
 import AttentionCard from "./AttentionCard";
 import { RMA_DECISION_LABELS } from "@/components/rma/RmaStatusCard";
-import { AlertTriangle, Clock, Factory, CheckCircle2, ListChecks, History, CheckCircle } from "lucide-react";
+import { AlertTriangle, Clock, Factory, CheckCircle2, ListChecks, History, CheckCircle, UserX, Timer } from "lucide-react";
 
 export const metadata = { title: "Dashboard RMA — HNS IT Center" };
 
@@ -133,6 +133,29 @@ export default async function RmaDashboardPage() {
           label="Lewat Tenggat"
           hint="Melewati target tahapannya"
           tone={stats.pastDue > 0 ? { bg: "#fee2e2", fg: "#991b1b" } : undefined}
+        />
+        <StatCard
+          icon={<UserX size={20} />}
+          value={stats.unassigned}
+          label="Tanpa PIC"
+          hint={stats.unassigned > 0 ? "Belum ada yang memegang" : "Semua case ada pemiliknya"}
+          tone={stats.unassigned > 0 ? { bg: "#fef3c7", fg: "#92400e" } : undefined}
+        />
+        <StatCard
+          icon={<Timer size={20} />}
+          value={stats.resolution.thisMonth ?? stats.resolution.overall ?? 0}
+          label="Rata-rata Selesai (hari)"
+          hint={
+            stats.resolution.sample === 0
+              ? "Belum ada case yang ditutup"
+              : stats.resolution.thisMonth !== null && stats.resolution.previous !== null
+                ? stats.resolution.thisMonth < stats.resolution.previous
+                  ? `Lebih cepat dari ${stats.resolution.previous} hari sebelumnya`
+                  : stats.resolution.thisMonth > stats.resolution.previous
+                    ? `Lebih lambat dari ${stats.resolution.previous} hari sebelumnya`
+                    : "Sama dengan bulan sebelumnya"
+                : `Dari ${stats.resolution.sample} case tertutup`
+          }
         />
         <StatCard
           icon={<CheckCircle2 size={20} />}
@@ -274,31 +297,103 @@ export default async function RmaDashboardPage() {
         </>
       )}
 
-      {decisionEntries.length > 0 && (
-        <div className="card">
-          <h3 style={{ margin: "0 0 0.75rem" }}>Keputusan Vendor</h3>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-            {decisionEntries.map(([decision, count]) => (
-              <span
-                key={decision}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: "0.4rem",
-                  background: "var(--cream)",
-                  border: "1px solid var(--border)",
-                  borderRadius: "999px",
-                  padding: "0.3rem 0.75rem",
-                  fontSize: "0.8125rem",
-                }}
-              >
-                {RMA_DECISION_LABELS[decision] ?? decision}
-                <strong>{count}</strong>
+      {/* ── Hasil klaim & vendor ────────────────────────────────────────── */}
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+          gap: "1rem",
+          alignItems: "start",
+        }}
+      >
+        {stats.outcome.decided > 0 && (
+          <div className="card">
+            <h3 style={{ margin: "0 0 0.25rem" }}>Hasil Klaim</h3>
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.85rem" }}>
+              Dari {stats.outcome.decided} klaim yang sudah diputus vendor. Klaim yang masih
+              berjalan belum dihitung.
+            </p>
+
+            <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginBottom: "0.85rem" }}>
+              <span style={{ fontSize: "2rem", fontWeight: 700, lineHeight: 1 }}>
+                {stats.outcome.successRate}%
               </span>
-            ))}
+              <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+                disetujui ({stats.outcome.approved} dari {stats.outcome.decided})
+              </span>
+            </div>
+
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+              {decisionEntries.map(([decision, count]) => (
+                <span
+                  key={decision}
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "0.4rem",
+                    background: decision === "rejected" ? "#fef2f2" : "var(--cream)",
+                    border: `1px solid ${decision === "rejected" ? "#fecaca" : "var(--border)"}`,
+                    color: decision === "rejected" ? "#991b1b" : undefined,
+                    borderRadius: "999px",
+                    padding: "0.3rem 0.75rem",
+                    fontSize: "0.8125rem",
+                  }}
+                >
+                  {RMA_DECISION_LABELS[decision] ?? decision}
+                  <strong>{count}</strong>
+                </span>
+              ))}
+            </div>
           </div>
-        </div>
-      )}
+        )}
+
+        {stats.vendors.length > 0 && (
+          <div className="card">
+            <h3 style={{ margin: "0 0 0.25rem" }}>Case per Vendor</h3>
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
+              Yang masih berjalan, menunggu terlama di atas.
+            </p>
+            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+              {stats.vendors.map((v) => (
+                <li
+                  key={v.name}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    gap: "0.75rem",
+                    padding: "0.55rem 0",
+                    borderTop: "1px solid var(--border)",
+                  }}
+                >
+                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                    {v.name}
+                  </span>
+                  <span style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
+                    <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                      {v.open} case
+                    </span>
+                    <span
+                      style={{
+                        fontFamily: "ui-monospace, monospace",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        borderRadius: "999px",
+                        padding: "0.15rem 0.55rem",
+                        background: v.oldestDays >= VENDOR_OVERDUE_DAYS ? "#fef2f2" : "var(--cream)",
+                        color: v.oldestDays >= VENDOR_OVERDUE_DAYS ? "#991b1b" : "var(--text-secondary)",
+                        border: `1px solid ${v.oldestDays >= VENDOR_OVERDUE_DAYS ? "#fecaca" : "var(--border)"}`,
+                      }}
+                    >
+                      {v.oldestDays} hari
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
 
       {/* Aktivitas pindah ke halaman sendiri: dashboard ini untuk bertindak,
           bukan untuk membaca riwayat. */}

@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import type { RmaStatus } from "@prisma/client";
+import { cleanVendorName, vendorKey } from "@/lib/rma/vendor";
 
 /**
  * Data for the RMA dashboard: the queue and its headline numbers.
@@ -81,7 +82,7 @@ export async function getRmaQueue() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [cases, closedCount, cancelledCount, closedThisMonth, openedThisMonth, decisions] =
+  const [cases, closedCount, cancelledCount, closedThisMonth, openedThisMonth, closedCases, decisions] =
     await Promise.all([
       db.rmaCase.findMany({
         where: { status: { in: [...RMA_QUEUE_STATUSES] } },
@@ -119,6 +120,11 @@ export async function getRmaQueue() {
       db.rmaCase.count({ where: { status: "cancelled" } }),
       db.rmaCase.count({ where: { status: "closed", closed_at: { gte: monthStart } } }),
       db.rmaCase.count({ where: { created_at: { gte: monthStart } } }),
+      // Every closed case, for the average turnaround and its trend.
+      db.rmaCase.findMany({
+        where: { status: "closed", closed_at: { not: null } },
+        select: { created_at: true, closed_at: true },
+      }),
       db.rmaCase.groupBy({
         by: ["decision"],
         where: { decision: { not: null } },
@@ -174,6 +180,72 @@ export async function getRmaQueue() {
     decisions: Object.fromEntries(
       decisions.map((d) => [d.decision as string, d._count._all])
     ) as Record<string, number>,
+
+    /** Active cases nobody has taken. Work with no owner is work that stalls. */
+    unassigned: rows.filter((r) => !r.handler).length,
+
+    /**
+     * Turnaround, and whether it is moving. `previous` is cases closed before
+     * this month, so the two never overlap and the comparison is honest; it is
+     * null until there is something to compare against.
+     */
+    resolution: (() => {
+      const daysToClose = (c: { created_at: Date; closed_at: Date | null }) =>
+        Math.round((c.closed_at!.getTime() - c.created_at.getTime()) / 86_400_000);
+      const mean = (xs: number[]) =>
+        xs.length ? Math.round(xs.reduce((a, b) => a + b, 0) / xs.length) : null;
+
+      const thisMonth = closedCases.filter((c) => c.closed_at! >= monthStart);
+      const earlier = closedCases.filter((c) => c.closed_at! < monthStart);
+
+      return {
+        overall: mean(closedCases.map(daysToClose)),
+        thisMonth: mean(thisMonth.map(daysToClose)),
+        previous: mean(earlier.map(daysToClose)),
+        sample: closedCases.length,
+      };
+    })(),
+
+    /**
+     * How claims that reached a verdict turned out. Counts decisions, not
+     * cases: a case still at the vendor has no verdict to report yet.
+     */
+    outcome: (() => {
+      const counts = Object.fromEntries(
+        decisions.map((d) => [d.decision as string, d._count._all])
+      ) as Record<string, number>;
+      const decided = Object.values(counts).reduce((a, b) => a + b, 0);
+      const rejected = counts.rejected ?? 0;
+      return {
+        decided,
+        rejected,
+        approved: decided - rejected,
+        /** null rather than 100% when nothing has been decided yet. */
+        successRate: decided > 0 ? Math.round(((decided - rejected) / decided) * 100) : null,
+      };
+    })(),
+
+    /**
+     * Open cases per vendor, worst wait first — who to chase. Grouped on the
+     * folded name so one vendor spelled two ways counts once; see
+     * lib/rma/vendor.ts.
+     */
+    vendors: (() => {
+      const byKey = new Map<string, { name: string; open: number; oldestDays: number }>();
+      for (const r of rows) {
+        if (!r.vendor_name) continue;
+        const key = vendorKey(r.vendor_name);
+        const entry = byKey.get(key) ?? {
+          name: cleanVendorName(r.vendor_name),
+          open: 0,
+          oldestDays: 0,
+        };
+        entry.open += 1;
+        entry.oldestDays = Math.max(entry.oldestDays, r.daysAtVendor ?? r.daysInStage);
+        byKey.set(key, entry);
+      }
+      return [...byKey.values()].sort((a, b) => b.oldestDays - a.oldestDays || b.open - a.open);
+    })(),
   };
 
   return { rows, stats, closedCount, cancelledCount };

@@ -90,6 +90,7 @@ export async function getRmaQueue() {
     cancelledCount,
     closedThisMonth,
     openedThisMonth,
+    awaitingCheckRaw,
     claimTickets,
     closedCases,
     decisions,
@@ -106,6 +107,8 @@ export async function getRmaQueue() {
           submitted_at: true,
           created_at: true,
           hold_reason: true,
+          recommended_eligible: true,
+          recommendation_note: true,
           handler: { select: { id: true, name: true } },
           // When the case entered its current stage. Every RMA transition
           // writes an event, so the newest one is the stage's start.
@@ -130,6 +133,28 @@ export async function getRmaQueue() {
       db.rmaCase.count({ where: { status: "cancelled" } }),
       db.rmaCase.count({ where: { status: "closed", closed_at: { gte: monthStart } } }),
       db.rmaCase.count({ where: { created_at: { gte: monthStart } } }),
+      // Claims the desk can already see but cannot act on: the technician still
+      // has the unit. Read-only on the dashboard so the desk knows what is
+      // coming without an RmaCase row existing before the handover.
+      db.ticket.findMany({
+        where: {
+          ticket_type: "warranty_claim",
+          status: { in: ["waiting", "on_progress"] },
+          rma_case: { is: null },
+        },
+        orderBy: { created_at: "asc" },
+        select: {
+          id: true,
+          ticket_code: true,
+          status: true,
+          created_at: true,
+          customer_name: true,
+          device_name: true,
+          device_sn: true,
+          store_location: { select: { code: true } },
+          technician: { select: { name: true } },
+        },
+      }),
       // Every warranty claim ever raised, for the brand and device-type mix.
       // Deliberately all of them, open and closed: the question "which brand
       // gets claimed most" is not about the current backlog.
@@ -152,6 +177,11 @@ export async function getRmaQueue() {
   // One clock read for the whole request, so every row is measured consistently.
   const nowMs = now.getTime();
   const days = (from: Date) => Math.floor((nowMs - new Date(from).getTime()) / 86_400_000);
+
+  const awaitingCheck = awaitingCheckRaw.map((t) => ({
+    ...t,
+    daysWaiting: days(t.created_at),
+  }));
 
   const rows = cases.map((c) => {
     // Falls back to the case's own creation for a row whose events were pruned.
@@ -286,5 +316,5 @@ export async function getRmaQueue() {
     totalClaims: claimTickets.length,
   };
 
-  return { rows, stats, closedCount, cancelledCount };
+  return { rows, awaitingCheck, stats, closedCount, cancelledCount };
 }

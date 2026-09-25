@@ -130,7 +130,7 @@ export default async function RmaDashboardPage() {
 
   // Loaded in lib/rma/queue.ts so every clock-derived number comes from a
   // single instant, outside any component render.
-  const { rows, stats } = await getRmaQueue();
+  const { rows, awaitingCheck, stats } = await getRmaQueue();
 
   const bySection = new Map<string, typeof rows>();
   for (const section of QUEUE_SECTIONS) {
@@ -235,6 +235,111 @@ export default async function RmaDashboardPage() {
           }
         />
       </div>
+
+      {/* ── Menunggu pemeriksaan teknisi (read-only) ─────────────────────── */}
+      {awaitingCheck.length > 0 && (
+        <div className="card">
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ minWidth: 0 }}>
+              <h3 style={{ margin: 0, fontSize: "1rem" }}>Menunggu Pemeriksaan Teknisi</h3>
+              <p style={{ margin: "0.2rem 0 0", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                Klaim yang sudah masuk tapi unitnya masih dipegang teknisi. Belum bisa
+                ditindak dari sini — case RMA baru terbentuk setelah unit diserahkan.
+              </p>
+            </div>
+            <span
+              style={{
+                background: "var(--cream)",
+                border: "1px solid var(--border)",
+                borderRadius: "999px",
+                padding: "0.15rem 0.6rem",
+                fontSize: "0.75rem",
+                fontWeight: 600,
+                whiteSpace: "nowrap",
+              }}
+            >
+              {awaitingCheck.length} tiket
+            </span>
+          </div>
+
+          <ul style={{ listStyle: "none", margin: "0.85rem 0 0", padding: 0 }}>
+            {awaitingCheck.map((t) => (
+              <li
+                key={t.id}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: "0.75rem",
+                  padding: "0.55rem 0",
+                  borderTop: "1px solid var(--border)",
+                }}
+              >
+                <span style={{ minWidth: 0 }}>
+                  <span
+                    style={{
+                      display: "block",
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: "0.875rem",
+                      fontWeight: 600,
+                    }}
+                  >
+                    #{t.ticket_code}
+                    {t.store_location ? ` · ${t.store_location.code}` : ""}
+                  </span>
+                  <span
+                    style={{
+                      display: "block",
+                      fontSize: "0.8125rem",
+                      color: "var(--text-muted)",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {[t.customer_name, t.device_name, t.technician?.name && `PIC ${t.technician.name}`]
+                      .filter(Boolean)
+                      .join(" · ") || "—"}
+                  </span>
+                </span>
+
+                <span style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
+                  <span
+                    style={{
+                      fontSize: "0.7rem",
+                      fontWeight: 600,
+                      borderRadius: "999px",
+                      padding: "0.1rem 0.5rem",
+                      background: t.status === "on_progress" ? "#dbeafe" : "#fef3c7",
+                      color: t.status === "on_progress" ? "#1e40af" : "#92400e",
+                    }}
+                  >
+                    {t.status === "on_progress" ? "Diperiksa" : "Belum diambil"}
+                  </span>
+                  <span
+                    style={{
+                      fontFamily: "ui-monospace, monospace",
+                      fontSize: "0.75rem",
+                      color: "var(--text-muted)",
+                      whiteSpace: "nowrap",
+                    }}
+                  >
+                    {t.daysWaiting} hari
+                  </span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {/* ── Antrean per tahapan ─────────────────────────────────────────── */}
       {rows.length === 0 ? (

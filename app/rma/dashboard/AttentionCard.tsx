@@ -65,15 +65,36 @@ function QueueRow({ row }: { row: RmaQueueRow }) {
           </span>
           <span
             style={{
-              display: "block",
+              display: "flex",
+              alignItems: "center",
+              gap: "0.4rem",
               fontSize: "0.8125rem",
               color: "var(--text-muted)",
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
+              minWidth: 0,
             }}
           >
-            {row.ticket.customer_name || row.ticket.device_name || `#${row.ticket.ticket_code}`}
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {row.ticket.customer_name || row.ticket.device_name || `#${row.ticket.ticket_code}`}
+            </span>
+            {/* What the technician who held the unit thought. Advice, not a
+                verdict — nothing here changes what the desk may do next. */}
+            {row.recommended_eligible === false && (
+              <span
+                title="Rekomendasi teknisi: tidak layak"
+                style={{
+                  flexShrink: 0,
+                  fontSize: "0.6875rem",
+                  fontWeight: 600,
+                  borderRadius: "999px",
+                  padding: "0.05rem 0.4rem",
+                  background: "#fffbeb",
+                  color: "#92400e",
+                  border: "1px solid #fde68a",
+                }}
+              >
+                tek: tidak layak
+              </span>
+            )}
           </span>
         </span>
 

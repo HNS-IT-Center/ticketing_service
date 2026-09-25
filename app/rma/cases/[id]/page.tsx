@@ -47,6 +47,8 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
       fault_description: true,
       test_result: true,
       hold_reason: true,
+      recommended_eligible: true,
+      recommendation_note: true,
       vendor_name: true,
       vendor_rma_number: true,
       shipping_tracking: true,
@@ -179,6 +181,62 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                   label="Lihat Nota Pembelian"
                   title={`Nota Pembelian — ${ticket.ticket_code}`}
                 />
+              </div>
+            )}
+
+            {/* The technician's read on the unit they physically held. Advisory:
+                it must not gate a transition, preselect the desk's choice, or
+                reach the public page. */}
+            {rmaCase.recommended_eligible !== null && (
+              <div
+                style={{
+                  marginTop: "1.25rem",
+                  padding: "0.85rem 1rem",
+                  borderRadius: "var(--radius-md, 10px)",
+                  background: rmaCase.recommended_eligible ? "#f0fdf4" : "#fffbeb",
+                  border: `1px solid ${rmaCase.recommended_eligible ? "#bbf7d0" : "#fde68a"}`,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "0.5rem",
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>
+                    Rekomendasi Teknisi
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      borderRadius: "999px",
+                      padding: "0.1rem 0.55rem",
+                      background: rmaCase.recommended_eligible ? "#dcfce7" : "#fef3c7",
+                      color: rmaCase.recommended_eligible ? "#15803d" : "#92400e",
+                    }}
+                  >
+                    {rmaCase.recommended_eligible ? "Layak diklaim" : "Tidak layak"}
+                  </span>
+                </div>
+                {rmaCase.recommendation_note && (
+                  <p
+                    style={{
+                      margin: "0.5rem 0 0",
+                      fontSize: "0.8125rem",
+                      color: "var(--text-secondary)",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {rmaCase.recommendation_note}
+                  </p>
+                )}
+                <p style={{ margin: "0.5rem 0 0", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                  Masukan dari teknisi yang memeriksa unit. Keputusan kelayakan tetap ada pada
+                  tim RMA.
+                </p>
               </div>
             )}
 

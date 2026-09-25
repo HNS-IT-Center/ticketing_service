@@ -768,7 +768,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             <button
               type="button"
               onClick={submit}
-              disabled={isPending || ticketType === "warranty_claim"}
+              disabled={isPending}
               className="btn btn-primary"
               style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
             >

@@ -2,8 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { getRmaQueue, RMA_STAGE_SLA, VENDOR_OVERDUE_DAYS } from "@/lib/rma/queue";
 import AttentionCard from "./AttentionCard";
-import { formatDateTime } from "@/lib/utils";
-import { RMA_DECISION_LABELS, rmaStatusMeta } from "@/components/rma/RmaStatusCard";
+import { RMA_DECISION_LABELS } from "@/components/rma/RmaStatusCard";
 import { AlertTriangle, Clock, Factory, CheckCircle2, ListChecks, History, CheckCircle } from "lucide-react";
 
 export const metadata = { title: "Dashboard RMA — HNS IT Center" };
@@ -73,7 +72,7 @@ export default async function RmaDashboardPage() {
 
   // Loaded in lib/rma/queue.ts so every clock-derived number comes from a
   // single instant, outside any component render.
-  const { rows, activity, stats } = await getRmaQueue();
+  const { rows, stats } = await getRmaQueue();
 
   const bySection = new Map<string, typeof rows>();
   for (const section of QUEUE_SECTIONS) {
@@ -282,82 +281,33 @@ export default async function RmaDashboardPage() {
         </div>
       )}
 
-      {/* ── Timeline aktivitas lintas case ──────────────────────────────── */}
-      <div className="card">
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.25rem" }}>
-          <History size={16} style={{ color: "var(--text-muted)" }} />
-          <h3 style={{ margin: 0 }}>Aktivitas Terbaru</h3>
-        </div>
-        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0 0 1rem" }}>
-          Perpindahan status terakhir dari semua case RMA.
-        </p>
-
-        {activity.length === 0 ? (
-          <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
-            Belum ada aktivitas.
-          </p>
-        ) : (
-          <ol style={{ display: "flex", flexDirection: "column", gap: "0.875rem", listStyle: "none", padding: 0, margin: 0 }}>
-            {activity.map((event, i) => {
-              const { label, colors, Icon } = rmaStatusMeta(event.to_status);
-              const fromLabel = event.from_status ? rmaStatusMeta(event.from_status).label : null;
-              return (
-                <li key={event.id} style={{ display: "flex", gap: "0.75rem" }}>
-                  <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-                    <span
-                      style={{
-                        width: "1.5rem",
-                        height: "1.5rem",
-                        borderRadius: "50%",
-                        background: colors.bg,
-                        color: colors.fg,
-                        border: `1px solid ${colors.border}`,
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <Icon size={12} />
-                    </span>
-                    {i < activity.length - 1 && (
-                      <span style={{ width: "1px", flex: 1, background: "var(--border)", marginTop: "0.25rem" }} />
-                    )}
-                  </div>
-
-                  <div style={{ minWidth: 0, paddingBottom: "0.25rem", flex: 1 }}>
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "baseline", gap: "0.35rem" }}>
-                      <Link
-                        href={`/rma/cases/${event.rma_case.id}`}
-                        style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.8125rem", fontWeight: 600 }}
-                      >
-                        {event.rma_case.rma_code}
-                      </Link>
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                        #{event.rma_case.ticket.ticket_code}
-                      </span>
-                    </div>
-                    <div style={{ fontSize: "0.875rem", fontWeight: 600, marginTop: "0.1rem" }}>
-                      {fromLabel ? `${fromLabel} → ${label}` : label}
-                    </div>
-                    <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                      {formatDateTime(event.created_at)}
-                      {event.daysAgo > 0 ? ` • ${event.daysAgo} hari lalu` : " • hari ini"}
-                      {event.actor ? ` • ${event.actor.name}` : ""}
-                    </div>
-                    {event.note && (
-                      <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", marginTop: "0.15rem", wordBreak: "break-word" }}>
-                        {event.note}
-                      </div>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ol>
-        )}
-      </div>
-
+      {/* Aktivitas pindah ke halaman sendiri: dashboard ini untuk bertindak,
+          bukan untuk membaca riwayat. */}
+      <Link
+        href="/rma/logs"
+        className="card"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: "0.75rem",
+          textDecoration: "none",
+          color: "inherit",
+        }}
+      >
+        <span style={{ display: "flex", alignItems: "center", gap: "0.65rem", minWidth: 0 }}>
+          <History size={18} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
+          <span style={{ minWidth: 0 }}>
+            <span style={{ display: "block", fontWeight: 600 }}>Log Aktivitas</span>
+            <span style={{ display: "block", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+              Riwayat perpindahan status semua case, bisa difilter.
+            </span>
+          </span>
+        </span>
+        <span style={{ color: "var(--primary)", fontWeight: 600, whiteSpace: "nowrap" }}>
+          Buka →
+        </span>
+      </Link>
     </div>
   );
 }

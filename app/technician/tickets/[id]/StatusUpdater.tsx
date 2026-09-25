@@ -8,9 +8,12 @@ import toast from "react-hot-toast";
 import {
   Play, Pause, CheckCircle, XCircle,
   PackageCheck, Truck, ArrowRight, HandshakeIcon,
-  ShieldCheck, ShieldX, FileText,
+  ShieldCheck, FileText,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+
+/** Matches MAX_DAMAGE_PHOTOS in app/actions/rma.ts. */
+const MAX_DAMAGE_PHOTOS = 5;
 
 type Status = string;
 type TimeLog = { id?: string; event: string; created_at: Date | string };
@@ -99,7 +102,6 @@ export default function StatusUpdater({
     | "courier_proof"    // courier: proof of handing package to courier
     | "delivery_proof"   // courier: proof from courier that item was delivered
     | "rma_handover"     // warranty claim: service form before handing to the RMA desk
-    | "claim_ineligible" // warranty claim: technician found the claim not eligible
     | null
   >(null);
   const [reason, setReason] = useState("");
@@ -114,8 +116,44 @@ export default function StatusUpdater({
   const [faultDescription, setFaultDescription] = useState("");
   const [testResult, setTestResult] = useState("");
   const [invoiceUrl, setInvoiceUrl] = useState("");
+  // Evidence and advice the RMA desk needs to rule on the claim.
+  const [damagePhotos, setDamagePhotos] = useState<File[]>([]);
+  const [recommendEligible, setRecommendEligible] = useState<"" | "yes" | "no">("");
+  const [recommendNote, setRecommendNote] = useState("");
+
+  /**
+   * Client-side copy of the server's handover rules.
+   *
+   * The wording is the server's, word for word, so a technician never sees two
+   * different sentences for the same rule. The server still enforces all of it
+   * — this only saves a round trip.
+   */
+  const handoverError = (): string | null => {
+    const photos = damagePhotos.filter((f) => f.size > 0);
+    if (photos.length === 0) {
+      return "Minimal satu foto kondisi/kerusakan unit wajib dilampirkan.";
+    }
+    if (photos.length > MAX_DAMAGE_PHOTOS) {
+      return `Maksimal ${MAX_DAMAGE_PHOTOS} foto kerusakan.`;
+    }
+    const bad = photos.find((f) => !f.type.startsWith("image/"));
+    if (bad) return `Foto kerusakan harus berupa gambar. "${bad.name}" bukan gambar.`;
+
+    if (recommendEligible !== "yes" && recommendEligible !== "no") {
+      return "Rekomendasi teknisi (layak / tidak layak) wajib dipilih.";
+    }
+    if (recommendEligible === "no" && !recommendNote.trim()) {
+      return "Catatan wajib diisi bila rekomendasi teknisi adalah tidak layak.";
+    }
+    return null;
+  };
 
   const handleHandover = () => {
+    const problem = handoverError();
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
     startTransition(async () => {
       const fd = new FormData();
       fd.append("ticketId", ticketId);
@@ -127,6 +165,11 @@ export default function StatusUpdater({
       if (unitOwnership === "store_stock") fd.append("stock_origin", stockOrigin);
       if (unitOwnership === "customer" && invoiceUrl) fd.append("purchase_invoice_url", invoiceUrl);
       files.forEach((f) => fd.append("invoice_files", f));
+      damagePhotos
+        .filter((f) => f.size > 0)
+        .forEach((f) => fd.append("damage_files", f));
+      fd.append("recommended_eligible", recommendEligible);
+      if (recommendNote.trim()) fd.append("recommendation_note", recommendNote.trim());
 
       const result = await handoverToRmaAction(fd);
       if ("error" in result && result.error) {
@@ -148,6 +191,9 @@ export default function StatusUpdater({
 
   const closeDialog = () => {
     setActiveDialog(null);
+    setDamagePhotos([]);
+    setRecommendEligible("");
+    setRecommendNote("");
     setReason("");
     setFiles([]);
   };
@@ -498,13 +544,6 @@ export default function StatusUpdater({
                 >
                   <ShieldCheck className="mr-2 h-4 w-4" /> Serahkan ke RMA
                 </button>
-                <button
-                  onClick={() => setActiveDialog("claim_ineligible")}
-                  disabled={isPending}
-                  className="btn btn-secondary px-4 py-2.5"
-                >
-                  <ShieldX className="mr-2 h-4 w-4" /> Tidak layak klaim
-                </button>
               </>
             ) : (
               <button
@@ -819,6 +858,80 @@ export default function StatusUpdater({
             />
           </div>
 
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+            <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              Foto Kondisi / Kerusakan <span style={{ color: "var(--accent-brand)" }}>*</span>
+            </label>
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+              1–{MAX_DAMAGE_PHOTOS} foto, gambar saja. Tim RMA memutuskan kelayakan klaim dari
+              foto ini — tanpa foto mereka hanya punya tulisan.
+            </p>
+            <FileUpload
+              onChange={setDamagePhotos}
+              accept="image/*,image/heic,image/heif"
+              maxFiles={MAX_DAMAGE_PHOTOS}
+            />
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+            <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              Rekomendasi Anda <span style={{ color: "var(--accent-brand)" }}>*</span>
+            </label>
+            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+              Menurut pemeriksaan Anda, apakah unit ini layak diklaim? Ini{" "}
+              <strong>masukan</strong>, bukan keputusan — tim RMA yang memutuskan.
+            </p>
+            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.25rem" }}>
+              {([
+                { value: "yes", label: "Layak diklaim", bg: "#f0fdf4", fg: "#15803d", border: "#bbf7d0" },
+                { value: "no", label: "Tidak layak", bg: "#fffbeb", fg: "#92400e", border: "#fde68a" },
+              ] as const).map((opt) => {
+                const active = recommendEligible === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => setRecommendEligible(opt.value)}
+                    className="btn"
+                    style={{
+                      background: active ? opt.bg : "transparent",
+                      color: active ? opt.fg : "var(--text-secondary)",
+                      border: `1px solid ${active ? opt.border : "var(--border)"}`,
+                      fontWeight: active ? 700 : 500,
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+            <label htmlFor="rma-recommend-note" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+              Catatan Rekomendasi{" "}
+              {recommendEligible === "no" ? (
+                <span style={{ color: "var(--accent-brand)" }}>*</span>
+              ) : (
+                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 400 }}>
+                  (opsional)
+                </span>
+              )}
+            </label>
+            <textarea
+              id="rma-recommend-note"
+              className="form-input"
+              rows={2}
+              value={recommendNote}
+              onChange={(e) => setRecommendNote(e.target.value)}
+              placeholder={
+                recommendEligible === "no"
+                  ? "Wajib diisi. Misal: ada bekas cairan di board"
+                  : "Opsional. Hal yang perlu diketahui tim RMA"
+              }
+            />
+          </div>
+
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
             <button className="btn btn-ghost" onClick={closeDialog} disabled={isPending}>
               Batal
@@ -835,61 +948,6 @@ export default function StatusUpdater({
         </div>
       </Modal>
 
-      {/* Warranty claim: technician found the claim not eligible */}
-      <Modal
-        open={activeDialog === "claim_ineligible"}
-        onClose={closeDialog}
-        title="Tandai Tidak Layak Klaim"
-        maxWidth="560px"
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <ProofStepInfo
-            step={1}
-            total={1}
-            icon={<ShieldX size={18} />}
-            title="Klaim tidak memenuhi syarat"
-            description="Tiket ditutup sebagai selesai dan unit tetap dikembalikan ke customer lewat alur serah terima biasa. Alasan ini tercatat pada tiket."
-          />
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label htmlFor="ineligible-reason" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Alasan Tidak Layak <span style={{ color: "var(--accent-brand)" }}>*</span>
-            </label>
-            <textarea
-              id="ineligible-reason"
-              className="form-input"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Misal: kerusakan akibat cairan, di luar cakupan garansi"
-            />
-          </div>
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Bukti Pemeriksaan{" "}
-              <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 400 }}>
-                (opsional)
-              </span>
-            </label>
-            <FileUpload onChange={setFiles} />
-          </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-            <button className="btn btn-ghost" onClick={closeDialog} disabled={isPending}>
-              Batal
-            </button>
-            <button
-              className="btn"
-              style={{ background: "var(--destructive)", color: "white" }}
-              onClick={() => handleAction("done", "DONE", { requireReason: true })}
-              disabled={isPending}
-            >
-              {isPending ? "Menyimpan..." : "Tandai Tidak Layak"}
-            </button>
-          </div>
-        </div>
-      </Modal>
     </>
   );
 }

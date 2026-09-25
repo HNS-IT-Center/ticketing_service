@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from "react";
 import toast from "react-hot-toast";
 import type { RmaStatus } from "@prisma/client";
 import Modal from "@/components/ui/Modal";
+import FileUpload from "@/components/ui/FileUpload";
 import { transitionRmaAction } from "@/app/actions/rma";
 import {
   canActOnRma,
@@ -38,6 +39,9 @@ const FIELD_INPUTS: Record<
 };
 
 /** Fields that are useful on a transition without being required by it. */
+/** Matches MAX_DAMAGE_PHOTOS in app/actions/rma.ts. */
+const MAX_INELIGIBLE_PHOTOS = 5;
+
 type OptionalField = "shipping_tracking" | "decision_notes";
 
 const OPTIONAL_FIELDS: Partial<Record<RmaStatus, readonly OptionalField[]>> = {
@@ -70,6 +74,9 @@ export default function RmaActionPanel({
   const [isPending, startTransition] = useTransition();
   const [active, setActive] = useState<RmaTransition | null>(null);
   const [values, setValues] = useState<Record<string, string>>({});
+  // Turning a claim down is the one desk decision the customer sees, so it
+  // carries the same evidence burden the technician does at handover.
+  const [photos, setPhotos] = useState<File[]>([]);
 
   // Status AND role both gate the buttons, matching the server's own checks.
   const allowed = useMemo(
@@ -80,6 +87,7 @@ export default function RmaActionPanel({
   const close = () => {
     setActive(null);
     setValues({});
+    setPhotos([]);
   };
 
   const setValue = (key: string, value: string) =>
@@ -101,6 +109,25 @@ export default function RmaActionPanel({
       return;
     }
 
+    // Same rules and the same wording as the server, so nobody is told two
+    // different things about one requirement.
+    if (active.to === "ineligible") {
+      const valid = photos.filter((f) => f.size > 0);
+      if (valid.length === 0) {
+        toast.error("Minimal satu foto bukti wajib dilampirkan saat menolak klaim.");
+        return;
+      }
+      if (valid.length > MAX_INELIGIBLE_PHOTOS) {
+        toast.error(`Maksimal ${MAX_INELIGIBLE_PHOTOS} foto.`);
+        return;
+      }
+      const bad = valid.find((f) => !f.type.startsWith("image/"));
+      if (bad) {
+        toast.error(`Foto harus berupa gambar. "${bad.name}" bukan gambar.`);
+        return;
+      }
+    }
+
     startTransition(async () => {
       const fd = new FormData();
       fd.append("rmaCaseId", rmaCaseId);
@@ -108,6 +135,7 @@ export default function RmaActionPanel({
       for (const [key, value] of Object.entries(values)) {
         if (value.trim()) fd.append(key, value.trim());
       }
+      photos.filter((f) => f.size > 0).forEach((f) => fd.append("damage_files", f));
 
       const result = await transitionRmaAction(fd);
       if ("error" in result && result.error) {
@@ -247,6 +275,23 @@ export default function RmaActionPanel({
                   )}
                 </div>
               )
+            )}
+
+            {active.to === "ineligible" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                  Foto Bukti <span style={{ color: "var(--accent-brand)" }}>*</span>
+                </label>
+                <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+                  1–{MAX_INELIGIBLE_PHOTOS} foto, gambar saja. Klaim customer ditolak, jadi
+                  keputusannya harus bisa ditunjukkan kalau ditanya.
+                </p>
+                <FileUpload
+                  onChange={setPhotos}
+                  accept="image/*,image/heic,image/heif"
+                  maxFiles={MAX_INELIGIBLE_PHOTOS}
+                />
+              </div>
             )}
 
             {optionalFields.includes("shipping_tracking") && (

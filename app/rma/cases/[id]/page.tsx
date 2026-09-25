@@ -23,6 +23,12 @@ function Field({ label, value, mono = false }: { label: string; value: string | 
   );
 }
 
+const LAMPIRAN_LABEL: Record<string, string> = {
+  image: "Foto",
+  video: "Video",
+  pdf: "Dokumen",
+};
+
 export default async function RmaCasePage({ params }: { params: Promise<{ id: string }> }) {
   const session = await requireRole("RMA", "Administrator");
   const { id } = await params;
@@ -80,6 +86,13 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
           store_location: { select: { name: true, code: true } },
           technician: { select: { id: true, name: true } },
           warranty_detail: { select: { purchase_date: true } },
+          // The technician's examination evidence. Without this the RMA desk
+          // decides whether to send a unit to a vendor having seen nothing but
+          // three lines of typed text.
+          attachments: {
+            orderBy: { created_at: "asc" },
+            select: { id: true, file_url: true, file_type: true, created_at: true },
+          },
         },
       },
     },
@@ -107,6 +120,12 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
   if (!rmaCase) notFound();
 
   const { ticket } = rmaCase;
+
+  // The invoice is rendered on its own above; showing it again in the list
+  // would just be the same file twice.
+  const otherAttachments = ticket.attachments.filter(
+    (a) => a.file_url !== rmaCase.purchase_invoice_url
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -160,6 +179,28 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                   label="Lihat Nota Pembelian"
                   title={`Nota Pembelian — ${ticket.ticket_code}`}
                 />
+              </div>
+            )}
+
+            {/* Everything attached to the ticket, minus the invoice already
+                shown above so it does not appear twice. */}
+            {otherAttachments.length > 0 && (
+              <div style={{ marginTop: "1.25rem" }}>
+                <div style={{ fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
+                  Lampiran Tiket ({otherAttachments.length})
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                  {otherAttachments.map((a, i) => (
+                    <FilePreview
+                      key={a.id}
+                      url={a.file_url}
+                      fileType={a.file_type}
+                      label={`${LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`}
+                      title={`Lampiran ${i + 1} — ${ticket.ticket_code}`}
+                      className="btn btn-outline"
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </div>

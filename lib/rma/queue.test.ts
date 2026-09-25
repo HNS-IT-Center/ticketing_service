@@ -1,10 +1,10 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import type { RmaStatus } from "@prisma/client";
 
 // lib/rma/queue.ts pulls in lib/db.ts, which is server-only.
 vi.mock("server-only", () => ({}));
 
-const { RMA_STAGE_SLA, RMA_QUEUE_STATUSES, rmaSeverity, VENDOR_WARNING_DAYS, VENDOR_OVERDUE_DAYS } =
+const { RMA_STAGE_SLA, RMA_QUEUE_STATUSES, rmaSeverity, VENDOR_WARNING_DAYS, VENDOR_OVERDUE_DAYS, getRmaQueue } =
   await import("./queue");
 
 const ALL_RMA_STATUSES: RmaStatus[] = [
@@ -98,5 +98,49 @@ describe("rmaSeverity", () => {
         previous = current;
       }
     }
+  });
+});
+
+describe("getRmaQueue stats — internal consistency", () => {
+  // Runs against whatever the local database holds. The assertions are
+  // relationships between the numbers, so they hold for any data.
+  let rows: Awaited<ReturnType<typeof getRmaQueue>>["rows"];
+  let stats: Awaited<ReturnType<typeof getRmaQueue>>["stats"];
+
+  beforeAll(async () => {
+    ({ rows, stats } = await getRmaQueue());
+  });
+
+  afterAll(async () => {
+    const { db } = await import("@/lib/db");
+    await db.$disconnect();
+  });
+
+  it("counts every queued row as active", () => {
+    expect(stats.active).toBe(rows.length);
+  });
+
+  it("never reports more late-at-vendor cases than cases at a vendor", () => {
+    // `submitted_at` stays set after a case leaves the vendor stages, so
+    // counting on it alone once made the "Di Vendor" card claim two late cases
+    // while showing one case.
+    expect(stats.overdue).toBeLessThanOrEqual(stats.atVendor);
+  });
+
+  it("keeps the stage buckets inside the active total", () => {
+    expect(stats.needsAction + stats.atVendor).toBeLessThanOrEqual(stats.active);
+  });
+
+  it("keeps overdue and warning disjoint and inside the active total", () => {
+    expect(stats.pastDue + stats.warning).toBeLessThanOrEqual(stats.active);
+  });
+
+  it("agrees with the per-row severity it derives from", () => {
+    expect(stats.pastDue).toBe(rows.filter((r) => r.severity === "overdue").length);
+    expect(stats.warning).toBe(rows.filter((r) => r.severity === "warning").length);
+  });
+
+  it("derives the month's net from its own intake and closures", () => {
+    expect(stats.netThisMonth).toBe(stats.openedThisMonth - stats.closedThisMonth);
   });
 });

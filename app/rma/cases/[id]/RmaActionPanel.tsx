@@ -52,10 +52,15 @@ export default function RmaActionPanel({
   rmaCaseId,
   currentStatus,
   role,
+  knownVendors = [],
 }: {
   rmaCaseId: string;
   currentStatus: RmaStatus;
   role: string;
+  /** Vendor names already in use, offered as suggestions so the same vendor is
+   *  not entered under three different spellings. The server folds near-matches
+   *  anyway (lib/rma/vendor.ts); this just makes the right choice the easy one. */
+  knownVendors?: string[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [active, setActive] = useState<RmaTransition | null>(null);
@@ -216,13 +221,24 @@ export default function RmaActionPanel({
                       placeholder={FIELD_INPUTS[field].placeholder}
                     />
                   ) : (
-                    <input
-                      id={`rma-${field}`}
-                      className="form-input"
-                      value={values[field] ?? ""}
-                      onChange={(e) => setValue(field, e.target.value)}
-                      placeholder={FIELD_INPUTS[field].placeholder}
-                    />
+                    <>
+                      <input
+                        id={`rma-${field}`}
+                        className="form-input"
+                        value={values[field] ?? ""}
+                        onChange={(e) => setValue(field, e.target.value)}
+                        placeholder={FIELD_INPUTS[field].placeholder}
+                        list={field === "vendor_name" ? "rma-known-vendors" : undefined}
+                        autoComplete="off"
+                      />
+                      {field === "vendor_name" && knownVendors.length > 0 && (
+                        <datalist id="rma-known-vendors">
+                          {knownVendors.map((v) => (
+                            <option key={v} value={v} />
+                          ))}
+                        </datalist>
+                      )}
+                    </>
                   )}
                 </div>
               )

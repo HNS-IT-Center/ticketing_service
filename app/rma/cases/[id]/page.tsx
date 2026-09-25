@@ -85,6 +85,25 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
     },
   });
 
+  // Spellings already in use, offered as suggestions in the vendor field.
+
+  const knownVendors = (
+
+    await db.rmaCase.findMany({
+
+      where: { vendor_name: { not: null } },
+
+      distinct: ["vendor_name"],
+
+      orderBy: { vendor_name: "asc" },
+
+      select: { vendor_name: true },
+
+    })
+
+  ).map((v) => v.vendor_name!).filter(Boolean);
+
+
   if (!rmaCase) notFound();
 
   const { ticket } = rmaCase;
@@ -149,7 +168,12 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          <RmaActionPanel rmaCaseId={rmaCase.id} currentStatus={rmaCase.status} role={session.role} />
+          <RmaActionPanel
+            rmaCaseId={rmaCase.id}
+            currentStatus={rmaCase.status}
+            role={session.role}
+            knownVendors={knownVendors}
+          />
         </div>
       </div>
     </div>

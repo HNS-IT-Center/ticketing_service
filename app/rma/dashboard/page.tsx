@@ -67,6 +67,64 @@ function StatCard({
   );
 }
 
+/** A labelled count with a proportion bar. Used for the claim breakdowns. */
+function BreakdownCard({
+  title,
+  hint,
+  rows,
+  total,
+}: {
+  title: string;
+  hint: string;
+  rows: { label: string; count: number }[];
+  total: number;
+}) {
+  // Scaled against the biggest row, not the total: with one dominant value the
+  // rest would otherwise be invisible slivers.
+  const max = rows.reduce((m, r) => Math.max(m, r.count), 0) || 1;
+
+  return (
+    <div className="card">
+      <h3 style={{ margin: "0 0 0.25rem" }}>{title}</h3>
+      <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.85rem" }}>
+        {hint}
+      </p>
+      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+        {rows.map((row) => (
+          <li key={row.label}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: "0.75rem",
+                fontSize: "0.875rem",
+                marginBottom: "0.25rem",
+              }}
+            >
+              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {row.label}
+              </span>
+              <span style={{ flexShrink: 0, color: "var(--text-muted)", fontFamily: "ui-monospace, monospace" }}>
+                {row.count} ({Math.round((row.count / total) * 100)}%)
+              </span>
+            </div>
+            <div style={{ height: "6px", borderRadius: "999px", background: "var(--cream-dark, #eee)", overflow: "hidden" }}>
+              <div
+                style={{
+                  width: `${(row.count / max) * 100}%`,
+                  height: "100%",
+                  borderRadius: "999px",
+                  background: "var(--primary)",
+                }}
+              />
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 export default async function RmaDashboardPage() {
   await requireRole("RMA", "Administrator");
 
@@ -295,6 +353,31 @@ export default async function RmaDashboardPage() {
             </div>
           )}
         </>
+      )}
+
+      {/* ── Sebaran klaim ───────────────────────────────────────────────── */}
+      {stats.totalClaims > 0 && (
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+            gap: "1rem",
+            alignItems: "start",
+          }}
+        >
+          <BreakdownCard
+            title="Klaim per Merek"
+            hint={`Dari ${stats.totalClaims} klaim yang pernah masuk. Diambil dari kata pertama nama perangkat.`}
+            rows={stats.brands.map((b) => ({ label: b.name, count: b.count }))}
+            total={stats.totalClaims}
+          />
+          <BreakdownCard
+            title="Klaim per Tipe Perangkat"
+            hint="Kategori perangkat saat tiket dibuat."
+            rows={stats.deviceTypes.map((d) => ({ label: d.label, count: d.count }))}
+            total={stats.totalClaims}
+          />
+        </div>
       )}
 
       {/* ── Hasil klaim & vendor ────────────────────────────────────────── */}

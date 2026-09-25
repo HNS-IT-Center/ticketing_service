@@ -21,6 +21,7 @@ export function canActOnRma(role: string): role is RmaActorRole {
 // ── Fields a transition may demand ──────────────────────────────────────────
 export type RmaTransitionField =
   | "hold_reason"
+  | "ineligibility_reason"
   | "vendor_name"
   | "vendor_rma_number"
   | "decision"
@@ -29,6 +30,7 @@ export type RmaTransitionField =
 /** Payload supplied by the caller when requesting a transition. */
 export type RmaTransitionInput = {
   hold_reason?: string | null;
+  ineligibility_reason?: string | null;
   vendor_name?: string | null;
   vendor_rma_number?: string | null;
   shipping_tracking?: string | null;
@@ -67,6 +69,14 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
   },
   {
     from: "pending_verification",
+    to: "ineligible",
+    label: "Tidak Layak Klaim",
+    requires: ["ineligibility_reason"],
+    description:
+      "Unit diperiksa dan di luar cakupan garansi. Tidak diajukan ke vendor. Alasan tampil ke customer.",
+  },
+  {
+    from: "pending_verification",
     to: "cancelled",
     label: "Batalkan Klaim",
     requires: ["hold_reason"],
@@ -88,6 +98,14 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
   },
   {
     from: "on_hold",
+    to: "ineligible",
+    label: "Tidak Layak Klaim",
+    requires: ["ineligibility_reason"],
+    description:
+      "Setelah kekurangan ditelusuri, ternyata di luar cakupan garansi. Alasan tampil ke customer.",
+  },
+  {
+    from: "on_hold",
     to: "cancelled",
     label: "Batalkan Klaim",
     requires: ["hold_reason"],
@@ -99,6 +117,14 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
     label: "Ajukan ke Vendor",
     requires: ["vendor_name", "vendor_rma_number"],
     description: "Wajib isi nama vendor dan nomor RMA vendor.",
+  },
+  {
+    from: "verified",
+    to: "ineligible",
+    label: "Tidak Layak Klaim",
+    requires: ["ineligibility_reason"],
+    description:
+      "Sudah lolos verifikasi tapi ternyata di luar cakupan garansi, sebelum dikirim ke vendor.",
   },
   {
     from: "submitted_to_vendor",
@@ -146,7 +172,11 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
 ];
 
 /** States from which no further transition is possible. */
-export const RMA_TERMINAL_STATUSES: readonly RmaStatus[] = ["closed", "cancelled"];
+export const RMA_TERMINAL_STATUSES: readonly RmaStatus[] = [
+  "closed",
+  "cancelled",
+  "ineligible",
+];
 
 export function isTerminalRmaStatus(status: RmaStatus): boolean {
   return RMA_TERMINAL_STATUSES.includes(status);
@@ -156,7 +186,13 @@ export function isTerminalRmaStatus(status: RmaStatus): boolean {
  * Statuses that hand the parent ticket back to the normal workflow.
  * Both move the ticket from `rma_process` back to `done`.
  */
-export const RMA_STATUSES_RELEASING_TICKET: readonly RmaStatus[] = ["closed", "cancelled"];
+export const RMA_STATUSES_RELEASING_TICKET: readonly RmaStatus[] = [
+  "closed",
+  "cancelled",
+  // The unit still has to go back to its owner, so the ticket returns to `done`
+  // and takes the ordinary handover chain, exactly as a closed case does.
+  "ineligible",
+];
 
 export function releasesTicket(status: RmaStatus): boolean {
   return RMA_STATUSES_RELEASING_TICKET.includes(status);
@@ -182,6 +218,7 @@ export type RmaValidationResult =
 
 const FIELD_LABELS: Record<RmaTransitionField, string> = {
   hold_reason: "Alasan",
+  ineligibility_reason: "Alasan tidak layak klaim",
   vendor_name: "Nama vendor",
   vendor_rma_number: "Nomor RMA vendor",
   decision: "Keputusan vendor",

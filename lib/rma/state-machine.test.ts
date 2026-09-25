@@ -20,6 +20,7 @@ const ALL_STATUSES: RmaStatus[] = [
   "vendor_decided",
   "unit_received",
   "closed",
+  "ineligible",
   "cancelled",
 ];
 
@@ -27,11 +28,14 @@ const ALL_STATUSES: RmaStatus[] = [
 const SPEC_TRANSITIONS: [RmaStatus, RmaStatus][] = [
   ["pending_verification", "verified"],
   ["pending_verification", "on_hold"],
+  ["pending_verification", "ineligible"],
   ["pending_verification", "cancelled"],
   ["on_hold", "pending_verification"],
   ["on_hold", "in_vendor_process"],
+  ["on_hold", "ineligible"],
   ["on_hold", "cancelled"],
   ["verified", "submitted_to_vendor"],
+  ["verified", "ineligible"],
   ["submitted_to_vendor", "in_vendor_process"],
   ["submitted_to_vendor", "on_hold"],
   ["in_vendor_process", "vendor_decided"],
@@ -75,21 +79,36 @@ describe("transition table", () => {
 });
 
 describe("terminal states", () => {
-  it("treats closed and cancelled as terminal", () => {
-    expect(RMA_TERMINAL_STATUSES).toEqual(["closed", "cancelled"]);
+  it("treats closed, cancelled and ineligible as terminal", () => {
+    expect(RMA_TERMINAL_STATUSES).toEqual(["closed", "cancelled", "ineligible"]);
     expect(isTerminalRmaStatus("closed")).toBe(true);
     expect(isTerminalRmaStatus("cancelled")).toBe(true);
+    expect(isTerminalRmaStatus("ineligible")).toBe(true);
     expect(isTerminalRmaStatus("verified")).toBe(false);
   });
 
   it("offers no outgoing transition from a terminal state", () => {
     expect(getAllowedTransitions("closed")).toEqual([]);
     expect(getAllowedTransitions("cancelled")).toEqual([]);
+    // A claim turned down is finished. Re-opening it means a new claim, not a
+    // transition back out of here.
+    expect(getAllowedTransitions("ineligible")).toEqual([]);
   });
 
-  it("releases the parent ticket back to `done` from closed and cancelled only", () => {
+  it("releases the parent ticket back to `done` from the three terminal states", () => {
+    // An ineligible claim still has a unit sitting on the shelf that belongs to
+    // someone, so it goes back through the ordinary handover chain exactly as a
+    // closed or cancelled one does.
     for (const s of ALL_STATUSES) {
-      expect(releasesTicket(s)).toBe(s === "closed" || s === "cancelled");
+      expect(releasesTicket(s), s).toBe(
+        s === "closed" || s === "cancelled" || s === "ineligible"
+      );
+    }
+  });
+
+  it("releases exactly the statuses it calls terminal", () => {
+    for (const s of ALL_STATUSES) {
+      expect(releasesTicket(s), s).toBe(isTerminalRmaStatus(s));
     }
   });
 });
@@ -125,7 +144,11 @@ describe("validateRmaTransition — every illegal move", () => {
   );
 
   it("covers a meaningful number of illegal pairs", () => {
-    expect(illegal.length).toBe(9 * 8 - SPEC_TRANSITIONS.length);
+    // Derived, not hardcoded: adding a status to the enum must not quietly
+    // leave this assertion measuring the old matrix.
+    expect(illegal.length).toBe(
+      ALL_STATUSES.length * (ALL_STATUSES.length - 1) - SPEC_TRANSITIONS.length
+    );
   });
 
   it.each(illegal)("rejects %s -> %s", (from, to) => {

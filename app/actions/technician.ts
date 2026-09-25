@@ -169,19 +169,19 @@ export async function updateTicketStatusAction(formData: FormData) {
       return { error: "Alasan wajib diisi saat menolak tiket." };
     }
 
-    // ── Guard 3: a warranty claim has exactly two ways out of `on_progress` —
-    // handover to RMA (handoverToRmaAction), or a finding that the claim is not
-    // eligible. So `done` here always means "not eligible", and needs a reason.
-    // The flag is never taken from the client: the server decides it.
-    const isIneligibleClaim =
-      ticket.ticket_type === "warranty_claim" &&
-      ticket.status === "on_progress" &&
-      newStatus === "done";
-
-    if (isIneligibleClaim && !reason?.trim()) {
+    // ── Guard 3: a warranty claim has exactly ONE way out of `on_progress` —
+    // handover to RMA (handoverToRmaAction).
+    //
+    // The technician used to be able to close a claim as "not eligible" here.
+    // That decision moved to the RMA desk, which is the side that knows what a
+    // vendor's warranty actually covers. The technician examines the unit and
+    // documents it; the desk judges it. So `done` on a claim is refused outright
+    // rather than asked for a reason.
+    if (ticket.ticket_type === "warranty_claim" && newStatus === "done") {
       return {
         error:
-          "Untuk tiket klaim, isi alasan bila unit tidak layak klaim — atau serahkan ke RMA.",
+          "Tiket klaim tidak bisa diselesaikan dari sini. Serahkan unit ke RMA — " +
+          "kelayakan klaim diputuskan tim RMA.",
       };
     }
 
@@ -255,21 +255,6 @@ export async function updateTicketStatusAction(formData: FormData) {
     if (newStatus === "on_progress") ticketUpdateData.work_started_at = new Date();
     if (newStatus === "done") ticketUpdateData.work_completed_at = new Date();
 
-    // Server-written outcome of guard 3. upsert because a legacy warranty ticket
-    // may predate its detail row.
-    if (isIneligibleClaim) {
-      await db.ticketWarrantyDetail.upsert({
-        where: { ticket_id: ticketId },
-        create: {
-          ticket_id: ticketId,
-          purchase_date: new Date(),
-          claim_eligible: false,
-          ineligibility_reason: reason!.trim(),
-        },
-        update: { claim_eligible: false, ineligibility_reason: reason!.trim() },
-      });
-    }
-
     // We write DB operations synchronously/in parallel once we know attachments are safe
     const dbOps: Promise<unknown>[] = [
       db.ticket.update({
@@ -331,15 +316,9 @@ export async function updateTicketStatusAction(formData: FormData) {
       revalidateTag(`user-profile:${session.userId}`, "max");
     }
 
-    // A claim turned down after examination is credited exactly like a handover
-    // to RMA; a claim merely passing through `done` on its way back from the
-    // desk is not. `isIneligibleClaim` is what separates the two, and the
-    // server decided it above. See lib/kpi.ts.
-    const effect = performanceEffect(
-      ticket.ticket_type,
-      newStatus,
-      isIneligibleClaim ? false : undefined,
-    );
+    // A claim is paid once, at handover to RMA. Nothing this action does to a
+    // claim credits anything. See lib/kpi.ts.
+    const effect = performanceEffect(ticket.ticket_type, newStatus);
     if (effect !== "ignore") {
       const points = getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package);
 

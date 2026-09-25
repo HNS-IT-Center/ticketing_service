@@ -26,6 +26,11 @@ const FIELD_INPUTS: Record<
   { label: string; placeholder: string; multiline?: boolean }
 > = {
   hold_reason: { label: "Alasan", placeholder: "Jelaskan apa yang kurang atau menghambat", multiline: true },
+  ineligibility_reason: {
+    label: "Alasan Tidak Layak",
+    placeholder: "Alasan ini ditampilkan ke customer di halaman pelacakan",
+    multiline: true,
+  },
   vendor_name: { label: "Nama Vendor", placeholder: "Misal: Asus Service Center" },
   vendor_rma_number: { label: "Nomor RMA Vendor", placeholder: "Nomor dari vendor" },
   decision: { label: "Keputusan Vendor", placeholder: "" },

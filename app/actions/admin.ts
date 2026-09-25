@@ -282,47 +282,28 @@ export async function adminUpdateTicketStatusAction(
     };
   }
 
-  // Mirrors guard 3 in updateTicketStatusAction. A warranty claim has exactly
-  // two ways out — handover to RMA, or a finding that the claim is not eligible
-  // — so `done` here always means "not eligible" and needs a reason. Without
-  // this the admin portal could close a claim as `done` with no marker at all,
-  // leaving it indistinguishable from a claim that came back from the RMA desk.
+  // Mirrors guard 3 in updateTicketStatusAction. A warranty claim leaves
+  // `waiting`/`on_progress` one way only: handover to the RMA desk, which is
+  // the side that decides eligibility.
   //
-  // `waiting` is included where the technician guard only names `on_progress`.
-  // That guard does not need it: updateTicketStatusAction's HANDOVER_CHAIN
-  // rejects `waiting -> done` before it is reached. This action has no such
-  // chain, so without `waiting` here the whole guard is sidestepped by closing
-  // the claim one status earlier.
+  // This used to ask an administrator for a reason and record the claim as
+  // ineligible on their word. That decision moved to the desk, so the admin
+  // portal now refuses the move outright rather than offering a second, quieter
+  // way to make it.
   //
   // A claim already past `done` is excluded on purpose: moving one along the
   // handover chain is not an eligibility decision. `rma_process` never reaches
-  // this line at all — the guard above returns first.
-  //
-  // The flag is never taken from the caller: the server decides it.
-  const isIneligibleClaim =
+  // this line — the guard above returns first.
+  if (
     ticket.ticket_type === "warranty_claim" &&
     (ticket.status === "waiting" || ticket.status === "on_progress") &&
-    newStatus === "done";
-
-  if (isIneligibleClaim && !reason?.trim()) {
+    newStatus === "done"
+  ) {
     return {
       error:
-        "Untuk tiket klaim, isi alasan bila unit tidak layak klaim — atau serahkan ke RMA.",
+        "Tiket klaim tidak bisa diselesaikan dari portal ini. Serahkan unit ke RMA — " +
+        "kelayakan klaim diputuskan tim RMA.",
     };
-  }
-
-  // upsert because a legacy warranty ticket may predate its detail row.
-  if (isIneligibleClaim) {
-    await db.ticketWarrantyDetail.upsert({
-      where: { ticket_id: ticketId },
-      create: {
-        ticket_id: ticketId,
-        purchase_date: new Date(),
-        claim_eligible: false,
-        ineligibility_reason: reason!.trim(),
-      },
-      update: { claim_eligible: false, ineligibility_reason: reason!.trim() },
-    });
   }
 
   await db.$transaction([
@@ -348,11 +329,7 @@ export async function adminUpdateTicketStatusAction(
   // ticket `ready_for_pickup` -> `completed` therefore credited the technician
   // a second time, for every ticket type, on top of the credit they already
   // got at `done`. The extra credit is gone; the rule now lives in lib/kpi.ts.
-  const effect = performanceEffect(
-    ticket.ticket_type,
-    newStatus,
-    isIneligibleClaim ? false : undefined,
-  );
+  const effect = performanceEffect(ticket.ticket_type, newStatus);
   if (effect !== "ignore" && ticket.technician_id) {
     // This table is this action's own, and disagrees with both the writers' one
     // in technician.ts and the display one in lib/leaderboard.ts. Left as it is

@@ -7,8 +7,10 @@ import {
   PackageCheck,
   CheckCircle2,
   XCircle,
+  ShieldX,
   Clock,
 } from "lucide-react";
+import type { RmaStatus } from "@prisma/client";
 import { formatDateTime } from "@/lib/utils";
 
 /**
@@ -24,8 +26,8 @@ import { formatDateTime } from "@/lib/utils";
 
 type RmaEventView = {
   id: string;
-  from_status: string | null;
-  to_status: string;
+  from_status: RmaStatus | null;
+  to_status: RmaStatus;
   note: string | null;
   created_at: Date;
   actor: { id: string; name: string } | null;
@@ -33,7 +35,7 @@ type RmaEventView = {
 
 export type RmaCaseView = {
   rma_code: string;
-  status: string;
+  status: RmaStatus;
   unit_ownership: string;
   stock_origin: string | null;
   sn_verified: boolean;
@@ -70,8 +72,15 @@ const TONES: Record<string, Tone> = {
   slate: { bg: "var(--cream)", fg: "var(--text-secondary)", border: "var(--border)" },
 };
 
+/**
+ * Exhaustive over RmaStatus on purpose. It used to be keyed by `string` with a
+ * fallback that de-underscored whatever it was given, which meant a status
+ * added to the schema rendered as raw enum text to whoever was looking — the
+ * same way `rma_process` once did on the public page. Now a new status fails
+ * the build here instead.
+ */
 export const RMA_STATUS_META: Record<
-  string,
+  RmaStatus,
   { label: string; tone: keyof typeof TONES; Icon: typeof ShieldCheck }
 > = {
   pending_verification: { label: "Menunggu Verifikasi", tone: "amber", Icon: Clock },
@@ -82,6 +91,7 @@ export const RMA_STATUS_META: Record<
   vendor_decided: { label: "Keputusan Vendor", tone: "blue", Icon: Gavel },
   unit_received: { label: "Unit Diterima", tone: "teal", Icon: PackageCheck },
   closed: { label: "Selesai", tone: "green", Icon: CheckCircle2 },
+  ineligible: { label: "Tidak Layak Klaim", tone: "amber", Icon: ShieldX },
   cancelled: { label: "Dibatalkan", tone: "red", Icon: XCircle },
 };
 
@@ -92,16 +102,12 @@ export const RMA_DECISION_LABELS: Record<string, string> = {
   rejected: "Ditolak vendor",
 };
 
-export function rmaStatusMeta(status: string) {
-  const meta = RMA_STATUS_META[status] ?? {
-    label: status.replace(/_/g, " "),
-    tone: "slate" as const,
-    Icon: Clock,
-  };
+export function rmaStatusMeta(status: RmaStatus) {
+  const meta = RMA_STATUS_META[status];
   return { ...meta, colors: TONES[meta.tone] };
 }
 
-export function RmaStatusBadge({ status }: { status: string }) {
+export function RmaStatusBadge({ status }: { status: RmaStatus }) {
   const { label, colors, Icon } = rmaStatusMeta(status);
   return (
     <span

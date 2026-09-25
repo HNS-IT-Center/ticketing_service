@@ -31,6 +31,7 @@ const ALL_RMA_STATUSES: RmaStatus[] = [
   "vendor_decided",
   "unit_received",
   "closed",
+  "ineligible",
   "cancelled",
 ];
 

@@ -19,10 +19,16 @@ vi.mock("next/cache", () => ({
 }));
 
 // R2 is a network dependency; the actions only care about the returned URL.
+// The type helpers do follow the mime type, so a test can tell an uploaded
+// damage photo apart from an uploaded invoice.
 vi.mock("@/lib/r2", () => ({
-  uploadToR2: vi.fn(async () => "https://r2.test/uploaded-invoice.pdf"),
-  getExt: () => "pdf",
-  getFileType: () => "pdf" as const,
+  uploadToR2: vi.fn(async (file: File) =>
+    file.type.startsWith("image/")
+      ? "https://r2.test/uploaded-damage.jpg"
+      : "https://r2.test/uploaded-invoice.pdf"
+  ),
+  getExt: (mime: string) => (mime.startsWith("image/") ? "jpg" : "pdf"),
+  getFileType: (mime: string) => (mime.startsWith("image/") ? "image" : "pdf"),
 }));
 
 // updateTicketStatusAction, imported below for the credit-parity test, fires
@@ -91,6 +97,11 @@ async function makeTicket(
   return ticket;
 }
 
+/** A JPEG the action will accept as a damage photo. */
+export function photo(name = "kerusakan.jpg") {
+  return new File([new Uint8Array([0xff, 0xd8, 0xff])], name, { type: "image/jpeg" });
+}
+
 /** Service form payload that passes every validation. */
 function validForm(ticketId: string, extra: Record<string, string> = {}) {
   const fd = new FormData();
@@ -101,6 +112,10 @@ function validForm(ticketId: string, extra: Record<string, string> = {}) {
   fd.append("fault_description", "Layar berkedip saat booting");
   fd.append("test_result", "Reproduksi konsisten pada 3 kali percobaan");
   fd.append("purchase_invoice_url", intakeInvoiceUrl(ticketId));
+  // Both mandatory since the eligibility decision moved to the RMA desk: the
+  // desk judges on the technician's evidence, not on their word.
+  fd.append("damage_files", photo());
+  fd.append("recommended_eligible", "yes");
   for (const [k, v] of Object.entries(extra)) fd.set(k, v);
   return fd;
 }
@@ -281,8 +296,11 @@ describe("handoverToRmaAction — service form validation", () => {
     });
     expect(rmaCase?.purchase_invoice_url).toBe("https://r2.test/uploaded-invoice.pdf");
 
-    // also surfaced in the ticket's normal attachment list
-    const attachments = await db.ticketAttachment.count({ where: { ticket_id: ticket.id } });
+    // also surfaced in the ticket's normal attachment list, alongside the
+    // intake attachment and the damage photo the handover now requires
+    const attachments = await db.ticketAttachment.count({
+      where: { ticket_id: ticket.id, file_type: "pdf" },
+    });
     expect(attachments).toBe(2); // intake invoice + the newly uploaded one
   });
 
@@ -405,6 +423,297 @@ describe("handoverToRmaAction — effects and idempotence", () => {
   });
 });
 
+describe("handoverToRmaAction — evidence and recommendation", () => {
+  // The RMA desk decides eligibility now, so the handover has to carry enough
+  // for it to decide on.
+
+  it("refuses a handover with no damage photo", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.delete("damage_files");
+
+    expect(await handoverToRmaAction(fd)).toMatchObject({
+      error: expect.stringContaining("foto"),
+    });
+    expect(await db.rmaCase.count({ where: { ticket_id: ticket.id } })).toBe(0);
+  });
+
+  it("refuses a non-image, so the desk always gets something it can look at", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.delete("damage_files");
+    fd.append("damage_files", new File(["mp4"], "rusak.mp4", { type: "video/mp4" }));
+
+    expect(await handoverToRmaAction(fd)).toMatchObject({
+      error: expect.stringContaining("gambar"),
+    });
+    expect(await db.rmaCase.count({ where: { ticket_id: ticket.id } })).toBe(0);
+  });
+
+  it("refuses more than five photos", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.delete("damage_files");
+    for (let i = 0; i < 6; i++) fd.append("damage_files", photo(`foto-${i}.jpg`));
+
+    expect(await handoverToRmaAction(fd)).toMatchObject({
+      error: expect.stringContaining("Maksimal"),
+    });
+  });
+
+  it("accepts five", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.delete("damage_files");
+    for (let i = 0; i < 5; i++) fd.append("damage_files", photo(`foto-${i}.jpg`));
+
+    expect(await handoverToRmaAction(fd)).toMatchObject({ success: true });
+    expect(
+      await db.ticketAttachment.count({ where: { ticket_id: ticket.id, file_type: "image" } })
+    ).toBe(5);
+  });
+
+  it("stores the photos as ticket attachments, so the case page can show them", async () => {
+    const ticket = await makeTicket();
+    expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
+
+    const images = await db.ticketAttachment.findMany({
+      where: { ticket_id: ticket.id, file_type: "image" },
+      select: { file_url: true },
+    });
+    expect(images).toHaveLength(1);
+    expect(images[0].file_url).toBe("https://r2.test/uploaded-damage.jpg");
+  });
+
+  it("refuses a handover with no recommendation", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.delete("recommended_eligible");
+
+    expect(await handoverToRmaAction(fd)).toMatchObject({
+      error: expect.stringContaining("Rekomendasi"),
+    });
+  });
+
+  it("refuses a recommendation that is neither yes nor no", async () => {
+    const ticket = await makeTicket();
+    expect(
+      await handoverToRmaAction(validForm(ticket.id, { recommended_eligible: "mungkin" })),
+    ).toMatchObject({ error: expect.stringContaining("Rekomendasi") });
+  });
+
+  it("records the recommendation and its note", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id, {
+      recommended_eligible: "no",
+      recommendation_note: "  Ada bekas cairan di board  ",
+    });
+    expect(await handoverToRmaAction(fd)).toMatchObject({ success: true });
+
+    expect(
+      await db.rmaCase.findUnique({
+        where: { ticket_id: ticket.id },
+        select: { recommended_eligible: true, recommendation_note: true },
+      }),
+    ).toEqual({ recommended_eligible: false, recommendation_note: "Ada bekas cairan di board" });
+  });
+
+  it("leaves the note null when it is blank", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id, { recommendation_note: "   " });
+    expect(await handoverToRmaAction(fd)).toMatchObject({ success: true });
+
+    expect(
+      (await db.rmaCase.findUnique({
+        where: { ticket_id: ticket.id },
+        select: { recommendation_note: true },
+      }))?.recommendation_note,
+    ).toBeNull();
+  });
+
+  it("a recommendation of 'not eligible' still opens a normal case", async () => {
+    // It is advice, not a verdict: the case enters the queue either way and the
+    // desk is free to disagree.
+    const ticket = await makeTicket({ withInvoice: true });
+    expect(
+      await handoverToRmaAction(validForm(ticket.id, { recommended_eligible: "no" })),
+    ).toMatchObject({ success: true });
+
+    const rmaCase = await db.rmaCase.findUnique({
+      where: { ticket_id: ticket.id },
+      select: { status: true },
+    });
+    expect(rmaCase?.status).toBe("pending_verification");
+
+    const after = await db.ticket.findUnique({
+      where: { id: ticket.id },
+      select: { status: true },
+    });
+    expect(after?.status).toBe("rma_process");
+
+    // And nothing has prejudged the claim.
+    expect(
+      (await db.ticketWarrantyDetail.findUnique({
+        where: { ticket_id: ticket.id },
+        select: { claim_eligible: true },
+      }))?.claim_eligible,
+    ).not.toBe(false);
+  });
+});
+
+describe("transitionRmaAction — the desk turns a claim down", () => {
+  /** Hand a ticket over and return its case id. */
+  async function openCase(overrides: Record<string, string> = {}) {
+    const ticket = await makeTicket();
+    expect(await handoverToRmaAction(validForm(ticket.id, overrides))).toMatchObject({
+      success: true,
+    });
+    const rmaCase = await db.rmaCase.findUnique({
+      where: { ticket_id: ticket.id },
+      select: { id: true },
+    });
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    return { ticketId: ticket.id, caseId: rmaCase!.id };
+  }
+
+  function ineligibleForm(caseId: string, opts: { reason?: string; photos?: number } = {}) {
+    const fd = new FormData();
+    fd.append("rmaCaseId", caseId);
+    fd.append("toStatus", "ineligible");
+    if (opts.reason !== undefined) fd.append("ineligibility_reason", opts.reason);
+    else fd.append("ineligibility_reason", "Kerusakan akibat cairan, di luar cakupan garansi");
+    for (let i = 0; i < (opts.photos ?? 1); i++) fd.append("damage_files", photo(`bukti-${i}.jpg`));
+    return fd;
+  }
+
+  it("refuses without a reason", async () => {
+    const { caseId } = await openCase();
+    expect(await transitionRmaAction(ineligibleForm(caseId, { reason: "" }))).toMatchObject({
+      error: expect.any(String),
+    });
+
+    expect(
+      (await db.rmaCase.findUnique({ where: { id: caseId }, select: { status: true } }))?.status,
+    ).toBe("pending_verification");
+  });
+
+  it("refuses without a photo", async () => {
+    const { caseId } = await openCase();
+    expect(await transitionRmaAction(ineligibleForm(caseId, { photos: 0 }))).toMatchObject({
+      error: expect.stringContaining("foto"),
+    });
+  });
+
+  it("marks the claim ineligible and records the reason", async () => {
+    const { ticketId, caseId } = await openCase();
+    expect(await transitionRmaAction(ineligibleForm(caseId))).toMatchObject({ success: true });
+
+    expect(
+      await db.ticketWarrantyDetail.findUnique({
+        where: { ticket_id: ticketId },
+        select: { claim_eligible: true, ineligibility_reason: true },
+      }),
+    ).toEqual({
+      claim_eligible: false,
+      ineligibility_reason: "Kerusakan akibat cairan, di luar cakupan garansi",
+    });
+  });
+
+  it("hands the ticket back so the unit can be returned", async () => {
+    const { ticketId, caseId } = await openCase();
+    await transitionRmaAction(ineligibleForm(caseId));
+
+    expect(
+      (await db.ticket.findUnique({ where: { id: ticketId }, select: { status: true } }))?.status,
+    ).toBe("done");
+
+    const log = await db.ticketStatusLog.findFirst({
+      where: { ticket_id: ticketId, new_status: "done" },
+      select: { old_status: true, reason: true },
+    });
+    expect(log?.old_status).toBe("rma_process");
+    expect(log?.reason).toContain("tidak layak");
+  });
+
+  it("is terminal — the case cannot move on afterwards", async () => {
+    const { caseId } = await openCase();
+    await transitionRmaAction(ineligibleForm(caseId));
+
+    const fd = new FormData();
+    fd.append("rmaCaseId", caseId);
+    fd.append("toStatus", "verified");
+    expect(await transitionRmaAction(fd)).toMatchObject({ error: expect.any(String) });
+  });
+
+  it("credits the technician nothing extra — the handover already paid", async () => {
+    const { caseId } = await openCase();
+    const before = await db.technicianPerformance.findUnique({
+      where: { technician_id: technicianId },
+      select: { tickets_handled: true, success_count: true, total_points_completed: true },
+    });
+
+    await transitionRmaAction(ineligibleForm(caseId));
+
+    expect(
+      await db.technicianPerformance.findUnique({
+        where: { technician_id: technicianId },
+        select: { tickets_handled: true, success_count: true, total_points_completed: true },
+      }),
+    ).toEqual(before);
+  });
+
+  it("does not disturb the vendor decision field", async () => {
+    // `rejected` means the vendor turned it down; this claim never reached one.
+    const { caseId } = await openCase();
+    await transitionRmaAction(ineligibleForm(caseId));
+
+    expect(
+      (await db.rmaCase.findUnique({ where: { id: caseId }, select: { decision: true } }))
+        ?.decision,
+    ).toBeNull();
+  });
+
+  it("can be reached from on_hold as well", async () => {
+    const { caseId } = await openCase();
+    const hold = new FormData();
+    hold.append("rmaCaseId", caseId);
+    hold.append("toStatus", "on_hold");
+    hold.append("hold_reason", "Menunggu nota asli dari customer");
+    expect(await transitionRmaAction(hold)).toMatchObject({ success: true });
+
+    expect(await transitionRmaAction(ineligibleForm(caseId))).toMatchObject({ success: true });
+  });
+
+  it("can be reached from verified as well", async () => {
+    const { caseId } = await openCase();
+    const verify = new FormData();
+    verify.append("rmaCaseId", caseId);
+    verify.append("toStatus", "verified");
+    expect(await transitionRmaAction(verify)).toMatchObject({ success: true });
+
+    expect(await transitionRmaAction(ineligibleForm(caseId))).toMatchObject({ success: true });
+  });
+
+  it("cannot be reached once the unit is already at the vendor", async () => {
+    const { caseId } = await openCase();
+    for (const [to, extra] of [
+      ["verified", {}],
+      ["submitted_to_vendor", { vendor_name: "Asus Service Center", vendor_rma_number: "V-1" }],
+    ] as const) {
+      const fd = new FormData();
+      fd.append("rmaCaseId", caseId);
+      fd.append("toStatus", to);
+      for (const [k, v] of Object.entries(extra)) fd.append(k, v as string);
+      expect(await transitionRmaAction(fd), to).toMatchObject({ success: true });
+    }
+
+    expect(await transitionRmaAction(ineligibleForm(caseId))).toMatchObject({
+      error: expect.any(String),
+    });
+  });
+});
+
 describe("handoverToRmaAction — technician KPI", () => {
   /** The stored counters for the assigned technician, or zeros. */
   async function perf() {
@@ -501,24 +810,14 @@ describe("KPI parity — both exits from a claim pay the same", () => {
     return fd;
   }
 
-  it("pays a claim turned down exactly what it pays a handover", async () => {
-    const handedOver = await makeTicket();
-    const fromHandover = await creditedBy(async () => {
-      expect(await handoverToRmaAction(validForm(handedOver.id))).toMatchObject({
-        success: true,
-      });
+  it("pays the handover, and that is the only thing that pays", async () => {
+    const ticket = await makeTicket();
+    const credited = await creditedBy(async () => {
+      expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
     });
 
-    const turnedDown = await makeTicket();
-    const fromIneligible = await creditedBy(async () => {
-      expect(await updateTicketStatusAction(ineligibleForm(turnedDown.id))).toMatchObject({
-        success: true,
-      });
-    });
-
-    expect(fromIneligible).toEqual(fromHandover);
-    // and it really is one credit, not zero on both sides
-    expect(fromHandover).toEqual({
+    // warranty_claim is worth 2 -- see lib/points.ts.
+    expect(credited).toEqual({
       tickets_handled: 1,
       success_count: 1,
       failed_count: 0,

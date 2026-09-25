@@ -123,7 +123,7 @@ Kolom **Hasil** diisi PASS / FAIL. Kolom **Bukti** diisi nama file screenshot.
 | ID | Skenario | Langkah | Hasil yang diharapkan | Hasil | Bukti |
 |---|---|---|---|---|---|
 | B-01 | Ambil tiket | Teknisi ambil tiket klaim | Status jadi `on_progress` | | |
-| B-02 | Tombol khusus klaim | Lihat panel status tiket klaim `on_progress` | Ada "Serahkan ke RMA" dan "Tidak layak klaim". "Mark Done" **tidak ada** | | |
+| B-02 | ~~Tombol khusus klaim~~ | ⏸️ **TUNDA — menunggu perubahan alur.** Jalur "Tidak layak klaim" akan dicabut dari teknisi; kelayakan diputuskan RMA | — | TUNDA | — |
 | B-03 | Tombol Pause tetap | Lihat panel yang sama | Pause masih berfungsi seperti biasa | | |
 | B-04 | Tipe lain tidak berubah | Buka tiket Service `on_progress` | "Mark Done" tetap ada seperti sebelumnya | | |
 | B-05 | Tiket Paused | Pause tiket klaim, lihat panel | Hanya "Resume Work". Tombol RMA kembali setelah Resume (perilaku lama, berlaku semua tipe) | | |
@@ -147,22 +147,29 @@ Kolom **Hasil** diisi PASS / FAIL. Kolom **Bukti** diisi nama file screenshot.
 | C-10 | Handover ganda | Buka ulang tiket yang sudah diserahkan | Tombol "Serahkan ke RMA" tidak tersedia lagi | | |
 | C-11 | Nota tiket lain ditolak | (opsional, perlu devtools) Ganti URL nota ke lampiran tiket lain → submit | Ditolak, nota bukan lampiran tiket ini | | |
 
-### D. Jalur tidak layak klaim
+### D. Jalur tidak layak klaim — ⏸️ SELURUHNYA TUNDA
+
+> **Menunggu perubahan alur.** Disepakati 2026-09-25: teknisi tidak lagi memutuskan
+> kelayakan. Teknisi hanya memeriksa, mendokumentasikan (foto wajib), lalu menyerahkan ke
+> RMA; kelayakan diputuskan meja RMA lewat status penolakan baru sebelum vendor.
+>
+> Seluruh test case di bawah menguji jalur yang akan dicabut. **Jangan dijalankan** — hasilnya
+> tidak akan berlaku. Tidak dihapus supaya bisa ditulis ulang untuk alur baru.
 
 | ID | Skenario | Langkah | Hasil yang diharapkan | Hasil | Bukti |
 |---|---|---|---|---|---|
-| D-01 | Alasan wajib | "Tidak layak klaim" → alasan kosong → submit | Ditolak, status tidak berubah | | |
-| D-02 | Penandaan berhasil | Isi alasan → submit | Status jadi `done`, tiket ditandai tidak layak klaim beserta alasannya | | |
-| D-03 | Unit bisa dikembalikan | `done` → `ready_for_pickup` atau `handed_to_courier` → `completed` | Alur pengembalian normal seperti tiket biasa | | |
-| D-04 | Tidak masuk antrean RMA | Login RMA → dashboard | Tiket ini tidak muncul | | |
-| D-06 | **Admin juga wajib memberi alasan** | Login admin → buka tiket klaim `on_progress` → tombolnya berbunyi "Tidak Layak Klaim", bukan "Mark Done" → klik → kosongkan alasan → submit | Tombol submit nonaktif selama alasan kosong. Kalau dipaksa lewat server, ditolak dengan pesan "Untuk tiket klaim, isi alasan…". Status tetap `on_progress`, tidak ada baris Status History baru | | |
-| D-07 | Penandaan oleh admin berhasil | Isi alasan → submit | Status jadi `done`, tiket ditandai tidak layak beserta alasannya, dan alasan itu tercatat di Status History | | |
-| D-08 | Sales juga terikat | Ulangi D-06 sebagai Sales | Ditolak dengan pesan yang sama | | |
-| D-09 | Hasilnya identik dengan jalur teknisi | Bandingkan tiket dari D-07 dengan tiket dari D-02 (ditandai teknisi) | Keduanya `claim_eligible = false` dengan alasan tersimpan, dan halaman publiknya menampilkan banner kuning yang sama | | |
-| D-10 | Tipe lain tidak terpengaruh | Sebagai admin, tutup tiket Service `on_progress` jadi `done` | Tetap bisa tanpa alasan, seperti sebelumnya | | |
-| D-11 | **Tidak bisa dipintas dari `waiting`** | Buat tiket klaim baru, biarkan `waiting` (jangan di-approve) → sebagai admin paksa statusnya jadi `done` | Ditolak dengan pesan yang sama. Status tetap `waiting`, tidak ada Status History baru, tiket tidak ditandai apa pun. Diisi alasan → baru berhasil, dan penandanya ikut tertulis | | |
-| D-12 | Approve & Reject di `waiting` tidak ikut terkunci | Pada tiket klaim `waiting`, klik Approve, lalu pada tiket klaim lain klik Reject | Keduanya tetap jalan tanpa diminta alasan tidak-layak (Reject tetap punya alur alasannya sendiri) | | |
-| D-05 | Tampilan publik jujur | Buka halaman publik tiket ini (`/{tanggal}/{kode}`) | Banner kuning "Klaim tidak memenuhi syarat garansi" beserta alasan teknisi. Tidak tertulis "Selesai Dikerjakan" saja | | |
+| D-01 | Alasan wajib | "Tidak layak klaim" → alasan kosong → submit | Ditolak, status tidak berubah | TUNDA | |
+| D-02 | Penandaan berhasil | Isi alasan → submit | Status jadi `done`, tiket ditandai tidak layak klaim beserta alasannya | TUNDA | |
+| D-03 | Unit bisa dikembalikan | `done` → `ready_for_pickup` atau `handed_to_courier` → `completed` | Alur pengembalian normal seperti tiket biasa | TUNDA | |
+| D-04 | Tidak masuk antrean RMA | Login RMA → dashboard | Tiket ini tidak muncul | TUNDA | |
+| D-06 | **Admin juga wajib memberi alasan** | Login admin → buka tiket klaim `on_progress` → tombolnya berbunyi "Tidak Layak Klaim", bukan "Mark Done" → klik → kosongkan alasan → submit | Tombol submit nonaktif selama alasan kosong. Kalau dipaksa lewat server, ditolak dengan pesan "Untuk tiket klaim, isi alasan…". Status tetap `on_progress`, tidak ada baris Status History baru | TUNDA | |
+| D-07 | Penandaan oleh admin berhasil | Isi alasan → submit | Status jadi `done`, tiket ditandai tidak layak beserta alasannya, dan alasan itu tercatat di Status History | TUNDA | |
+| D-08 | Sales juga terikat | Ulangi D-06 sebagai Sales | Ditolak dengan pesan yang sama | TUNDA | |
+| D-09 | Hasilnya identik dengan jalur teknisi | Bandingkan tiket dari D-07 dengan tiket dari D-02 (ditandai teknisi) | Keduanya `claim_eligible = false` dengan alasan tersimpan, dan halaman publiknya menampilkan banner kuning yang sama | TUNDA | |
+| D-10 | Tipe lain tidak terpengaruh | Sebagai admin, tutup tiket Service `on_progress` jadi `done` | Tetap bisa tanpa alasan, seperti sebelumnya | TUNDA | |
+| D-11 | **Tidak bisa dipintas dari `waiting`** | Buat tiket klaim baru, biarkan `waiting` (jangan di-approve) → sebagai admin paksa statusnya jadi `done` | Ditolak dengan pesan yang sama. Status tetap `waiting`, tidak ada Status History baru, tiket tidak ditandai apa pun. Diisi alasan → baru berhasil, dan penandanya ikut tertulis | TUNDA | |
+| D-12 | Approve & Reject di `waiting` tidak ikut terkunci | Pada tiket klaim `waiting`, klik Approve, lalu pada tiket klaim lain klik Reject | Keduanya tetap jalan tanpa diminta alasan tidak-layak (Reject tetap punya alur alasannya sendiri) | TUNDA | |
+| D-05 | Tampilan publik jujur | Buka halaman publik tiket ini (`/{tanggal}/{kode}`) | Banner kuning "Klaim tidak memenuhi syarat garansi" beserta alasan teknisi. Tidak tertulis "Selesai Dikerjakan" saja | TUNDA | |
 
 ### E. Akses & navigasi portal RMA
 
@@ -244,7 +251,10 @@ menyalin URL-nya. Uji di jendela incognito supaya benar-benar tanpa session.
 
 ## 7. Kriteria lulus
 
-- Seluruh test case bagian A sampai G berstatus PASS. Tidak ada lagi yang ditandai SKIP.
+- Seluruh test case bagian A, C, E, F, G berstatus PASS.
+- ⏸️ **Bagian D dan B-02 ditunda**, menunggu perubahan alur kelayakan klaim (teknisi tidak
+  lagi memutuskan; RMA yang memutuskan). Keduanya akan ditulis ulang, bukan dihapus. Kelulusan
+  putaran QC ini tidak menunggu keduanya.
 - Tidak ada bug severity **Critical** atau **High** yang masih terbuka.
 - Bagian H (regresi) seluruhnya PASS — syarat mutlak, karena tipe tiket lain sedang dipakai di produksi.
 - Tidak ada error di terminal dev server selama pengujian.

@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/session";
-import { getRmaQueue, VENDOR_OVERDUE_DAYS, VENDOR_WARNING_DAYS } from "@/lib/rma/queue";
+import { getRmaQueue, RMA_STAGE_SLA, VENDOR_OVERDUE_DAYS } from "@/lib/rma/queue";
+import AttentionCard from "./AttentionCard";
 import { formatDateTime } from "@/lib/utils";
-import { RmaStatusBadge, RMA_DECISION_LABELS, rmaStatusMeta } from "@/components/rma/RmaStatusCard";
-import { AlertTriangle, Clock, Inbox, Factory, CheckCircle2, ListChecks, History } from "lucide-react";
+import { RMA_DECISION_LABELS, rmaStatusMeta } from "@/components/rma/RmaStatusCard";
+import { AlertTriangle, Clock, Factory, CheckCircle2, ListChecks, History, CheckCircle } from "lucide-react";
 
 export const metadata = { title: "Dashboard RMA — HNS IT Center" };
 
@@ -11,11 +12,10 @@ export const metadata = { title: "Dashboard RMA — HNS IT Center" };
 const QUEUE_SECTIONS = [
   {
     key: "pending_verification",
-    title: "Menunggu Verifikasi",
+    title: "Baru Masuk",
     hint: "Unit baru diserahkan teknisi. Periksa dokumen, SN, dan fisik.",
-    urgent: true,
   },
-  { key: "on_hold", title: "Ditahan", hint: "Menunggu kelengkapan. Selesaikan atau batalkan.", urgent: true },
+  { key: "on_hold", title: "Ditahan", hint: "Menunggu kelengkapan. Selesaikan atau batalkan." },
   { key: "verified", title: "Siap Diajukan ke Vendor", hint: "Lengkapi nama vendor dan nomor RMA." },
   { key: "submitted_to_vendor", title: "Diajukan ke Vendor", hint: "Menunggu konfirmasi vendor." },
   { key: "in_vendor_process", title: "Diproses Vendor", hint: "Menunggu keputusan vendor." },
@@ -80,6 +80,15 @@ export default async function RmaDashboardPage() {
     bySection.set(section.key, rows.filter((r) => r.status === section.key));
   }
 
+  // A stage with nothing in it says something too, but as one green line rather
+  // than an empty card taking up a grid cell.
+  const activeSections = QUEUE_SECTIONS.filter(
+    (s) => (bySection.get(s.key) ?? []).length > 0
+  );
+  const clearSections = QUEUE_SECTIONS.filter(
+    (s) => (bySection.get(s.key) ?? []).length === 0
+  );
+
   const decisionEntries = Object.entries(stats.decisions).filter(([, n]) => n > 0);
 
   return (
@@ -90,6 +99,125 @@ export default async function RmaDashboardPage() {
           Pantau case klaim yang sedang berjalan dan aktivitas terakhirnya.
         </p>
       </div>
+
+      {/* ── Antrean per tahapan ─────────────────────────────────────────── */}
+      {rows.length === 0 ? (
+        <div className="card" style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
+          <CheckCircle2
+            size={40}
+            style={{ margin: "0 auto 0.75rem", color: "#059669", opacity: 0.8 }}
+          />
+          <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>Tidak ada case RMA aktif.</p>
+          <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+            Case muncul di sini setelah teknisi menyerahkan unit klaim ke RMA.
+          </p>
+        </div>
+      ) : (
+        <>
+          {/* Band ringkas: satu angka yang jadi alasan membuka halaman ini. */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              gap: "0.75rem",
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <AlertTriangle size={18} style={{ color: stats.pastDue > 0 ? "#dc2626" : "#b45309" }} />
+              <h2 style={{ margin: 0, fontSize: "1.0625rem" }}>Perlu Perhatian</h2>
+              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
+                {stats.active} case aktif
+              </span>
+            </div>
+            {stats.pastDue > 0 && (
+              <span
+                style={{
+                  background: "#fef2f2",
+                  color: "#991b1b",
+                  border: "1px solid #fecaca",
+                  borderRadius: "999px",
+                  padding: "0.2rem 0.7rem",
+                  fontSize: "0.8125rem",
+                  fontWeight: 600,
+                  fontFamily: "ui-monospace, monospace",
+                }}
+              >
+                {stats.pastDue} melewati tenggat
+              </span>
+            )}
+          </div>
+
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+              gap: "1rem",
+              alignItems: "start",
+            }}
+          >
+            {activeSections.map((section) => (
+              <AttentionCard
+                key={section.key}
+                title={section.title}
+                hint={section.hint}
+                rows={bySection.get(section.key) ?? []}
+              />
+            ))}
+          </div>
+
+          {/* Tahapan yang kosong: ditampilkan supaya jelas "memang tidak ada",
+              bukan "belum dimuat". */}
+          {clearSections.length > 0 && (
+            <div className="card" style={{ borderColor: "#a7f3d0", background: "#f0fdf4" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <CheckCircle size={18} style={{ color: "#059669" }} />
+                <h3 style={{ margin: 0, fontSize: "1rem" }}>Tidak ada tunggakan</h3>
+              </div>
+              <p style={{ fontSize: "0.8125rem", color: "#047857", margin: "0.25rem 0 1rem" }}>
+                Tidak ada case yang menunggu di tahapan berikut.
+              </p>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {clearSections.map((section) => (
+                  <li
+                    key={section.key}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "0.75rem",
+                      padding: "0.45rem 0",
+                    }}
+                  >
+                    <span
+                      style={{
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "0.5rem",
+                        fontSize: "0.875rem",
+                      }}
+                    >
+                      <CheckCircle size={15} style={{ color: "#059669", flexShrink: 0 }} />
+                      {section.title}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "0.75rem",
+                        color: "#047857",
+                        fontFamily: "ui-monospace, monospace",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Tenggat {RMA_STAGE_SLA[section.key].overdue} hari
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </>
+      )}
 
       {/* ── Ringkasan ───────────────────────────────────────────────────── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "1rem" }}>
@@ -230,129 +358,6 @@ export default async function RmaDashboardPage() {
         )}
       </div>
 
-      {/* ── Antrean ─────────────────────────────────────────────────────── */}
-      {rows.length === 0 ? (
-        <div className="card" style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
-          <Inbox size={40} style={{ margin: "0 auto 0.75rem", color: "var(--text-muted)", opacity: 0.6 }} />
-          <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>Tidak ada case RMA aktif.</p>
-          <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
-            Case muncul di sini setelah teknisi menyerahkan unit klaim ke RMA.
-          </p>
-        </div>
-      ) : (
-        QUEUE_SECTIONS.map((section) => {
-          const sectionRows = bySection.get(section.key) ?? [];
-          if (sectionRows.length === 0) return null;
-          const urgent = "urgent" in section && section.urgent;
-
-          return (
-            <div
-              key={section.key}
-              className="card"
-              style={urgent ? { borderColor: "#fde68a", background: "#fffbeb" } : undefined}
-            >
-              <div style={{ marginBottom: "1rem" }}>
-                <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem", flexWrap: "wrap" }}>
-                  {urgent && <AlertTriangle size={16} style={{ color: "#b45309" }} />}
-                  {section.title}
-                  <span
-                    style={{
-                      fontSize: "0.75rem",
-                      fontWeight: 700,
-                      background: "var(--cream-dark)",
-                      borderRadius: "999px",
-                      padding: "0.1rem 0.5rem",
-                    }}
-                  >
-                    {sectionRows.length}
-                  </span>
-                </h3>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.25rem 0 0" }}>
-                  {section.hint}
-                </p>
-              </div>
-
-              <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-                {sectionRows.map((row) => (
-                  <Link key={row.id} href={`/rma/cases/${row.id}`} className="rma-queue-card">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "0.5rem" }}>
-                      <span style={{ fontFamily: "ui-monospace, monospace", fontSize: "0.875rem", fontWeight: 600 }}>
-                        {row.rma_code}
-                      </span>
-                      <RmaStatusBadge status={row.status} />
-                    </div>
-
-                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem 1rem", fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-                      <span>
-                        #{row.ticket.ticket_code}
-                        {row.ticket.store_location ? ` • ${row.ticket.store_location.code}` : ""}
-                      </span>
-                      {row.ticket.customer_name && <span>{row.ticket.customer_name}</span>}
-                      {row.ticket.device_name && <span>{row.ticket.device_name}</span>}
-                      {row.ticket.device_sn && (
-                        <span style={{ fontFamily: "ui-monospace, monospace" }}>SN {row.ticket.device_sn}</span>
-                      )}
-                      {row.vendor_name && <span>Vendor: {row.vendor_name}</span>}
-                      {row.decision && (
-                        <span style={{ fontWeight: 600 }}>
-                          {RMA_DECISION_LABELS[row.decision] ?? row.decision}
-                        </span>
-                      )}
-                      {row.handler && <span>PIC: {row.handler.name}</span>}
-                    </div>
-
-                    {row.status === "on_hold" && row.hold_reason && (
-                      <p
-                        style={{
-                          background: "#ffedd5",
-                          border: "1px solid #fed7aa",
-                          color: "#9a3412",
-                          borderRadius: "6px",
-                          padding: "0.35rem 0.6rem",
-                          fontSize: "0.75rem",
-                          margin: 0,
-                        }}
-                      >
-                        {row.hold_reason}
-                      </p>
-                    )}
-
-                    <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "0.75rem", fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
-                        <Clock size={12} />
-                        Masuk {formatDateTime(row.created_at)} ({row.daysOpen} hari)
-                      </span>
-                      {row.daysAtVendor !== null && (
-                        <span
-                          style={{
-                            fontWeight: 600,
-                            borderRadius: "999px",
-                            padding: "0.1rem 0.5rem",
-                            background:
-                              row.daysAtVendor >= VENDOR_OVERDUE_DAYS
-                                ? "#fee2e2"
-                                : row.daysAtVendor >= VENDOR_WARNING_DAYS
-                                  ? "#fef3c7"
-                                  : "var(--cream)",
-                            color:
-                              row.daysAtVendor >= VENDOR_OVERDUE_DAYS
-                                ? "#991b1b"
-                                : row.daysAtVendor >= VENDOR_WARNING_DAYS
-                                  ? "#92400e"
-                                  : "var(--text-secondary)",
-                          }}
-                        >
-                          {row.daysAtVendor} hari di vendor
-                        </span>
-                      )}
-                    </div>
-                  </Link>
-                ))}
-              </div>
-            </div>
-          );
-        })
-      )}
     </div>
   );
 }

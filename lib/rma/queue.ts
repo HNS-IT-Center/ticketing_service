@@ -2,8 +2,10 @@ import { db } from "@/lib/db";
 import type { RmaStatus } from "@prisma/client";
 
 /**
- * Data for the RMA dashboard: the queue, headline numbers, and a cross-case
- * activity feed.
+ * Data for the RMA dashboard: the queue and its headline numbers.
+ *
+ * The cross-case activity feed moved to /rma/logs, which queries RmaEvent
+ * itself with filters and paging. It is not loaded here any more.
  *
  * Loading lives here rather than in the page so the clock is read outside any
  * component render — `react-hooks/purity` flags `Date.now()` inside one, and it
@@ -74,13 +76,12 @@ export function rmaSeverity(status: RmaStatus, daysInStage: number): RmaSeverity
 }
 
 export type RmaQueueRow = Awaited<ReturnType<typeof getRmaQueue>>["rows"][number];
-export type RmaActivityRow = Awaited<ReturnType<typeof getRmaQueue>>["activity"][number];
 
 export async function getRmaQueue() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [cases, closedCount, cancelledCount, closedThisMonth, decisions, events] =
+  const [cases, closedCount, cancelledCount, closedThisMonth, decisions] =
     await Promise.all([
       db.rmaCase.findMany({
         where: { status: { in: [...RMA_QUEUE_STATUSES] } },
@@ -122,25 +123,6 @@ export async function getRmaQueue() {
         where: { decision: { not: null } },
         _count: { _all: true },
       }),
-      db.rmaEvent.findMany({
-        orderBy: { created_at: "desc" },
-        take: 15,
-        select: {
-          id: true,
-          from_status: true,
-          to_status: true,
-          note: true,
-          created_at: true,
-          actor: { select: { id: true, name: true } },
-          rma_case: {
-            select: {
-              id: true,
-              rma_code: true,
-              ticket: { select: { ticket_code: true } },
-            },
-          },
-        },
-      }),
     ]);
 
   // One clock read for the whole request, so every row is measured consistently.
@@ -161,11 +143,6 @@ export async function getRmaQueue() {
     };
   });
 
-  const activity = events.map((e) => ({
-    ...e,
-    daysAgo: days(e.created_at),
-  }));
-
   const stats = {
     active: rows.length,
     needsAction: rows.filter((r) => NEEDS_ACTION.includes(r.status)).length,
@@ -185,5 +162,5 @@ export async function getRmaQueue() {
     ) as Record<string, number>,
   };
 
-  return { rows, activity, stats, closedCount, cancelledCount };
+  return { rows, stats, closedCount, cancelledCount };
 }

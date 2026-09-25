@@ -55,6 +55,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
   ],
   rma: [
     { href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+    { href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> },
     { href: "/rma/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
   ],
   sales: [

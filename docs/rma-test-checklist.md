@@ -184,7 +184,10 @@ Kolom **Hasil** diisi PASS / FAIL. Kolom **Bukti** diisi nama file screenshot.
 
 | ID | Skenario | Langkah | Hasil yang diharapkan | Hasil | Bukti |
 |---|---|---|---|---|---|
-| F-01 | Dashboard | Buka dashboard RMA | Kartu ringkasan tampil; `pending_verification` dan `on_hold` di urutan atas antrean | | |
+| F-01 | Dashboard | Buka dashboard RMA | Band "Perlu Perhatian" di paling atas dengan jumlah case aktif; satu kartu per tahapan yang ada isinya; tahapan kosong tergabung di kartu hijau "Tidak ada tunggakan" | | |
+| F-01a | Urgensi kartu | Perhatikan kartu yang punya case lewat tenggat | Kartu bertanda pita merah dan pill "N mendesak"; pill amber "N peringatan" untuk yang mendekati. Baris di dalamnya urut dari yang paling lama menunggu | | |
+| F-01b | Umur dihitung per tahapan | Pindahkan satu case ke tahap berikutnya, lalu buka dashboard | Badge harinya kembali ke 0 hari — dihitung sejak masuk tahap itu, bukan sejak case dibuka | | |
+| F-01c | Kartu yang panjang | Cari kartu dengan lebih dari 5 case | Hanya 5 teratas tampil, sisanya di balik "Lihat N case lainnya" yang bisa dibuka di tempat | | |
 | F-02 | Tombol sesuai status | Buka case `pending_verification` | Hanya tombol sah yang muncul (verifikasi, on hold, batal) | | |
 | F-03 | On hold butuh alasan | Pilih on hold tanpa alasan | Ditolak | | |
 | F-04 | On hold dan kembali | On hold dengan alasan → kembali ke verifikasi | Status berpindah, kedua langkah tercatat di timeline | | |
@@ -200,7 +203,10 @@ Kolom **Hasil** diisi PASS / FAIL. Kolom **Bukti** diisi nama file screenshot.
 | F-14 | Lanjutan pengembalian | Login teknisi → tiket tadi → `ready_for_pickup` → `completed` | Alur handover normal | | |
 | F-15 | Keputusan ditolak vendor | Ulangi dengan keputusan `rejected` | Case tetap bisa ditutup dan unit dikembalikan | | |
 | F-16 | Case tertutup terkunci | Buka case `closed` | Panel aksi menyatakan case sudah ditutup, tidak ada tombol | | |
-| F-17 | Timeline dashboard | Lihat "Aktivitas Terbaru" di dashboard RMA | Perpindahan terakhir dari semua case tampil, tiap baris menuju case yang benar | | |
+| F-17 | Log aktivitas | Dashboard RMA → klik kartu "Log Aktivitas" (atau menu sidebar "Log Aktivitas") | Halaman `/rma/logs` terbuka. Perpindahan status semua case tampil terbaru dulu, tiap baris menuju case yang benar, catatan transisi ikut tampil | | |
+| F-17a | Filter log | Di `/rma/logs`: cari kode RMA, lalu pilih satu status tujuan, lalu pilih satu tanggal | Hasil menyempit sesuai filter; jumlah kejadian di kanan atas ikut berubah; tombol Reset mengembalikan semua | | |
+| F-17b | Halaman log | Kalau kejadian lebih dari 25, klik "Berikutnya" | Pindah halaman dan **filter tetap terbawa** di URL | | |
+| F-17c | Akses log | Login teknisi → buka `/rma/logs` langsung | Ditolak, diarahkan ke `/technician/dashboard` seperti route `/rma` lainnya | | |
 | F-18 | Preview nota | Detail case → "Lihat Nota Pembelian" | Terbuka di modal, bukan tab baru; ada opsi Unduh dan Buka di Tab Baru | | |
 
 ### G. Halaman publik

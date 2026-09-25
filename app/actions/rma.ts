@@ -169,6 +169,15 @@ export async function handoverToRmaAction(formData: FormData) {
       return { error: "Rekomendasi teknisi (layak / tidak layak) wajib dipilih." };
     }
     const recommendedEligible = recommendedEligibleRaw === "yes";
+
+    // Optional when the technician thinks it qualifies — "looks covered" needs
+    // no essay. Required when they think it does not: the desk is being told to
+    // consider turning a customer down, and it should be told why.
+    if (!recommendedEligible && !recommendationNote) {
+      return {
+        error: "Catatan wajib diisi bila rekomendasi teknisi adalah tidak layak.",
+      };
+    }
     if (unitOwnership === "store_stock" && !stockOrigin) {
       return { error: "Stock origin is required for a store stock unit." };
     }

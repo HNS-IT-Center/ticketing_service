@@ -518,6 +518,34 @@ describe("handoverToRmaAction — evidence and recommendation", () => {
     ).toEqual({ recommended_eligible: false, recommendation_note: "Ada bekas cairan di board" });
   });
 
+  it("requires a note when the recommendation is 'not eligible'", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id, { recommended_eligible: "no" });
+    fd.delete("recommendation_note");
+
+    expect(await handoverToRmaAction(fd)).toMatchObject({
+      error: expect.stringContaining("Catatan wajib"),
+    });
+    expect(await db.rmaCase.count({ where: { ticket_id: ticket.id } })).toBe(0);
+  });
+
+  it("does not accept whitespace as that note", async () => {
+    const ticket = await makeTicket();
+    expect(
+      await handoverToRmaAction(
+        validForm(ticket.id, { recommended_eligible: "no", recommendation_note: "   " }),
+      ),
+    ).toMatchObject({ error: expect.stringContaining("Catatan wajib") });
+  });
+
+  it("does not require a note when the recommendation is 'eligible'", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id, { recommended_eligible: "yes" });
+    fd.delete("recommendation_note");
+
+    expect(await handoverToRmaAction(fd)).toMatchObject({ success: true });
+  });
+
   it("leaves the note null when it is blank", async () => {
     const ticket = await makeTicket();
     const fd = validForm(ticket.id, { recommendation_note: "   " });
@@ -536,7 +564,12 @@ describe("handoverToRmaAction — evidence and recommendation", () => {
     // desk is free to disagree.
     const ticket = await makeTicket({ withInvoice: true });
     expect(
-      await handoverToRmaAction(validForm(ticket.id, { recommended_eligible: "no" })),
+      await handoverToRmaAction(
+        validForm(ticket.id, {
+          recommended_eligible: "no",
+          recommendation_note: "Ada bekas benturan di casing",
+        }),
+      ),
     ).toMatchObject({ success: true });
 
     const rmaCase = await db.rmaCase.findUnique({

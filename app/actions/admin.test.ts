@@ -226,10 +226,11 @@ describe("a ticket with the RMA desk cannot be moved from the admin portal", () 
   });
 });
 
-describe("a warranty claim closed from the admin portal must say why", () => {
-  // Mirrors guard 3 in updateTicketStatusAction. Without it, the admin portal
-  // could close a claim as `done` carrying no marker at all, which is
-  // indistinguishable from a claim that came back from the RMA desk.
+describe("a warranty claim cannot be closed from the admin portal at all", () => {
+  // This guard used to ask an administrator for a reason and record the claim
+  // as ineligible on their word. That decision moved to the RMA desk, so the
+  // admin portal now refuses the move rather than offering a second, quieter
+  // way to make it.
 
   async function detail(ticketId: string) {
     return db.ticketWarrantyDetail.findUnique({
@@ -238,13 +239,11 @@ describe("a warranty claim closed from the admin portal must say why", () => {
     });
   }
 
-  it("refuses `done` with no reason", async () => {
+  it("refuses `done` from on_progress", async () => {
     const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
     const result = await adminUpdateTicketStatusAction(ticket.id, "done");
 
-    expect(result).toMatchObject({
-      error: expect.stringContaining("tidak layak klaim"),
-    });
+    expect(result).toMatchObject({ error: expect.stringContaining("Serahkan unit ke RMA") });
 
     const after = await db.ticket.findUnique({
       where: { id: ticket.id },
@@ -255,64 +254,48 @@ describe("a warranty claim closed from the admin portal must say why", () => {
     expect(await detail(ticket.id)).toBeNull();
   });
 
-  it("refuses a whitespace-only reason", async () => {
-    const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
-    const result = await adminUpdateTicketStatusAction(ticket.id, "done", "   ");
-
-    expect(result).toMatchObject({ error: expect.stringContaining("tidak layak klaim") });
-    expect(await detail(ticket.id)).toBeNull();
-  });
-
-  it("accepts a reason, and the SERVER writes claim_eligible=false", async () => {
-    const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
-    const result = await adminUpdateTicketStatusAction(
-      ticket.id,
-      "done",
-      "  Kerusakan akibat cairan, di luar garansi  ",
-    );
-    expect(result).toMatchObject({ success: true });
-
-    expect(await detail(ticket.id)).toEqual({
-      claim_eligible: false,
-      // trimmed by the server
-      ineligibility_reason: "Kerusakan akibat cairan, di luar garansi",
+  it("refuses `done` from waiting too", async () => {
+    // The technician action does not need `waiting` in its guard because
+    // HANDOVER_CHAIN rejects waiting -> done first. This action has no chain.
+    const ticket = await makeTicket({ type: "warranty_claim", status: "waiting" });
+    expect(await adminUpdateTicketStatusAction(ticket.id, "done")).toMatchObject({
+      error: expect.stringContaining("Serahkan unit ke RMA"),
     });
 
     const after = await db.ticket.findUnique({
       where: { id: ticket.id },
       select: { status: true },
     });
-    expect(after?.status).toBe("done");
+    expect(after?.status).toBe("waiting");
   });
 
-  it("records the reason on the status log", async () => {
+  it("refuses even when a reason is supplied", async () => {
+    // A reason used to be the way through; a caller still sending one must not
+    // slip past.
+    const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
+    expect(
+      await adminUpdateTicketStatusAction(ticket.id, "done", "Kerusakan akibat cairan"),
+    ).toMatchObject({ error: expect.stringContaining("Serahkan unit ke RMA") });
+
+    expect(await detail(ticket.id)).toBeNull();
+  });
+
+  it("never marks a claim ineligible from this action", async () => {
     const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
     await adminUpdateTicketStatusAction(ticket.id, "done", "Segel rusak");
 
-    const log = await db.ticketStatusLog.findFirst({
-      where: { ticket_id: ticket.id, new_status: "done" },
-      select: { old_status: true, reason: true, changed_by: true },
-    });
-    expect(log).toMatchObject({
-      old_status: "on_progress",
-      reason: "Segel rusak",
-      changed_by: adminId,
-    });
+    expect(await detail(ticket.id)).toBeNull();
   });
 
-  it("leaves the unit returnable through the ordinary chain", async () => {
+  it("applies to Sales too", async () => {
+    session.role = "Sales";
     const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
-    await adminUpdateTicketStatusAction(ticket.id, "done", "Di luar garansi");
-
-    expect(await adminUpdateTicketStatusAction(ticket.id, "ready_for_pickup")).toMatchObject({
-      success: true,
-    });
-    expect(await adminUpdateTicketStatusAction(ticket.id, "completed")).toMatchObject({
-      success: true,
+    expect(await adminUpdateTicketStatusAction(ticket.id, "done")).toMatchObject({
+      error: expect.stringContaining("Serahkan unit ke RMA"),
     });
   });
 
-  it("does not ask a non-claim ticket for a reason", async () => {
+  it("does not block a non-claim ticket", async () => {
     const ticket = await makeTicket({ type: "service", status: "on_progress" });
     expect(await adminUpdateTicketStatusAction(ticket.id, "done")).toMatchObject({
       success: true,
@@ -320,57 +303,16 @@ describe("a warranty claim closed from the admin portal must say why", () => {
     expect(await detail(ticket.id)).toBeNull();
   });
 
-  it("does not ask for a reason once the claim is already past on_progress", async () => {
-    // A claim returned by the RMA desk sits at `done`; moving it along the
-    // handover chain is not an eligibility decision.
+  it("does not block a claim already past on_progress", async () => {
+    // A claim the desk returned sits at `done`; moving it along the handover
+    // chain is not an eligibility decision.
     const ticket = await makeTicket({ type: "warranty_claim", status: "done" });
     expect(await adminUpdateTicketStatusAction(ticket.id, "ready_for_pickup")).toMatchObject({
       success: true,
     });
-    expect(await detail(ticket.id)).toBeNull();
   });
 
-  it("refuses `done` from `waiting` too, not just from `on_progress`", async () => {
-    // The technician action does not need `waiting` in its guard because
-    // HANDOVER_CHAIN rejects waiting -> done first. This action has no chain,
-    // so without it the guard is sidestepped by closing the claim one status
-    // earlier.
-    const ticket = await makeTicket({ type: "warranty_claim", status: "waiting" });
-    const result = await adminUpdateTicketStatusAction(ticket.id, "done");
-
-    expect(result).toMatchObject({ error: expect.stringContaining("tidak layak klaim") });
-
-    const after = await db.ticket.findUnique({
-      where: { id: ticket.id },
-      select: { status: true },
-    });
-    expect(after?.status).toBe("waiting");
-    expect(await db.ticketStatusLog.count({ where: { ticket_id: ticket.id } })).toBe(0);
-    expect(await detail(ticket.id)).toBeNull();
-  });
-
-  it("marks the claim properly when closed from `waiting` with a reason", async () => {
-    const ticket = await makeTicket({ type: "warranty_claim", status: "waiting" });
-    expect(
-      await adminUpdateTicketStatusAction(ticket.id, "done", "Sudah lewat masa garansi"),
-    ).toMatchObject({ success: true });
-
-    expect(await detail(ticket.id)).toEqual({
-      claim_eligible: false,
-      ineligibility_reason: "Sudah lewat masa garansi",
-    });
-  });
-
-  it("still lets a non-claim ticket go waiting -> done without a reason", async () => {
-    const ticket = await makeTicket({ type: "service", status: "waiting" });
-    expect(await adminUpdateTicketStatusAction(ticket.id, "done")).toMatchObject({
-      success: true,
-    });
-  });
-
-  it("leaves the other approach to `waiting` alone", async () => {
-    // Approve and Reject are what the panel actually offers at `waiting`;
-    // neither is an eligibility decision and neither should start asking.
+  it("leaves Approve and Reject at waiting alone", async () => {
     const a = await makeTicket({ type: "warranty_claim", status: "waiting" });
     expect(await adminUpdateTicketStatusAction(a.id, "on_progress")).toMatchObject({
       success: true,
@@ -381,23 +323,16 @@ describe("a warranty claim closed from the admin portal must say why", () => {
       success: true,
     });
   });
-
-  it("applies to Sales too", async () => {
-    session.role = "Sales";
-    const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
-    expect(await adminUpdateTicketStatusAction(ticket.id, "done")).toMatchObject({
-      error: expect.stringContaining("tidak layak klaim"),
-    });
-  });
 });
 
 describe("the guard is narrow — every other status still moves", () => {
-  it("leaves an ordinary claim ticket movable", async () => {
-    const ticket = await makeTicket({ status: "on_progress" });
-    // A claim leaving on_progress needs a reason now — see the describe above.
-    expect(
-      await adminUpdateTicketStatusAction(ticket.id, "done", "Di luar garansi"),
-    ).toMatchObject({ success: true });
+  it("leaves an ordinary ticket movable", async () => {
+    // A claim is no longer closable here at all, so the narrowness of the guard
+    // is shown with a service ticket instead.
+    const ticket = await makeTicket({ type: "service", status: "on_progress" });
+    expect(await adminUpdateTicketStatusAction(ticket.id, "done")).toMatchObject({
+      success: true,
+    });
 
     const after = await db.ticket.findUnique({
       where: { id: ticket.id },
@@ -444,20 +379,14 @@ describe("the guard is narrow — every other status still moves", () => {
     expect(after.total_points_completed).toBe(before.total_points_completed + 4);
   });
 
-  it("credits an ineligible claim once, here as in the technician action", async () => {
+  it("credits nothing for a claim from this action", async () => {
+    // Every paid moment for a claim is the handover, which this action cannot
+    // perform. See lib/kpi.ts.
     const before = await perf();
     const ticket = await makeTicket({ type: "warranty_claim", status: "on_progress" });
-    expect(
-      await adminUpdateTicketStatusAction(ticket.id, "done", "Di luar garansi"),
-    ).toMatchObject({ success: true });
+    await adminUpdateTicketStatusAction(ticket.id, "done", "Di luar garansi");
 
-    // warranty_claim is worth 2 in this action's table as well, so both exits
-    // and both portals pay the same.
-    const after = await perf();
-    expect(after.tickets_handled).toBe(before.tickets_handled + 1);
-    expect(after.success_count).toBe(before.success_count + 1);
-    expect(after.failed_count).toBe(before.failed_count);
-    expect(after.total_points_completed).toBe(before.total_points_completed + 2);
+    expect(await perf()).toEqual(before);
   });
 
   it("does not credit again as the ineligible claim goes back to the customer", async () => {

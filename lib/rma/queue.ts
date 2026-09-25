@@ -66,6 +66,7 @@ export const RMA_STAGE_SLA: Record<RmaStatus, { warning: number; overdue: number
   // Terminal — never queued, never measured.
   closed: { warning: Infinity, overdue: Infinity },
   cancelled: { warning: Infinity, overdue: Infinity },
+  ineligible: { warning: Infinity, overdue: Infinity },
 };
 
 export type RmaSeverity = "overdue" | "warning" | "ok";

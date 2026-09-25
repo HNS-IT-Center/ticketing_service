@@ -126,6 +126,11 @@ enum RmaStatus {
   vendor_decided
   unit_received
   closed
+  // Examined by the RMA desk and found outside warranty cover, before the unit
+  // ever went to a vendor. Distinct from RmaDecision.rejected, which is the
+  // vendor turning a claim down after receiving it, and from `cancelled`, which
+  // is a claim abandoned rather than judged.
+  ineligible
   cancelled
 }
 
@@ -573,6 +578,15 @@ model RmaCase {
   handed_over_by_id    String
   handed_over_by       User      @relation("RmaHandedOverBy", fields: [handed_over_by_id], references: [id])
   handed_over_at       DateTime  @default(now())
+
+  // ── Technician's recommendation at handover ──
+  // Advisory only. The RMA desk decides eligibility; this records what the
+  // person who physically examined the unit thought. It must never gate a
+  // transition, preselect the desk's choice, or reach the public page.
+  // Nullable in the database because seven cases predate this field; required
+  // at handover in the application, the same way device_sn is.
+  recommended_eligible Boolean?
+  recommendation_note  String?
 
   // ── Handling ──
   handler_id  String?

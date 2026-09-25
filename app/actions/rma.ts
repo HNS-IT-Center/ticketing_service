@@ -19,6 +19,9 @@ import type { RmaStatus, RmaDecision, UnitOwnership } from "@prisma/client";
 
 type TxClient = Parameters<Parameters<typeof db.$transaction>[0]>[0];
 
+/** Matches the FileUpload limit used at intake. */
+const MAX_DAMAGE_PHOTOS = 5;
+
 function rmaCodePrefix(storeCode: string | null): string {
   const now = new Date();
   const yymm = `${String(now.getFullYear()).slice(2)}${String(now.getMonth() + 1).padStart(2, "0")}`;
@@ -93,6 +96,13 @@ export async function handoverToRmaAction(formData: FormData) {
     // URL of an invoice already attached at intake; only upload when absent.
     const existingInvoiceUrl = ((formData.get("purchase_invoice_url") as string | null) || "").trim();
     const invoiceFiles = (formData.getAll("invoice_files") as File[]).filter((f) => f.size > 0);
+    // Photographic evidence of the fault, separate from the invoice. The RMA
+    // desk decides eligibility now, and it cannot do that on three lines of
+    // typed description.
+    const damageFiles = (formData.getAll("damage_files") as File[]).filter((f) => f.size > 0);
+    const recommendedEligibleRaw = (formData.get("recommended_eligible") as string | null) || "";
+    const recommendationNote =
+      ((formData.get("recommendation_note") as string | null) || "").trim() || null;
 
     if (!ticketId) return { error: "Ticket not found" };
 
@@ -141,6 +151,24 @@ export async function handoverToRmaAction(formData: FormData) {
     if (!physicalCondition) return { error: "Physical condition is required." };
     if (!faultDescription) return { error: "Fault description is required." };
     if (!testResult) return { error: "Test result is required." };
+
+    if (damageFiles.length === 0) {
+      return { error: "Minimal satu foto kondisi/kerusakan unit wajib dilampirkan." };
+    }
+    if (damageFiles.length > MAX_DAMAGE_PHOTOS) {
+      return { error: `Maksimal ${MAX_DAMAGE_PHOTOS} foto kerusakan.` };
+    }
+    // Images only: the desk views these in a preview modal, and a video there
+    // is both heavier and harder to judge a scratch from.
+    const badPhoto = damageFiles.find((f) => !f.type.startsWith("image/"));
+    if (badPhoto) {
+      return { error: `Foto kerusakan harus berupa gambar. "${badPhoto.name}" bukan gambar.` };
+    }
+
+    if (recommendedEligibleRaw !== "yes" && recommendedEligibleRaw !== "no") {
+      return { error: "Rekomendasi teknisi (layak / tidak layak) wajib dipilih." };
+    }
+    const recommendedEligible = recommendedEligibleRaw === "yes";
     if (unitOwnership === "store_stock" && !stockOrigin) {
       return { error: "Stock origin is required for a store stock unit." };
     }
@@ -184,6 +212,23 @@ export async function handoverToRmaAction(formData: FormData) {
       });
     }
 
+    // ── Upload the damage photos ──
+    // Before the case row exists, so a failed upload leaves nothing behind: the
+    // handover simply has not happened yet.
+    const damageUrls: { url: string; type: ReturnType<typeof getFileType> }[] = [];
+    for (const [i, file] of damageFiles.entries()) {
+      const ext = getExt(file.type, file.name);
+      const path = `tickets/${ticketId}/rma-damage_${ticket.ticket_code}_${i + 1}.${ext}`;
+      try {
+        damageUrls.push({ url: await uploadToR2(file, path), type: getFileType(file.type) });
+      } catch (err) {
+        console.error("[RMA DAMAGE PHOTO UPLOAD ERROR]", err);
+        return {
+          error: "Gagal mengunggah foto kerusakan. Periksa ukuran file lalu coba lagi.",
+        };
+      }
+    }
+
     // Staff at the same store can hand over at the same instant and compute the
     // same next sequence, so a unique-violation on rma_code is retried with a
     // freshly generated code rather than surfaced to the technician.
@@ -216,9 +261,23 @@ export async function handoverToRmaAction(formData: FormData) {
               fault_description: faultDescription,
               test_result: testResult,
               handed_over_by_id: session.userId,
+              recommended_eligible: recommendedEligible,
+              recommendation_note: recommendationNote,
             },
             select: { id: true, rma_code: true },
           });
+
+          // Inside the transaction: a rolled-back handover leaves no orphaned
+          // attachment rows pointing at the uploaded files.
+          if (damageUrls.length > 0) {
+            await tx.ticketAttachment.createMany({
+              data: damageUrls.map((d) => ({
+                ticket_id: ticketId,
+                file_url: d.url,
+                file_type: d.type,
+              })),
+            });
+          }
 
           await tx.rmaEvent.create({
             data: {
@@ -357,6 +416,8 @@ export async function transitionRmaAction(formData: FormData) {
 
     const input: RmaTransitionInput = {
       hold_reason: ((formData.get("hold_reason") as string | null) || "").trim() || null,
+      ineligibility_reason:
+        ((formData.get("ineligibility_reason") as string | null) || "").trim() || null,
       vendor_name: vendorName,
       vendor_rma_number: ((formData.get("vendor_rma_number") as string | null) || "").trim() || null,
       shipping_tracking: ((formData.get("shipping_tracking") as string | null) || "").trim() || null,
@@ -391,6 +452,22 @@ export async function transitionRmaAction(formData: FormData) {
     });
     if (!check.ok) return { error: check.error };
 
+    // Turning a claim down is the one desk decision the customer sees, so it
+    // carries the same evidence burden the technician now carries at handover.
+    const ineligibleFiles = (formData.getAll("damage_files") as File[]).filter(
+      (f) => f.size > 0
+    );
+    if (toStatus === "ineligible") {
+      if (ineligibleFiles.length === 0) {
+        return { error: "Minimal satu foto bukti wajib dilampirkan saat menolak klaim." };
+      }
+      if (ineligibleFiles.length > MAX_DAMAGE_PHOTOS) {
+        return { error: `Maksimal ${MAX_DAMAGE_PHOTOS} foto.` };
+      }
+      const bad = ineligibleFiles.find((f) => !f.type.startsWith("image/"));
+      if (bad) return { error: `Foto harus berupa gambar. "${bad.name}" bukan gambar.` };
+    }
+
     // ── Fields this transition writes onto the case ──
     const now = new Date();
     const data: Record<string, unknown> = { status: toStatus, handler_id: session.userId };
@@ -415,6 +492,7 @@ export async function transitionRmaAction(formData: FormData) {
       data.decided_at = now;
     }
     if (toStatus === "unit_received") data.unit_received_at = now;
+    if (toStatus === "ineligible") data.closed_at = now;
     if (toStatus === "closed") data.closed_at = now;
     if (toStatus === "cancelled") {
       data.hold_reason = input.hold_reason;
@@ -435,10 +513,54 @@ export async function transitionRmaAction(formData: FormData) {
         rma_case_id: rmaCaseId,
         from_status: fromStatus,
         to_status: toStatus,
-        note: input.note || input.hold_reason || input.decision_notes || null,
+        note:
+          input.note ||
+          input.ineligibility_reason ||
+          input.hold_reason ||
+          input.decision_notes ||
+          null,
         actor_id: session.userId,
       },
     });
+
+    // ── The desk found the claim outside warranty cover ──
+    // Written after the optimistic lock succeeded, so a losing concurrent
+    // caller cannot mark the ticket ineligible. upsert because a warranty
+    // ticket created before the detail row existed may not have one.
+    if (toStatus === "ineligible") {
+      for (const [i, file] of ineligibleFiles.entries()) {
+        const ext = getExt(file.type, file.name);
+        const path = `tickets/${rmaCase.ticket_id}/rma-ineligible_${rmaCase.rma_code}_${i + 1}.${ext}`;
+        try {
+          const url = await uploadToR2(file, path);
+          await db.ticketAttachment.create({
+            data: {
+              ticket_id: rmaCase.ticket_id,
+              file_url: url,
+              file_type: getFileType(file.type),
+            },
+          });
+        } catch (err) {
+          // The status change already committed; losing a photo must not undo
+          // it, so this is logged rather than surfaced as a failed transition.
+          console.error("[RMA INELIGIBLE PHOTO UPLOAD ERROR]", err);
+        }
+      }
+
+      await db.ticketWarrantyDetail.upsert({
+        where: { ticket_id: rmaCase.ticket_id },
+        create: {
+          ticket_id: rmaCase.ticket_id,
+          purchase_date: new Date(),
+          claim_eligible: false,
+          ineligibility_reason: input.ineligibility_reason,
+        },
+        update: {
+          claim_eligible: false,
+          ineligibility_reason: input.ineligibility_reason,
+        },
+      });
+    }
 
     // ── Closing or cancelling hands the ticket back to the normal workflow ──
     if (releasesTicket(toStatus) && rmaCase.ticket.status === "rma_process") {
@@ -452,7 +574,9 @@ export async function transitionRmaAction(formData: FormData) {
             reason:
               toStatus === "closed"
                 ? `RMA case ${rmaCase.rma_code} closed`
-                : `RMA case ${rmaCase.rma_code} cancelled`,
+                : toStatus === "ineligible"
+                  ? `RMA case ${rmaCase.rma_code} — klaim tidak layak`
+                  : `RMA case ${rmaCase.rma_code} cancelled`,
             changed_by: session.userId,
           },
         }),

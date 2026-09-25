@@ -72,6 +72,10 @@ const IN_PROGRESS_HEADLINE: Record<RmaStatus, string> = {
   unit_received: "Keputusan vendor sudah keluar",
   closed: "Klaim sedang diproses",
   cancelled: "Klaim sedang diproses",
+  // Unreachable in practice: an ineligible case releases the ticket out of
+  // `rma_process`, and the claim_eligible=false branch answers first. Present
+  // because the map is exhaustive, and a wrong label here would leak.
+  ineligible: "Klaim sedang diproses",
 };
 
 const DECISION_HEADLINE: Record<RmaDecision, string> = {

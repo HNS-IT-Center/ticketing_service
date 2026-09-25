@@ -183,90 +183,90 @@ describe("guard 2 — rejecting needs a reason", () => {
   });
 });
 
-describe("guard 3 — a warranty claim leaves on_progress only two ways", () => {
-  it("refuses `done` with no reason", async () => {
+describe("guard 3 — a warranty claim leaves on_progress ONE way", () => {
+  // The technician used to be able to close a claim here as "not eligible".
+  // That decision moved to the RMA desk, which is the side that knows what a
+  // vendor's warranty covers. The technician examines and documents; the desk
+  // judges. So `done` is refused outright rather than asked for a reason.
+
+  it("refuses `done`", async () => {
     const ticket = await makeTicket();
     const result = await updateTicketStatusAction(statusForm(ticket.id, "done"));
-    expect(result).toMatchObject({ error: expect.stringContaining("tidak layak klaim") });
+    expect(result).toMatchObject({ error: expect.stringContaining("Serahkan unit ke RMA") });
 
     const after = await db.ticket.findUnique({ where: { id: ticket.id }, select: { status: true } });
     expect(after?.status).toBe("on_progress");
   });
 
-  it("refuses `done` with a whitespace-only reason", async () => {
-    const ticket = await makeTicket();
-    const result = await updateTicketStatusAction(statusForm(ticket.id, "done", { reason: "  " }));
-    expect(result).toMatchObject({ error: expect.stringContaining("tidak layak klaim") });
+  it("refuses `done` even when a reason is supplied", async () => {
+    // A reason used to be the way through. It no longer is, and a caller still
+    // sending one must not slip past.
+    const result = await updateTicketStatusAction(
+      statusForm((await makeTicket()).id, "done", { reason: "Di luar garansi" })
+    );
+    expect(result).toMatchObject({ error: expect.stringContaining("Serahkan unit ke RMA") });
   });
 
-  it("accepts `done` with a reason and the SERVER writes claim_eligible=false", async () => {
+  it("writes nothing when it refuses", async () => {
     const ticket = await makeTicket();
-    const result = await updateTicketStatusAction(
-      statusForm(ticket.id, "done", { reason: "Kerusakan akibat cairan, di luar garansi" })
-    );
-    expect(result).toMatchObject({ success: true });
+    await updateTicketStatusAction(statusForm(ticket.id, "done", { reason: "Di luar garansi" }));
 
+    expect(await db.ticketStatusLog.count({ where: { ticket_id: ticket.id } })).toBe(0);
     const detail = await db.ticketWarrantyDetail.findUnique({
       where: { ticket_id: ticket.id },
       select: { claim_eligible: true, ineligibility_reason: true },
     });
-    expect(detail?.claim_eligible).toBe(false);
-    expect(detail?.ineligibility_reason).toBe("Kerusakan akibat cairan, di luar garansi");
-
-    const after = await db.ticket.findUnique({ where: { id: ticket.id }, select: { status: true } });
-    expect(after?.status).toBe("done");
+    // The fixture row exists; what matters is that nothing marked it ineligible.
+    expect(detail?.claim_eligible).toBe(true);
+    expect(detail?.ineligibility_reason).toBeNull();
   });
 
-  it("ignores a client-supplied claim_eligible flag", async () => {
+  it("cannot be talked into it by a client-supplied flag", async () => {
     const ticket = await makeTicket();
-    // A caller trying to mark the claim eligible while closing it as done.
     const result = await updateTicketStatusAction(
       statusForm(ticket.id, "done", {
         reason: "Segel rusak",
-        claim_eligible: "true",
+        claim_eligible: "false",
         ineligibility_reason: "dipalsukan klien",
       })
     );
-    expect(result).toMatchObject({ success: true });
+    expect(result).toMatchObject({ error: expect.any(String) });
 
-    const detail = await db.ticketWarrantyDetail.findUnique({
-      where: { ticket_id: ticket.id },
-      select: { claim_eligible: true, ineligibility_reason: true },
-    });
-    // server decides both fields
-    expect(detail?.claim_eligible).toBe(false);
-    expect(detail?.ineligibility_reason).toBe("Segel rusak");
+    expect(
+      (await db.ticketWarrantyDetail.findUnique({
+        where: { ticket_id: ticket.id },
+        select: { ineligibility_reason: true },
+      }))?.ineligibility_reason,
+    ).toBeNull();
   });
 
-  it("leaves the unit returnable: done → ready_for_pickup → completed still works", async () => {
-    const ticket = await makeTicket();
-    expect(
-      await updateTicketStatusAction(statusForm(ticket.id, "done", { reason: "Di luar garansi" }))
-    ).toMatchObject({ success: true });
+  it("still lets a claim returned by the desk finish its handover chain", async () => {
+    // rma.ts puts the ticket back at `done` itself; from there the technician
+    // carries on exactly as with any other ticket.
+    const ticket = await makeTicket({ status: "done" });
 
     expect(await updateTicketStatusAction(statusForm(ticket.id, "ready_for_pickup"))).toMatchObject({
       success: true,
     });
 
-    const fd = statusForm(ticket.id, "completed");
-    fd.append("files", new File(["img"], "serah-terima.jpg", { type: "image/jpeg" }));
-    expect(await updateTicketStatusAction(fd)).toMatchObject({ success: true });
-
-    const after = await db.ticket.findUnique({ where: { id: ticket.id }, select: { status: true } });
-    expect(after?.status).toBe("completed");
+    const completing = statusForm(ticket.id, "completed");
+    completing.append("files", new File(["img"], "serah-terima.jpg", { type: "image/jpeg" }));
+    expect(await updateTicketStatusAction(completing)).toMatchObject({ success: true });
   });
 
-  it("leaves the courier path open too", async () => {
+  it("leaves cancelling a claim alone", async () => {
+    // Refusing `done` must not also block an ordinary cancellation.
     const ticket = await makeTicket();
-    await updateTicketStatusAction(statusForm(ticket.id, "done", { reason: "Di luar garansi" }));
-
-    const fd = statusForm(ticket.id, "handed_to_courier");
-    fd.append("files", new File(["img"], "kurir.jpg", { type: "image/jpeg" }));
-    expect(await updateTicketStatusAction(fd)).toMatchObject({ success: true });
+    expect(
+      await updateTicketStatusAction(
+        statusForm(ticket.id, "cancelled", { reason: "Customer menarik klaim" })
+      ),
+    ).toMatchObject({ success: true });
   });
 });
 
-describe("KPI — an ineligible claim is credited like a handover", () => {
+
+describe("KPI — a claim credits nothing from this action", () => {
   async function perf() {
     const row = await db.technicianPerformance.findUnique({
       where: { technician_id: technicianId },
@@ -277,79 +277,48 @@ describe("KPI — an ineligible claim is credited like a handover", () => {
     );
   }
 
-  it("credits one success when a claim is closed as not eligible", async () => {
+  it("credits nothing for a refused `done`", async () => {
     const before = await perf();
-    const ticket = await makeTicket();
-    const result = await updateTicketStatusAction(
-      statusForm(ticket.id, "done", { reason: "Segel rusak, garansi hangus" })
+    await updateTicketStatusAction(
+      statusForm((await makeTicket()).id, "done", { reason: "Di luar garansi" })
     );
-    expect(result).toMatchObject({ success: true });
-
-    // The examination is real work and the conclusion was right, so it pays the
-    // same as a handover: warranty_claim is worth 2 — see lib/points.ts.
-    const after = await perf();
-    expect(after.tickets_handled).toBe(before.tickets_handled + 1);
-    expect(after.success_count).toBe(before.success_count + 1);
-    expect(after.failed_count).toBe(before.failed_count);
-    expect(after.total_points_completed).toBe(before.total_points_completed + 2);
+    expect(await perf()).toEqual(before);
   });
 
-  it("credits nothing when the ineligible marking is refused", async () => {
+  it("credits nothing as a returned claim goes back to the customer", async () => {
+    const ticket = await makeTicket({ status: "done" });
     const before = await perf();
-    const ticket = await makeTicket();
-    expect(await updateTicketStatusAction(statusForm(ticket.id, "done"))).toMatchObject({
-      error: expect.any(String),
-    });
+
+    await updateTicketStatusAction(statusForm(ticket.id, "ready_for_pickup"));
+    const completing = statusForm(ticket.id, "completed");
+    completing.append("files", new File(["img"], "serah-terima.jpg", { type: "image/jpeg" }));
+    await updateTicketStatusAction(completing);
 
     expect(await perf()).toEqual(before);
   });
 
   it("still counts a cancelled claim as a failure", async () => {
     const before = await perf();
-    const ticket = await makeTicket();
-    const result = await updateTicketStatusAction(
-      statusForm(ticket.id, "cancelled", { reason: "Customer menarik klaim" })
+    await updateTicketStatusAction(
+      statusForm((await makeTicket()).id, "cancelled", { reason: "Customer menarik klaim" })
     );
-    expect(result).toMatchObject({ success: true });
 
     const after = await perf();
     expect(after.failed_count).toBe(before.failed_count + 1);
     expect(after.success_count).toBe(before.success_count);
-    expect(after.total_points_completed).toBe(before.total_points_completed);
   });
 
   it("credits an ordinary ticket at done, as before", async () => {
     const before = await perf();
-    const ticket = await makeTicket({ type: "service" });
-    const result = await updateTicketStatusAction(statusForm(ticket.id, "done"));
-    expect(result).toMatchObject({ success: true });
+    await updateTicketStatusAction(statusForm((await makeTicket({ type: "service" })).id, "done"));
 
     const after = await perf();
     // service on a Laptop_Gaming is worth 5 -- see lib/points.ts.
     expect(after.success_count).toBe(before.success_count + 1);
     expect(after.total_points_completed).toBe(before.total_points_completed + 5);
   });
-
-  it("does not credit again when the ineligible claim is handed back to the customer", async () => {
-    const ticket = await makeTicket();
-    expect(
-      await updateTicketStatusAction(
-        statusForm(ticket.id, "done", { reason: "Bukan cakupan garansi" })
-      )
-    ).toMatchObject({ success: true });
-
-    // Snapshot AFTER the one credit, so anything the chain adds shows up.
-    const before = await perf();
-    expect(await updateTicketStatusAction(statusForm(ticket.id, "ready_for_pickup"))).toMatchObject({
-      success: true,
-    });
-    const completing = statusForm(ticket.id, "completed");
-    completing.append("files", new File(["img"], "serah-terima.jpg", { type: "image/jpeg" }));
-    expect(await updateTicketStatusAction(completing)).toMatchObject({ success: true });
-
-    expect(await perf()).toEqual(before);
-  });
 });
+
 
 describe("guard 3 — no effect on other ticket types", () => {
   it.each(["service", "cleaning"] as const)(

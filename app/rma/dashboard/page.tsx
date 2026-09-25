@@ -99,6 +99,62 @@ export default async function RmaDashboardPage() {
         </p>
       </div>
 
+      {/* ── Ringkasan ───────────────────────────────────────────────────── */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "1rem" }}>
+        <StatCard
+          icon={<ListChecks size={20} />}
+          value={stats.active}
+          label="Case Aktif"
+          hint={stats.oldestOpenDays > 0 ? `Terlama ${stats.oldestOpenDays} hari` : undefined}
+        />
+        <StatCard
+          icon={<AlertTriangle size={20} />}
+          value={stats.needsAction}
+          label="Butuh Tindakan"
+          hint="Menunggu verifikasi atau ditahan"
+          tone={stats.needsAction > 0 ? { bg: "#fef3c7", fg: "#92400e" } : undefined}
+        />
+        <StatCard
+          icon={<Factory size={20} />}
+          value={stats.atVendor}
+          label="Di Vendor"
+          hint={
+            stats.overdue > 0
+              ? `${stats.overdue} lewat ${VENDOR_OVERDUE_DAYS} hari, perlu dikejar`
+              : "Diajukan atau sedang diproses"
+          }
+        />
+        {/* Counts the same thing as the "melewati tenggat" pill above. Before,
+            this card counted only vendor days over 14 while the pill counted
+            every stage past its own target, so the two disagreed on screen. */}
+        <StatCard
+          icon={<Clock size={20} />}
+          value={stats.pastDue}
+          label="Lewat Tenggat"
+          hint="Melewati target tahapannya"
+          tone={stats.pastDue > 0 ? { bg: "#fee2e2", fg: "#991b1b" } : undefined}
+        />
+        <StatCard
+          icon={<CheckCircle2 size={20} />}
+          value={stats.closedThisMonth}
+          label="Selesai Bulan Ini"
+          hint={
+            // The single number that says whether the desk is keeping up.
+            `${stats.openedThisMonth} masuk bulan ini` +
+            (stats.netThisMonth > 0
+              ? ` • tumpukan +${stats.netThisMonth}`
+              : stats.netThisMonth < 0
+                ? ` • tumpukan ${stats.netThisMonth}`
+                : " • seimbang")
+          }
+          tone={
+            stats.netThisMonth > 0
+              ? { bg: "#fef3c7", fg: "#92400e" }
+              : { bg: "#d1fae5", fg: "#065f46" }
+          }
+        />
+      </div>
+
       {/* ── Antrean per tahapan ─────────────────────────────────────────── */}
       {rows.length === 0 ? (
         <div className="card" style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
@@ -217,43 +273,6 @@ export default async function RmaDashboardPage() {
           )}
         </>
       )}
-
-      {/* ── Ringkasan ───────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "1rem" }}>
-        <StatCard
-          icon={<ListChecks size={20} />}
-          value={stats.active}
-          label="Case Aktif"
-          hint={stats.oldestOpenDays > 0 ? `Terlama ${stats.oldestOpenDays} hari` : undefined}
-        />
-        <StatCard
-          icon={<AlertTriangle size={20} />}
-          value={stats.needsAction}
-          label="Butuh Tindakan"
-          hint="Menunggu verifikasi atau ditahan"
-          tone={stats.needsAction > 0 ? { bg: "#fef3c7", fg: "#92400e" } : undefined}
-        />
-        <StatCard
-          icon={<Factory size={20} />}
-          value={stats.atVendor}
-          label="Di Vendor"
-          hint="Diajukan atau sedang diproses"
-        />
-        <StatCard
-          icon={<Clock size={20} />}
-          value={stats.overdue}
-          label={`Lewat ${VENDOR_OVERDUE_DAYS} Hari`}
-          hint="Di vendor terlalu lama, perlu dikejar"
-          tone={stats.overdue > 0 ? { bg: "#fee2e2", fg: "#991b1b" } : undefined}
-        />
-        <StatCard
-          icon={<CheckCircle2 size={20} />}
-          value={stats.closedThisMonth}
-          label="Selesai Bulan Ini"
-          hint={`Total ${stats.closedCount} selesai${stats.cancelledCount > 0 ? ` • ${stats.cancelledCount} dibatalkan` : ""}`}
-          tone={{ bg: "#d1fae5", fg: "#065f46" }}
-        />
-      </div>
 
       {decisionEntries.length > 0 && (
         <div className="card">

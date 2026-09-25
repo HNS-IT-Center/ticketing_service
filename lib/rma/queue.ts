@@ -81,7 +81,7 @@ export async function getRmaQueue() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [cases, closedCount, cancelledCount, closedThisMonth, decisions] =
+  const [cases, closedCount, cancelledCount, closedThisMonth, openedThisMonth, decisions] =
     await Promise.all([
       db.rmaCase.findMany({
         where: { status: { in: [...RMA_QUEUE_STATUSES] } },
@@ -118,6 +118,7 @@ export async function getRmaQueue() {
       db.rmaCase.count({ where: { status: "closed" } }),
       db.rmaCase.count({ where: { status: "cancelled" } }),
       db.rmaCase.count({ where: { status: "closed", closed_at: { gte: monthStart } } }),
+      db.rmaCase.count({ where: { created_at: { gte: monthStart } } }),
       db.rmaCase.groupBy({
         by: ["decision"],
         where: { decision: { not: null } },
@@ -147,12 +148,25 @@ export async function getRmaQueue() {
     active: rows.length,
     needsAction: rows.filter((r) => NEEDS_ACTION.includes(r.status)).length,
     atVendor: rows.filter((r) => AT_VENDOR.includes(r.status)).length,
-    overdue: rows.filter((r) => r.daysAtVendor !== null && r.daysAtVendor >= VENDOR_OVERDUE_DAYS)
-      .length,
+    /**
+     * Still at the vendor AND there too long. `submitted_at` stays set after a
+     * case moves on, so filtering on it alone counts cases that already came
+     * back — which made the "Di Vendor" card claim more late cases than it had
+     * cases.
+     */
+    overdue: rows.filter(
+      (r) =>
+        AT_VENDOR.includes(r.status) &&
+        r.daysAtVendor !== null &&
+        r.daysAtVendor >= VENDOR_OVERDUE_DAYS
+    ).length,
     /** Past its stage target — the number the dashboard leads with. */
     pastDue: rows.filter((r) => r.severity === "overdue").length,
     warning: rows.filter((r) => r.severity === "warning").length,
     closedThisMonth,
+    openedThisMonth,
+    /** Positive means the pile is growing this month. */
+    netThisMonth: openedThisMonth - closedThisMonth,
     closedCount,
     cancelledCount,
     /** Longest-running open case, the one most likely to need chasing. */

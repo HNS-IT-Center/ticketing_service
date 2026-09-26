@@ -376,11 +376,17 @@ waiting ──→ on_progress ──→ ready_for_pickup ──→ waiting_picku
 
 ## 📋 Remaining / Suggested Work
 
+> The current, maintained backlog is **`## 📋 BACKLOG`** near the bottom of this file. What
+> follows is the older list, kept because a few entries are still open. Two of its items were
+> obsolete and have been struck out rather than silently deleted.
+
 - [ ] **Admin user delete** — button exists in user list but needs confirmation modal
-- [ ] **Real-time notifications** — upgrade from polling to Supabase Realtime channels
-- [ ] **Ticket point totals** — `total_points` on Ticket is not auto-calculated; set on creation
-- [ ] **Supabase Storage bucket** — bucket named `attachments` must be created with **public** read access
-- [ ] **Production deployment** — switch to Supabase direct DB URL + proper certificates for prod
+- [x] ~~**Real-time notifications**~~ — done; `NotificationBell` uses Supabase Realtime channels
+- [ ] **Ticket point totals** — `total_points` on Ticket is not auto-calculated; points are
+      computed on read from `lib/points.ts`
+- [x] ~~**Supabase Storage bucket**~~ — no longer applicable; file storage is Cloudflare R2
+      (`lib/r2.ts`), with MinIO or `STORAGE_DRIVER=local` for development
+- [ ] **Production deployment** — see BL11 and BL14 in the backlog
 
 ---
 
@@ -701,18 +707,96 @@ Branch `feat/rma-warranty-claim`. 343 tests, `tsc` clean, production build passe
 | T3 | Warranty claim credited once | ✅ | `lib/kpi.ts` holds the rule `(type != warranty_claim && done) \|\| (type == warranty_claim && rma_process)` as both a predicate and a Prisma filter. `handoverToRmaAction` now credits `TechnicianPerformance` inside the handover transaction. The `done` that `rma.ts` writes when a case closes credits nothing. |
 | T4 | Admin double-count fixed | ✅ | `adminUpdateTicketStatusAction` had `completed` in `isTerminal` plus a private point table, so an admin closing any ticket credited the technician a second time. Both gone. Historical inflated rows left alone. |
 | T5 | Point tables — diagnosed, split out | ⚠️ | Found nine copies of `getTicketPoints` with four different tables: a `Basic_Cleaning` ticket shows 2 pts, credits 5 when a technician closes it and 4 when an admin does. Divergent since `0fed3b9` (2026-07-27). **Not unified here** — doing so shifts displayed figures and admin-credited points, which is outside this branch's "no effect on other ticket types" rule. `lib/points.ts` was added but is used only by `tickets.ts` / `technician.ts` / `rma.ts`, which already used exactly that table, so no figure moves. Unification parked on `fix/points-table-unification`. |
-| T6 | Ineligible claim costs nothing | ✅ | Decided with the user: a claim closed as not eligible adds neither `success_count` nor `failed_count`. The examination was correct; charging a failure would make it expensive to turn down a bad claim. `cancelled`/`rejected` still count as failures. |
+| T6 | ~~Ineligible claim costs nothing~~ | ♻️ | **Superseded twice.** First changed to "paid the same as a handover" (2026-09-25), then made moot entirely when the ineligibility decision moved to the RMA desk (2026-09-26). Current rule: one paid exit, the handover. See the 2026-09-26 sprint. |
 | T7 | Monthly winners read the log | ✅ | `getTopTechnicianOfMonth` / `getTopStoreOfMonth` / the admin performance report queried `ticket.status == "done"`, so a ticket dropped out of its month the moment the customer picked it up. All three are log-based now, on the same filter as the leaderboard. |
 | T8 | `FLOW.md` | ✅ | New § 5 "Warranty Claim & RMA Flow" with the two legal exits and, explicitly, that **every claim statistic must filter on `claim_eligible` and `decision`** — otherwise a vendor rejection counts as a successful claim. § 4 point table corrected (it held a fifth, wrong copy). |
 | T9 | QC plan | ✅ | Nothing is SKIP any more. D-05 and G-01–G-03 reopened, G-04–G-06 and H-05b–H-05d added, and the changed point figures flagged so a tester does not report them as bugs. |
 
-**Still open after this sprint**
+### SPRINT 2026-09-25 SESSION — RMA dashboard, metrics, local tooling
+Branch `feat/rma-warranty-claim`. 442 tests at close.
 
-- [ ] Branch is **not pushed**. It will crash against Supabase until `RmaCase` / `RmaEvent` / the new enum values exist there — three ticket detail pages already `select: { rma_case: ... }`. Migration steps: `docs/rma-deploy.md`
-- [ ] Demo data NGW-000004…NGW-000009 still in the local database
-- [ ] `fix/sales-redirect` — `ticketHrefForPortal("sales")` still points at `/customer/...`, which 404s. Deliberately left for its own branch off `origin/main`
-- [ ] RLS still not enabled anywhere, now including `RmaCase` and `RmaEvent`
-- [ ] The average-duration report (`completedTickets` in `app/admin/performance/page.tsx`) is still ticket-status based, so it misses claims sitting at `rma_process`. It measures elapsed work time rather than credit, so it was left alone
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| D1 | Dashboard rebuilt around what needs acting on | ✅ | Was a long vertical list of every open case, sitting under the stats and the activity log. Now a "Perlu Perhatian" band, one card per stage showing the longest-waiting cases with urgency pills, and a green card listing the stages that are clear. Overflow folds into `<details>` rather than linking to a `/rma/cases` route that does not exist. |
+| D2 | Per-stage deadlines | ✅ | `RMA_STAGE_SLA` in `lib/rma/queue.ts`: a warning and an overdue threshold per stage, measured from when the case **entered** that stage (newest `RmaEvent`), not from when it opened. Desk-controlled stages are tight; vendor stages keep 7/14. Tune the table and every count, colour and sort order follows. |
+| D3 | Activity feed moved to `/rma/logs` | ✅ | Its own page with search, status filter, date filter, 25 per page, filters preserved across paging. `queue.ts` no longer runs the 15-event query at all. Sidebar entry added. |
+| D4 | Two contradicting figures reconciled | ✅ | "Lewat 14 Hari" counted vendor days only while the band counted every stage past its target — 2 against 1 on the same screen. Fixing that exposed the vendor figure itself being wrong ("Di Vendor 1 (2 lewat 14 hari)"), because `submitted_at` survives a case leaving the vendor stages. Six invariants now pinned in `queue.test.ts`, including `overdue <= atVendor`. |
+| D5 | Four more figures | ✅ | Tanpa PIC, rata-rata penyelesaian with a month-on-month comparison, hasil klaim (share of decided claims not rejected), and case-per-vendor. Plus monthly intake beside closures, so the card says whether the pile is growing. |
+| D6 | Vendor names stop splitting | ✅ | `vendor_name` is free text and held "Asus Service Center" and "ASUS SERVICE CENTER" as two vendors. `lib/rma/vendor.ts` folds a new name onto one already in use when they differ only by case or spacing; a genuinely new vendor keeps its own capitalisation, since Title Case would turn "iBox" into "Ibox". Applied on save, with a datalist in the case form. Old rows are not rewritten; the dashboard groups on the folded key. |
+| D7 | Claims by brand and by device type | ✅ | `device_name` splits the same way: "ASUS ROG G15", "ASUS ROG" and "Asus TUF A15" are three strings for one manufacturer. Grouped by brand (first word), labelled with the most common spelling. Counts every claim ever raised, not just open ones. |
+| D8 | Ticket-code collision | ✅ | `createTicketAction` read the most recently **created** ticket and added one. A backdated row left a low number on the newest ticket, so a store holding NGW-000001..9 asked for NGW-000004 forever and died on P2002. Now reads the highest code, plus a retry. Pre-existing since `00fefe6`. Branch `fix/ticket-code-collision` off main, cherry-picked here with 9 tests. |
+| D9 | Create Ticket button dead for claims | ✅ | `disabled={isPending \|\| ticketType === "warranty_claim"}` — the other half of the "Coming Soon" placeholder, left behind when the intake was built. Third time this feature broke in the same shape, so `create-form.test.ts` now reads the source and pins all three. |
+| D10 | MinIO replaces R2 locally | ✅ | `STORAGE_DRIVER=local` skips the S3 client entirely, so nothing in the R2 path was ever exercised before deploy. `R2_ENDPOINT` now points the real client at MinIO. Production untouched: unset behaves as before, `forcePathStyle` follows the endpoint, and a non-https endpoint is refused under `NODE_ENV=production`. ⚠️ Docker Hub refuses `minio/minio` on this machine — use `quay.io/minio/minio`. See `docs/minio-local-storage.md`. |
+| D11 | Seed pointed at production | ✅ | The deploy runbook ended with `npm run seed` against Supabase. It writes six accounts with published passwords, and its `upsert` sets the password in the `update` branch too — so it would reset a live `admin@techserve.id` to `admin123` and re-enable it. Replaced with `npm run create-user`. `NODE_TLS_REJECT_UNAUTHORIZED=0` removed: process-wide, and pointless for Postgres because the driver already skips verification. |
+
+---
+
+### SPRINT 2026-09-26 SESSION — eligibility moves to the RMA desk
+Branch `feat/rma-warranty-claim`. **477 tests**, `tsc` clean, production build passes.
+
+Plan approved before any code was written: `docs/plan-rma-eligibility.md`.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| E1 | Technician stops deciding eligibility | ✅ | They examine, document, and hand over; the desk judges. `updateTicketStatusAction` refuses `done` on a claim outright instead of asking for a reason. |
+| E2 | `ineligible` status | ✅ | New terminal `RmaStatus`, reachable from `pending_verification`, `on_hold` and `verified`, reason required. Deliberately **not** `RmaDecision.rejected` (the vendor turned it down after receiving the unit) and not `cancelled` (abandoned rather than judged) — `FLOW.md` § 5 requires reports to tell these apart. Releases the ticket to `done` like the other terminal states. |
+| E3 | Admin guard repurposed | ✅ | `d983b53` / `9838ebd` asked an administrator for a reason; the move is now refused outright, so there is no quieter second way to make the same call. |
+| E4 | Evidence is mandatory | ✅ | Handover requires 1–5 photos, images only, stored as `TicketAttachment` so the case page previews them. The desk's own refusal carries the same burden. Until now the desk judged on three lines of typed text. |
+| E5 | Technician recommendation | ✅ | Eligible or not, plus a note, on `RmaCase`. Advisory by construction: nothing reads it to gate a transition or preselect anything, and it never reaches the public page. The note is optional for "eligible" and required for "not eligible". Nullable in the database — seven cases predate it — and required at handover in the application, as `device_sn` is. |
+| E6 | KPI simplified | ✅ | Back to one paid exit. The third branch of `EARNING_STATUS_LOG_FILTER` and the `claimEligible` argument to `performanceEffect` are removed rather than left dead. |
+| E7 | `rmaStatusMeta` exhaustive | ✅ | Lost its string fallback, which would have rendered "ineligible" as raw enum text — exactly how `rma_process` once leaked onto the public page. A new status now fails the build instead. |
+| E8 | UI caught up | ✅ | Photo uploader, recommendation buttons and note in the handover dialog, with client validation repeating the server's exact sentences. "Tidak layak klaim" removed from both portals. The admin panel explains itself rather than rendering an empty row. |
+| E9 | Recommendation and pre-handover queue shown | ✅ | Recommendation on the case page and as a badge in queue rows; a read-only "Menunggu Pemeriksaan Teknisi" list on the dashboard for claims whose unit is still with the technician. |
+| E10 | RMA can see the attachments | ✅ | The case page rendered only the invoice, so everything else on the ticket was invisible to the person deciding whether to involve a vendor. |
+
+---
+
+## 📋 BACKLOG — what is likely to come next
+
+Ordered roughly by how much is already decided.
+
+### Approved, waiting only on QC finishing
+
+| # | Item | Where |
+|---|------|-------|
+| BL1 | **Field "komponen yang diklaim"** — which part is being claimed. Approved, scoped to every device type, because all nine claims on record are laptops and a PC-only field would report nothing. Schema, intake form, and QC A-02..A-08 | `docs/issue-claimed-component.md` |
+| BL2 | **Rewrite QC sections C, D and F** for the new claim flow. D is entirely about the removed technician path; C-01/C-06 and F-02/F-16 change | `docs/rma-test-checklist.md` |
+
+### Parked branches — written and tested, not pushed
+
+| # | Branch | Note |
+|---|--------|------|
+| BL3 | `fix/points-table-unification` | Nine copies of `getTicketPoints` into one. **Shifts displayed figures** (cleaning 2/4 to 3/5, service `Other_Device` 5 to 3) and admin-credited points. `docs/points-change-announcement.md` explains it per case for the technicians. ⚠️ Behind the RMA branch — needs rebasing |
+| BL4 | `fix/ticket-code-collision` | The P2002 fix, cut from main so it can land on its own |
+| BL5 | `fix/claude-md-seed-warning` | One file: stops the setup guide pointing `npm run seed` at a shared database |
+
+### Known defects, deliberately not fixed yet
+
+| # | Item | Where |
+|---|------|-------|
+| BL6 | ⛔ **`delivery.ts:50` swallows the action's return value** and reports success regardless. Dormant only because no panel currently offers a handover button for a status the action refuses — the first new caller activates it, and the symptom misleads. **Fix before adding any new caller of `adminUpdateTicketStatusAction`** | `docs/issue-transition-guard.md` |
+| BL7 | **No ticket transition guard.** Any status may follow any status, so `done` to `on_progress` to `done` credits a technician twice. The note includes SQL to check whether it has actually happened | `docs/issue-transition-guard.md` |
+| BL8 | **Sales redirect 404s** — `ticketHrefForPortal("sales")` points at `/customer/...`. Wants its own branch off `origin/main` | `lib/routes.ts` |
+| BL9 | **Average-duration report** misses claims sitting at `rma_process`. It measures elapsed work time rather than credit, so it was left alone | `app/admin/performance/page.tsx` |
+| BL10 | Residual: both claim guards key on `waiting`/`on_progress`. A real transition table closes this without special-casing claims | `docs/issue-transition-guard.md` |
+
+### Deployment and infrastructure
+
+| # | Item |
+|---|------|
+| BL11 | **Branch is not pushed.** It will crash against Supabase until `RmaCase`, `RmaEvent` and the new enum values exist there — several pages already `select: { rma_case: ... }`. Steps in `docs/rma-deploy.md`. Postgres enum values **cannot be removed**, so `ineligible` is permanent once applied |
+| BL12 | **RLS not enabled** on any table, now including `RmaCase` and `RmaEvent` |
+| BL13 | **Demo data** NGW-000004..NGW-000009 still in the local database |
+| BL14 | Production TLS: `rejectUnauthorized: false` in `lib/db.ts` is interim; the target is Supabase's CA bundle |
+| BL15 | MariaDB port — Supabase Realtime, `@prisma/adapter-pg`, and `pg_advisory_xact_lock` in `allocateRmaCode()` all break |
+
+### Worth doing, nobody has asked yet
+
+| # | Item |
+|---|------|
+| BL16 | **jsdom and React Testing Library.** `create-form.test.ts` reads the file as text because the project cannot render a component in a test. That guard exists because the claim flow broke three times by confirming a form renders instead of confirming the flow completes |
+| BL17 | **A real vendor table.** The folding in `lib/rma/vendor.ts` stops the splitting getting worse; it does not clean up what is already there, and vendors still cannot be managed from the UI |
+| BL18 | `extra_services` earns nothing anywhere. Two badges used to imply otherwise. Whether extras should earn is one line in `lib/points.ts` — and an unanswered question |
 
 ---
 

@@ -788,7 +788,7 @@ Ordered roughly by how much is already decided.
 | BL12 | **RLS not enabled** on any table, now including `RmaCase` and `RmaEvent` |
 | BL13 | **Demo data** NGW-000004..NGW-000009 still in the local database |
 | BL14 | Production TLS: `rejectUnauthorized: false` in `lib/db.ts` is interim; the target is Supabase's CA bundle |
-| BL15 | MariaDB port — Supabase Realtime, `@prisma/adapter-pg`, and `pg_advisory_xact_lock` in `allocateRmaCode()` all break |
+| BL15 | **MariaDB port** — inventoried 2026-09-27 in `docs/plan-mariadb-port.md`. Bigger than the one-line note suggested: `extra_services String[]` is a scalar list, which Prisma supports on PostgreSQL only, so it fails `prisma validate` and forces a schema change plus data migration. Supabase Realtime dies entirely. 15 `mode: "insensitive"` usages must be dropped (MySQL collation is already case-insensitive). Plus the advisory lock, PascalCase table names, and 477 tests that currently run on Postgres |
 
 ### Worth doing, nobody has asked yet
 

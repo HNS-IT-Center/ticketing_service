@@ -6,7 +6,7 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
+  provider = "mysql"
 }
 
 // ─────────────────────────────────────────────
@@ -149,7 +149,7 @@ model StoreLocation {
   id         String  @id @default(cuid())
   name       String  @unique       // e.g. "Nagoya Gateway"
   code       String  @unique       // e.g. "NGW" — used in ticket_code prefix
-  address    String?
+  address    String? @db.Text
   is_active  Boolean @default(true)
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -179,7 +179,7 @@ model User {
   name         String
   email        String   @unique
   phone_number String
-  address      String
+  address      String @db.Text
   role         Role     @default(Customer)
   password     String?
 
@@ -248,20 +248,20 @@ model Ticket {
   store_location_id String?
   store_location    StoreLocation? @relation(fields: [store_location_id], references: [id])
 
-  notes            String? // Rich text (HTML) — visible to all
-  technician_notes String? // Notes from CS to technician — plain text
+  notes            String? @db.LongText // Rich text (HTML) — visible to all
+  technician_notes String? @db.Text // Notes from CS to technician — plain text
 
   is_for_self      Boolean @default(true)  // false = ticket created on behalf of another person
   customer_name    String?                 // Name of the actual recipient (if is_for_self = false)
   customer_phone   String?
   customer_email   String?
-  customer_address String?
+  customer_address String? @db.Text
 
   customer_type    CustomerType @default(User)
 
   // CS intake fields
-  accessories      String?        // accessories included with device
-  device_condition String?        // customer-described physical condition
+  accessories      String? @db.Text // accessories included with device
+  device_condition String? @db.Text // customer-described physical condition
   device_name      String?        // Optional device name
   device_sn        String?        // Optional device serial number
   warranty_status  String?        // 'active' or 'inactive'
@@ -271,13 +271,13 @@ model Ticket {
   pickup_method    PickupMethod?
   terms_accepted   Boolean  @default(false)
 
-  payment_proof_url   String?
-  delivery_proof_url  String?
-  progress_proof_url  String?
-  revision_proof_url  String?
+  payment_proof_url   String? @db.Text
+  delivery_proof_url  String? @db.Text
+  progress_proof_url  String? @db.Text
+  revision_proof_url  String? @db.Text
 
   // Extra services added during the ticket (e.g. "Repaste", "Upgrade") — each adds +3 bonus points
-  extra_services      String[]  @default([])
+  extra_services      Json      @default("[]")
 
   // Public access
   public_chat_enabled Boolean @default(false)
@@ -344,7 +344,7 @@ model TicketWarrantyDetail {
   // ticket still goes to `done` so the normal handover chain can return the
   // unit to the customer — see docs/rma-test-checklist.md.
   claim_eligible       Boolean @default(true)
-  ineligibility_reason String?
+  ineligibility_reason String? @db.Text
 }
 
 model TicketCleaningDetail {
@@ -374,8 +374,8 @@ model TicketPcBuildDetail {
   id                 String  @id @default(cuid())
   ticket_id          String  @unique
   ticket             Ticket  @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
-  first_build_url    String? // Uploaded by technician upon marking done
-  revision_build_url String? // Uploaded by assigned Sales
+  first_build_url    String? @db.Text // Uploaded by technician upon marking done
+  revision_build_url String? @db.Text // Uploaded by assigned Sales
 }
 
 model TicketPcBuildComponent {
@@ -393,7 +393,7 @@ model TicketAttachment {
   id         String   @id @default(cuid())
   ticket_id  String
   ticket     Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
-  file_url   String
+  file_url   String @db.Text
   file_type  FileType
   created_at DateTime @default(now())
 }
@@ -407,7 +407,7 @@ model TicketMessage {
   sender      User?   @relation(fields: [sender_id], references: [id])
   sender_name String?       // for anonymous senders
 
-  message  String
+  message  String @db.Text
   is_read  Boolean @default(false)
 
   created_at DateTime @default(now())
@@ -425,7 +425,7 @@ model TicketStatusLog {
   ticket     Ticket       @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   old_status TicketStatus?
   new_status TicketStatus
-  reason     String?
+  reason     String? @db.Text
   changed_by String
   changer    User         @relation(fields: [changed_by], references: [id])
   created_at DateTime     @default(now())
@@ -484,7 +484,7 @@ model Notification {
 
   type         NotificationType
   reference_id String? // e.g. message_id or status_log_id
-  message      String? // Optional human-readable detail (e.g. points earned message)
+  message      String? @db.Text // Optional human-readable detail (e.g. points earned message)
 
   is_read Boolean @default(false)
 
@@ -502,7 +502,7 @@ model TicketTimeLog {
   ticket_id  String
   ticket     Ticket       @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   event      TimeLogEvent
-  reason     String?
+  reason     String? @db.Text
   created_at DateTime     @default(now())
 
   @@index([ticket_id])
@@ -513,7 +513,7 @@ model TechnicianLeave {
   technician_id String
   technician    User     @relation(fields: [technician_id], references: [id], onDelete: Cascade)
   date          DateTime @db.Date
-  reason        String?
+  reason        String? @db.Text
   is_off_day    Boolean  @default(false)
   created_at    DateTime @default(now())
 
@@ -570,10 +570,10 @@ model RmaCase {
   // ── Service form — filled by the technician at handover ──
   unit_ownership       UnitOwnership
   stock_origin         String?   // free text, required when unit_ownership = store_stock
-  purchase_invoice_url String?   // required when unit_ownership = customer
+  purchase_invoice_url String? @db.Text // required when unit_ownership = customer
   sn_verified          Boolean   @default(false)
-  physical_condition   String
-  fault_description    String
+  physical_condition   String @db.Text
+  fault_description    String @db.Text
   test_result          String
   handed_over_by_id    String
   handed_over_by       User      @relation("RmaHandedOverBy", fields: [handed_over_by_id], references: [id])
@@ -586,12 +586,12 @@ model RmaCase {
   // Nullable in the database because seven cases predate this field; required
   // at handover in the application, the same way device_sn is.
   recommended_eligible Boolean?
-  recommendation_note  String?
+  recommendation_note  String? @db.Text
 
   // ── Handling ──
   handler_id  String?
   handler     User?   @relation("RmaHandler", fields: [handler_id], references: [id])
-  hold_reason String?
+  hold_reason String? @db.Text
 
   // ── Vendor ──
   vendor_name       String?
@@ -601,7 +601,7 @@ model RmaCase {
 
   // ── Outcome ──
   decision         RmaDecision?
-  decision_notes   String?
+  decision_notes   String? @db.Text
   replacement_sn   String?     // required when decision = replaced
   decided_at       DateTime?
   unit_received_at DateTime?
@@ -623,7 +623,7 @@ model RmaEvent {
   rma_case    RmaCase    @relation(fields: [rma_case_id], references: [id], onDelete: Cascade)
   from_status RmaStatus?
   to_status   RmaStatus
-  note        String?
+  note        String? @db.Text
   actor_id    String
   actor       User       @relation(fields: [actor_id], references: [id])
   created_at  DateTime   @default(now())

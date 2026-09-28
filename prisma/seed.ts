@@ -1,16 +1,15 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";
+import { mariadbPoolConfig } from "../lib/mariadb";
 
 config({ path: ".env.local" });
 
-// Mirrors lib/db.ts: unset DATABASE_SSL keeps the Supabase behaviour (TLS on,
-// verification off); DATABASE_SSL=false targets a plain-TCP local container.
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false },
-});
+// Same settings as lib/db.ts, from the one module both share — including the
+// forced strict sql_mode, without which this script would silently write
+// truncated rows against the Hostinger server.
+const adapter = new PrismaMariaDb(mariadbPoolConfig());
 const db = new PrismaClient({ adapter });
 
 async function main() {

@@ -29,20 +29,25 @@ function rmaCodePrefix(storeCode: string | null): string {
 }
 
 /**
- * Allocates the next code INSIDE a transaction, serialised per store+month by a
- * Postgres advisory lock that is released when the transaction ends.
+ * Allocates the next code INSIDE a transaction.
  *
- * Reading the highest existing code without the lock is a lost-update race:
- * concurrent handovers at one store all read the same maximum and then fight
- * over the same number. The lock makes allocation deterministic; the P2002
- * retry around the transaction remains only as a safety net.
+ * Reading the highest existing code is a lost-update race: two handovers at one
+ * store in the same instant both read the same maximum and then fight over the
+ * same number. Under PostgreSQL that was serialised by
+ * `pg_advisory_xact_lock`, which has no MariaDB equivalent that behaves the
+ * same way — `GET_LOCK()` is scoped to the connection rather than the
+ * transaction, so it would need its own release path and its own tests.
  *
- * NOTE: pg_advisory_xact_lock is Postgres-specific. A MariaDB port needs
- * GET_LOCK()/RELEASE_LOCK() or an equivalent here.
+ * Dropped rather than translated, because the correctness of the result never
+ * rested on it: the unique index on `rma_code` rejects a duplicate, and the
+ * caller retries up to three times on exactly that violation. Without the lock
+ * the retry fires more often; the code it finally allocates is the same one.
+ *
+ * If contention ever proves common — two staff at one store handing over within
+ * milliseconds, repeatedly — GET_LOCK() can be added here without changing
+ * anything around it.
  */
 async function allocateRmaCode(tx: TxClient, prefix: string): Promise<string> {
-  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${prefix}))`;
-
   const last = await tx.rmaCase.findFirst({
     where: { rma_code: { startsWith: prefix } },
     orderBy: { rma_code: "desc" },

@@ -4,16 +4,14 @@
  * Run with: $env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npx tsx prisma/restore-admin.ts
  */
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { mariadbPoolConfig } from "../lib/mariadb";
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
+const adapter = new PrismaMariaDb(mariadbPoolConfig());
 const db = new PrismaClient({ adapter });
 
 async function main() {

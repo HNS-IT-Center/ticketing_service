@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { mariadbPoolConfig } from "../lib/mariadb";
 import { config } from "dotenv";
 import * as path from "path";
 
@@ -7,10 +8,7 @@ import * as path from "path";
 config({ path: path.join(process.cwd(), ".env.local") });
 
 async function main() {
-  const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL!,
-    ssl: { rejectUnauthorized: false },
-  });
+  const adapter = new PrismaMariaDb(mariadbPoolConfig());
   const prisma = new PrismaClient({ adapter });
 
   console.log("Upserting new upgrades...");

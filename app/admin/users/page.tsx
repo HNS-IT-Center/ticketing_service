@@ -22,7 +22,7 @@ export default async function AdminUsersPage({
     where: {
       is_active: true,
       ...(roleFilter !== "all" ? { role: roleFilter as any } : {}),
-      ...(query ? { OR: [{ name: { contains: query, mode: "insensitive" } }, { email: { contains: query, mode: "insensitive" } }] } : {}),
+      ...(query ? { OR: [{ name: { contains: query } }, { email: { contains: query } }] } : {}),
     },
     orderBy: { created_at: "desc" },
     include: {

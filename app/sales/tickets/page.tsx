@@ -36,9 +36,9 @@ export default async function SalesTicketsPage({
     ...(query
       ? {
           OR: [
-            { ticket_code: { contains: query, mode: "insensitive" as const } },
-            { user: { name: { contains: query, mode: "insensitive" as const } } },
-            { customer_name: { contains: query, mode: "insensitive" as const } },
+            { ticket_code: { contains: query } },
+            { user: { name: { contains: query } } },
+            { customer_name: { contains: query } },
           ],
         }
       : {}),

@@ -5,13 +5,13 @@
  */
 import { PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
-import { mariadbPoolConfig } from "../lib/mariadb";
+import { mariadbPoolConfig, MARIADB_ADAPTER_OPTIONS } from "../lib/mariadb";
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";
 
 config({ path: ".env.local" });
 
-const adapter = new PrismaMariaDb(mariadbPoolConfig());
+const adapter = new PrismaMariaDb(mariadbPoolConfig(), MARIADB_ADAPTER_OPTIONS);
 const db = new PrismaClient({ adapter });
 
 async function main() {

@@ -33,6 +33,44 @@ export const STRICT_SESSION_SQL =
   "SET SESSION sql_mode='STRICT_TRANS_TABLES,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION'";
 
 /**
+ * Adapter options shared by every entry point.
+ *
+ * `useTextProtocol` makes the driver send values inline (escaped) with
+ * `query()` instead of binding them through a server-side prepared statement
+ * with `execute()`. It is not a preference — without it, every search box in
+ * the application fails against the Hostinger server:
+ *
+ *   Code 1267: Illegal mix of collations
+ *   (utf8mb4_unicode_ci,IMPLICIT) and (utf8mb4_bin,NONE) for operation 'like'
+ *
+ * Prisma renders `contains` as `col LIKE CONCAT('%', ?, '%')`. The `'%'`
+ * literals take the connection collation; the bound parameter does not, and the
+ * two servers disagree about what it takes instead. Measured with
+ * `SELECT COLLATION(?)` on both:
+ *
+ *              text protocol          binary protocol
+ *   local      utf8mb4_unicode_ci     utf8mb4_unicode_ci   ← agree
+ *   Hostinger  utf8mb4_unicode_ci     utf8mb4_general_ci   ← disagree
+ *
+ * So the LIKE compares two different collations and MariaDB refuses. `equals`
+ * and `orderBy` are unaffected, which is why the failure is narrow and easy to
+ * miss: only `contains`, `startsWith` and `endsWith` break.
+ *
+ * The local container cannot reproduce this — its two protocols agree — so no
+ * amount of local testing would have caught it. It was found by running the
+ * real Prisma client against the real server before deploying, and that is the
+ * reason to keep doing so.
+ *
+ * Applied everywhere rather than only in production: a setting that differs
+ * between the test database and the real one is what created this gap in the
+ * first place.
+ *
+ * Trade-off accepted: no server-side statement cache. Values are still escaped
+ * by the driver, so this is not a SQL-injection surface.
+ */
+export const MARIADB_ADAPTER_OPTIONS = { useTextProtocol: true } as const;
+
+/**
  * TLS for the MariaDB connection.
  *
  * Opt-in, which inverts what DATABASE_SSL meant under PostgreSQL. There it was

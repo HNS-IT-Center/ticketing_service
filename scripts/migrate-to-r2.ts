@@ -17,7 +17,7 @@ config({ path: ".env.local" });
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
-import { mariadbPoolConfig } from "../lib/mariadb";
+import { mariadbPoolConfig, MARIADB_ADAPTER_OPTIONS } from "../lib/mariadb";
 import { PrismaClient } from "@prisma/client";
 
 // ─── Config ────────────────────────────────────────────────────────────────
@@ -45,7 +45,7 @@ const r2 = new S3Client({
   credentials: { accessKeyId: R2_ACCESS_KEY, secretAccessKey: R2_SECRET_KEY },
 });
 
-const adapter = new PrismaMariaDb(mariadbPoolConfig());
+const adapter = new PrismaMariaDb(mariadbPoolConfig(), MARIADB_ADAPTER_OPTIONS);
 const db = new PrismaClient({ adapter } as any);
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

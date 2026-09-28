@@ -1,6 +1,20 @@
 # Rencana Eksekusi — Port ke MySQL/MariaDB + Deploy hPanel Node.js Web Apps
 
-Status: **menunggu persetujuan.** Belum ada satu baris kode pun yang diubah.
+Status per **2026-09-28**: Tahap 0–4 **selesai dan lolos gerbang**; Tahap 5 sebagian
+(standalone sudah diuji lokal, sisanya butuh hPanel). Belum di-push — commit dan push
+ditahan atas permintaan.
+
+| Tahap | Gerbang | Hasil |
+|---|---|---|
+| 0 | Container versi sama dengan server | ✅ MariaDB 11.8.9 |
+| 1 | `prisma validate` + `db push` | ✅ 25 tabel |
+| 2 | `tsc --noEmit` | ✅ bersih |
+| 3 | Lonceng update ≤30 detik | ✅ polling; Supabase dicabut seluruhnya |
+| 4 | 477 test | ✅ 477/477, stabil 4× jalan |
+| 5 | `output: "standalone"` teruji lokal | ✅ lihat catatan di bawah |
+| 5 | Deploy hPanel + smoke test | ⬜ butuh akses hPanel |
+
+Commit lokal: `862f475` (tahap 1–2), `15e26ad` (tahap 3–4).
 
 Keputusan yang mendasari rencana ini (diambil 2026-09-27, tidak dibuka lagi):
 
@@ -252,10 +266,31 @@ per satu.
 
 Baru di sini menyentuh Hostinger.
 
-1. **`output: "standalone"` di `next.config.ts`.** Hostinger membangun Next
-   dengan standalone output. Ini perubahan yang **belum pernah diuji di proyek
-   ini** — uji `npm run build && node .next/standalone/server.js` di lokal dulu,
-   jauh sebelum deploy
+1. ✅ **`output: "standalone"` — sudah diaktifkan dan diuji lokal.** Dan
+   pengujian itu langsung menemukan jebakannya.
+
+   Next **tidak** menyalin `.next/static` dan `public/` ke dalam
+   `.next/standalone`. Tanpa keduanya server tetap menyala dan tetap menjawab
+   **200 untuk setiap halaman** — hanya semua aset yang dirujuknya 404. Yang
+   sampai ke pengguna adalah halaman polos tanpa gaya dan tanpa interaksi,
+   sementara setiap pemeriksaan yang cuma melihat kode status lolos:
+
+   ```
+   sebelum:  HTML 200  ·  CSS 404  ·  logo 307
+   sesudah:  HTML 200  ·  CSS 200  ·  JS 200
+   ```
+
+   Diperbaiki sebagai langkah `postbuild` (`scripts/copy-standalone-assets.mjs`),
+   bukan sebagai langkah di runbook — langkah di dokumen bisa terlewat, dan
+   terlewatnya tidak terlihat seperti kegagalan. Skripnya no-op kalau standalone
+   dimatikan.
+
+   Ukuran deploy turun dari `node_modules` 945 MB jadi **37 MB**.
+
+   ⚠️ **`next start` tidak lagi berlaku** — ia menyala lalu memperingatkan.
+   Skrip `start` di `package.json` sekarang `node .next/standalone/server.js`,
+   jadi `npm run start` (dan PM2, dan runbook mana pun yang menyebutnya) tetap
+   benar.
 2. Buat database MySQL di hPanel — **baru sekarang** form di screenshot itu ada
    gunanya
 3. Env lewat panel Hostinger (bukan `.env.local`; panel menyuntikkannya ke build

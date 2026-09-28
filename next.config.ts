@@ -1,6 +1,17 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Hostinger's Node.js Web Apps build with Next's standalone output and start
+  // the bundled server themselves, so this is required rather than an
+  // optimisation. It also shrinks the deploy: the server no longer needs the
+  // full node_modules tree (945 MB in this project), only the traced subset.
+  //
+  // Two things it changes that are easy to miss: `public/` and `.next/static`
+  // are NOT copied into `.next/standalone` by the build and must be placed
+  // beside the generated server, and the entry point becomes `server.js`
+  // rather than `next start`.
+  output: "standalone",
+
   experimental: {
     serverActions: {
       bodySizeLimit: "20mb",

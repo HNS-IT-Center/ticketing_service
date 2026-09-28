@@ -370,7 +370,7 @@ waiting ──→ on_progress ──→ ready_for_pickup ──→ waiting_picku
 - Polled via `GET /api/notifications` route.
 - `NotificationBell` component in the topbar displays unread count.
 - Types: `message` (new chat), `status_update` (ticket status changed), `assigned` (technician assigned), `completed` (technician completed a ticket, awards points).
-- **Real-time enabled** — uses Supabase Realtime WebSockets to instantly update the unread count when a new record is inserted.
+- **Polled, every 30s** (`POLL_MS` in `NotificationBell.tsx` / `RequestsBell.tsx`). Supabase Realtime was removed in the MariaDB port: it reads PostgreSQL's write-ahead log through Supabase, so on MariaDB a `.channel()` subscription never fires. A new notification now appears within 30 seconds rather than instantly. See `AGENTS.md` rule #9 before changing this back.
 
 ---
 
@@ -797,6 +797,8 @@ Ordered roughly by how much is already decided.
 | BL16 | **jsdom and React Testing Library.** `create-form.test.ts` reads the file as text because the project cannot render a component in a test. That guard exists because the claim flow broke three times by confirming a form renders instead of confirming the flow completes |
 | BL17 | **A real vendor table.** The folding in `lib/rma/vendor.ts` stops the splitting getting worse; it does not clean up what is already there, and vendors still cannot be managed from the UI |
 | BL18 | `extra_services` earns nothing anywhere. Two badges used to imply otherwise. Whether extras should earn is one line in `lib/points.ts` — and an unanswered question |
+| BL19 | **RMA code allocation is retry-based, not serialised.** `pg_advisory_xact_lock` was transaction-scoped and had no MariaDB equivalent — `GET_LOCK()` is connection-scoped, so it cannot be held to commit without leaking on an error path. `allocateRmaCode` now absorbs contention through `MAX_ALLOCATION_ATTEMPTS = 10`: with N simultaneous handovers at one store the Nth needs its Nth attempt, and exhausting the budget returns "please try again" rather than a duplicate, because the unique index is the real guarantee. The deterministic fix is a per-prefix counter row whose InnoDB lock is held to commit and rolls back cleanly — a schema change, deliberately kept out of the port |
+| BL20 | **`extra_services` should be a catalog table, not a Json column.** The six services and their points are hardcoded in `ExtraPointsPanel.tsx`, which is why a third point table exists (2/3/1/1/3/2 there, +3 flat on the list badges, 0 in `lib/points.ts`). `Upgrade` + `TicketUpgradeDetail` already model exactly this correctly. End state: `ExtraService` + `TicketExtraServiceDetail` with `@@unique([ticket_id, extra_service_id])`. Held back from the MariaDB port on purpose: a platform move and a redesign in one change make a failing test impossible to attribute. Related: `TicketUpgradeDetail` has **no** `@@unique`, so the same upgrade can be attached twice and counted twice |
 
 ---
 

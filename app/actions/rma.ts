@@ -257,7 +257,27 @@ export async function handoverToRmaAction(formData: FormData) {
     const codePrefix = rmaCodePrefix(ticket.store_location?.code ?? null);
     const claimPoints = getTicketPoints(ticket.ticket_type, ticket.device_type);
 
-    for (let attempt = 0; attempt < 3 && created === null; attempt++) {
+    // The budget is the concurrency this can absorb, not a round number.
+    //
+    // Each round, exactly one racer commits and the rest lose the unique index
+    // on rma_code, so with N simultaneous handovers at one store the last one
+    // needs its Nth attempt. Under PostgreSQL an advisory lock serialised them
+    // and the retry was pure safety net; MariaDB has no transaction-scoped
+    // equivalent, so the retry now carries the contention itself. At 3 — the
+    // value inherited from the locked version — four parallel handovers made
+    // the fourth fail, which is how the test caught it.
+    //
+    // Exhausting the budget is safe, only unhelpful: the unique index is what
+    // guarantees codes never collide, so the caller gets "please try again"
+    // rather than a duplicate. Ten is far above anything one store will ever do
+    // in the same instant.
+    //
+    // The deterministic fix is a per-prefix counter row, whose InnoDB lock is
+    // held to commit and released on rollback. That is a schema change and is
+    // deliberately not bundled into the port — see BL19.
+    const MAX_ALLOCATION_ATTEMPTS = 10;
+
+    for (let attempt = 0; attempt < MAX_ALLOCATION_ATTEMPTS && created === null; attempt++) {
       try {
         created = await db.$transaction(async (tx) => {
           const rmaCode = await allocateRmaCode(tx, codePrefix);

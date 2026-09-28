@@ -319,10 +319,10 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
             {/* Requests bell — Admin, Sales, and Store Coordinators */}
             {(role === "admin" || role === "sales" || isCoordinator) && (
-              <RequestsBell userId={userId} />
+              <RequestsBell />
             )}
 
-            <NotificationBell userId={userId} role={role} />
+            <NotificationBell role={role} />
 
             {/* ── Profile badge with dropdown ── */}
             <div ref={profileRef} style={{ position: "relative" }}>

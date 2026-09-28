@@ -40,9 +40,9 @@ export default async function RmaLogsPage({
 
   if (q) {
     where.OR = [
-      { rma_case: { rma_code: { contains: q, mode: "insensitive" } } },
-      { rma_case: { ticket: { ticket_code: { contains: q, mode: "insensitive" } } } },
-      { actor: { name: { contains: q, mode: "insensitive" } } },
+      { rma_case: { rma_code: { contains: q } } },
+      { rma_case: { ticket: { ticket_code: { contains: q } } } },
+      { actor: { name: { contains: q } } },
     ];
   }
 

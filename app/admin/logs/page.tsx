@@ -26,8 +26,8 @@ export default async function AdminLogsPage({
 
   if (q) {
     where.OR = [
-      { ticket: { ticket_code: { contains: q, mode: "insensitive" } } },
-      { changer: { name: { contains: q, mode: "insensitive" } } },
+      { ticket: { ticket_code: { contains: q } } },
+      { changer: { name: { contains: q } } },
     ];
   }
 

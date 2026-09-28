@@ -21,18 +21,19 @@
  * chain.
  */
 import { PrismaClient, type Role } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";
+import { mariadbPoolConfig } from "../lib/mariadb";
 import { createInterface } from "node:readline";
 import { stdin, stdout } from "node:process";
 
 config({ path: ".env.local" });
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false },
-});
+// Same settings as lib/db.ts, from the one module both share — including the
+// forced strict sql_mode, without which this script would silently write a
+// truncated name or address against the Hostinger server.
+const adapter = new PrismaMariaDb(mariadbPoolConfig());
 const db = new PrismaClient({ adapter });
 
 const rl = createInterface({ input: stdin, output: stdout, terminal: stdin.isTTY });

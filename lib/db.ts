@@ -1,31 +1,17 @@
 import "server-only";
 import { PrismaClient } from "@prisma/client";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { mariadbPoolConfig } from "./mariadb";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
 };
 
-/**
- * TLS settings for the Postgres connection.
- *
- * Leaving DATABASE_SSL unset keeps the exact production behaviour: TLS on with
- * certificate verification off, because the Supabase session pooler serves a
- * self-signed chain.
- *
- * Set DATABASE_SSL=false for a local Postgres container, which speaks plain TCP
- * — node-pg otherwise aborts the handshake with "The server does not support
- * SSL connections".
- */
-function resolveSsl(): { rejectUnauthorized: boolean } | false {
-  return process.env.DATABASE_SSL === "false" ? false : { rejectUnauthorized: false };
-}
-
 function createPrismaClient() {
-  const adapter = new PrismaPg({
-    connectionString: process.env.DATABASE_URL!,
-    ssl: resolveSsl(),
-  });
+  // Connection settings, including the forced strict sql_mode, live in
+  // lib/mariadb.ts — shared with prisma/seed.ts and scripts/create-user.ts so
+  // the three cannot drift apart.
+  const adapter = new PrismaMariaDb(mariadbPoolConfig());
 
   return new PrismaClient({
     adapter,

@@ -16,7 +16,8 @@ import { config } from "dotenv";
 config({ path: ".env.local" });
 
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { PrismaPg } from "@prisma/adapter-pg";
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { mariadbPoolConfig } from "../lib/mariadb";
 import { PrismaClient } from "@prisma/client";
 
 // ─── Config ────────────────────────────────────────────────────────────────
@@ -44,10 +45,7 @@ const r2 = new S3Client({
   credentials: { accessKeyId: R2_ACCESS_KEY, secretAccessKey: R2_SECRET_KEY },
 });
 
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
+const adapter = new PrismaMariaDb(mariadbPoolConfig());
 const db = new PrismaClient({ adapter } as any);
 
 // ─── Helpers ───────────────────────────────────────────────────────────────

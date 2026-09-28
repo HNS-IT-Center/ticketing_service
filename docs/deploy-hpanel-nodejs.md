@@ -116,6 +116,40 @@ hPanel → Node.js / Web Apps → aplikasi baru:
 | Start command | `npm run start` |
 | Node version | 20 LTS atau lebih baru (Next.js 16 minimal 20.9) |
 
+#### ⚠️ Pastikan branch-nya benar, dan cara memeriksanya dari log
+
+Salah branch tidak selalu terlihat sebagai error. Cara tercepat memastikannya ada di
+baris awal log build:
+
+```
+✔ Generated Prisma Client (v7.10.0)     ← branch BENAR
+✔ Generated Prisma Client (v7.8.0)      ← branch LAMA (main / deploy / first_development)
+```
+
+Branch lama masih versi PostgreSQL + Supabase. Ia tidak akan jalan terhadap MariaDB
+sekalipun build-nya berhasil.
+
+#### Kalau build gagal dengan error Turbopack di `globals.css`
+
+```
+FATAL: An unexpected Turbopack error occurred
+- Execution of PostCssTransformedAsset::process failed
+- creating new process
+- node process exited before we could connect to it with exit status: 0
+```
+
+Turbopack menjalankan PostCSS di **proses Node terpisah**, dan di shared hosting proses
+itu bisa ditolak atau kehabisan memori. Ganti build command:
+
+```
+npm ci && npm run build:webpack
+```
+
+Webpack menjalankan PostCSS di dalam proses yang sama, jadi tidak menyentuh batas itu.
+`postbuild:webpack` tetap menyalin aset secara otomatis. Sudah diuji lokal: compiled
+successfully, server jalan, CSS 200. Hasilnya lebih besar (66 MB vs 37 MB) karena
+webpack menelusuri lebih banyak dependensi — masih jauh di bawah `node_modules` penuh.
+
 `npm run build` memicu `postbuild`, yang menyalin `.next/static` dan `public/` ke dalam
 `.next/standalone`. Tanpa langkah itu setiap halaman tetap menjawab 200 sementara seluruh
 CSS dan JS 404 — halaman polos yang lolos semua pemeriksaan status.

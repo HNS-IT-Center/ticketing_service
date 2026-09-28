@@ -6,6 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "postbuild": "node scripts/copy-standalone-assets.mjs",
+    "build:webpack": "next build --webpack",
+    "postbuild:webpack": "node scripts/copy-standalone-assets.mjs",
     "start": "node .next/standalone/server.js",
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",

@@ -2,14 +2,14 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";
-import { mariadbPoolConfig } from "../lib/mariadb";
+import { mariadbPoolConfig, MARIADB_ADAPTER_OPTIONS } from "../lib/mariadb";
 
 config({ path: ".env.local" });
 
 // Same settings as lib/db.ts, from the one module both share — including the
 // forced strict sql_mode, without which this script would silently write
 // truncated rows against the Hostinger server.
-const adapter = new PrismaMariaDb(mariadbPoolConfig());
+const adapter = new PrismaMariaDb(mariadbPoolConfig(), MARIADB_ADAPTER_OPTIONS);
 const db = new PrismaClient({ adapter });
 
 async function main() {

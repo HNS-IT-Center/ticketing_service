@@ -196,6 +196,7 @@ Catat di password manager sekarang. Tidak ada cara membacanya lagi.
 | 7 | Handover: unggah 1 foto + rekomendasi | Berhasil. **Ini yang menguji R2** |
 | 8 | Login RMA | Case muncul, foto bisa dibuka |
 | 9 | **Lonceng notifikasi** | Bertambah dalam **≤30 detik**, bukan seketika. Itu perilaku benar sekarang — polling, bukan Realtime |
+| 10 | **Ketik apa pun di kotak cari** pada daftar tiket admin | Hasil keluar tanpa error. Ini menguji `useTextProtocol`: tanpa opsi itu server ini menolak setiap `LIKE` dengan error 1267, dan kegagalannya **tidak bisa direproduksi di database lokal** |
 
 **🛑 #7 gagal upload** → itu R2. Jangan ditambal dengan `STORAGE_DRIVER=local`: ditolak saat
 `NODE_ENV=production`, dan kalaupun lolos ia menulis ke filesystem yang hilang tiap deploy.

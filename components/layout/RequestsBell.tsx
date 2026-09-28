@@ -2,7 +2,15 @@
 
 import { useState, useEffect, useRef, useCallback, useTransition } from "react";
 import { ClipboardList, Check, X } from "lucide-react";
-import { supabase } from "@/lib/supabase";
+
+/**
+ * How often the pending-request list is refetched, in milliseconds.
+ *
+ * Matches NotificationBell. Kept as its own constant rather than shared,
+ * because the two answer different questions and may well want different
+ * intervals later.
+ */
+const POLL_MS = 30_000;
 
 interface AssignmentRequest {
   id: string;
@@ -24,7 +32,7 @@ function getTicketPoints(type: string, deviceType?: string | null): number {
   return 2;
 }
 
-export default function RequestsBell({ userId }: { userId: string }) {
+export default function RequestsBell() {
   const [requests, setRequests]       = useState<AssignmentRequest[]>([]);
   const [open, setOpen]               = useState(false);
   const [loaded, setLoaded]           = useState(false);
@@ -47,30 +55,23 @@ export default function RequestsBell({ userId }: { userId: string }) {
     }
   }, []);
 
-  // Initial load
+  /**
+   * Initial load, then refresh on an interval.
+   *
+   * This was a Supabase Realtime subscription on inserts into
+   * TicketAssignmentRequest. That mechanism reads PostgreSQL's write-ahead log
+   * through Supabase and has no MariaDB equivalent, so after the port it would
+   * never fire — leaving a coordinator staring at a count that only changed
+   * when they reloaded the page.
+   *
+   * A technician waiting for approval is the one being kept waiting here, so
+   * the interval matters more than it does for a read-only badge.
+   */
   useEffect(() => {
     fetchRequests();
+    const id = setInterval(fetchRequests, POLL_MS);
+    return () => clearInterval(id);
   }, [fetchRequests]);
-
-  // Real-time: refresh when new request comes in for this admin/coordinator
-  useEffect(() => {
-    const channel = supabase
-      .channel("realtime:ticket-requests")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "TicketAssignmentRequest",
-        },
-        () => {
-          fetchRequests();
-        }
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [userId, fetchRequests]);
 
   // Load list when opened
   useEffect(() => {

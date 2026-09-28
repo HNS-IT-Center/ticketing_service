@@ -3,8 +3,16 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Bell } from "lucide-react";
 import Link from "next/link";
-import { supabase } from "@/lib/supabase";
 import { ticketHrefForPortal, type Portal } from "@/lib/routes";
+
+/**
+ * How often the unread count is refetched, in milliseconds.
+ *
+ * 30s is a deliberate middle: short enough that a notification does not feel
+ * lost, long enough that an idle dashboard left open all day makes 120
+ * requests rather than thousands.
+ */
+const POLL_MS = 30_000;
 
 interface Notification {
   id: string;
@@ -17,7 +25,7 @@ interface Notification {
   ticket?: { ticket_code: string };
 }
 
-export default function NotificationBell({ userId, role }: { userId: string; role: string }) {
+export default function NotificationBell({ role }: { role: string }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [open, setOpen] = useState(false);
@@ -52,34 +60,32 @@ export default function NotificationBell({ userId, role }: { userId: string; rol
     }
   }, []);
 
-  // Poll unread count initially, then listen to realtime inserts
+  /**
+   * Poll the unread count on an interval.
+   *
+   * This used to be a Supabase Realtime subscription, which pushed an update
+   * the instant a Notification row was inserted. That mechanism reads
+   * PostgreSQL's write-ahead log through Supabase; with the database moved to
+   * MariaDB it has no equivalent and simply never fires, so the bell would sit
+   * at its initial count forever.
+   *
+   * Polling is the honest replacement, not a downgrade in disguise: the cost is
+   * that a new notification takes up to POLL_MS to appear instead of arriving
+   * immediately. The endpoint it calls is a COUNT with no joins.
+   *
+   * If the list happens to be open, it is refreshed too, so the rows the user
+   * is looking at do not contradict the badge above them.
+   */
   useEffect(() => {
     pollUnreadCount();
 
-    const channel = supabase
-      .channel("realtime:notifications")
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "Notification",
-          filter: `user_id=eq.${userId}`,
-        },
-        (payload) => {
-          setUnreadCount((prev) => prev + 1);
-          // If the list is currently open, we should fetch it again or optimistically insert
-          if (listLoaded) {
-            fetchFullList();
-          }
-        }
-      )
-      .subscribe();
+    const id = setInterval(() => {
+      pollUnreadCount();
+      if (listLoaded) fetchFullList();
+    }, POLL_MS);
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [pollUnreadCount, userId, listLoaded, fetchFullList]);
+    return () => clearInterval(id);
+  }, [pollUnreadCount, listLoaded, fetchFullList]);
 
   // Load full list when bell opens
   useEffect(() => {

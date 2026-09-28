@@ -4,6 +4,19 @@ Tahap 5 dari [`plan-mysql-port-execution.md`](plan-mysql-port-execution.md).
 Menggantikan [`deploy-staging-vps.md`](deploy-staging-vps.md), yang ditulis untuk VPS +
 PostgreSQL dan disimpan kalau suatu saat kembali ke sana.
 
+> **Repositori ini publik.** Karena itu host, username, dan nama database ditulis sebagai
+> placeholder, bukan nilai asli. Nilai aslinya ada di hPanel, dan **jangan** ditulis balik
+> ke file ini:
+>
+> | Placeholder | Di mana mencarinya |
+> |---|---|
+> | `<SSH_USER>`, `<SSH_HOST>` | hPanel → Tingkat lanjut → **SSH Access** |
+> | `<DB_USER>`, `<DB_NAME>`, `<PASSWORD>` | hPanel → Database → **Manajemen** |
+> | `<MYSQL_HOST>` | Sama; untuk aplikasi di server yang sama, `127.0.0.1` |
+>
+> Port 3306 server ini menjawab dari internet, jadi host + username adalah separuh
+> pasangan kredensial. Password MySQL dan SSH saat ini identik — buat berbeda saat rotasi.
+
 ---
 
 ## Yang SUDAH selesai, jangan diulang

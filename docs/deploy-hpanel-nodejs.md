@@ -142,11 +142,11 @@ Turbopack menjalankan PostCSS di **proses Node terpisah**, dan di shared hosting
 itu bisa ditolak atau kehabisan memori. Ganti build command:
 
 ```
-npm ci && npm run build:webpack
+npm ci && npm run build
 ```
 
 Webpack menjalankan PostCSS di dalam proses yang sama, jadi tidak menyentuh batas itu.
-`postbuild:webpack` tetap menyalin aset secara otomatis. Sudah diuji lokal: compiled
+`postbuild` tetap menyalin aset secara otomatis. Sudah diuji lokal: compiled
 successfully, server jalan, CSS 200. Hasilnya lebih besar (66 MB vs 37 MB) karena
 webpack menelusuri lebih banyak dependensi — masih jauh di bawah `node_modules` penuh.
 

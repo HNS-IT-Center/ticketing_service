@@ -90,7 +90,7 @@ Di panel:
 | Kolom | Isi |
 |---|---|
 | Branch | `main` (atau `deploy`, sesuai yang dipakai aplikasi) |
-| Build command | `npm ci && npm run build:webpack` |
+| Build command | `npm ci && npm run build` |
 | Start command | `npm run start` |
 
 Jangan set `NODE_ENV=production` — itu membuat `npm ci` melewati `devDependencies`, dan

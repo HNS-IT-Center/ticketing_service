@@ -12,6 +12,7 @@
     "lint": "eslint",
     "seed": "tsx prisma/seed.ts",
     "create-user": "tsx scripts/create-user.ts",
+    "migrate:from-supabase": "tsx scripts/migrate-from-supabase.ts",
     "setup:minio": "tsx scripts/setup-minio.ts",
     "postinstall": "prisma generate",
     "test": "vitest run",

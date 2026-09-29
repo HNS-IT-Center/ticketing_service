@@ -41,6 +41,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
       status: true,
       unit_ownership: true,
       stock_origin: true,
+      stock_transfer_number: true,
       purchase_invoice_url: true,
       sn_verified: true,
       physical_condition: true,
@@ -170,6 +171,16 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                 }
               />
               <Field label="Toko" value={ticket.store_location?.name} />
+              {/* Only meaningful for a unit taken from store stock; Field hides
+                  itself when the value is empty, so a customer's own unit shows
+                  neither row. stock_origin was selected but never rendered
+                  before this. */}
+              <Field label="Asal Stok" value={rmaCase.stock_origin} />
+              <Field
+                label="Nomor Pemindahan Stok"
+                value={rmaCase.stock_transfer_number}
+                mono
+              />
               <Field label="Teknisi" value={ticket.technician?.name} />
               <Field label="Tiket Dibuat" value={formatDateTime(ticket.created_at)} />
             </div>
@@ -271,6 +282,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             rmaCaseId={rmaCase.id}
             currentStatus={rmaCase.status}
             role={session.role}
+            unitOwnership={rmaCase.unit_ownership}
             knownVendors={knownVendors}
           />
         </div>

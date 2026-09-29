@@ -1048,7 +1048,9 @@ describe("transitionRmaAction — rules", () => {
     const result = await transitionRmaAction(
       transitionForm(rmaCaseId, "submitted_to_vendor", { vendor_name: "Asus" })
     );
-    expect(result).toMatchObject({ error: expect.stringContaining("Nomor RMA vendor") });
+    // Label renamed 2026-09-30: the desk calls this the supplier claim number.
+    // Same field, same requirement — only what it is called changed.
+    expect(result).toMatchObject({ error: expect.stringContaining("Nomor klaim pemasok") });
   });
 
   it("refuses a `replaced` decision without a replacement serial number", async () => {

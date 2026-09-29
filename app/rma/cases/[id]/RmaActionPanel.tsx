@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useTransition } from "react";
 import toast from "react-hot-toast";
-import type { RmaStatus } from "@prisma/client";
+import type { RmaStatus, UnitOwnership } from "@prisma/client";
 import Modal from "@/components/ui/Modal";
 import FileUpload from "@/components/ui/FileUpload";
 import { transitionRmaAction } from "@/app/actions/rma";
@@ -32,8 +32,12 @@ const FIELD_INPUTS: Record<
     placeholder: "Alasan ini ditampilkan ke customer di halaman pelacakan",
     multiline: true,
   },
+  stock_transfer_number: {
+    label: "Nomor Pemindahan Stok",
+    placeholder: "Nomor dokumen pemindahan gudang toko → gudang klaim",
+  },
   vendor_name: { label: "Nama Vendor", placeholder: "Misal: Asus Service Center" },
-  vendor_rma_number: { label: "Nomor RMA Vendor", placeholder: "Nomor dari vendor" },
+  vendor_rma_number: { label: "Nomor Klaim Pemasok", placeholder: "Nomor klaim ke pemasok" },
   decision: { label: "Keputusan Vendor", placeholder: "" },
   replacement_sn: { label: "Serial Number Pengganti", placeholder: "SN unit pengganti" },
 };
@@ -61,11 +65,15 @@ export default function RmaActionPanel({
   rmaCaseId,
   currentStatus,
   role,
+  unitOwnership,
   knownVendors = [],
 }: {
   rmaCaseId: string;
   currentStatus: RmaStatus;
   role: string;
+  /** Drives the store-stock transfer-number requirement. The server checks it
+   *  too; this only lets the dialog ask before a round trip. */
+  unitOwnership: UnitOwnership;
   /** Vendor names already in use, offered as suggestions so the same vendor is
    *  not entered under three different spellings. The server folds near-matches
    *  anyway (lib/rma/vendor.ts); this just makes the right choice the easy one. */
@@ -103,6 +111,7 @@ export default function RmaActionPanel({
       from: currentStatus,
       to: active.to,
       input: values,
+      unitOwnership,
     });
     if (!check.ok) {
       toast.error(check.error);
@@ -174,6 +183,10 @@ export default function RmaActionPanel({
         ...active.requires,
         ...(active.to === "vendor_decided" && values.decision === "replaced"
           ? (["replacement_sn"] as RmaTransitionField[])
+          : []),
+        ...(unitOwnership === "store_stock" &&
+        (active.to === "verified" || active.to === "in_vendor_process")
+          ? (["stock_transfer_number"] as RmaTransitionField[])
           : []),
       ]
     : [];

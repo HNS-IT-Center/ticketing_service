@@ -452,6 +452,8 @@ export async function transitionRmaAction(formData: FormData) {
       hold_reason: ((formData.get("hold_reason") as string | null) || "").trim() || null,
       ineligibility_reason:
         ((formData.get("ineligibility_reason") as string | null) || "").trim() || null,
+      stock_transfer_number:
+        ((formData.get("stock_transfer_number") as string | null) || "").trim() || null,
       vendor_name: vendorName,
       vendor_rma_number: ((formData.get("vendor_rma_number") as string | null) || "").trim() || null,
       shipping_tracking: ((formData.get("shipping_tracking") as string | null) || "").trim() || null,
@@ -468,6 +470,7 @@ export async function transitionRmaAction(formData: FormData) {
         rma_code: true,
         status: true,
         ticket_id: true,
+        unit_ownership: true,
         ticket: {
           select: { id: true, ticket_code: true, status: true, technician_id: true },
         },
@@ -483,6 +486,7 @@ export async function transitionRmaAction(formData: FormData) {
       from: fromStatus,
       to: toStatus,
       input,
+      unitOwnership: rmaCase.unit_ownership,
     });
     if (!check.ok) return { error: check.error };
 
@@ -509,6 +513,12 @@ export async function transitionRmaAction(formData: FormData) {
     if (toStatus === "on_hold") data.hold_reason = input.hold_reason;
     // Leaving on_hold clears the reason so a stale one cannot linger in the UI.
     if (fromStatus === "on_hold" && toStatus !== "on_hold") data.hold_reason = null;
+
+    // Written on whichever transition demanded it, so the number lands with the
+    // move that required it rather than waiting for a later step.
+    if (input.stock_transfer_number) {
+      data.stock_transfer_number = input.stock_transfer_number;
+    }
 
     if (toStatus === "submitted_to_vendor") {
       data.vendor_name = input.vendor_name;

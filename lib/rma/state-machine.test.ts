@@ -397,3 +397,82 @@ describe("getAllowedTransitions drives the UI", () => {
     }
   });
 });
+
+describe("store-stock transfer number", () => {
+  const base = { role: "RMA" as const, from: "pending_verification" as const };
+
+  it("refuses to verify a store-stock case without the transfer number", () => {
+    const r = validateRmaTransition({ ...base, to: "verified", unitOwnership: "store_stock" });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.missing).toContain("stock_transfer_number");
+      expect(r.error).toContain("Nomor pemindahan stok");
+    }
+  });
+
+  it("accepts the verification once the number is given", () => {
+    const r = validateRmaTransition({
+      ...base,
+      to: "verified",
+      unitOwnership: "store_stock",
+      input: { stock_transfer_number: "PM-2026-0912" },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("demands nothing of a customer's own unit — it is never transferred", () => {
+    const r = validateRmaTransition({ ...base, to: "verified", unitOwnership: "customer" });
+    expect(r.ok).toBe(true);
+  });
+
+  it("treats a blank string as missing, not as an answer", () => {
+    const r = validateRmaTransition({
+      ...base,
+      to: "verified",
+      unitOwnership: "store_stock",
+      input: { stock_transfer_number: "   " },
+    });
+    expect(r.ok).toBe(false);
+  });
+
+  // The requirement exists to keep a unit traceable once it leaves the shop
+  // floor. Turning the claim down, holding it or cancelling it all leave the
+  // unit where it is, so none of them may demand a transfer that never happened.
+  it.each([
+    ["ineligible", { ineligibility_reason: "Kerusakan akibat cairan" }],
+    ["on_hold", { hold_reason: "Menunggu faktur" }],
+    ["cancelled", { hold_reason: "Ditarik oleh toko" }],
+  ] as const)("does not demand it when moving to %s", (to, input) => {
+    const r = validateRmaTransition({ ...base, to, unitOwnership: "store_stock", input });
+    expect(r.ok).toBe(true);
+  });
+
+  // on_hold -> in_vendor_process reaches the vendor without passing through
+  // `verified`. A requirement one path can walk around is worse than none.
+  it("closes the on_hold -> in_vendor_process bypass", () => {
+    const r = validateRmaTransition({
+      role: "RMA",
+      from: "on_hold",
+      to: "in_vendor_process",
+      unitOwnership: "store_stock",
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.missing).toContain("stock_transfer_number");
+  });
+
+  it("leaves that same bypass open for a customer's unit", () => {
+    const r = validateRmaTransition({
+      role: "RMA",
+      from: "on_hold",
+      to: "in_vendor_process",
+      unitOwnership: "customer",
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  // Existing callers that do not pass unitOwnership must keep working.
+  it("applies nothing when ownership is not supplied", () => {
+    const r = validateRmaTransition({ ...base, to: "verified" });
+    expect(r.ok).toBe(true);
+  });
+});

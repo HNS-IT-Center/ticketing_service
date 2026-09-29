@@ -570,6 +570,11 @@ model RmaCase {
   // ── Service form — filled by the technician at handover ──
   unit_ownership       UnitOwnership
   stock_origin         String?   // free text, required when unit_ownership = store_stock
+  // Number of the goods-transfer document that moved the unit out of the store
+  // warehouse and into the claim warehouse. Required by the application before
+  // a store_stock case may be verified; nullable here because a customer's own
+  // unit is never transferred and has nothing to record.
+  stock_transfer_number String?
   purchase_invoice_url String? @db.Text // required when unit_ownership = customer
   sn_verified          Boolean   @default(false)
   physical_condition   String @db.Text

@@ -7,7 +7,7 @@
  * to render. Neither should hardcode its own copy of these rules.
  */
 
-import type { RmaStatus, RmaDecision } from "@prisma/client";
+import type { RmaStatus, RmaDecision, UnitOwnership } from "@prisma/client";
 
 // ── Roles allowed to drive an RMA case ──────────────────────────────────────
 // Administrator can do everything the RMA desk can.
@@ -21,6 +21,7 @@ export function canActOnRma(role: string): role is RmaActorRole {
 // ── Fields a transition may demand ──────────────────────────────────────────
 export type RmaTransitionField =
   | "hold_reason"
+  | "stock_transfer_number"
   | "ineligibility_reason"
   | "vendor_name"
   | "vendor_rma_number"
@@ -30,6 +31,7 @@ export type RmaTransitionField =
 /** Payload supplied by the caller when requesting a transition. */
 export type RmaTransitionInput = {
   hold_reason?: string | null;
+  stock_transfer_number?: string | null;
   ineligibility_reason?: string | null;
   vendor_name?: string | null;
   vendor_rma_number?: string | null;
@@ -58,7 +60,8 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
     to: "verified",
     label: "Verifikasi Lolos",
     requires: [],
-    description: "Dokumen, serial number, dan kondisi fisik sudah sesuai.",
+    description:
+      "Dokumen, serial number, dan kondisi fisik sudah sesuai. Unit stok toko wajib mencantumkan nomor pemindahan stok.",
   },
   {
     from: "pending_verification",
@@ -116,7 +119,7 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
     to: "submitted_to_vendor",
     label: "Ajukan ke Vendor",
     requires: ["vendor_name", "vendor_rma_number"],
-    description: "Wajib isi nama vendor dan nomor RMA vendor.",
+    description: "Wajib isi nama vendor dan nomor klaim pemasok.",
   },
   {
     from: "verified",
@@ -218,9 +221,10 @@ export type RmaValidationResult =
 
 const FIELD_LABELS: Record<RmaTransitionField, string> = {
   hold_reason: "Alasan",
+  stock_transfer_number: "Nomor pemindahan stok",
   ineligibility_reason: "Alasan tidak layak klaim",
   vendor_name: "Nama vendor",
-  vendor_rma_number: "Nomor RMA vendor",
+  vendor_rma_number: "Nomor klaim pemasok",
   decision: "Keputusan vendor",
   replacement_sn: "Serial number pengganti",
 };
@@ -242,8 +246,18 @@ export function validateRmaTransition(args: {
   from: RmaStatus;
   to: RmaStatus;
   input?: RmaTransitionInput;
+  /**
+   * Where the unit came from. Passed in rather than read from the database so
+   * this module stays pure and testable without one, the same reason
+   * `replacement_sn` resolves from `input.decision` here instead of being
+   * listed statically in the table.
+   *
+   * Optional so existing callers keep compiling; when it is absent the
+   * store-stock requirement simply does not apply.
+   */
+  unitOwnership?: UnitOwnership | null;
 }): RmaValidationResult {
-  const { role, from, to, input = {} } = args;
+  const { role, from, to, input = {}, unitOwnership = null } = args;
 
   if (!canActOnRma(role)) {
     return {
@@ -265,6 +279,23 @@ export function validateRmaTransition(args: {
   // Conditional requirement: a replaced unit must carry its new serial number.
   if (to === "vendor_decided" && input.decision === "replaced") {
     required.push("replacement_sn");
+  }
+  // Conditional requirement: a unit taken from store stock physically moves from
+  // the store warehouse into the claim warehouse, and that movement has a
+  // transfer document. The number is demanded before the case may proceed, so
+  // the unit can still be traced once it has left the shop floor.
+  //
+  // Applied to both routes that carry a case forward, not only the obvious one.
+  // `verified` is where it belongs, but `on_hold -> in_vendor_process` reaches
+  // the vendor without passing through `verified`, and a requirement that one
+  // path can walk around is worse than none: it reads as enforced.
+  //
+  // A customer's own unit is never transferred, so nothing is demanded of it.
+  if (
+    unitOwnership === "store_stock" &&
+    (to === "verified" || to === "in_vendor_process")
+  ) {
+    required.push("stock_transfer_number");
   }
 
   const missing = required.filter((field) => isBlank(input[field]));

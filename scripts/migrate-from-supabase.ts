@@ -64,7 +64,6 @@ const ORDER = [
   "Notification",
 ] as const;
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "::1", "host.docker.internal"]);
 const accessor = (t: string) => t.charAt(0).toLowerCase() + t.slice(1);
 const CHUNK = 500;
 
@@ -77,10 +76,27 @@ type AnyDelegate = Record<
   }
 >;
 
-async function confirmRemoteTarget(host: string, database: string) {
-  if (LOCAL_HOSTS.has(host)) return;
-  console.log(`\n⚠️  Tujuan BUKAN database lokal: ${host}/${database}`);
-  console.log("   Skrip ini MENGOSONGKAN seluruh 23 tabel di tujuan sebelum menyalin.");
+/**
+ * Konfirmasi selalu diminta, tidak pernah disimpulkan dari host.
+ *
+ * Versi pertama melewati konfirmasi kalau host-nya `127.0.0.1`. Itu cacat:
+ * database Hostinger dijangkau lewat SSH tunnel, jadi ia MUNCUL sebagai
+ * `127.0.0.1` dan penjaganya lolos begitu saja — persis cacat yang sama dengan
+ * `LOCAL_HOSTS` di `vitest.setup.ts`, yang juga menilai host dan tidak bisa
+ * membedakan tunnel dari container.
+ *
+ * Skrip ini mengosongkan 23 tabel sebelum menyalin, jadi "sepertinya lokal"
+ * bukan alasan yang cukup. Untuk pemakaian non-interaktif, set MIGRATE_YES=1
+ * secara sadar.
+ */
+async function confirmTarget(host: string, port: number, database: string) {
+  if (process.env.MIGRATE_YES === "1") {
+    console.log("   (MIGRATE_YES=1 — konfirmasi dilewati secara sadar)");
+    return;
+  }
+  console.log(`\n⚠️  Skrip ini MENGOSONGKAN seluruh 23 tabel di ${host}:${port}/${database}`);
+  console.log("   Lewat SSH tunnel, database Hostinger pun terlihat sebagai 127.0.0.1.");
+  console.log("   Periksa nama database di atas, bukan host-nya.");
   const rl = createInterface({ input: stdin, output: stdout });
   const answer = (await rl.question("   Ketik 'ya' untuk lanjut: ")).trim().toLowerCase();
   rl.close();
@@ -100,7 +116,7 @@ async function main() {
   const target = mariadbPoolConfig();
   console.log(`sumber : ${new URL(pgUrl).hostname}  (dibaca saja)`);
   console.log(`tujuan : ${target.host}:${target.port}/${target.database}`);
-  await confirmRemoteTarget(target.host, target.database);
+  await confirmTarget(target.host, target.port, target.database);
 
   const pg = new Client({ connectionString: pgUrl, ssl: { rejectUnauthorized: false } });
   await pg.connect();

@@ -10,6 +10,8 @@ import {
   isRole,
   ticketHrefForPortal,
   type Portal,
+  ticketsListHrefForPortal,
+  ticketsListHrefForRoleName,
 } from "./routes";
 
 /**
@@ -190,5 +192,51 @@ describe("ticketHrefForPortal", () => {
   it("keeps technician and admin links as they were", () => {
     expect(ticketHrefForPortal("technician", "tkt_1")).toBe("/technician/tickets/tkt_1");
     expect(ticketHrefForPortal("admin", "tkt_1")).toBe("/admin/tickets/tkt_1");
+  });
+});
+
+describe("ticketsListHrefForPortal", () => {
+  // The bug this replaces: createTicketAction named Sales, Administrator and
+  // Technician in an if-chain and sent everyone else — RMA — to
+  // `/ticket/${public_share_token}`, a route that has never existed. Creating a
+  // ticket succeeded and then landed the desk on a 404.
+  it.each([
+    ["admin", "/admin/tickets"],
+    ["technician", "/technician/tickets"],
+    ["sales", "/sales/tickets"],
+    ["rma", "/rma/tickets"],
+    ["customer", "/customer/tickets"],
+  ] as const)("%s -> %s", (portal, href) => {
+    expect(ticketsListHrefForPortal(portal)).toBe(href);
+  });
+
+  it("never returns the /ticket/... route that does not exist", () => {
+    const all = (["admin", "technician", "sales", "rma", "customer"] as const).map(
+      ticketsListHrefForPortal,
+    );
+    for (const href of all) expect(href.startsWith("/ticket/")).toBe(false);
+  });
+
+  it("gives every portal a distinct destination", () => {
+    const all = (["admin", "technician", "sales", "rma", "customer"] as const).map(
+      ticketsListHrefForPortal,
+    );
+    expect(new Set(all).size).toBe(all.length);
+  });
+});
+
+describe("ticketsListHrefForRoleName", () => {
+  it.each([
+    ["Administrator", "/admin/tickets"],
+    ["Technician", "/technician/tickets"],
+    ["Sales", "/sales/tickets"],
+    ["RMA", "/rma/tickets"],
+  ] as const)("%s -> %s", (role, href) => {
+    expect(ticketsListHrefForRoleName(role)).toBe(href);
+  });
+
+  // A role with no portal must not be handed someone else's list.
+  it.each(["Customer", "Nonsense", ""])("sends %s to /unauthorized", (role) => {
+    expect(ticketsListHrefForRoleName(role)).toBe("/unauthorized");
   });
 });

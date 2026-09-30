@@ -2,7 +2,8 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
+import { getTicketPoints } from "@/lib/points";
 
 /**
  * All tickets, for the RMA desk.
@@ -11,13 +12,20 @@ import { ChevronLeft, ChevronRight } from "lucide-react";
  * which is also where `createTicketAction` landed the desk after a successful
  * creation, since its redirect chain named no route for this role.
  *
+ * Laid out to match the technician's My Tickets page rather than the admin one:
+ * points pill, sortable Updated column, icon empty state, Manage button.
+ *
  * Deliberately unfiltered by owner. Sales lists what it sold and a technician
  * lists what they hold, but the RMA desk owns nothing; it needs to find a
  * ticket it has just raised, or look one up when a claim walks in.
  *
- * No points column, matching the admin page. Points measure technician output
- * and mean nothing at this desk — and leaving it out also avoids adding a fifth
- * copy of `getTicketPoints` to the four that already disagree (BL3).
+ * ⚠ The points shown here come from `lib/points.ts`, which CLAUDE.md requires
+ * for anything new. That is the table the writers actually credit, and it is
+ * NOT the table the technician and sales lists render — those carry their own
+ * copies. So this page can disagree with them: cleaning is 3/5 here against
+ * 2/4 there, `service` on `Other_Device` is 3 here against 5 there, and the
+ * +3-per-extra-service those badges add is absent because no writer has ever
+ * credited it. Reconciling the tables is BL3, its own branch.
  */
 export const metadata = { title: "All Tickets — HNS IT Center" };
 
@@ -43,7 +51,7 @@ export default async function RmaTicketsPage({
   const query = params.q || "";
   const page = Math.max(1, parseInt(params.page || "1") || 1);
   const skip = (page - 1) * PAGE_SIZE;
-  const sortParam = params.sort || "created_desc";
+  const sortParam = params.sort || "updated_desc";
 
   const where = {
     ...(statusFilter !== "all" ? { status: statusFilter as never } : {}),
@@ -58,8 +66,8 @@ export default async function RmaTicketsPage({
       : {}),
   };
 
-  let orderBy: Record<string, "asc" | "desc"> = { created_at: "desc" };
-  if (sortParam === "created_asc") orderBy = { created_at: "asc" };
+  let orderBy: Record<string, "asc" | "desc"> = { updated_at: "desc" };
+  if (sortParam === "updated_asc") orderBy = { updated_at: "asc" };
   else if (sortParam === "status_asc") orderBy = { status: "asc" };
   else if (sortParam === "status_desc") orderBy = { status: "desc" };
   else if (sortParam === "code_asc") orderBy = { ticket_code: "asc" };
@@ -74,8 +82,11 @@ export default async function RmaTicketsPage({
       include: {
         user: { select: { name: true } },
         technician: { select: { name: true } },
+        // getTicketPoints scores cleaning by its package, so the row cannot be
+        // priced without it.
+        cleaning_detail: { select: { service_package: true } },
         // Only a claim that reached this desk has a case, and only a case has a
-        // page in this portal. Without this the View link would point at
+        // page in this portal. Without this the Manage link would point at
         // /rma/tickets/{id}, which resolves a case and 404s when there is none.
         rma_case: { select: { id: true, rma_code: true } },
       },
@@ -89,7 +100,7 @@ export default async function RmaTicketsPage({
     const qs = new URLSearchParams();
     if (statusFilter !== "all") qs.set("status", statusFilter);
     if (query) qs.set("q", query);
-    if (currentSort !== "created_desc") qs.set("sort", currentSort);
+    if (currentSort !== "updated_desc") qs.set("sort", currentSort);
     if (p > 1) qs.set("page", String(p));
     const str = qs.toString();
     return `/rma/tickets${str ? `?${str}` : ""}`;
@@ -109,6 +120,26 @@ export default async function RmaTicketsPage({
       </Link>
     );
   };
+
+  const pointsPill = (pts: number) => (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "0.25rem",
+        padding: "0.2rem 0.55rem",
+        borderRadius: "999px",
+        fontSize: "0.75rem",
+        fontWeight: 700,
+        background: pts >= 5 ? "rgba(234,179,8,0.12)" : pts >= 4 ? "rgba(124,58,237,0.1)" : "rgba(22,70,157,0.1)",
+        color: pts >= 5 ? "#92400e" : pts >= 4 ? "#6d28d9" : "var(--primary)",
+        border: `1px solid ${pts >= 5 ? "rgba(234,179,8,0.3)" : pts >= 4 ? "rgba(124,58,237,0.25)" : "rgba(22,70,157,0.25)"}`,
+        whiteSpace: "nowrap",
+      }}
+    >
+      ⭐ {pts} pts
+    </span>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
@@ -130,13 +161,13 @@ export default async function RmaTicketsPage({
         </div>
         <form style={{ display: "flex", gap: "0.5rem" }}>
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
-          {sortParam !== "created_desc" && <input type="hidden" name="sort" value={sortParam} />}
+          {sortParam !== "updated_desc" && <input type="hidden" name="sort" value={sortParam} />}
           <input
             name="q"
             defaultValue={query}
             className="form-input"
-            placeholder="Cari kode atau customer..."
-            style={{ width: "220px" }}
+            placeholder="Search code or customer..."
+            style={{ width: "200px" }}
           />
           <button type="submit" className="btn btn-primary btn-sm">Search</button>
           {query && (
@@ -147,13 +178,13 @@ export default async function RmaTicketsPage({
         </form>
       </div>
 
-      {/* Status tabs */}
+      {/* Filter tabs */}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
         {STATUS_FILTERS.map((s) => {
           const qs = new URLSearchParams();
           if (s !== "all") qs.set("status", s);
           if (query) qs.set("q", query);
-          if (sortParam !== "created_desc") qs.set("sort", sortParam);
+          if (sortParam !== "updated_desc") qs.set("sort", sortParam);
           const str = qs.toString();
           const href = `/rma/tickets${str ? `?${str}` : ""}`;
           return (
@@ -163,7 +194,7 @@ export default async function RmaTicketsPage({
               className="btn btn-sm"
               style={{
                 background: statusFilter === s ? "var(--primary)" : "var(--white)",
-                color: statusFilter === s ? "#fff" : "var(--text-secondary)",
+                color: statusFilter === s ? "var(--white)" : "var(--text-secondary)",
                 border: "1.5px solid",
                 borderColor: statusFilter === s ? "var(--primary)" : "var(--border)",
                 textTransform: "capitalize",
@@ -179,7 +210,10 @@ export default async function RmaTicketsPage({
       <div className="admin-ticket-table">
         <div className="table-wrapper">
           {tickets.length === 0 ? (
-            <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>No tickets found</p>
+            <div className="empty-state">
+              <Ticket size={36} style={{ opacity: 0.3 }} />
+              <p>No tickets found</p>
+            </div>
           ) : (
             <table>
               <thead>
@@ -187,38 +221,43 @@ export default async function RmaTicketsPage({
                   <th>{renderSortableHeader("Code", "code_asc", "code_desc")}</th>
                   <th>Type</th>
                   <th>Customer</th>
-                  <th>Technician</th>
+                  <th>Points</th>
                   <th>{renderSortableHeader("Status", "status_asc", "status_desc")}</th>
-                  <th>{renderSortableHeader("Date", "created_asc", "created_desc")}</th>
+                  <th>{renderSortableHeader("Updated", "updated_asc", "updated_desc")}</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {tickets.map((t) => {
                   const actualName = t.is_for_self ? t.user?.name : t.customer_name;
+                  const pts = getTicketPoints(
+                    t.ticket_type,
+                    t.device_type,
+                    t.cleaning_detail?.service_package,
+                  );
                   return (
                     <tr key={t.id}>
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
-                      <td style={{ textTransform: "capitalize", fontSize: "0.875rem" }}>{t.ticket_type.replace(/_/g, " ")}</td>
+                      <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace(/_/g, " ")}</td>
                       <td>
                         <div style={{ fontWeight: 500 }}>{actualName}</div>
                         {!t.is_for_self && (
                           <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>(For Others)</div>
                         )}
                       </td>
-                      <td style={{ color: "var(--text-muted)" }}>
-                        {t.technician?.name ?? <span style={{ color: "var(--accent)", fontSize: "0.875rem" }}>Unassigned</span>}
-                      </td>
+                      <td>{pointsPill(pts)}</td>
                       <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                       <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                        {new Date(t.created_at).toLocaleDateString("id-ID")}
+                        {new Date(t.updated_at).toLocaleDateString("id-ID")}
                       </td>
                       <td>
                         {t.rma_case ? (
                           <Link href={`/rma/cases/${t.rma_case.id}`} className="btn btn-secondary btn-sm">
-                            Lihat Case
+                            Manage
                           </Link>
                         ) : (
+                          // No RMA page exists for a ticket without a case, so
+                          // nothing is offered rather than a link that 404s.
                           <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}>—</span>
                         )}
                       </td>
@@ -234,9 +273,17 @@ export default async function RmaTicketsPage({
       {/* Mobile card list */}
       <div className="admin-ticket-cards">
         {tickets.length === 0 ? (
-          <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>No tickets found</p>
+          <div className="empty-state">
+            <Ticket size={36} style={{ opacity: 0.3 }} />
+            <p>No tickets found</p>
+          </div>
         ) : (
           tickets.map((t) => {
+            const pts = getTicketPoints(
+              t.ticket_type,
+              t.device_type,
+              t.cleaning_detail?.service_package,
+            );
             const card = (
               <div className="mobile-ticket-card">
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -245,15 +292,13 @@ export default async function RmaTicketsPage({
                   </span>
                   <Badge variant={t.status} technicianId={t.technician_id} />
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                   <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace(/_/g, " ")}</span>
-                  <span>{new Date(t.created_at).toLocaleDateString("id-ID")}</span>
+                  {pointsPill(pts)}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
                   <span style={{ color: "var(--text-secondary)" }}>👤 {t.user?.name || "Guest"}</span>
-                  <span style={{ color: t.technician ? "var(--text-secondary)" : "var(--accent)" }}>
-                    {t.technician ? `🔧 ${t.technician.name}` : "Unassigned"}
-                  </span>
+                  <span>{new Date(t.updated_at).toLocaleDateString("id-ID")}</span>
                 </div>
                 {t.rma_case && (
                   <div style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--primary)" }}>
@@ -262,7 +307,6 @@ export default async function RmaTicketsPage({
                 )}
               </div>
             );
-            // Only a ticket with a case has somewhere to go in this portal.
             return t.rma_case ? (
               <Link key={t.id} href={`/rma/cases/${t.rma_case.id}`} style={{ textDecoration: "none" }}>
                 {card}

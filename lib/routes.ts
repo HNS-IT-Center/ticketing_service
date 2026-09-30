@@ -90,6 +90,48 @@ export function canEnter(pathname: string, role: string): boolean {
   return isRole(role) && (owner.allowed as readonly string[]).includes(role);
 }
 
+// ── Where each portal's ticket LIST lives ───────────────────────────────────
+
+/**
+ * The ticket list a portal lands on after creating a ticket.
+ *
+ * `createTicketAction` used to decide this with a hand-rolled if-chain whose
+ * final branch was `/ticket/${public_share_token}` — a route that does not
+ * exist. Any role the chain did not name, which meant RMA, was sent to a 404
+ * immediately after successfully creating a ticket.
+ *
+ * That is the exact failure this module was written to prevent: the comment at
+ * the top describes the `/login -> /login` loop a default branch produced. The
+ * switch below is exhaustive over `Portal`, so a new portal without a list
+ * fails `tsc` rather than silently inheriting someone else's route.
+ */
+export function ticketsListHrefForPortal(portal: Portal): string {
+  switch (portal) {
+    case "admin":
+      return "/admin/tickets";
+    case "technician":
+      return "/technician/tickets";
+    case "sales":
+      return "/sales/tickets";
+    case "rma":
+      return "/rma/tickets";
+    case "customer":
+      return "/customer/tickets";
+    default: {
+      const _exhaustive: never = portal;
+      return `/${String(_exhaustive)}`;
+    }
+  }
+}
+
+/** Same, for a role that arrives as a plain string (a session claim). */
+export function ticketsListHrefForRoleName(role: string): string {
+  const destination = destinationForRoleName(role);
+  return destination.allowed
+    ? ticketsListHrefForPortal(destination.portal)
+    : DENIED_DESTINATION;
+}
+
 // ── Where a notification about a ticket should link to ──────────────────────
 export function ticketHrefForPortal(portal: Portal, ticketId: string): string {
   switch (portal) {

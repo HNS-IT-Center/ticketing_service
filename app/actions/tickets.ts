@@ -11,6 +11,7 @@ import { nextStoreTicketCode, isTicketCodeCollision } from "@/lib/ticket-code";
 import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { sendTicketStatusEmail } from "@/lib/email";
+import { ticketsListHrefForRoleName } from "@/lib/routes";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
@@ -295,12 +296,12 @@ export async function createTicketAction(formData: FormData) {
     }).catch((err) => console.error("[EMAIL CREATE ERROR]", err));
   }
 
-  const redirectUrl = session.role === "Sales"
-    ? `/sales/tickets`
-    : session.role === "Administrator"
-    ? `/admin/tickets` 
-    : (session.role === "Technician" ? `/technician/tickets` : `/ticket/${ticket.public_share_token}`);
-    
+  // One mapping, from lib/routes.ts. The if-chain this replaces named three
+  // roles and sent everyone else — in practice RMA — to
+  // `/ticket/${public_share_token}`, a route that has never existed, so a
+  // successful creation ended on a 404.
+  const redirectUrl = ticketsListHrefForRoleName(session.role);
+
     return { success: true, redirectUrl };
   } catch (err: any) {
     console.error("[createTicketAction Error]:", err);

@@ -38,6 +38,10 @@ const FIELD_INPUTS: Record<
   },
   vendor_name: { label: "Nama Vendor", placeholder: "Misal: Asus Service Center" },
   vendor_rma_number: { label: "Nomor Klaim Pemasok", placeholder: "Nomor klaim ke pemasok" },
+  customer_ticket_number: {
+    label: "Nomor Tiket User",
+    placeholder: "Nomor dari pihak luar, boleh dikosongkan",
+  },
   decision: { label: "Keputusan Vendor", placeholder: "" },
   replacement_sn: { label: "Serial Number Pengganti", placeholder: "SN unit pengganti" },
 };
@@ -46,13 +50,31 @@ const FIELD_INPUTS: Record<
 /** Matches MAX_DAMAGE_PHOTOS in app/actions/rma.ts. */
 const MAX_INELIGIBLE_PHOTOS = 5;
 
-type OptionalField = "shipping_tracking" | "decision_notes";
+type OptionalField = "shipping_tracking" | "decision_notes" | "customer_ticket_number";
 
-const OPTIONAL_FIELDS: Partial<Record<RmaStatus, readonly OptionalField[]>> = {
-  submitted_to_vendor: ["shipping_tracking"],
-  in_vendor_process: ["shipping_tracking"],
-  vendor_decided: ["decision_notes"],
-};
+/**
+ * Optional fields, by destination status and by where the unit came from.
+ *
+ * Submitting to a vendor differs between the two ownerships:
+ *
+ *   store_stock  the shop claims against its own supplier, so it records a
+ *                supplier claim number (required, in the transition table) and
+ *                a shipping tracking number.
+ *   customer     there is no supplier claim. Whatever reference the outside
+ *                party gave is recorded instead, and handover is evidenced by
+ *                a photo of the receipt rather than a tracking number.
+ */
+function optionalFieldsFor(
+  to: RmaStatus,
+  unitOwnership: UnitOwnership,
+): readonly OptionalField[] {
+  if (to === "submitted_to_vendor") {
+    return unitOwnership === "store_stock" ? ["shipping_tracking"] : ["customer_ticket_number"];
+  }
+  if (to === "in_vendor_process") return ["shipping_tracking"];
+  if (to === "vendor_decided") return ["decision_notes"];
+  return [];
+}
 
 const DECISION_OPTIONS = [
   { value: "repaired", label: "Diperbaiki" },
@@ -144,7 +166,11 @@ export default function RmaActionPanel({
       for (const [key, value] of Object.entries(values)) {
         if (value.trim()) fd.append(key, value.trim());
       }
-      photos.filter((f) => f.size > 0).forEach((f) => fd.append("damage_files", f));
+      // One picker, two meanings, so the field name has to say which. Sending
+      // receipts as `damage_files` would have filed proof of handover as proof
+      // of damage, and the server rejects damage photos outside `ineligible`.
+      const photoField = active.to === "submitted_to_vendor" ? "receipt_files" : "damage_files";
+      photos.filter((f) => f.size > 0).forEach((f) => fd.append(photoField, f));
 
       const result = await transitionRmaAction(fd);
       if ("error" in result && result.error) {
@@ -188,11 +214,14 @@ export default function RmaActionPanel({
         (active.to === "verified" || active.to === "in_vendor_process")
           ? (["stock_transfer_number"] as RmaTransitionField[])
           : []),
+        ...(unitOwnership === "store_stock" && active.to === "submitted_to_vendor"
+          ? (["vendor_rma_number"] as RmaTransitionField[])
+          : []),
       ]
     : [];
 
   const optionalFields: readonly OptionalField[] = active
-    ? (OPTIONAL_FIELDS[active.to] ?? [])
+    ? optionalFieldsFor(active.to, unitOwnership)
     : [];
 
   return (
@@ -307,6 +336,24 @@ export default function RmaActionPanel({
               </div>
             )}
 
+            {active.to === "submitted_to_vendor" && unitOwnership === "customer" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                  Foto Tanda Terima{" "}
+                  <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(opsional)</span>
+                </label>
+                <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+                  Sampai {MAX_INELIGIBLE_PHOTOS} foto, gambar saja. Unit milik customer, jadi
+                  bukti serah terimanya foto tanda terima, bukan nomor resi.
+                </p>
+                <FileUpload
+                  onChange={setPhotos}
+                  accept="image/*,image/heic,image/heif"
+                  maxFiles={MAX_INELIGIBLE_PHOTOS}
+                />
+              </div>
+            )}
+
             {optionalFields.includes("shipping_tracking") && (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
                 <label htmlFor="rma-tracking" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
@@ -318,6 +365,22 @@ export default function RmaActionPanel({
                   value={values.shipping_tracking ?? ""}
                   onChange={(e) => setValue("shipping_tracking", e.target.value)}
                   placeholder="Nomor resi"
+                />
+              </div>
+            )}
+
+            {optionalFields.includes("customer_ticket_number") && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                <label htmlFor="rma-customer-ticket" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                  Nomor Tiket User{" "}
+                  <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(opsional)</span>
+                </label>
+                <input
+                  id="rma-customer-ticket"
+                  className="form-input"
+                  value={values.customer_ticket_number ?? ""}
+                  onChange={(e) => setValue("customer_ticket_number", e.target.value)}
+                  placeholder="Boleh dikosongkan kalau belum keluar"
                 />
               </div>
             )}

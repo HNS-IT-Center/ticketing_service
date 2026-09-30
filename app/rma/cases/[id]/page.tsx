@@ -42,6 +42,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
       unit_ownership: true,
       stock_origin: true,
       stock_transfer_number: true,
+      customer_ticket_number: true,
       purchase_invoice_url: true,
       sn_verified: true,
       physical_condition: true,
@@ -181,6 +182,12 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                 value={rmaCase.stock_transfer_number}
                 mono
               />
+              {/* Selected here since the case page was written, but never
+                  rendered until now: the desk typed a supplier claim number at
+                  handover to the vendor and then had no way to read it back. */}
+              <Field label="Vendor" value={rmaCase.vendor_name} />
+              <Field label="Nomor Klaim Pemasok" value={rmaCase.vendor_rma_number} mono />
+              <Field label="Nomor Tiket User" value={rmaCase.customer_ticket_number} mono />
               <Field label="Teknisi" value={ticket.technician?.name} />
               <Field label="Tiket Dibuat" value={formatDateTime(ticket.created_at)} />
             </div>

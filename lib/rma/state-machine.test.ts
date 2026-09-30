@@ -245,19 +245,28 @@ describe("required fields", () => {
     expect(result.ok).toBe(false);
   });
 
-  it("requires both vendor_name and vendor_rma_number to submit to a vendor", () => {
-    const none = validateRmaTransition({
-      role: "RMA",
-      from: "verified",
-      to: "submitted_to_vendor",
-    });
-    expect(none.ok).toBe(false);
-    if (!none.ok) expect(none.missing).toEqual(["vendor_name", "vendor_rma_number"]);
+  // Changed 2026-09-30: vendor_rma_number is the SUPPLIER claim number, and
+  // only a store-stock unit is claimed against the shop's supplier. It used to
+  // be demanded of every claim, including a customer's own unit, which has no
+  // supplier claim to reference.
+  it("requires the vendor name from every claim, whatever the ownership", () => {
+    for (const unitOwnership of ["store_stock", "customer"] as const) {
+      const none = validateRmaTransition({
+        role: "RMA",
+        from: "verified",
+        to: "submitted_to_vendor",
+        unitOwnership,
+        input: unitOwnership === "store_stock" ? { vendor_rma_number: "SUP-1" } : {},
+      });
+      expect(none.ok).toBe(false);
+      if (!none.ok) expect(none.missing).toContain("vendor_name");
+    }
 
     const partial = validateRmaTransition({
       role: "RMA",
       from: "verified",
       to: "submitted_to_vendor",
+      unitOwnership: "store_stock",
       input: { vendor_name: "Asus Service Center" },
     });
     expect(partial.ok).toBe(false);
@@ -267,6 +276,7 @@ describe("required fields", () => {
       role: "RMA",
       from: "verified",
       to: "submitted_to_vendor",
+      unitOwnership: "store_stock",
       input: { vendor_name: "Asus Service Center", vendor_rma_number: "RMA-991" },
     });
     expect(full.ok).toBe(true);
@@ -473,6 +483,61 @@ describe("store-stock transfer number", () => {
   // Existing callers that do not pass unitOwnership must keep working.
   it("applies nothing when ownership is not supplied", () => {
     const r = validateRmaTransition({ ...base, to: "verified" });
+    expect(r.ok).toBe(true);
+  });
+});
+
+describe("supplier claim number depends on where the unit came from", () => {
+  const base = { role: "RMA" as const, from: "verified" as const, to: "submitted_to_vendor" as const };
+
+  it("demands it for a store-stock unit — the shop claims against its supplier", () => {
+    const r = validateRmaTransition({
+      ...base,
+      unitOwnership: "store_stock",
+      input: { vendor_name: "Asus Service Center", stock_transfer_number: "PM-1" },
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.missing).toContain("vendor_rma_number");
+      expect(r.error).toContain("Nomor klaim pemasok");
+    }
+  });
+
+  it("accepts a store-stock unit once the number is given", () => {
+    const r = validateRmaTransition({
+      ...base,
+      unitOwnership: "store_stock",
+      input: { vendor_name: "Asus", vendor_rma_number: "SUP-99", stock_transfer_number: "PM-1" },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  // A customer's own unit is not claimed against the shop's supplier. Its
+  // reference number is often not issued when the unit is sent, so nothing is
+  // demanded of it.
+  it("demands only the vendor name for a customer's unit", () => {
+    const r = validateRmaTransition({
+      ...base,
+      unitOwnership: "customer",
+      input: { vendor_name: "Asus" },
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("still demands the vendor name from both", () => {
+    for (const unitOwnership of ["store_stock", "customer"] as const) {
+      const r = validateRmaTransition({ ...base, unitOwnership, input: {} });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.missing).toContain("vendor_name");
+    }
+  });
+
+  it("accepts the customer's optional reference number when supplied", () => {
+    const r = validateRmaTransition({
+      ...base,
+      unitOwnership: "customer",
+      input: { vendor_name: "Asus", customer_ticket_number: "TKT-778" },
+    });
     expect(r.ok).toBe(true);
   });
 });

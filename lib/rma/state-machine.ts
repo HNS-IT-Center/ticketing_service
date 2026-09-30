@@ -22,6 +22,7 @@ export function canActOnRma(role: string): role is RmaActorRole {
 export type RmaTransitionField =
   | "hold_reason"
   | "stock_transfer_number"
+  | "customer_ticket_number"
   | "ineligibility_reason"
   | "vendor_name"
   | "vendor_rma_number"
@@ -32,6 +33,7 @@ export type RmaTransitionField =
 export type RmaTransitionInput = {
   hold_reason?: string | null;
   stock_transfer_number?: string | null;
+  customer_ticket_number?: string | null;
   ineligibility_reason?: string | null;
   vendor_name?: string | null;
   vendor_rma_number?: string | null;
@@ -118,8 +120,11 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
     from: "verified",
     to: "submitted_to_vendor",
     label: "Ajukan ke Vendor",
-    requires: ["vendor_name", "vendor_rma_number"],
-    description: "Wajib isi nama vendor dan nomor klaim pemasok.",
+    // vendor_rma_number is demanded conditionally in validateRmaTransition:
+    // only a store-stock unit is claimed against a supplier.
+    requires: ["vendor_name"],
+    description:
+      "Wajib isi nama vendor. Unit stok toko juga wajib nomor klaim pemasok.",
   },
   {
     from: "verified",
@@ -222,6 +227,7 @@ export type RmaValidationResult =
 const FIELD_LABELS: Record<RmaTransitionField, string> = {
   hold_reason: "Alasan",
   stock_transfer_number: "Nomor pemindahan stok",
+  customer_ticket_number: "Nomor tiket user",
   ineligibility_reason: "Alasan tidak layak klaim",
   vendor_name: "Nama vendor",
   vendor_rma_number: "Nomor klaim pemasok",
@@ -296,6 +302,13 @@ export function validateRmaTransition(args: {
     (to === "verified" || to === "in_vendor_process")
   ) {
     required.push("stock_transfer_number");
+  }
+  // Only a store-stock unit is claimed against the shop's own supplier, so only
+  // it carries a supplier claim number. A customer's unit records the reference
+  // the outside party gave instead (`customer_ticket_number`), which is often
+  // not issued yet when the unit is sent, so nothing is demanded for it here.
+  if (unitOwnership === "store_stock" && to === "submitted_to_vendor") {
+    required.push("vendor_rma_number");
   }
 
   const missing = required.filter((field) => isBlank(input[field]));

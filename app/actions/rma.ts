@@ -454,6 +454,8 @@ export async function transitionRmaAction(formData: FormData) {
         ((formData.get("ineligibility_reason") as string | null) || "").trim() || null,
       stock_transfer_number:
         ((formData.get("stock_transfer_number") as string | null) || "").trim() || null,
+      customer_ticket_number:
+        ((formData.get("customer_ticket_number") as string | null) || "").trim() || null,
       vendor_name: vendorName,
       vendor_rma_number: ((formData.get("vendor_rma_number") as string | null) || "").trim() || null,
       shipping_tracking: ((formData.get("shipping_tracking") as string | null) || "").trim() || null,
@@ -506,6 +508,25 @@ export async function transitionRmaAction(formData: FormData) {
       if (bad) return { error: `Foto harus berupa gambar. "${bad.name}" bukan gambar.` };
     }
 
+    // Proof of handover for a customer's own unit. Optional by decision — the
+    // receipt is not always in hand when the unit is sent — but when photos are
+    // supplied they carry the same burden as every other evidence upload here.
+    const receiptFiles = (formData.getAll("receipt_files") as File[]).filter(
+      (f) => f.size > 0
+    );
+    if (receiptFiles.length > 0) {
+      if (toStatus !== "submitted_to_vendor") {
+        return { error: "Foto tanda terima hanya dilampirkan saat mengajukan ke vendor." };
+      }
+      if (receiptFiles.length > MAX_DAMAGE_PHOTOS) {
+        return { error: `Maksimal ${MAX_DAMAGE_PHOTOS} foto tanda terima.` };
+      }
+      const badReceipt = receiptFiles.find((f) => !f.type.startsWith("image/"));
+      if (badReceipt) {
+        return { error: `Foto harus berupa gambar. "${badReceipt.name}" bukan gambar.` };
+      }
+    }
+
     // ── Fields this transition writes onto the case ──
     const now = new Date();
     const data: Record<string, unknown> = { status: toStatus, handler_id: session.userId };
@@ -523,6 +544,7 @@ export async function transitionRmaAction(formData: FormData) {
     if (toStatus === "submitted_to_vendor") {
       data.vendor_name = input.vendor_name;
       data.vendor_rma_number = input.vendor_rma_number;
+      data.customer_ticket_number = input.customer_ticket_number;
       data.shipping_tracking = input.shipping_tracking;
       data.submitted_at = now;
     }
@@ -566,6 +588,29 @@ export async function transitionRmaAction(formData: FormData) {
         actor_id: session.userId,
       },
     });
+
+    // Handover proof for a customer's unit. Uploaded after the status change has
+    // committed, and a failure is logged rather than surfaced: losing a photo
+    // must not undo a transition that already happened, exactly as on the
+    // ineligible path below.
+    if (toStatus === "submitted_to_vendor" && receiptFiles.length > 0) {
+      for (const [i, file] of receiptFiles.entries()) {
+        const ext = getExt(file.type, file.name);
+        const path = `tickets/${rmaCase.ticket_id}/rma-receipt_${rmaCase.rma_code}_${i + 1}.${ext}`;
+        try {
+          const url = await uploadToR2(file, path);
+          await db.ticketAttachment.create({
+            data: {
+              ticket_id: rmaCase.ticket_id,
+              file_url: url,
+              file_type: getFileType(file.type),
+            },
+          });
+        } catch (err) {
+          console.error("[RMA RECEIPT PHOTO UPLOAD ERROR]", err);
+        }
+      }
+    }
 
     // ── The desk found the claim outside warranty cover ──
     // Written after the optimistic lock succeeded, so a losing concurrent

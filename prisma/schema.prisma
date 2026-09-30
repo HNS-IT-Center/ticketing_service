@@ -600,7 +600,13 @@ model RmaCase {
 
   // ── Vendor ──
   vendor_name       String?
+  // The claim number raised with the supplier. Only a store-stock unit has one:
+  // the shop claims against its own supplier. Labelled "Nomor Klaim Pemasok".
   vendor_rma_number String?   // internal only — never shown on the public page
+  // A customer's own unit is not claimed against a supplier, so it carries the
+  // reference number the outside party gave instead — optional, because it
+  // often has not been issued yet when the unit is sent.
+  customer_ticket_number String?
   shipping_tracking String?
   submitted_at      DateTime?
 

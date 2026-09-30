@@ -1039,7 +1039,22 @@ describe("transitionRmaAction — rules", () => {
     expect(await db.rmaEvent.count({ where: { rma_case_id: rmaCaseId } })).toBe(before);
   });
 
-  it("refuses submission without vendor name and number", async () => {
+  it("refuses submission without a vendor name", async () => {
+    const { rmaCaseId } = await freshCase();
+    await driveTo(rmaCaseId, [["verified", {}]]);
+    session.userId = rmaUserId;
+    session.role = "RMA";
+
+    const result = await transitionRmaAction(
+      transitionForm(rmaCaseId, "submitted_to_vendor", {})
+    );
+    expect(result).toMatchObject({ error: expect.stringContaining("Nama vendor") });
+  });
+
+  // freshCase() builds a customer-owned unit. Since 2026-09-30 the supplier
+  // claim number is only demanded of store stock, because a customer's own unit
+  // is not claimed against the shop's supplier at all.
+  it("accepts a customer's unit with only the vendor name", async () => {
     const { rmaCaseId } = await freshCase();
     await driveTo(rmaCaseId, [["verified", {}]]);
     session.userId = rmaUserId;
@@ -1048,9 +1063,7 @@ describe("transitionRmaAction — rules", () => {
     const result = await transitionRmaAction(
       transitionForm(rmaCaseId, "submitted_to_vendor", { vendor_name: "Asus" })
     );
-    // Label renamed 2026-09-30: the desk calls this the supplier claim number.
-    // Same field, same requirement — only what it is called changed.
-    expect(result).toMatchObject({ error: expect.stringContaining("Nomor klaim pemasok") });
+    expect(result).toMatchObject({ success: true });
   });
 
   it("refuses a `replaced` decision without a replacement serial number", async () => {

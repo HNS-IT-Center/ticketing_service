@@ -49,7 +49,8 @@ export default async function PublicTicketPage({
       },
       // Warranty claims only. Selected field by field on purpose: the rest of
       // RmaCase (vendor_rma_number, hold_reason, decision_notes, stock_origin,
-      // stock_transfer_number) is internal and must never reach this page.
+      // stock_transfer_number, customer_ticket_number) is internal and must
+      // never reach this page.
       warranty_detail: {
         select: { claim_eligible: true, ineligibility_reason: true },
       },

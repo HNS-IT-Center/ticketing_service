@@ -58,20 +58,42 @@ export default async function RmaTicketsPage({
   const skip = (page - 1) * PAGE_SIZE;
   const sortParam = params.sort || "updated_desc";
 
+  // Claims only, and of those only the ones this desk has a stake in:
+  //
+  //   has an RmaCase        → always, whatever the ticket status. This is the
+  //                           desk's own work, including cases already closed.
+  //   no case, still open   → the queue heading this way; a technician may hand
+  //                           it over at any moment.
+  //   no case, finished     → hidden. A claim a technician resolved without
+  //                           ever involving RMA is not this desk's history,
+  //                           and three of the nine on record are exactly that.
+  //
+  // Combined with AND because the search below also uses OR, and two OR keys in
+  // one object would overwrite each other rather than both apply.
+  const OPEN_BEFORE_HANDOVER = ["waiting", "on_progress"] as const;
+
   const where = {
-    // This desk only handles warranty claims. Every other ticket type belongs
-    // to the technician and admin portals and would just be noise here.
     ticket_type: "warranty_claim" as const,
-    ...(statusFilter !== "all" ? { status: statusFilter as never } : {}),
-    ...(query
-      ? {
-          OR: [
-            { ticket_code: { contains: query } },
-            { user: { name: { contains: query } } },
-            { customer_name: { contains: query } },
-          ],
-        }
-      : {}),
+    AND: [
+      {
+        OR: [
+          { rma_case: { isNot: null } },
+          { status: { in: OPEN_BEFORE_HANDOVER as unknown as never } },
+        ],
+      },
+      ...(statusFilter !== "all" ? [{ status: statusFilter as never }] : []),
+      ...(query
+        ? [
+            {
+              OR: [
+                { ticket_code: { contains: query } },
+                { user: { name: { contains: query } } },
+                { customer_name: { contains: query } },
+              ],
+            },
+          ]
+        : []),
+    ],
   };
 
   let orderBy: Record<string, "asc" | "desc"> = { updated_at: "desc" };

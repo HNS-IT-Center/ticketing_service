@@ -6,7 +6,7 @@ import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
 import { getTicketPoints } from "@/lib/points";
 
 /**
- * All tickets, for the RMA desk.
+ * Warranty claims, for the RMA desk.
  *
  * Every other portal had this page; RMA did not, so `/rma/tickets` was a 404 —
  * which is also where `createTicketAction` landed the desk after a successful
@@ -15,9 +15,14 @@ import { getTicketPoints } from "@/lib/points";
  * Laid out to match the technician's My Tickets page rather than the admin one:
  * points pill, sortable Updated column, icon empty state, Manage button.
  *
- * Deliberately unfiltered by owner. Sales lists what it sold and a technician
- * lists what they hold, but the RMA desk owns nothing; it needs to find a
- * ticket it has just raised, or look one up when a claim walks in.
+ * Filtered to `warranty_claim` and nothing else: this desk handles claims, and
+ * every other ticket type belongs to the technician and admin portals.
+ *
+ * Not filtered by owner, though. Sales lists what it sold and a technician
+ * lists what they hold; the RMA desk owns nothing and needs to see every claim,
+ * including the ones still sitting with a technician before handover. Those
+ * have no RmaCase yet, so their RMA column reads "belum diserahkan" — which is
+ * useful in itself: it is the queue of work heading this way.
  *
  * ⚠ The points shown here come from `lib/points.ts`, which CLAUDE.md requires
  * for anything new. That is the table the writers actually credit, and it is
@@ -27,7 +32,7 @@ import { getTicketPoints } from "@/lib/points";
  * +3-per-extra-service those badges add is absent because no writer has ever
  * credited it. Reconciling the tables is BL3, its own branch.
  */
-export const metadata = { title: "All Tickets — HNS IT Center" };
+export const metadata = { title: "Klaim Garansi — HNS IT Center" };
 
 const STATUS_FILTERS = [
   "all",
@@ -54,6 +59,9 @@ export default async function RmaTicketsPage({
   const sortParam = params.sort || "updated_desc";
 
   const where = {
+    // This desk only handles warranty claims. Every other ticket type belongs
+    // to the technician and admin portals and would just be noise here.
+    ticket_type: "warranty_claim" as const,
     ...(statusFilter !== "all" ? { status: statusFilter as never } : {}),
     ...(query
       ? {
@@ -145,10 +153,10 @@ export default async function RmaTicketsPage({
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <h1>All Tickets</h1>
+          <h1>Klaim Garansi</h1>
           <div className="flex items-center gap-3 mt-1">
             <p className="text-gray-500">
-              {totalCount} ticket{totalCount !== 1 ? "s" : ""}
+              {totalCount} klaim
             </p>
             <Link
               href="/rma/tickets/create"
@@ -212,14 +220,14 @@ export default async function RmaTicketsPage({
           {tickets.length === 0 ? (
             <div className="empty-state">
               <Ticket size={36} style={{ opacity: 0.3 }} />
-              <p>No tickets found</p>
+              <p>Tidak ada klaim</p>
             </div>
           ) : (
             <table>
               <thead>
                 <tr>
                   <th>{renderSortableHeader("Code", "code_asc", "code_desc")}</th>
-                  <th>Type</th>
+                  <th>RMA</th>
                   <th>Customer</th>
                   <th>Points</th>
                   <th>{renderSortableHeader("Status", "status_asc", "status_desc")}</th>
@@ -238,7 +246,13 @@ export default async function RmaTicketsPage({
                   return (
                     <tr key={t.id}>
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
-                      <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace(/_/g, " ")}</td>
+                      <td style={{ fontFamily: "monospace", fontSize: "0.8125rem" }}>
+                        {t.rma_case ? (
+                          <span style={{ color: "var(--primary)" }}>{t.rma_case.rma_code}</span>
+                        ) : (
+                          <span style={{ color: "var(--text-muted)" }}>belum diserahkan</span>
+                        )}
+                      </td>
                       <td>
                         <div style={{ fontWeight: 500 }}>{actualName}</div>
                         {!t.is_for_self && (
@@ -275,7 +289,7 @@ export default async function RmaTicketsPage({
         {tickets.length === 0 ? (
           <div className="empty-state">
             <Ticket size={36} style={{ opacity: 0.3 }} />
-            <p>No tickets found</p>
+            <p>Tidak ada klaim</p>
           </div>
         ) : (
           tickets.map((t) => {
@@ -293,18 +307,15 @@ export default async function RmaTicketsPage({
                   <Badge variant={t.status} technicianId={t.technician_id} />
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                  <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace(/_/g, " ")}</span>
+                  <span style={{ fontFamily: "monospace" }}>
+                    {t.rma_case ? t.rma_case.rma_code : "belum diserahkan"}
+                  </span>
                   {pointsPill(pts)}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
                   <span style={{ color: "var(--text-secondary)" }}>👤 {t.user?.name || "Guest"}</span>
                   <span>{new Date(t.updated_at).toLocaleDateString("id-ID")}</span>
                 </div>
-                {t.rma_case && (
-                  <div style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "var(--primary)" }}>
-                    {t.rma_case.rma_code}
-                  </div>
-                )}
               </div>
             );
             return t.rma_case ? (

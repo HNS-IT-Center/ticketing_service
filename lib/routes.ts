@@ -132,6 +132,47 @@ export function ticketsListHrefForRoleName(role: string): string {
     : DENIED_DESTINATION;
 }
 
+// ── The public, customer-facing ticket page ─────────────────────────────────
+
+/**
+ * The URL a customer is given to follow their ticket.
+ *
+ * Keyed on `public_share_token`, not on `ticket_code`. Codes run
+ * NGW-000001..NGW-000372 with no gaps, and the date segment is decorative — the
+ * lookup never read it — so a code-based URL let anyone count upwards and read
+ * every customer's device name, serial number, complaint and chat history. The
+ * token is random and unique, so a link only opens the ticket it was issued for.
+ *
+ * Returns null when the ticket has no token, which is the caller's signal to
+ * offer no link at all rather than a broken one. Every ticket on record has one.
+ *
+ * Six call sites built this string by hand before this existed, across three
+ * portals, and all six are also what goes into the WhatsApp message sent to the
+ * customer.
+ */
+export function publicTicketPath(createdAt: Date, shareToken: string | null): string | null {
+  if (!shareToken) return null;
+  return `/${createdAt.toISOString().split("T")[0]}/${shareToken}`;
+}
+
+/**
+ * True when `pathname` is a public ticket page.
+ *
+ * The proxy needs this to let an anonymous visitor through. Deliberately tight:
+ * an ISO date, then one token segment, and nothing else — so it opens the
+ * tracking page without opening anything that happens to have two segments.
+ *
+ * It replaces `PUBLIC_ROUTES`, a constant that was declared in proxy.ts and
+ * never read, while the guard it was meant to drive allowed `/ticket` — a route
+ * that has never existed. Every customer who followed a link from WhatsApp
+ * landed on the login page instead.
+ */
+const PUBLIC_TICKET_PATH = /^\/\d{4}-\d{2}-\d{2}\/[A-Za-z0-9_-]+\/?$/;
+
+export function isPublicTicketPath(pathname: string): boolean {
+  return PUBLIC_TICKET_PATH.test(pathname);
+}
+
 // ── Where a notification about a ticket should link to ──────────────────────
 export function ticketHrefForPortal(portal: Portal, ticketId: string): string {
   switch (portal) {

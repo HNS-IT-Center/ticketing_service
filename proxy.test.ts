@@ -43,15 +43,33 @@ beforeEach(() => {
 });
 
 describe("public routes", () => {
-  it.each(["/ticket/2026-01-01/NGW-000001", "/unauthorized"])(
+  // These used to assert that `/ticket/...` was served without a session. It
+  // was — and it 404'd, because no such route has ever existed. The tracking
+  // page lives at /{date}/{share_token}, and the proxy was redirecting every
+  // customer who followed the link in their WhatsApp message to /login.
+  it.each(["/2026-01-01/e28ea366608aa378cc56b7288df67769", "/unauthorized"])(
     "%s is served with no session",
     async (path) => {
       expect(await visit(path, null)).toEqual({ kind: "next" });
     }
   );
 
-  it.each(["/ticket/abc", "/unauthorized"])("%s is served WITH a session too", async (path) => {
-    expect(await visit(path, "RMA")).toEqual({ kind: "next" });
+  it.each(["/2026-01-01/sometoken", "/unauthorized"])(
+    "%s is served WITH a session too",
+    async (path) => {
+      expect(await visit(path, "RMA")).toEqual({ kind: "next" });
+    }
+  );
+
+  it("no longer treats the /ticket prefix as public", async () => {
+    // Nothing is served there, so letting it through only hid the real bug.
+    expect(await visit("/ticket/sometoken", null)).not.toEqual({ kind: "next" });
+  });
+
+  it("does not open the portals to an anonymous visitor", async () => {
+    for (const path of ["/admin/tickets", "/rma/dashboard", "/technician/tickets"]) {
+      expect(await visit(path, null)).not.toEqual({ kind: "next" });
+    }
   });
 
   it("passes API routes straight through", async () => {

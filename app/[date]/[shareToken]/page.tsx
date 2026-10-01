@@ -24,12 +24,19 @@ const PROOF_STATUSES = new Set([
 export default async function PublicTicketPage({
   params,
 }: {
-  params: Promise<{ date: string; ticketCode: string }>;
+  params: Promise<{ date: string; shareToken: string }>;
 }) {
-  const { date, ticketCode } = await params;
+  const { date, shareToken } = await params;
 
+  // Looked up by token, not by ticket_code.
+  //
+  // Codes run NGW-000001..NGW-000372 with no gaps, and `date` has never been
+  // part of the lookup — it is decorative. Resolving by code therefore let
+  // anyone count upwards and read every customer's device name, serial number,
+  // complaint and public chat. The token is random and unique, so a link opens
+  // only the ticket it was issued for.
   const ticket = await db.ticket.findUnique({
-    where: { ticket_code: ticketCode },
+    where: { public_share_token: shareToken },
     include: {
       user: { select: { name: true } },
       store_location: { select: { name: true, code: true } },
@@ -82,7 +89,7 @@ export default async function PublicTicketPage({
   const host = headersList.get("host");
   const protocol = headersList.get("x-forwarded-proto") || "https";
   const appUrl = host ? `${protocol}://${host}` : (process.env.NEXT_PUBLIC_APP_URL || "");
-  const shareUrl = `${appUrl}/${date}/${ticketCode}`;
+  const shareUrl = `${appUrl}/${date}/${shareToken}`;
 
   let totalTimeMs = 0;
   let lastStartTime: Date | null = null;

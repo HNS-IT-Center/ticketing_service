@@ -12,6 +12,8 @@ import {
   type Portal,
   ticketsListHrefForPortal,
   ticketsListHrefForRoleName,
+  publicTicketPath,
+  isPublicTicketPath,
 } from "./routes";
 
 /**
@@ -238,5 +240,58 @@ describe("ticketsListHrefForRoleName", () => {
   // A role with no portal must not be handed someone else's list.
   it.each(["Customer", "Nonsense", ""])("sends %s to /unauthorized", (role) => {
     expect(ticketsListHrefForRoleName(role)).toBe("/unauthorized");
+  });
+});
+
+describe("public ticket page", () => {
+  const created = new Date("2026-09-28T03:50:17.000Z");
+
+  it("builds a link from the share token, never the ticket code", () => {
+    const path = publicTicketPath(created, "e28ea366608aa378cc56b7288df67769");
+    expect(path).toBe("/2026-09-28/e28ea366608aa378cc56b7288df67769");
+  });
+
+  it("offers no link when the ticket has no token", () => {
+    // The caller renders nothing rather than a link that cannot resolve.
+    expect(publicTicketPath(created, null)).toBeNull();
+  });
+
+  // Codes run NGW-000001..NGW-000372 with no gaps, and the date segment was
+  // never part of the lookup, so a code-based URL was walkable end to end.
+  it("never puts a ticket code in the path", () => {
+    const path = publicTicketPath(created, "tok3n");
+    expect(path).not.toContain("NGW-");
+    expect(path).not.toContain("NGH-");
+  });
+
+  describe("isPublicTicketPath", () => {
+    it.each([
+      "/2026-09-28/e28ea366608aa378cc56b7288df67769",
+      "/2026-01-01/abc-DEF_123",
+      "/2026-09-28/tok3n/",
+    ])("lets %s through", (p) => {
+      expect(isPublicTicketPath(p)).toBe(true);
+    });
+
+    // A guard that opened more than the tracking page would expose the portals.
+    it.each([
+      "/admin/tickets",
+      "/admin/tickets/abc123",
+      "/rma/dashboard",
+      "/technician/tickets",
+      "/login",
+      "/2026-09-28",
+      "/2026-09-28/a/b",
+      "/not-a-date/token",
+      "/",
+    ])("keeps %s behind the guard", (p) => {
+      expect(isPublicTicketPath(p)).toBe(false);
+    });
+
+    // The old guard tested startsWith("/ticket") against a route that has never
+    // existed, which is why every WhatsApp link landed on /login.
+    it("does not resurrect the /ticket prefix", () => {
+      expect(isPublicTicketPath("/ticket/sometoken")).toBe(false);
+    });
   });
 });

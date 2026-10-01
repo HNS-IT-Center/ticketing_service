@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { decrypt } from "@/lib/session";
-import { canEnter, dashboardPathForRoleName } from "@/lib/routes";
+import { canEnter, dashboardPathForRoleName, isPublicTicketPath } from "@/lib/routes";
 
 function getBaseUrl(request: NextRequest) {
   const host = request.headers.get("x-forwarded-host") || request.headers.get("host");
@@ -11,14 +11,19 @@ function getBaseUrl(request: NextRequest) {
   return process.env.NEXT_PUBLIC_APP_URL || request.url;
 }
 
-const PUBLIC_ROUTES = ["/login", "/register", "/ticket", "/unauthorized"];
-
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const baseUrl = getBaseUrl(request);
 
-  // Allow public ticket tracking route and unauthorized page without redirecting authenticated users
-  if (pathname.startsWith("/ticket") || pathname.startsWith("/unauthorized")) {
+  // The customer-facing tracking page, and the page a denied role lands on.
+  //
+  // `isPublicTicketPath` matches an ISO date plus one token segment. The guard
+  // here used to test `startsWith("/ticket")` against a route that has never
+  // existed, while the real page lives at /{date}/{token} — so every customer
+  // who followed the link in their WhatsApp message was sent to /login. The
+  // `PUBLIC_ROUTES` constant that was meant to drive this was declared and
+  // never read.
+  if (isPublicTicketPath(pathname) || pathname.startsWith("/unauthorized")) {
     return NextResponse.next();
   }
 

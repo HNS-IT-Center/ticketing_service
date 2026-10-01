@@ -7,7 +7,7 @@ You are a **Professional Full Stack Developer** with perfect skills in Backend a
 
 ## 🧭 Project Overview
 
-A full-stack **role-based service ticketing system** for a computer repair/upgrade shop. Built with Next.js 16, Prisma 7, Supabase (Postgres + Storage), and Tiptap rich text.
+A full-stack **role-based service ticketing system** for a computer repair/upgrade shop. Built with Next.js 16, Prisma 7, **MariaDB**, Cloudflare R2, and Tiptap rich text.
 
 **Live Dev Server:** `http://localhost:3000` (run `npm run dev`)  
 **Root path:** Redirects to the correct portal based on role (see `/app/page.tsx`)
@@ -25,7 +25,11 @@ A full-stack **role-based service ticketing system** for a computer repair/upgra
 | **Sales**         | `sales@techserve.id`   | `sales123`    | Goes to Customer portal        |
 | **Customer**      | `customer@example.com` | `customer123` | Name: John Doe                 |
 
-To re-seed at any time: `$env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed`
+To re-seed the **local** database: `npm run seed`. ⛔ Never against a shared or production
+database — the seed's `upsert` writes the password in its `update` branch too, so it resets
+a live `admin@techserve.id` back to `admin123` and reactivates it. Use `npm run create-user`
+there. `NODE_TLS_REJECT_UNAUTHORIZED=0` is **not** needed and must not be used: it is
+process-wide, disabling certificate checks for R2 and Resend as well.
 
 ---
 
@@ -35,10 +39,10 @@ To re-seed at any time: `$env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed`
 | ------------- | ----------------------------------------------------------------- |
 | Framework     | Next.js 16.2.4 (App Router, Turbopack)                            |
 | Language      | **TypeScript** (Strict Type Checking Enabled)                     |
-| ORM           | Prisma 7.8.0                                                      |
-| DB Adapter    | `@prisma/adapter-pg` (PrismaPg) — **required for Prisma 7**       |
-| Database      | Supabase Postgres (Session Pooler, port 5432)                     |
-| File Storage  | Supabase Storage (bucket: `attachments`)                          |
+| ORM           | Prisma 7.10.0                                                     |
+| DB Adapter    | `@prisma/adapter-mariadb` via `lib/mariadb.ts` — **not** adapter-pg |
+| Database      | **MariaDB 11.8.9** (Hostinger). Ported from Supabase Postgres 2026-09-28 |
+| File Storage  | Cloudflare R2 (`lib/r2.ts`); MinIO locally                        |
 | Auth          | Custom JWT sessions via `jose` (cookie: `session`)                |
 | Rich Text     | Tiptap v3 (`@tiptap/react`, StarterKit, Image, Link, Placeholder) |
 | Styling       | Vanilla CSS (`app/globals.css`) for existing components + Tailwind v4 for new pages |
@@ -261,28 +265,36 @@ ticket-app-2/
 
 ### 1. Prisma 7 — No More `datasources` Option
 
-Prisma 7 removed `datasources` from the `PrismaClient` constructor. The **only** way to pass a DB URL is via `prisma.config.ts` (for CLI) and `@prisma/adapter-pg` (for runtime).
+Prisma 7 removed `datasources` from the `PrismaClient` constructor. The DB URL arrives via `prisma.config.ts` (for the CLI) and a driver adapter (for runtime).
+
+**The adapter is `@prisma/adapter-mariadb`, not `adapter-pg`** — the database moved to MariaDB on 2026-09-28. Connection settings live in **one** module, `lib/mariadb.ts`, shared by all seven entry points that open a client. Two of its settings are load-bearing and must not be dropped:
+
+- **`STRICT_TRANS_TABLES` via `initSql`** — the server runs without it, so an over-long string is truncated rather than rejected. PostgreSQL rejected it; this restores that.
+- **`useTextProtocol: true`** — without it every `contains` / `startsWith` search fails on the server with "Illegal mix of collations", and the failure cannot be reproduced against the local container.
 
 **`lib/db.ts`** — Always use this pattern:
 
 ```ts
-import { PrismaPg } from "@prisma/adapter-pg";
-const adapter = new PrismaPg({
-  connectionString: process.env.DATABASE_URL!,
-  ssl: { rejectUnauthorized: false },
-});
+import { PrismaMariaDb } from "@prisma/adapter-mariadb";
+import { mariadbPoolConfig, MARIADB_ADAPTER_OPTIONS } from "./mariadb";
+
+const adapter = new PrismaMariaDb(mariadbPoolConfig(), MARIADB_ADAPTER_OPTIONS);
 const db = new PrismaClient({ adapter });
 ```
 
 **`prisma/seed.ts`** — Same pattern, plus `import { config } from "dotenv"` + `config({ path: ".env.local" })`.
 
-### 2. Supabase TLS / SSL
+### 2. ~~Supabase TLS / SSL~~ — obsolete since the MariaDB port
 
-The session pooler uses a self-signed certificate. You must:
+Kept so the advice is not rediscovered from an old commit. It described the Supabase session
+pooler's self-signed chain: `sslmode=no-verify`, `ssl: { rejectUnauthorized: false }`, and a
+`NODE_TLS_REJECT_UNAUTHORIZED=0` prefix for the seed.
 
-- Set `sslmode=no-verify` in the DATABASE_URL, AND
-- Pass `ssl: { rejectUnauthorized: false }` in PrismaPg options
-- When running seed manually: prefix with `$env:NODE_TLS_REJECT_UNAUTHORIZED="0"`
+**None of it applies now.** Both MariaDB targets speak plain TCP — the local container, and
+Hostinger reached through an SSH tunnel, where the tunnel provides the encryption. `DATABASE_SSL`
+is opt-in (`true` only for a server that genuinely terminates TLS), and
+`NODE_TLS_REJECT_UNAUTHORIZED=0` must never be used: it is process-wide and would disable
+certificate checks for R2 and Resend too.
 
 ### 3. Next.js 16 — `middleware.ts` → `proxy.ts`
 
@@ -402,13 +414,18 @@ When cloning the project to a new device, you will need to reconfigure the envir
    ```
 
 2. **Configure Environment Variables**
-   - Copy the newly created `.env.example` file to create a new `.env.local` file in the root directory.
-   - Fill in your **Supabase Project URL**, **Anon Key**, and **Service Role Key** (found in your Supabase dashboard under Project Settings > API).
-   - Fill in the **Database URL** using the Supabase Session Pooler connection string (found in Project Settings > Database). **IMPORTANT:** Make sure to include `sslmode=no-verify` at the end of the connection string.
-   - Generate a random 32+ character string for `SESSION_SECRET` (you can use any password generator).
+   - Copy `.env.example` to `.env.local`.
+   - **Database — MariaDB, not Supabase.** Start a local container and point `DATABASE_URL` at it:
+     ```bash
+     docker run -d --name hns-ticketing-mariadb -p 127.0.0.1:3310:3306        -e MARIADB_ROOT_PASSWORD=devpass -e MARIADB_DATABASE=ticketing        -v hns-ticketing-mariadb-data:/var/lib/mysql --restart unless-stopped mariadb:11.8
+     ```
+     `DATABASE_URL="mysql://root:devpass@127.0.0.1:3310/ticketing"`. Leave `DATABASE_SSL` unset.
+   - **Uploads:** MinIO locally — see `docs/minio-local-storage.md`, then `npm run setup:minio`.
+   - Generate a random 32+ character string for `SESSION_SECRET`.
+   - The `*SUPABASE*` variables are no longer read by the application and can be left out.
 
 3. **Push Database Schema**
-   Sync your Prisma schema to the newly connected Supabase PostgreSQL database:
+   Sync your Prisma schema to the local MariaDB container:
    ```bash
    npx prisma db push
    ```
@@ -416,9 +433,10 @@ When cloning the project to a new device, you will need to reconfigure the envir
 4. **Seed the Database (Optional but recommended)**
    If this is a fresh database, you need to populate it with initial dummy accounts, tickets, and upgrades:
    ```bash
-   $env:NODE_TLS_REJECT_UNAUTHORIZED="0"; npm run seed
+   npm run seed
    ```
-   *(Note: The `NODE_TLS_REJECT_UNAUTHORIZED="0"` flag is required to bypass self-signed certificate errors from the Supabase session pooler during the seed script).*
+   *(Local database only. Against anything shared, use `npm run create-user` — the seed resets
+   existing passwords to the ones published in this repo.)*
 
 5. **Start the Development Server**
    ```bash
@@ -751,6 +769,33 @@ Plan approved before any code was written: `docs/plan-rma-eligibility.md`.
 
 ---
 
+### SPRINT 2026-09-28 → 10-01 — MariaDB port, data migration, RMA refinements
+Branch `port/postgres-to-mariadb`, also on `main` and `deploy`. **539 tests**, `tsc` clean,
+production build passes. ⚠️ **Cutover NOT done** — see "Where this stands" below.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| M1 | Schema + adapter to MariaDB | ✅ | `provider = "mysql"`, `extra_services String[]` → `Json` (scalar lists are PostgreSQL-only and fail `prisma validate`, not runtime). `@prisma/adapter-pg` → `@prisma/adapter-mariadb` 7.10.0 |
+| M2 | `lib/mariadb.ts` — one copy of the connection | ✅ | Seven entry points open a client; copied settings are how this project got four disagreeing point tables. `lib/mariadb.test.ts` reads the source and fails if any of them drifts |
+| M3 | **27 columns given `@db.Text` / `@db.LongText`** | ✅ | The mysql provider maps `String` → `VARCHAR(191)` where PostgreSQL used unlimited `TEXT`. The first DDL had **118 VARCHAR(191) and zero TEXT** — every chat message, status reason and `Ticket.notes` (Tiptap HTML) would have silently capped at 191 characters |
+| M4 | **`STRICT_TRANS_TABLES` forced per connection** | ✅ | The server runs without it. Proven side by side: strict raises "Data too long for column", loose stores the truncated value. PostgreSQL rejected both; this restores the guarantee |
+| M5 | **`useTextProtocol: true`** | ✅ | Without it **every search box** fails on the server: `LIKE CONCAT('%', ?, '%')` mixes collations because the two servers disagree about a bound parameter's collation under the binary protocol. **Cannot be reproduced locally** — found only by running the real client against the real server |
+| M6 | 15 `mode: "insensitive"` removed | ✅ | Deleted, not replaced: the collation is `utf8mb4_unicode_ci`, already case-insensitive. Only 6 of the 15 were caught by `tsc`; the rest sat in untyped `where` objects |
+| M7 | Advisory lock → retry budget | ✅ | `pg_advisory_xact_lock` is transaction-scoped and has no MariaDB equivalent. `MAX_ALLOCATION_ATTEMPTS = 10`; exhausting it returns "try again", never a duplicate. BL19 |
+| M8 | Realtime → 30s polling | ✅ | `lib/supabase.ts` deleted entirely, `@supabase/supabase-js` removed. Three `*SUPABASE*` env vars are no longer read by anything |
+| M9 | `output: "standalone"` + `postbuild` | ✅ | Hostinger builds standalone. Next does **not** copy `.next/static` or `public/`, and without them every page answers 200 while all CSS and JS 404. `scripts/copy-standalone-assets.mjs` runs as `postbuild` so it cannot be skipped. `build` is `next build --webpack`: Turbopack dies on this host spawning PostCSS, and the panel ignores its own build-command field |
+| M10 | `scripts/migrate-from-supabase.ts` | ✅ | All 23 tables, **7,139 rows**, idempotent, Supabase read-only. Rehearsed twice — local container and Hostinger — with bcrypt hashes, `extra_services`, enums, relations and technician points all verified intact |
+| M11 | RMA: stock transfer number | ✅ | A store-stock unit cannot be verified without the Accurate transfer document number. Also closes `on_hold → in_vendor_process`, which reaches the vendor without passing `verified` |
+| M12 | RMA: vendor form follows ownership | ✅ | `vendor_rma_number` → "Nomor Klaim Pemasok", required for store stock only. A customer's unit gets an optional `customer_ticket_number` and an optional receipt photo instead of a tracking number |
+| M13 | RMA ticket list + create redirect | ✅ | `/rma/tickets` did not exist, and `createTicketAction` sent RMA to `/ticket/${share_token}` — a route that has never existed. Now `ticketsListHrefForRoleName` in `lib/routes.ts`, exhaustive over `Portal` |
+
+**Where this stands (2026-10-01):** production still runs the **old Supabase build**;
+`main` and `deploy` carry MariaDB code that has never built successfully on Hostinger. The
+cutover runbook is `docs/cutover-runbook.md`; the data copy on Hostinger is stale and two
+RMA columns are not yet pushed there. Both are handled in one step during the cutover.
+
+---
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.
@@ -784,11 +829,11 @@ Ordered roughly by how much is already decided.
 
 | # | Item |
 |---|------|
-| BL11 | **Branch is not pushed.** It will crash against Supabase until `RmaCase`, `RmaEvent` and the new enum values exist there — several pages already `select: { rma_case: ... }`. Steps in `docs/rma-deploy.md`. Postgres enum values **cannot be removed**, so `ineligible` is permanent once applied |
+| BL11 | ⚠️ **Superseded.** The branch is pushed and the database is MariaDB, not Supabase, so the enum warning no longer applies. What remains is the **cutover**: `docs/cutover-runbook.md`. Original note: it will crash against Supabase until `RmaCase`, `RmaEvent` and the new enum values exist there — several pages already `select: { rma_case: ... }`. Steps in `docs/rma-deploy.md`. Postgres enum values **cannot be removed**, so `ineligible` is permanent once applied |
 | BL12 | **RLS not enabled** on any table, now including `RmaCase` and `RmaEvent` |
 | BL13 | **Demo data** NGW-000004..NGW-000009 still in the local database |
 | BL14 | Production TLS: `rejectUnauthorized: false` in `lib/db.ts` is interim; the target is Supabase's CA bundle |
-| BL15 | **MariaDB port** — inventoried 2026-09-27 in `docs/plan-mariadb-port.md`. Bigger than the one-line note suggested: `extra_services String[]` is a scalar list, which Prisma supports on PostgreSQL only, so it fails `prisma validate` and forces a schema change plus data migration. Supabase Realtime dies entirely. 15 `mode: "insensitive"` usages must be dropped (MySQL collation is already case-insensitive). Plus the advisory lock, PascalCase table names, and 477 tests that currently run on Postgres |
+| ~~BL15~~ | ✅ **DONE** — see sprint 2026-09-28. Original note kept for its reasoning: inventoried 2026-09-27 in `docs/plan-mariadb-port.md`. Bigger than the one-line note suggested: `extra_services String[]` is a scalar list, which Prisma supports on PostgreSQL only, so it fails `prisma validate` and forces a schema change plus data migration. Supabase Realtime dies entirely. 15 `mode: "insensitive"` usages must be dropped (MySQL collation is already case-insensitive). Plus the advisory lock, PascalCase table names, and 477 tests that currently run on Postgres |
 
 ### Worth doing, nobody has asked yet
 
@@ -815,7 +860,7 @@ Ordered roughly by how much is already decided.
 **Key constraint reminders:**
 - **TypeScript & ESLint:** This project strictly uses **TypeScript**. You must always run `npx tsc --noEmit` and `npm run lint` before committing to ensure there are no typing or formatting errors that would break the build.
 - **Routing guard:** `proxy.ts` (not `middleware.ts`), exported function named `proxy` (not `middleware`)
-- **Prisma 7:** Never use `datasources` option — use `@prisma/adapter-pg` pattern in `lib/db.ts`
+- **Prisma 7 + MariaDB:** Never use `datasources`. Build every client with `@prisma/adapter-mariadb` and the shared `mariadbPoolConfig()` + `MARIADB_ADAPTER_OPTIONS` from `lib/mariadb.ts`. Do not reintroduce `@prisma/adapter-pg`, and do not hand-roll connection settings — `lib/mariadb.test.ts` fails the build if any entry point does
 - **Tiptap:** Always pass `immediatelyRender: false` to `useEditor()`
 - **CSS imports:** `@import "tailwindcss"` is line 1 of `globals.css`. Never add Google Fonts `@import` to CSS — put font `<link>` tags in `app/layout.tsx`
 - **Tailwind v4:** Uses `@import "tailwindcss"` directive — NOT the old `@tailwind base/components/utilities`

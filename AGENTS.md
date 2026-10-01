@@ -20,11 +20,11 @@ You are a **Professional Full Stack Developer** with perfect skills in Backend a
 
 ## Project in One Line
 Role-based service ticketing system. Three portals: Customer, Technician, Admin.
-Stack: Next.js 16.2.4 App Router · Prisma 7 + Supabase Postgres · Custom JWT auth (jose) · Vanilla CSS + Tailwind v4
+Stack: Next.js 16.2.4 App Router · Prisma 7 + **MariaDB** · Custom JWT auth (jose) · Vanilla CSS + Tailwind v4
 
 ## Critical Rules (Do Not Violate)
 1. **No middleware.ts** — use `proxy.ts`, export function named `proxy` (not `middleware`)
-2. **Prisma 7 client** — always use `@prisma/adapter-pg` pattern in `lib/db.ts`. Never pass `datasources` to PrismaClient constructor
+2. **Prisma 7 client** — the database is **MariaDB**, not PostgreSQL. Use `@prisma/adapter-mariadb` via `mariadbPoolConfig()` + `MARIADB_ADAPTER_OPTIONS` from `lib/mariadb.ts`; never build connection settings by hand, and never pass `datasources` to the PrismaClient constructor. **Do not "restore" `@prisma/adapter-pg`** — this rule said to use it until 2026-09-28 and the port to MariaDB made it wrong. `lib/mariadb.ts` also forces `STRICT_TRANS_TABLES` and the driver's text protocol; both are load-bearing and explained there.
 3. **Tiptap** — always pass `immediatelyRender: false` to `useEditor()`
 4. **CSS** — `@import "tailwindcss"` is at line 1 of `globals.css`. Do NOT add Google Fonts `@import` to CSS — it's in `app/layout.tsx` as `<link>` tags
 5. **Tailwind v4** — uses `@import "tailwindcss"` directive, NOT `@tailwind base/components/utilities`

@@ -769,9 +769,9 @@ Plan approved before any code was written: `docs/plan-rma-eligibility.md`.
 
 ---
 
-### SPRINT 2026-09-28 → 10-01 — MariaDB port, data migration, RMA refinements
-Branch `port/postgres-to-mariadb`, also on `main` and `deploy`. **539 tests**, `tsc` clean,
-production build passes. ⚠️ **Cutover NOT done** — see "Where this stands" below.
+### SPRINT 2026-09-28 → 10-01 — MariaDB port, data migration, cutover, RMA refinements
+18 commits, `52feee5` → `ca44816`, all on `main` and `deploy`. **557 tests**, `tsc` clean,
+production build passes. ✅ **Cutover done 2026-10-01** — production runs MariaDB.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
@@ -789,10 +789,30 @@ production build passes. ⚠️ **Cutover NOT done** — see "Where this stands"
 | M12 | RMA: vendor form follows ownership | ✅ | `vendor_rma_number` → "Nomor Klaim Pemasok", required for store stock only. A customer's unit gets an optional `customer_ticket_number` and an optional receipt photo instead of a tracking number |
 | M13 | RMA ticket list + create redirect | ✅ | `/rma/tickets` did not exist, and `createTicketAction` sent RMA to `/ticket/${share_token}` — a route that has never existed. Now `ticketsListHrefForRoleName` in `lib/routes.ts`, exhaustive over `Portal` |
 
-**Where this stands (2026-10-01):** production still runs the **old Supabase build**;
-`main` and `deploy` carry MariaDB code that has never built successfully on Hostinger. The
-cutover runbook is `docs/cutover-runbook.md`; the data copy on Hostinger is stale and two
-RMA columns are not yet pushed there. Both are handled in one step during the cutover.
+| M14 | RMA ticket list laid out like My Tickets | ✅ | Points pill (from `lib/points.ts`, so its figures differ from the technician list until BL3 — see the comment in the page), sortable Updated column, Manage button |
+| M15 | RMA list shows only claims it has a stake in | ✅ | `warranty_claim` **and** (has an `RmaCase` **or** still `waiting`/`on_progress`). Three claims a technician resolved months ago without RMA are hidden. Combined with `AND` because the search also uses `OR`, and two `OR` keys overwrite each other |
+| M16 | Vendor form follows unit ownership | ✅ | `vendor_rma_number` → "Nomor Klaim Pemasok", required for store stock only. A customer's unit gets an optional `customer_ticket_number` and an optional receipt photo instead of a tracking number |
+| M17 | **BL21 — the customer tracking page** | ✅ | Two faults. `proxy.ts` tested `startsWith("/ticket")`, a route that never existed, so **every WhatsApp link the shop sent landed on /login**. And opening it as-is would have been worse: codes run NGW-000001..000372 with no gaps and `date` was never in the lookup, so the whole list was walkable. Now resolves by `public_share_token`; folder renamed `[ticketCode]` → `[shareToken]`; six hand-built URLs replaced by `publicTicketPath()`; both dead `PublicShareButton` components deleted |
+
+#### Cutover, 2026-10-01 — what actually happened
+
+| Step | Result |
+|---|---|
+| Fresh `pg_dump` of Supabase | `Documents/Project/pre-cutover-2026-10-01-1032.dump`, 584.6 KB, 23 app tables verified |
+| Two new RMA columns pushed to Hostinger | `stock_transfer_number`, `customer_ticket_number` |
+| **3 tickets + 1 user found only on Hostinger** | NGW-000366/367/368 and `rmahnsitcenter@gmail.com`, created 29–30 Sep. Confirmed as test data and dropped. They continued production's numbering rather than colliding with it, which is why this had to be asked before the copy |
+| Data copied | **7,139 of 7,139 rows**, 23 tables, every column mapped |
+| Verified on the server | 16 users / 512 tickets matching Supabase exactly, bcrypt hashes intact, search returning 365 for both `ngw` and `NGW`, leaderboard 486 earning logs, Rianto 483 / Mitchel 481 |
+| Build on Hostinger | Succeeded. Verified live: `/admin/dashboard`, `/admin/tickets`, `/admin/tickets?q=ngw`, `/rma/tickets`, `/rma/dashboard`, `/admin/leaderboard` all 200 with CSS |
+
+**Production had taken no tickets since 28 September**, so nothing was lost in the window.
+Supabase was only ever read and still holds a complete copy — do not delete the project yet.
+
+**Still unverified by a human, and the obvious QC starting point:** login with a real staff
+password (every check above used a forged session), **photo upload — the only thing that
+exercises R2**, creating a ticket, and the full claim handover. The RMA account
+`rmahnsitcenter@gmail.com` was dropped with the test data and needs recreating through the
+tunnel before the desk can be used.
 
 ---
 
@@ -843,7 +863,7 @@ Ordered roughly by how much is already decided.
 | BL17 | **A real vendor table.** The folding in `lib/rma/vendor.ts` stops the splitting getting worse; it does not clean up what is already there, and vendors still cannot be managed from the UI |
 | BL18 | `extra_services` earns nothing anywhere. Two badges used to imply otherwise. Whether extras should earn is one line in `lib/points.ts` — and an unanswered question |
 | BL19 | **RMA code allocation is retry-based, not serialised.** `pg_advisory_xact_lock` was transaction-scoped and had no MariaDB equivalent — `GET_LOCK()` is connection-scoped, so it cannot be held to commit without leaking on an error path. `allocateRmaCode` now absorbs contention through `MAX_ALLOCATION_ATTEMPTS = 10`: with N simultaneous handovers at one store the Nth needs its Nth attempt, and exhausting the budget returns "please try again" rather than a duplicate, because the unique index is the real guarantee. The deterministic fix is a per-prefix counter row whose InnoDB lock is held to commit and rolls back cleanly — a schema change, deliberately kept out of the port |
-| BL21 | ⛔ **The public share page is unreachable by the people it is for** — two independent faults, both pre-existing, found while testing the standalone build. (a) `proxy.ts` allows `/ticket*` but the page lives at `/[date]/[ticketCode]`, so `/2026-09-28/NGW-000001` redirects an anonymous visitor to `/login` (verified: 307 → /login). (b) `PublicShareButton` copies `/ticket/${shareToken}`, which passes the proxy but resolves against `findUnique({ ticket_code })` — a share token is not a ticket code, so the copied link finds nothing. `PUBLIC_ROUTES` in `proxy.ts` is declared and never read, the same dead-constant shape as `STATUS_STEPS`. Also worth noting: `date` is not used in the lookup, so it adds no secrecy. This makes the whole public-status work from the 2026-09-24 sprint invisible in production. **Own branch off `origin/main`** — unrelated to the MariaDB port |
+| ~~BL21~~ | ✅ **DONE 2026-10-01** (`ca44816`), and the fix went further than the note: resolving by ticket code was also enumerable. Original note: ⛔ **The public share page is unreachable by the people it is for** — two independent faults, both pre-existing, found while testing the standalone build. (a) `proxy.ts` allows `/ticket*` but the page lives at `/[date]/[ticketCode]`, so `/2026-09-28/NGW-000001` redirects an anonymous visitor to `/login` (verified: 307 → /login). (b) `PublicShareButton` copies `/ticket/${shareToken}`, which passes the proxy but resolves against `findUnique({ ticket_code })` — a share token is not a ticket code, so the copied link finds nothing. `PUBLIC_ROUTES` in `proxy.ts` is declared and never read, the same dead-constant shape as `STATUS_STEPS`. Also worth noting: `date` is not used in the lookup, so it adds no secrecy. This makes the whole public-status work from the 2026-09-24 sprint invisible in production. **Own branch off `origin/main`** — unrelated to the MariaDB port |
 | BL20 | **`extra_services` should be a catalog table, not a Json column.** The six services and their points are hardcoded in `ExtraPointsPanel.tsx`, which is why a third point table exists (2/3/1/1/3/2 there, +3 flat on the list badges, 0 in `lib/points.ts`). `Upgrade` + `TicketUpgradeDetail` already model exactly this correctly. End state: `ExtraService` + `TicketExtraServiceDetail` with `@@unique([ticket_id, extra_service_id])`. Held back from the MariaDB port on purpose: a platform move and a redesign in one change make a failing test impossible to attribute. Related: `TicketUpgradeDetail` has **no** `@@unique`, so the same upgrade can be attached twice and counted twice |
 
 ---

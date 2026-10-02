@@ -421,9 +421,7 @@ export async function handoverToRmaAction(formData: FormData) {
 
     return { success: true, rmaCaseId: created.id, rmaCode: created.rma_code };
   } catch (err) {
-    console.error("[HANDOVER TO RMA ERROR]", err);
-    const message = err instanceof Error ? err.message : "An internal server error occurred";
-    return { error: message };
+    return unexpectedFailure(err, "HANDOVER TO RMA ERROR");
   }
 }
 
@@ -751,9 +749,7 @@ export async function transitionRmaAction(formData: FormData) {
 
     return { success: true, status: toStatus };
   } catch (err) {
-    console.error("[RMA TRANSITION ERROR]", err);
-    const message = err instanceof Error ? err.message : "An internal server error occurred";
-    return { error: message };
+    return unexpectedFailure(err, "RMA TRANSITION ERROR");
   }
 }
 
@@ -765,6 +761,28 @@ export async function transitionRmaAction(formData: FormData) {
  * is NOT moved: whether the evidence is good enough is the desk's call, and
  * auto-releasing a hold would take that decision away from them.
  */
+/**
+ * What an unexpected failure says to the person in front of it.
+ *
+ * Both actions used to return `err.message` straight through, so a Prisma
+ * failure reached a technician's screen as "Invalid
+ * `prisma.rmaCase.updateMany()` invocation: The column `hold_reason_code` does
+ * not exist in the current database." That names internal tables and columns,
+ * and tells the reader nothing they can act on. The detail still goes to the
+ * server log, which is where it is useful.
+ *
+ * Every message a user is meant to act on is returned explicitly above; this
+ * only covers the ones nobody planned for.
+ */
+function unexpectedFailure(err: unknown, context: string): { error: string } {
+  console.error(`[${context}]`, err);
+  return {
+    error:
+      "Terjadi kesalahan di server dan perubahan tidak tersimpan. Coba lagi; " +
+      "bila tetap gagal, hubungi administrator.",
+  };
+}
+
 export async function submitHoldEvidenceAction(formData: FormData) {
   try {
     const session = await requireSession();

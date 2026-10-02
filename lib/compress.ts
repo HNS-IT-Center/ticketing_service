@@ -143,9 +143,49 @@ export async function compressImage(file: File): Promise<File> {
 // ── Video Compression ───────────────────────────────────────────────────────
 
 /**
+ * Below this, a video is uploaded as it is.
+ *
+ * Transcoding here is not a cheap pass over the bytes: MediaRecorder records
+ * `captureStream()` while the clip PLAYS, so it costs one full playback —
+ * a two-minute video takes two minutes, whatever its file size. That is worth
+ * paying only when the file would otherwise not fit. The upload budget is
+ * `serverActions.bodySizeLimit`, 20 MB for a whole submission, so anything
+ * comfortably under it is left alone and uploads immediately.
+ *
+ * Reported as "stuck on Compressing files" for a 3.93 MB clip, which was never
+ * about the 3.93 MB.
+ */
+export const VIDEO_TRANSCODE_MIN_BYTES = 8 * 1024 * 1024;
+
+/**
+ * A transcode is abandoned after this and the original kept.
+ *
+ * `onended` is the only thing that stopped the recorder. A clip that stalls
+ * buffering, or a tab sent to the background — where browsers throttle media
+ * and timers — never fires it, and the dialog sat on "Compressing files…" with
+ * no way out. Real-time cost means this doubles as the ceiling on clip length.
+ */
+export const VIDEO_TRANSCODE_TIMEOUT_MS = 45_000;
+
+/**
+ * Whether transcoding this video is worth a full playback. Pure, so the rule
+ * can be tested without a browser.
+ */
+export function shouldTranscodeVideo(file: { size: number; type: string }): boolean {
+  const mime = file.type;
+  if (!mime.startsWith("video/")) return false;
+  // Already the target container.
+  if (mime === "video/webm") return false;
+  return file.size >= VIDEO_TRANSCODE_MIN_BYTES;
+}
+
+/**
  * Attempts to transcode a video to WebM using MediaRecorder + captureStream().
  * - Returns the original file if:
+ *   - It is small enough already (see VIDEO_TRANSCODE_MIN_BYTES)
  *   - The browser doesn't support MediaRecorder WebM encoding (iOS Safari)
+ *   - The transcode outruns VIDEO_TRANSCODE_TIMEOUT_MS
+ *   - The result is not actually smaller
  *   - The transcoding fails for any reason
  *
  * NOTE: iOS Safari does not support MediaRecorder with video/webm.
@@ -155,8 +195,7 @@ export async function compressVideo(file: File): Promise<File> {
   const mime = resolveMimeType(file);
   if (!mime.startsWith("video/")) return file;
 
-  // If the file is already WebM, no transcoding needed
-  if (mime === "video/webm") return file;
+  if (!shouldTranscodeVideo({ size: file.size, type: mime })) return file;
 
   // Check if the browser supports WebM recording
   const webmMime = "video/webm;codecs=vp8,opus";
@@ -179,22 +218,39 @@ export async function compressVideo(file: File): Promise<File> {
     video.playsInline = true;
     video.src = objectUrl;
 
+    // Whichever path finishes first wins; the rest become no-ops. Without this
+    // a stalled clip left the caller awaiting a promise that never settled.
+    let settled = false;
+
     const cleanup = () => {
+      clearTimeout(timer);
       URL.revokeObjectURL(objectUrl);
       video.remove();
     };
 
-    video.onerror = () => {
+    const finish = (result: File) => {
+      if (settled) return;
+      settled = true;
       cleanup();
-      resolve(file); // fallback
+      resolve(result);
+    };
+
+    // Declared after `cleanup`, which closes over it — `cleanup` only ever runs
+    // from `finish`, by which point this has been assigned.
+    const timer = setTimeout(() => {
+      try { video.pause(); } catch { /* noop */ }
+      finish(file); // took too long — upload what the technician chose
+    }, VIDEO_TRANSCODE_TIMEOUT_MS);
+
+    video.onerror = () => {
+      finish(file); // fallback
     };
 
     video.onloadedmetadata = () => {
       // Use captureStream to get a MediaStream from the video element
       const stream = (video as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
       if (!stream) {
-        cleanup();
-        resolve(file); // captureStream not supported
+        finish(file); // captureStream not supported
         return;
       }
 
@@ -204,8 +260,7 @@ export async function compressVideo(file: File): Promise<File> {
       try {
         recorder = new MediaRecorder(stream, { mimeType: supportedMime });
       } catch {
-        cleanup();
-        resolve(file); // MediaRecorder constructor failed
+        finish(file); // MediaRecorder constructor failed
         return;
       }
 
@@ -214,15 +269,19 @@ export async function compressVideo(file: File): Promise<File> {
       };
 
       recorder.onstop = () => {
-        cleanup();
         const blob = new Blob(chunks, { type: "video/webm" });
+        // VP8 at MediaRecorder's default bitrate can come out LARGER than the
+        // H.264 the phone recorded. Keep whichever is smaller.
+        if (blob.size === 0 || blob.size >= file.size) {
+          finish(file);
+          return;
+        }
         const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
-        resolve(new File([blob], `${baseName}.webm`, { type: "video/webm" }));
+        finish(new File([blob], `${baseName}.webm`, { type: "video/webm" }));
       };
 
       recorder.onerror = () => {
-        cleanup();
-        resolve(file); // fallback on error
+        finish(file); // fallback on error
       };
 
       recorder.start();

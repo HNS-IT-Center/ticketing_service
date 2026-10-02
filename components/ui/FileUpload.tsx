@@ -4,6 +4,7 @@ import { useRef, useState, useEffect, DragEvent, ChangeEvent } from "react";
 import { Upload, X, FileText, Image as ImageIcon, Video, Loader2 } from "lucide-react";
 import {
   compressFile,
+  shouldTranscodeVideo,
   normalizeFileType,
   resolveMimeType,
   formatBytes,
@@ -47,6 +48,9 @@ export default function FileUpload({
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
+  // A video transcode runs at playback speed, so the wait is worth explaining
+  // rather than leaving as an unexplained spinner.
+  const [transcodingVideo, setTranscodingVideo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -84,6 +88,10 @@ export default function FileUpload({
       // Step 1: Normalize MIME types (fixes empty/wrong types from mobile cameras)
       const normalized = rawFiles.map(normalizeFileType);
 
+      // Most videos are now left alone; only one big enough to be worth a full
+      // playback is transcoded, and only that case needs explaining.
+      setTranscodingVideo(normalized.some(shouldTranscodeVideo));
+
       // Step 2: Compress each file (images → WebP, videos → WebM or fallback)
       // Process sequentially to prevent mobile browsers from crashing due to memory limits (OOM)
       const compressed: File[] = [];
@@ -120,6 +128,7 @@ export default function FileUpload({
       setError("Failed to process one or more files. Please try again.");
     } finally {
       setIsCompressing(false);
+      setTranscodingVideo(false);
     }
   };
 
@@ -173,10 +182,12 @@ export default function FileUpload({
               }}
             />
             <p style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
-              Compressing files…
+              {transcodingVideo ? "Mengonversi video…" : "Compressing files…"}
             </p>
             <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-              Converting to optimized format, please wait
+              {transcodingVideo
+                ? "Video diproses selama klipnya diputar, jadi lamanya mengikuti durasi video. Berhenti sendiri setelah 45 detik dan memakai berkas aslinya."
+                : "Converting to optimized format, please wait"}
             </p>
           </>
         ) : (

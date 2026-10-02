@@ -1,18 +1,50 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
+import {
+  canActOnAssignmentRequest,
+  isUnrestrictedAssignmentRole,
+  CROSS_STORE_DENIED,
+  type AssignmentAuthority,
+} from "@/lib/assignment-authority";
 
-// GET — list pending assignment requests (Admin/Coordinator only)
+/**
+ * Who the caller is, for both halves of this route.
+ *
+ * `GET` used to build this inline and `POST` built a weaker version that never
+ * looked at stores, so a coordinator could approve another store's ticket by
+ * posting its `requestId` — the list hid those rows, nothing refused them.
+ * Both halves now resolve the caller here and ask
+ * `canActOnAssignmentRequest()`, so the two cannot drift apart again.
+ */
+async function resolveAuthority(session: {
+  userId: string;
+  role: string;
+}): Promise<AssignmentAuthority> {
+  if (isUnrestrictedAssignmentRole(session.role)) return { kind: "admin" };
+
+  if (session.role !== "Technician") return { kind: "none" };
+
+  const user = await db.user.findUnique({
+    where: { id: session.userId },
+    select: { is_team_leader: true },
+  });
+  if (!user?.is_team_leader) return { kind: "none" };
+
+  const assignments = await db.technicianStoreAssignment.findMany({
+    where: { technician_id: session.userId },
+    select: { store_id: true },
+  });
+  return { kind: "coordinator", storeIds: assignments.map((a) => a.store_id) };
+}
+
+// GET — list pending assignment requests (Admin/Sales/Coordinator only)
 export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const isAdmin = session.role === "Administrator" || session.role === "Sales";
-  const isCoordinator = !isAdmin && session.role === "Technician"
-    ? (await db.user.findUnique({ where: { id: session.userId }, select: { is_team_leader: true } }))?.is_team_leader ?? false
-    : false;
-
-  if (!isAdmin && !isCoordinator) {
+  const authority = await resolveAuthority(session);
+  if (authority.kind === "none") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -27,6 +59,9 @@ export async function GET() {
           ticket_type: true,
           device_type: true,
           status: true,
+          // Selected here so the store filter below needs no second round of
+          // per-request queries. It used to run one `findUnique` per row.
+          store_location_id: true,
         },
       },
     },
@@ -34,29 +69,11 @@ export async function GET() {
     take: 50,
   });
 
-  // If coordinator, filter to only their store's tickets
-  if (isCoordinator) {
-    const assignments = await db.technicianStoreAssignment.findMany({
-      where: { technician_id: session.userId },
-      select: { store_id: true },
-    });
-    const myStoreIds = new Set(assignments.map((a) => a.store_id));
+  const visible = requests.filter((r) =>
+    canActOnAssignmentRequest(authority, r.ticket.store_location_id),
+  );
 
-    const filtered = await Promise.all(
-      requests.map(async (req) => {
-        const ticket = await db.ticket.findUnique({
-          where: { id: req.ticket_id },
-          select: { store_location_id: true },
-        });
-        return myStoreIds.has(ticket?.store_location_id ?? "") || ticket?.store_location_id === null
-          ? req
-          : null;
-      })
-    );
-    return NextResponse.json(filtered.filter(Boolean));
-  }
-
-  return NextResponse.json(requests);
+  return NextResponse.json(visible);
 }
 
 // POST — accept or reject a request
@@ -64,12 +81,8 @@ export async function POST(req: NextRequest) {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const isAdmin = session.role === "Administrator" || session.role === "Sales";
-  const isCoordinator = !isAdmin && session.role === "Technician"
-    ? (await db.user.findUnique({ where: { id: session.userId }, select: { is_team_leader: true } }))?.is_team_leader ?? false
-    : false;
-
-  if (!isAdmin && !isCoordinator) {
+  const authority = await resolveAuthority(session);
+  if (authority.kind === "none") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -82,10 +95,26 @@ export async function POST(req: NextRequest) {
 
   const request = await db.ticketAssignmentRequest.findUnique({
     where: { id: requestId },
-    include: { ticket: { select: { id: true, ticket_code: true, status: true, technician_id: true } } },
+    include: {
+      ticket: {
+        select: {
+          id: true,
+          ticket_code: true,
+          status: true,
+          technician_id: true,
+          store_location_id: true,
+        },
+      },
+    },
   });
 
   if (!request) return NextResponse.json({ error: "Request not found" }, { status: 404 });
+
+  // The store check belongs here, not only in the list above.
+  if (!canActOnAssignmentRequest(authority, request.ticket.store_location_id)) {
+    return NextResponse.json({ error: CROSS_STORE_DENIED }, { status: 403 });
+  }
+
   if (request.status !== "pending") return NextResponse.json({ error: "Request already handled" }, { status: 409 });
   if (request.ticket.technician_id) return NextResponse.json({ error: "Ticket already assigned" }, { status: 409 });
 

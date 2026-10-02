@@ -25,10 +25,16 @@ vi.mock("@/lib/r2", () => ({
   uploadToR2: vi.fn(async (file: File) =>
     file.type.startsWith("image/")
       ? "https://r2.test/uploaded-damage.jpg"
-      : "https://r2.test/uploaded-invoice.pdf"
+      : file.type.startsWith("video/")
+        ? "https://r2.test/uploaded-damage.mp4"
+        : "https://r2.test/uploaded-invoice.pdf"
   ),
-  getExt: (mime: string) => (mime.startsWith("image/") ? "jpg" : "pdf"),
-  getFileType: (mime: string) => (mime.startsWith("image/") ? "image" : "pdf"),
+  getExt: (mime: string) =>
+    mime.startsWith("image/") ? "jpg" : mime.startsWith("video/") ? "mp4" : "pdf",
+  // Mirrors the real getFileType in lib/r2.ts, including its three-way split —
+  // and its quirk of calling everything that is neither image nor video "pdf".
+  getFileType: (mime: string) =>
+    mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : "pdf",
 }));
 
 // updateTicketStatusAction, imported below for the credit-parity test, fires
@@ -438,14 +444,42 @@ describe("handoverToRmaAction — evidence and recommendation", () => {
     expect(await db.rmaCase.count({ where: { ticket_id: ticket.id } })).toBe(0);
   });
 
-  it("refuses a non-image, so the desk always gets something it can look at", async () => {
+  it("accepts a video — an intermittent fault is what a still cannot show", async () => {
+    // This used to be refused. The desk kept holding cases waiting for a video
+    // the technician had no way to attach, so video now counts as evidence.
     const ticket = await makeTicket();
     const fd = validForm(ticket.id);
     fd.delete("damage_files");
     fd.append("damage_files", new File(["mp4"], "rusak.mp4", { type: "video/mp4" }));
 
+    expect(await handoverToRmaAction(fd)).toMatchObject({ success: true });
+    expect(await db.rmaCase.count({ where: { ticket_id: ticket.id } })).toBe(1);
+  });
+
+  it("stores a video attachment as file_type video, so the case page plays it", async () => {
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.delete("damage_files");
+    fd.append("damage_files", new File(["mp4"], "rusak.mp4", { type: "video/mp4" }));
+    await handoverToRmaAction(fd);
+
+    const attachments = await db.ticketAttachment.findMany({
+      where: { ticket_id: ticket.id },
+      select: { file_type: true },
+    });
+    expect(attachments.some((a) => a.file_type === "video")).toBe(true);
+  });
+
+  it("still refuses a file that is neither image nor video", async () => {
+    // The desk must get something it can look at — a PDF or a text file is not
+    // evidence of a scratch.
+    const ticket = await makeTicket();
+    const fd = validForm(ticket.id);
+    fd.delete("damage_files");
+    fd.append("damage_files", new File(["halo"], "catatan.txt", { type: "text/plain" }));
+
     expect(await handoverToRmaAction(fd)).toMatchObject({
-      error: expect.stringContaining("gambar"),
+      error: expect.stringContaining("gambar atau video"),
     });
     expect(await db.rmaCase.count({ where: { ticket_id: ticket.id } })).toBe(0);
   });

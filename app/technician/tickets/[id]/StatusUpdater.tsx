@@ -131,13 +131,15 @@ export default function StatusUpdater({
   const handoverError = (): string | null => {
     const photos = damagePhotos.filter((f) => f.size > 0);
     if (photos.length === 0) {
-      return "Minimal satu foto kondisi/kerusakan unit wajib dilampirkan.";
+      return "Minimal satu foto atau video kondisi/kerusakan unit wajib dilampirkan.";
     }
     if (photos.length > MAX_DAMAGE_PHOTOS) {
-      return `Maksimal ${MAX_DAMAGE_PHOTOS} foto kerusakan.`;
+      return `Maksimal ${MAX_DAMAGE_PHOTOS} berkas bukti kerusakan.`;
     }
-    const bad = photos.find((f) => !f.type.startsWith("image/"));
-    if (bad) return `Foto kerusakan harus berupa gambar. "${bad.name}" bukan gambar.`;
+    const bad = photos.find(
+      (f) => !f.type.startsWith("image/") && !f.type.startsWith("video/"),
+    );
+    if (bad) return `Bukti kerusakan harus berupa gambar atau video. "${bad.name}" bukan keduanya.`;
 
     if (recommendEligible !== "yes" && recommendEligible !== "no") {
       return "Rekomendasi teknisi (layak / tidak layak) wajib dipilih.";
@@ -860,15 +862,17 @@ export default function StatusUpdater({
 
           <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
             <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Foto Kondisi / Kerusakan <span style={{ color: "var(--accent-brand)" }}>*</span>
+              Foto / Video Kondisi Kerusakan <span style={{ color: "var(--accent-brand)" }}>*</span>
             </label>
             <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
-              1–{MAX_DAMAGE_PHOTOS} foto, gambar saja. Tim RMA memutuskan kelayakan klaim dari
-              foto ini — tanpa foto mereka hanya punya tulisan.
+              1–{MAX_DAMAGE_PHOTOS} berkas, foto atau video. Tim RMA memutuskan kelayakan klaim
+              dari bukti ini — tanpa bukti mereka hanya punya tulisan. Untuk kerusakan yang
+              kambuhan, video jauh lebih meyakinkan daripada foto. Total seluruh unggahan
+              maksimal 20 MB.
             </p>
             <FileUpload
               onChange={setDamagePhotos}
-              accept="image/*,image/heic,image/heif"
+              accept="image/*,image/heic,image/heif,video/*"
               maxFiles={MAX_DAMAGE_PHOTOS}
             />
           </div>

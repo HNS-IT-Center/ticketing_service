@@ -158,16 +158,31 @@ export async function handoverToRmaAction(formData: FormData) {
     if (!testResult) return { error: "Test result is required." };
 
     if (damageFiles.length === 0) {
-      return { error: "Minimal satu foto kondisi/kerusakan unit wajib dilampirkan." };
+      return {
+        error: "Minimal satu foto atau video kondisi/kerusakan unit wajib dilampirkan.",
+      };
     }
     if (damageFiles.length > MAX_DAMAGE_PHOTOS) {
-      return { error: `Maksimal ${MAX_DAMAGE_PHOTOS} foto kerusakan.` };
+      return { error: `Maksimal ${MAX_DAMAGE_PHOTOS} berkas bukti kerusakan.` };
     }
-    // Images only: the desk views these in a preview modal, and a video there
-    // is both heavier and harder to judge a scratch from.
-    const badPhoto = damageFiles.find((f) => !f.type.startsWith("image/"));
-    if (badPhoto) {
-      return { error: `Foto kerusakan harus berupa gambar. "${badPhoto.name}" bukan gambar.` };
+    // Images AND video. This was images-only, on the reasoning that a video is
+    // heavier and a scratch is harder to judge from one. Practice disagreed:
+    // the desk kept holding cases for a video the technician had no way to
+    // attach — "VIDEO KERUSAKAN BELUM DIKIRIMKAN" as a hold reason on a live
+    // case. An intermittent fault is the normal reason a unit is claimed, and
+    // it is exactly what a still cannot show.
+    //
+    // `FileType` already has `video`, and `components/ui/FilePreview.tsx`
+    // already renders one, so the case page plays it without further change.
+    // The ceiling is `serverActions.bodySizeLimit` in next.config.ts (20 MB for
+    // the whole submission, not per file).
+    const badFile = damageFiles.find(
+      (f) => !f.type.startsWith("image/") && !f.type.startsWith("video/"),
+    );
+    if (badFile) {
+      return {
+        error: `Bukti kerusakan harus berupa gambar atau video. "${badFile.name}" bukan keduanya.`,
+      };
     }
 
     if (recommendedEligibleRaw !== "yes" && recommendedEligibleRaw !== "no") {

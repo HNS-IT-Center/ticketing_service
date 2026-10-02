@@ -1,4 +1,4 @@
-import { requireSession } from "@/lib/session";
+import { getSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { customAlphabet } from "nanoid";
 
@@ -12,9 +12,16 @@ const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 10);
  * Returns an array of { url, fileType } objects.
  */
 export async function POST(req: Request) {
-  try {
-    const session = await requireSession();
+  // `requireSession()` redirects, which is right for a page and wrong here: the
+  // thrown NEXT_REDIRECT was caught below and returned as
+  // `500 {"error":"NEXT_REDIRECT"}`, so an unauthenticated upload reported a
+  // server fault and leaked an internal error name instead of saying 401.
+  const session = await getSession();
+  if (!session) {
+    return Response.json({ error: "Unauthorized" }, { status: 401 });
+  }
 
+  try {
     const formData = await req.formData();
     const files = formData.getAll("files") as File[];
 

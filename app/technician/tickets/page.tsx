@@ -2,6 +2,9 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
+import { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
+import { TECHNICIAN_TICKET_FILTERS, ticketListWhere } from "@/lib/ticket-list-filter";
+import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
 
 function getTicketPoints(type: string, deviceType?: string | null, extraServices?: string[]): number {
@@ -14,7 +17,6 @@ function getTicketPoints(type: string, deviceType?: string | null, extraServices
 
 export const metadata = { title: "My Tickets — HNS IT Center" };
 
-const STATUS_FILTERS = ["all", "waiting", "on_progress", "done", "cancelled"] as const;
 const PAGE_SIZE = 10;
 
 export default async function TechnicianTicketsPage({
@@ -51,7 +53,9 @@ export default async function TechnicianTicketsPage({
 
   const where = {
     ...technicianWhere,
-    ...(statusFilter !== "all" ? { status: statusFilter as any } : {}),
+    // Chip → filter lives in lib/ticket-list-filter.ts, shared with the admin
+    // list so the same chip cannot mean two things.
+    ...ticketListWhere(statusFilter),
     ...(query
       ? {
           OR: [
@@ -83,6 +87,9 @@ export default async function TechnicianTicketsPage({
       status: true, technician_id: true, is_for_self: true, customer_name: true,
       updated_at: true, extra_services: true,
       user: { select: { name: true } },
+      // `rma_process` is one ticket status covering nine RMA ones; the list
+      // shows the informative one. See lib/rma/ticket-status-badge.ts.
+      rma_case: { select: { status: true } },
     },
   });
 
@@ -164,7 +171,7 @@ export default async function TechnicianTicketsPage({
 
       {/* Filter tabs */}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        {STATUS_FILTERS.map((s) => {
+        {TECHNICIAN_TICKET_FILTERS.map(({ key: s, label }) => {
           const qs = new URLSearchParams();
           if (s !== "all") qs.set("status", s);
           if (query) qs.set("q", query);
@@ -181,10 +188,10 @@ export default async function TechnicianTicketsPage({
                 color: statusFilter === s ? "var(--white)" : "var(--text-secondary)",
                 border: "1.5px solid",
                 borderColor: statusFilter === s ? "var(--primary)" : "var(--border)",
-                textTransform: "capitalize",
+                whiteSpace: "nowrap",
               }}
             >
-              {s === "all" ? "All" : s.replace("_", " ")}
+              {label}
             </Link>
           );
         })}
@@ -237,7 +244,14 @@ export default async function TechnicianTicketsPage({
                           ⭐ {pts} pts{hasExtra && <span style={{ opacity: 0.65, fontWeight: 400, fontSize: "0.68rem" }}> (+extra)</span>}
                         </span>
                       </td>
-                      <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
+                      <td>
+                        {(() => {
+                          const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
+                          return badge.kind === "rma"
+                            ? <RmaStatusBadge status={badge.status} />
+                            : <Badge variant={badge.status} technicianId={t.technician_id} />;
+                        })()}
+                      </td>
                       <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{new Date(t.updated_at).toLocaleDateString("id-ID")}</td>
                       <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
                     </tr>
@@ -267,7 +281,12 @@ export default async function TechnicianTicketsPage({
                   <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>
                     {t.ticket_code}
                   </span>
-                  <Badge variant={t.status} technicianId={t.technician_id} />
+                  {(() => {
+                    const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
+                    return badge.kind === "rma"
+                      ? <RmaStatusBadge status={badge.status} />
+                      : <Badge variant={badge.status} technicianId={t.technician_id} />;
+                  })()}
                 </div>
                 <div style={{ fontWeight: 500, fontSize: "0.875rem", margin: "0.25rem 0", color: "var(--text-primary)" }}>
                   Customer: {actualName} {!t.is_for_self && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(For Others)</span>}

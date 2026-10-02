@@ -2,11 +2,12 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
+import { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
+import { ADMIN_TICKET_FILTERS, ticketListWhere } from "@/lib/ticket-list-filter";
+import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export const metadata = { title: "All Tickets — HNS IT Center" };
-
-const STATUS_FILTERS = ["all", "unassigned", "waiting", "on_progress", "done", "cancelled", "rejected"] as const;
 const PAGE_SIZE = 10;
 
 export default async function AdminTicketsPage({
@@ -24,8 +25,9 @@ export default async function AdminTicketsPage({
 
   const where = {
     ...(session.role === "Sales" ? { sales_id: session.userId } : {}),
-    ...(statusFilter !== "all" && statusFilter !== "unassigned" ? { status: statusFilter as any } : {}),
-    ...(statusFilter === "unassigned" ? { technician_id: null } : {}),
+    // Chip → filter lives in lib/ticket-list-filter.ts so the admin and
+    // technician lists cannot offer the same chip and mean different things.
+    ...ticketListWhere(statusFilter),
     ...(query
       ? {
           OR: [
@@ -53,6 +55,9 @@ export default async function AdminTicketsPage({
       include: {
         user: { select: { name: true } },
         technician: { select: { name: true } },
+        // `rma_process` is one ticket status covering nine RMA ones; the list
+        // shows the informative one. See lib/rma/ticket-status-badge.ts.
+        rma_case: { select: { status: true } },
       },
     }),
     db.ticket.count({ where }),
@@ -117,7 +122,7 @@ export default async function AdminTicketsPage({
 
       {/* Status tabs */}
       <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        {STATUS_FILTERS.map((s) => {
+        {ADMIN_TICKET_FILTERS.map(({ key: s, label }) => {
           const qs = new URLSearchParams();
           if (s !== "all") qs.set("status", s);
           if (query) qs.set("q", query);
@@ -134,10 +139,10 @@ export default async function AdminTicketsPage({
                 color: statusFilter === s ? "#fff" : "var(--text-secondary)",
                 border: "1.5px solid",
                 borderColor: statusFilter === s ? "var(--primary)" : "var(--border)",
-                textTransform: "capitalize",
+                whiteSpace: "nowrap",
               }}
             >
-              {s === "all" ? "All" : s.replace("_", " ")}
+              {label}
             </Link>
           );
         })}
@@ -164,6 +169,7 @@ export default async function AdminTicketsPage({
               <tbody>
                 {tickets.map((t) => {
                   const actualName = t.is_for_self ? t.user?.name : t.customer_name;
+                  const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
                   return (
                     <tr key={t.id}>
                       <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
@@ -173,7 +179,11 @@ export default async function AdminTicketsPage({
                         {!t.is_for_self && <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>(For Others)</div>}
                       </td>
                       <td style={{ color: "var(--text-muted)" }}>{t.technician?.name ?? <span style={{ color: "var(--accent)", fontSize: "0.875rem" }}>Unassigned</span>}</td>
-                      <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
+                      <td>
+                        {badge.kind === "rma"
+                          ? <RmaStatusBadge status={badge.status} />
+                          : <Badge variant={badge.status} technicianId={t.technician_id} />}
+                      </td>
                       <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{new Date(t.created_at).toLocaleDateString("id-ID")}</td>
                       <td><Link href={`/admin/tickets/${t.id}`} className="btn btn-secondary btn-sm">View</Link></td>
                     </tr>
@@ -189,14 +199,18 @@ export default async function AdminTicketsPage({
       <div className="admin-ticket-cards">
         {tickets.length === 0 ? (
           <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>No tickets found</p>
-        ) : tickets.map((t) => (
+        ) : tickets.map((t) => {
+          const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
+          return (
           <Link key={t.id} href={`/admin/tickets/${t.id}`} style={{ textDecoration: "none" }}>
             <div className="mobile-ticket-card">
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", fontSize: "0.9375rem" }}>
                   {t.ticket_code}
                 </span>
-                <Badge variant={t.status} technicianId={t.technician_id} />
+                {badge.kind === "rma"
+                  ? <RmaStatusBadge status={badge.status} />
+                  : <Badge variant={badge.status} technicianId={t.technician_id} />}
               </div>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                 <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
@@ -210,7 +224,8 @@ export default async function AdminTicketsPage({
               </div>
             </div>
           </Link>
-        ))}
+          );
+        })}
       </div>
 
       {/* Pagination */}

@@ -839,6 +839,41 @@ their scenarios goes through a form submission, and the project has no browser d
 Four things have still never been exercised by a human since the cutover, the first being
 login with a real staff password. The rest is in `docs/qc-run-2026-10-01.md` § 3.
 
+---
+
+### SPRINT 2026-10-02 — hold reasons, a production outage, and a migration history
+Branch `feat/rma-hold-reason`, 4 commits above `main`. **618 tests**, `tsc` clean.
+`main` = `deploy` = `cf44ca4` and is what production runs.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| H1 | **A hold names what is missing, and asks for it** | ✅ | Holding a case was free text on a page only the desk opens, so the desk chased the technician by hand — one live case sat held with "VIDEO KERUSAKAN BELUM DIKIRIMKAN" in capitals. The reason is now a category (`RmaCase.hold_reason_code`), and the three `missing_*` values grow a panel on the technician's own ticket page asking for that exact thing. `other` tells an administrator instead. `lib/rma/hold-reason.ts` is the only switch, exhaustive over the enum. Sending evidence does **not** release the hold — that stays the desk's judgement |
+| H2 | **Video stopped hanging on upload** | ✅ | `compressVideo` transcodes with MediaRecorder over `captureStream()`, which records the clip *while it plays* — a cost of one full playback, whatever the file size, and `recorder.stop()` was only reachable from `onended`. A stalled clip or a backgrounded tab never settled the promise. Now: under 8 MB is left alone, anything else is abandoned after 45 s, and a result that is not smaller is discarded. **Pre-existing** — `FileUpload`'s default `accept` has always included `video/*` |
+| H3 | **Dev server moved to webpack** | ✅ | `/technician/tickets/[id]` answered 500 for every ticket with nothing logged but `write EPIPE` and "Jest worker encountered 2 child process exceptions", while every other route stayed 200. Same quirk M9 already recorded for the build: Turbopack dies on this host spawning PostCSS. `dev` is now `next dev --webpack`; `dev:turbopack` keeps the old command |
+| H4 | **Raw database errors stopped reaching staff** | ✅ | Both RMA actions returned `err.message` straight through, so a technician saw ``Invalid `prisma.rmaCase.updateMany()` invocation: The column `hold_reason_code` does not exist``. Detail goes to the server log; the screen gets a sentence someone can act on |
+| H5 | **A migration history, at last** | ✅ | See the incident below. `00000000000000_baseline` is the schema **as it actually stood**, generated from the database rather than from `schema.prisma` — faults inherited from `db push` are corrected in migrations that can be read, not hidden inside a baseline. `migrate diff` between database and schema is now empty for the first time. ⚠️ **Production is not baselined yet** — `docs/migration-baseline.md` |
+| H6 | **`UserTitle.emoji` default dropped** | ✅ | Schema said `@default("🏆")`, the column said `'?'`, and they had disagreed since creation. Not a configuration mistake and no charset fixes it: MariaDB stores a column DEFAULT using `character_set_system` = `utf8mb3`, and U+1F3C6 is outside the BMP. Proven — `ALTER ... DEFAULT _utf8mb4 0xF09F8F86` from a fully utf8mb4 client still yields `'?'`. Nothing depended on it; both callers in `lib/performance.ts` pass `emoji` explicitly |
+| H7 | **A whole claim walked end to end, twice** | ✅ | Handover → held for a missing video → technician answers from the panel → verified → vendor → replaced → unit received → closed; and the other legal ending, the desk finding it ineligible. Pins what no single-step test sees: paid **once** at handover (read before and after, not assumed), ticket released exactly when the case ends, `hold_reason_code` cleared on the way out, evidence stored as a video attachment |
+
+#### Production outage, 2026-10-02 — what happened and why
+
+`cf44ca4` was pushed to `main` and deployed while the production database did not have
+`RmaCase.hold_reason_code`. Every technician ticket page answered 500 and every RMA transition
+failed. Admin, Sales and the ticket lists were unaffected — they do not select the column.
+
+Fixed by applying one `ALTER TABLE` through the tunnel; no rebuild was needed, because the
+deployed Prisma client already knew the field and only the column was missing.
+
+**The deploy order was wrong, but that is the symptom.** The cause is that there was no
+mechanism: `prisma db push` records nothing, so every schema change had to be typed into
+production by whoever remembered. That is what H5 exists to end. Until production is
+baselined too, the same failure is one schema change away.
+
+⚠️ Two things remain unproven by a human: **a technician actually clicking the upload button**
+(the server side is covered from both directions — 618 tests through the real actions, and the
+panel confirmed in the rendered HTML — but nobody has used it on screen), and **login with a
+real staff password**, still untested since the cutover.
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.
@@ -876,6 +911,7 @@ Ordered roughly by how much is already decided.
 | BL12 | **RLS not enabled** on any table, now including `RmaCase` and `RmaEvent` |
 | BL13 | **Demo data** NGW-000004..NGW-000009 still in the local database |
 | BL14 | Production TLS: `rejectUnauthorized: false` in `lib/db.ts` is interim; the target is Supabase's CA bundle |
+| BL26 | ⛔ **Production is not baselined.** The repo now has `prisma/migrations/` and the local database is on it, but production is not — so `prisma migrate deploy` there would still try to create 25 tables that already exist. Until this is done, every schema change still has to be typed into production by hand, which is exactly what took it down on 2026-10-02. Steps, including the verification gate that must be read before `migrate resolve` and the one ALTER that is the only acceptable output, are in `docs/migration-baseline.md`. Needs SSH + database credentials |
 | ~~BL15~~ | ✅ **DONE** — see sprint 2026-09-28. Original note kept for its reasoning: inventoried 2026-09-27 in `docs/plan-mariadb-port.md`. Bigger than the one-line note suggested: `extra_services String[]` is a scalar list, which Prisma supports on PostgreSQL only, so it fails `prisma validate` and forces a schema change plus data migration. Supabase Realtime dies entirely. 15 `mode: "insensitive"` usages must be dropped (MySQL collation is already case-insensitive). Plus the advisory lock, PascalCase table names, and 477 tests that currently run on Postgres |
 
 ### Worth doing, nobody has asked yet
@@ -885,10 +921,10 @@ Ordered roughly by how much is already decided.
 | BL16 | **jsdom and React Testing Library.** `create-form.test.ts` reads the file as text because the project cannot render a component in a test. That guard exists because the claim flow broke three times by confirming a form renders instead of confirming the flow completes |
 | BL17 | **A real vendor table.** The folding in `lib/rma/vendor.ts` stops the splitting getting worse; it does not clean up what is already there, and vendors still cannot be managed from the UI |
 | BL18 | `extra_services` earns nothing anywhere. Two badges used to imply otherwise. Whether extras should earn is one line in `lib/points.ts` — and an unanswered question |
-| BL19 | **RMA code allocation is retry-based, not serialised.** `pg_advisory_xact_lock` was transaction-scoped and had no MariaDB equivalent — `GET_LOCK()` is connection-scoped, so it cannot be held to commit without leaking on an error path. `allocateRmaCode` now absorbs contention through `MAX_ALLOCATION_ATTEMPTS = 10`: with N simultaneous handovers at one store the Nth needs its Nth attempt, and exhausting the budget returns "please try again" rather than a duplicate, because the unique index is the real guarantee. The deterministic fix is a per-prefix counter row whose InnoDB lock is held to commit and rolls back cleanly — a schema change, deliberately kept out of the port |
+| BL19 | **RMA code allocation is retry-based, not serialised.** `pg_advisory_xact_lock` was transaction-scoped and had no MariaDB equivalent — `GET_LOCK()` is connection-scoped, so it cannot be held to commit without leaking on an error path. `allocateRmaCode` now absorbs contention through `MAX_ALLOCATION_ATTEMPTS = 10`: with N simultaneous handovers at one store the Nth needs its Nth attempt, and exhausting the budget returns "please try again" rather than a duplicate, because the unique index is the real guarantee. The deterministic fix is a per-prefix counter row whose InnoDB lock is held to commit and rolls back cleanly — a schema change, deliberately kept out of the port. **Unblocked 2026-10-02**: there is a migration history now |
 | ~~BL21~~ | ✅ **DONE 2026-10-01** (`ca44816`), and the fix went further than the note: resolving by ticket code was also enumerable. Original note: ⛔ **The public share page is unreachable by the people it is for** — two independent faults, both pre-existing, found while testing the standalone build. (a) `proxy.ts` allows `/ticket*` but the page lives at `/[date]/[ticketCode]`, so `/2026-09-28/NGW-000001` redirects an anonymous visitor to `/login` (verified: 307 → /login). (b) `PublicShareButton` copies `/ticket/${shareToken}`, which passes the proxy but resolves against `findUnique({ ticket_code })` — a share token is not a ticket code, so the copied link finds nothing. `PUBLIC_ROUTES` in `proxy.ts` is declared and never read, the same dead-constant shape as `STATUS_STEPS`. Also worth noting: `date` is not used in the lookup, so it adds no secrecy. This makes the whole public-status work from the 2026-09-24 sprint invisible in production. **Own branch off `origin/main`** — unrelated to the MariaDB port |
 | BL20 | **`extra_services` should be a catalog table, not a Json column.** The six services and their points are hardcoded in `ExtraPointsPanel.tsx`, which is why a third point table exists (2/3/1/1/3/2 there, +3 flat on the list badges, 0 in `lib/points.ts`). `Upgrade` + `TicketUpgradeDetail` already model exactly this correctly. End state: `ExtraService` + `TicketExtraServiceDetail` with `@@unique([ticket_id, extra_service_id])`. Held back from the MariaDB port on purpose: a platform move and a redesign in one change make a failing test impossible to attribute. Related: `TicketUpgradeDetail` has **no** `@@unique`, so the same upgrade can be attached twice and counted twice |
-| BL22 | **`getFileType()` calls everything that is not an image or a video a `pdf`.** A `.txt` uploaded through `/api/upload-temp` is stored as `file_type: pdf` and renders with a PDF icon. Fixing it means a fourth value on the `FileType` enum — a schema change, which is blocked on there being no baseline migration (`docs/rma-deploy.md` § A). Found 2026-10-01 |
+| BL22 | **`getFileType()` calls everything that is not an image or a video a `pdf`.** A `.txt` uploaded through `/api/upload-temp` is stored as `file_type: pdf` and renders with a PDF icon. Fixing it means a fourth value on the `FileType` enum. **Unblocked 2026-10-02** — the baseline migration exists, so this is now an ordinary `prisma migrate dev` plus a backfill decision for rows already stored as `pdf`. Found 2026-10-01 |
 | BL23 | **Image validation trusts the client's MIME type.** `f.type.startsWith("image/")` in `app/actions/rma.ts` (three places) is whatever the browser claimed; the bytes are never sniffed. Tightening it needs a decision first — HEIC from iOS has already caused trouble in this form, and content sniffing will reject some legitimate files |
 | BL24 | **The date segment of a public ticket URL is not validated.** `/2020-01-01/{token}` opens the page; only the token resolves it. Harmless today, but the segment reads as if it matters. Three options, all needing a decision: validate it (links already sent by WhatsApp with a mismatched date stop working), leave it decorative, or drop it from the route |
 | BL25 | **Stored `TechnicianPerformance` disagrees with a recomputation from the log** for 9 of 14 technicians (Rianto −8, Mitchel −9, Steaven −11, Raffi −15 …). The direction is consistent with history credited under the older point tables, so it is probably explanation rather than corruption — but it has not been traced, and recomputing would move leaderboard figures people have already seen. Measured 2026-10-01 |

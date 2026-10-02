@@ -2,6 +2,8 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
+import { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
+import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
 import { getTicketPoints } from "@/lib/points";
 
@@ -118,7 +120,7 @@ export default async function RmaTicketsPage({
         // Only a claim that reached this desk has a case, and only a case has a
         // page in this portal. Without this the Manage link would point at
         // /rma/tickets/{id}, which resolves a case and 404s when there is none.
-        rma_case: { select: { id: true, rma_code: true } },
+        rma_case: { select: { id: true, rma_code: true, status: true } },
       },
     }),
     db.ticket.count({ where }),
@@ -277,12 +279,22 @@ export default async function RmaTicketsPage({
                       </td>
                       <td>
                         <div style={{ fontWeight: 500 }}>{actualName}</div>
-                        {!t.is_for_self && (
-                          <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>(For Others)</div>
-                        )}
+                        {/* The RMA desk works on units, not on who booked them.
+                            "(For Others)" told this table nothing it could act
+                            on; the device does. */}
+                        <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
+                          {t.device_name?.trim() || t.device_type.replace(/_/g, " ")}
+                        </div>
                       </td>
                       <td>{pointsPill(pts)}</td>
-                      <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
+                      <td>
+                        {(() => {
+                          const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
+                          return badge.kind === "rma"
+                            ? <RmaStatusBadge status={badge.status} />
+                            : <Badge variant={badge.status} technicianId={t.technician_id} />;
+                        })()}
+                      </td>
                       <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
                         {new Date(t.updated_at).toLocaleDateString("id-ID")}
                       </td>
@@ -326,7 +338,12 @@ export default async function RmaTicketsPage({
                   <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", fontSize: "0.9375rem" }}>
                     {t.ticket_code}
                   </span>
-                  <Badge variant={t.status} technicianId={t.technician_id} />
+                  {(() => {
+                    const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
+                    return badge.kind === "rma"
+                      ? <RmaStatusBadge status={badge.status} />
+                      : <Badge variant={badge.status} technicianId={t.technician_id} />;
+                  })()}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                   <span style={{ fontFamily: "monospace" }}>

@@ -1465,3 +1465,170 @@ describe("submitHoldEvidenceAction — the technician answers a hold", () => {
     });
   });
 });
+
+describe("alur klaim lengkap — dari serah terima sampai case ditutup", () => {
+  /**
+   * One claim walked end to end through the real actions, including the hold
+   * the desk puts on it and the evidence the technician sends back.
+   *
+   * The pieces are covered individually above. What this pins is the chain:
+   * every step is driven by the action a real portal calls, in the order a
+   * real claim takes, and the things that must hold across the whole run —
+   * the technician is paid once, the ticket is released exactly when the case
+   * ends, and every stage leaves a trace — are asserted at the end rather than
+   * per step.
+   */
+  it("jalur normal: serah → ditahan → bukti dikirim → vendor → unit kembali → ditutup", async () => {
+    const ticket = await makeTicket();
+
+    // ── 1. Technician hands the unit over ──
+    session.userId = technicianId;
+    session.role = "Technician";
+    const handover = await handoverToRmaAction(validForm(ticket.id));
+    expect(handover, "serah terima").toMatchObject({ success: true });
+    const caseId = (handover as { rmaCaseId: string }).rmaCaseId;
+
+    const afterHandover = await db.ticket.findUniqueOrThrow({
+      where: { id: ticket.id },
+      select: { status: true },
+    });
+    expect(afterHandover.status, "tiket pindah ke RMA").toBe("rma_process");
+
+    const paidAfterHandover = await db.technicianPerformance.findUniqueOrThrow({
+      where: { technician_id: technicianId },
+      select: { total_points_completed: true, success_count: true },
+    });
+
+    // ── 2. The desk holds it: the damage video was never sent ──
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    expect(
+      await transitionRmaAction(
+        transitionForm(caseId, "on_hold", { hold_reason_code: "missing_damage_video" }),
+      ),
+      "ditahan karena video kurang",
+    ).toMatchObject({ success: true });
+
+    // The technician is told what is wanted, by name — not "verified → on_hold".
+    const asked = await db.notification.findMany({
+      where: { ticket_id: ticket.id, user_id: technicianId, type: "rma_update" },
+      select: { message: true },
+      orderBy: { created_at: "desc" },
+      take: 1,
+    });
+    expect(asked[0]?.message ?? "", "notifikasi menyebut yang diminta").toContain("video");
+
+    // ── 3. The technician sends the video from their own ticket page ──
+    session.userId = technicianId;
+    session.role = "Technician";
+    const evidence = new FormData();
+    evidence.append("ticket_id", ticket.id);
+    evidence.append("evidence_files", new File(["mp4"], "kerusakan.mp4", { type: "video/mp4" }));
+    expect(await submitHoldEvidenceAction(evidence), "kirim bukti").toMatchObject({ success: true });
+
+    const stillHeld = await db.rmaCase.findUniqueOrThrow({
+      where: { id: caseId },
+      select: { status: true },
+    });
+    expect(stillHeld.status, "mengirim bukti tidak melepas penahanan").toBe("on_hold");
+
+    // ── 4. The desk is satisfied and carries it through to the vendor ──
+    await driveTo(caseId, [
+      ["pending_verification", {}],
+      ["verified", {}],
+      ["submitted_to_vendor", { vendor_name: "Asus Service Center" }],
+      ["in_vendor_process", {}],
+      ["vendor_decided", { decision: "replaced", replacement_sn: "SN-PENGGANTI-1" }],
+      ["unit_received", {}],
+      ["closed", {}],
+    ]);
+
+    // ── What must hold across the whole run ──
+    const finalCase = await db.rmaCase.findUniqueOrThrow({
+      where: { id: caseId },
+      select: {
+        status: true,
+        decision: true,
+        replacement_sn: true,
+        hold_reason_code: true,
+        vendor_name: true,
+        events: { select: { to_status: true, note: true } },
+      },
+    });
+    expect(finalCase.status).toBe("closed");
+    expect(finalCase.decision).toBe("replaced");
+    expect(finalCase.replacement_sn).toBe("SN-PENGGANTI-1");
+    // Leaving on_hold clears the category, so nothing keeps asking the
+    // technician for a video that already arrived.
+    expect(finalCase.hold_reason_code, "kategori ditahan dibersihkan").toBeNull();
+
+    const finalTicket = await db.ticket.findUniqueOrThrow({
+      where: { id: ticket.id },
+      select: { status: true },
+    });
+    expect(finalTicket.status, "tiket dilepas untuk diserahkan ke customer").toBe("done");
+
+    // Paid once, at the handover. Everything after it — the hold, the vendor,
+    // the closing `done` — credits nothing.
+    const paidAtEnd = await db.technicianPerformance.findUniqueOrThrow({
+      where: { technician_id: technicianId },
+      select: { total_points_completed: true, success_count: true },
+    });
+    expect(
+      paidAtEnd.total_points_completed,
+      "poin tidak bertambah setelah serah terima",
+    ).toBe(paidAfterHandover.total_points_completed);
+    expect(paidAtEnd.success_count).toBe(paidAfterHandover.success_count);
+
+    // The evidence the technician sent is on the ticket, and the answer is in
+    // the case history.
+    const attachments = await db.ticketAttachment.findMany({
+      where: { ticket_id: ticket.id },
+      select: { file_type: true },
+    });
+    expect(attachments.some((a) => a.file_type === "video"), "video tersimpan").toBe(true);
+    expect(
+      finalCase.events.some((e) => (e.note ?? "").includes("Teknisi mengirim")),
+      "jawaban teknisi tercatat di riwayat case",
+    ).toBe(true);
+  });
+
+  it("jalur tidak layak: desk menolak klaim, tiket tetap dilepas, poin tetap sekali", async () => {
+    const ticket = await makeTicket();
+    session.userId = technicianId;
+    session.role = "Technician";
+    const handover = await handoverToRmaAction(validForm(ticket.id));
+    expect(handover).toMatchObject({ success: true });
+    const caseId = (handover as { rmaCaseId: string }).rmaCaseId;
+
+    const paidAfterHandover = await db.technicianPerformance.findUniqueOrThrow({
+      where: { technician_id: technicianId },
+      select: { total_points_completed: true, failed_count: true },
+    });
+
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    const reject = new FormData();
+    reject.append("rmaCaseId", caseId);
+    reject.append("toStatus", "ineligible");
+    reject.append("ineligibility_reason", "Kerusakan akibat cairan, di luar cakupan garansi");
+    reject.append("damage_files", new File(["jpg"], "cairan.jpg", { type: "image/jpeg" }));
+    expect(await transitionRmaAction(reject)).toMatchObject({ success: true });
+
+    const finalTicket = await db.ticket.findUniqueOrThrow({
+      where: { id: ticket.id },
+      select: { status: true, warranty_detail: { select: { claim_eligible: true } } },
+    });
+    expect(finalTicket.status, "tiket dilepas supaya unit bisa dikembalikan").toBe("done");
+    expect(finalTicket.warranty_detail?.claim_eligible, "ditandai tidak layak").toBe(false);
+
+    const paidAtEnd = await db.technicianPerformance.findUniqueOrThrow({
+      where: { technician_id: technicianId },
+      select: { total_points_completed: true, failed_count: true },
+    });
+    // Turning a claim down is not the technician's failure — they examined and
+    // documented it correctly. Not a point more, not a failure either.
+    expect(paidAtEnd.total_points_completed).toBe(paidAfterHandover.total_points_completed);
+    expect(paidAtEnd.failed_count, "bukan failed_count").toBe(paidAfterHandover.failed_count);
+  });
+});

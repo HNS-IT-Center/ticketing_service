@@ -1,0 +1,17 @@
+-- `UserTitle.emoji` was declared `@default("🏆")`, but the column in the
+-- database carried the default `'?'`. The two had disagreed since the column
+-- was created, which `prisma db push` leaves no trace of, and every
+-- `migrate diff` would have gone on reporting it forever.
+--
+-- It is not a configuration mistake and it cannot be fixed by setting a
+-- charset. MariaDB stores a column's DEFAULT expression using
+-- `character_set_system`, which is `utf8mb3`. U+1F3C6 TROPHY sits outside the
+-- BMP, so it does not fit, and the server substitutes '?'. Verified directly:
+-- `ALTER ... DEFAULT _utf8mb4 0xF09F8F86` run from a fully utf8mb4 client still
+-- produces `DEFAULT '?'`. No four-byte emoji can be a column default here.
+--
+-- So the default is dropped rather than corrected. Nothing depended on it:
+-- both places that create a UserTitle (lib/performance.ts:151 and :169) pass
+-- `emoji` explicitly, and existing rows are untouched — they hold 🛡️ correctly
+-- as F09F9BA1EFB88F, because row DATA is utf8mb4; only the metadata was not.
+ALTER TABLE `UserTitle` MODIFY `emoji` VARCHAR(191) NOT NULL;

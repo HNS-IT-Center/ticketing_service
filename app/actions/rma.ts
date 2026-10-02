@@ -6,13 +6,14 @@ import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { getTicketPoints } from "@/lib/points";
 import { canonicalVendorName, cleanVendorName } from "@/lib/rma/vendor";
+import { RMA_HOLD_REASONS, holdReasonAsksTechnician, isRmaHoldReason } from "@/lib/rma/hold-reason";
 import {
   canActOnRma,
   releasesTicket,
   validateRmaTransition,
   type RmaTransitionInput,
 } from "@/lib/rma/state-machine";
-import type { RmaStatus, RmaDecision, UnitOwnership } from "@prisma/client";
+import type { RmaStatus, RmaDecision, UnitOwnership, RmaHoldReason } from "@prisma/client";
 
 // ─── RMA code generator ────────────────────────────────────────────────────
 // RMA-{STORECODE}-{YYMM}-{0001}, sequence restarting each month per store.
@@ -463,7 +464,14 @@ export async function transitionRmaAction(formData: FormData) {
         ) || null;
     }
 
+    const rawHoldCode = ((formData.get("hold_reason_code") as string | null) || "").trim();
+    if (rawHoldCode && !isRmaHoldReason(rawHoldCode)) {
+      return { error: "Kategori alasan ditahan tidak dikenal." };
+    }
+    const holdReasonCode = rawHoldCode ? (rawHoldCode as RmaHoldReason) : null;
+
     const input: RmaTransitionInput = {
+      hold_reason_code: holdReasonCode,
       hold_reason: ((formData.get("hold_reason") as string | null) || "").trim() || null,
       ineligibility_reason:
         ((formData.get("ineligibility_reason") as string | null) || "").trim() || null,
@@ -546,9 +554,15 @@ export async function transitionRmaAction(formData: FormData) {
     const now = new Date();
     const data: Record<string, unknown> = { status: toStatus, handler_id: session.userId };
 
-    if (toStatus === "on_hold") data.hold_reason = input.hold_reason;
+    if (toStatus === "on_hold") {
+      data.hold_reason = input.hold_reason;
+      data.hold_reason_code = holdReasonCode;
+    }
     // Leaving on_hold clears the reason so a stale one cannot linger in the UI.
-    if (fromStatus === "on_hold" && toStatus !== "on_hold") data.hold_reason = null;
+    if (fromStatus === "on_hold" && toStatus !== "on_hold") {
+      data.hold_reason = null;
+      data.hold_reason_code = null;
+    }
 
     // Written on whichever transition demanded it, so the number lands with the
     // move that required it rather than waiting for a later step.
@@ -687,16 +701,46 @@ export async function transitionRmaAction(formData: FormData) {
       ]);
     }
 
-    // ── Notify the technician who handled the ticket ──
+    // ── Tell the people who can act on this ──
+    //
+    // A hold used to notify the technician with "verified → on_hold", which
+    // names no action. When the desk is waiting on something only the
+    // technician has, the message asks for that thing by name and their ticket
+    // page grows a panel to send it. "Lainnya" has no automatic remedy, so an
+    // administrator is told instead.
+    const askedFor =
+      toStatus === "on_hold" && holdReasonCode
+        ? RMA_HOLD_REASONS[holdReasonCode].asksTechnicianFor
+        : null;
+
     if (rmaCase.ticket.technician_id && rmaCase.ticket.technician_id !== session.userId) {
       await db.notification.create({
         data: {
           user_id: rmaCase.ticket.technician_id,
           ticket_id: rmaCase.ticket_id,
           type: "rma_update",
-          message: `🔧 ${rmaCase.rma_code} (#${rmaCase.ticket.ticket_code}): ${fromStatus} → ${toStatus}`,
+          message: askedFor
+            ? `📎 ${rmaCase.rma_code} (#${rmaCase.ticket.ticket_code}): tim RMA meminta ${askedFor}.`
+            : `🔧 ${rmaCase.rma_code} (#${rmaCase.ticket.ticket_code}): ${fromStatus} → ${toStatus}`,
         },
       });
+    }
+
+    if (toStatus === "on_hold" && holdReasonCode === "other") {
+      const admins = await db.user.findMany({
+        where: { role: "Administrator", is_active: true },
+        select: { id: true },
+      });
+      if (admins.length > 0) {
+        await db.notification.createMany({
+          data: admins.map((a) => ({
+            user_id: a.id,
+            ticket_id: rmaCase.ticket_id,
+            type: "rma_update" as const,
+            message: `⏸️ ${rmaCase.rma_code} (#${rmaCase.ticket.ticket_code}) ditahan: ${input.hold_reason ?? "tanpa keterangan"}`,
+          })),
+        });
+      }
     }
 
     revalidatePath(`/rma/cases/${rmaCaseId}`);
@@ -710,5 +754,134 @@ export async function transitionRmaAction(formData: FormData) {
     console.error("[RMA TRANSITION ERROR]", err);
     const message = err instanceof Error ? err.message : "An internal server error occurred";
     return { error: message };
+  }
+}
+
+/**
+ * The technician sends back whatever the desk asked for while holding the case.
+ *
+ * Only reachable while the case is `on_hold` with a reason that names something
+ * the technician can supply. The desk is notified when it lands, but the case
+ * is NOT moved: whether the evidence is good enough is the desk's call, and
+ * auto-releasing a hold would take that decision away from them.
+ */
+export async function submitHoldEvidenceAction(formData: FormData) {
+  try {
+    const session = await requireSession();
+    const ticketId = formData.get("ticket_id") as string;
+    if (!ticketId) return { error: "Ticket tidak ditemukan." };
+
+    const files = (formData.getAll("evidence_files") as File[]).filter((f) => f && f.size > 0);
+
+    const rmaCase = await db.rmaCase.findUnique({
+      where: { ticket_id: ticketId },
+      select: {
+        id: true,
+        rma_code: true,
+        status: true,
+        hold_reason_code: true,
+        handler_id: true,
+        handed_over_by_id: true,
+        ticket: { select: { id: true, ticket_code: true, technician_id: true } },
+      },
+    });
+    if (!rmaCase) return { error: "Klaim ini belum diserahkan ke RMA." };
+
+    // Whoever examined the unit is who can photograph it again. The assigned
+    // technician counts too, because a ticket can change hands.
+    const mayAnswer =
+      session.role === "Administrator" ||
+      session.userId === rmaCase.handed_over_by_id ||
+      session.userId === rmaCase.ticket.technician_id;
+    if (!mayAnswer) {
+      return { error: "Hanya teknisi yang menangani tiket ini yang dapat mengirim bukti." };
+    }
+
+    if (rmaCase.status !== "on_hold") {
+      return { error: "Klaim ini sedang tidak ditahan, jadi tidak ada yang diminta." };
+    }
+    const code = rmaCase.hold_reason_code;
+    if (!code || !holdReasonAsksTechnician(code)) {
+      return { error: "Tidak ada bukti yang diminta untuk klaim ini." };
+    }
+
+    if (files.length === 0) {
+      return { error: `Minimal satu berkas wajib dilampirkan: ${RMA_HOLD_REASONS[code].asksTechnicianFor}.` };
+    }
+    if (files.length > MAX_DAMAGE_PHOTOS) {
+      return { error: `Maksimal ${MAX_DAMAGE_PHOTOS} berkas.` };
+    }
+
+    // Each reason asks for a particular kind of thing; sending a photo when the
+    // desk asked for a video leaves the case held for exactly the same reason.
+    const allowed: Record<typeof code, (mime: string) => boolean> = {
+      missing_damage_video: (m) => m.startsWith("video/"),
+      missing_damage_photo: (m) => m.startsWith("image/"),
+      missing_purchase_invoice: (m) => m.startsWith("image/") || m === "application/pdf",
+    } as Record<typeof code, (mime: string) => boolean>;
+    const accepts = allowed[code];
+    const bad = files.find((f) => !accepts(f.type));
+    if (bad) {
+      return {
+        error: `Berkas harus berupa ${RMA_HOLD_REASONS[code].asksTechnicianFor}. "${bad.name}" tidak sesuai.`,
+      };
+    }
+
+    const uploaded: string[] = [];
+    for (const [i, file] of files.entries()) {
+      const ext = getExt(file.type, file.name);
+      const path = `tickets/${ticketId}/rma-hold-evidence_${rmaCase.rma_code}_${Date.now()}_${i + 1}.${ext}`;
+      try {
+        const url = await uploadToR2(file, path);
+        await db.ticketAttachment.create({
+          data: { ticket_id: ticketId, file_url: url, file_type: getFileType(file.type) },
+        });
+        uploaded.push(url);
+      } catch (err) {
+        console.error("[RMA HOLD EVIDENCE UPLOAD ERROR]", err);
+        return { error: "Gagal mengunggah berkas. Periksa ukuran file lalu coba lagi." };
+      }
+    }
+
+    // The case stays on_hold. This is the trail showing the request was answered.
+    await db.rmaEvent.create({
+      data: {
+        rma_case_id: rmaCase.id,
+        from_status: "on_hold",
+        to_status: "on_hold",
+        actor_id: session.userId,
+        note: `Teknisi mengirim ${uploaded.length} berkas: ${RMA_HOLD_REASONS[code].asksTechnicianFor}`,
+      },
+    });
+
+    // Tell the desk. Without this the request is answered into silence and the
+    // case keeps ageing on the dashboard.
+    const desk = await db.user.findMany({
+      where: {
+        is_active: true,
+        OR: [{ role: "RMA" }, ...(rmaCase.handler_id ? [{ id: rmaCase.handler_id }] : [])],
+      },
+      select: { id: true },
+    });
+    if (desk.length > 0) {
+      await db.notification.createMany({
+        data: desk.map((u) => ({
+          user_id: u.id,
+          ticket_id: ticketId,
+          type: "rma_update" as const,
+          message: `📎 ${rmaCase.rma_code} (#${rmaCase.ticket.ticket_code}): teknisi mengirim ${RMA_HOLD_REASONS[code].asksTechnicianFor}.`,
+        })),
+      });
+    }
+
+    revalidatePath(`/technician/tickets/${ticketId}`);
+    revalidatePath(`/admin/tickets/${ticketId}`);
+    revalidatePath(`/rma/cases/${rmaCase.id}`);
+    revalidatePath("/rma/dashboard");
+
+    return { success: true, count: uploaded.length };
+  } catch (err) {
+    console.error("[RMA HOLD EVIDENCE ERROR]", err);
+    return { error: "Gagal mengirim bukti. Coba lagi." };
   }
 }

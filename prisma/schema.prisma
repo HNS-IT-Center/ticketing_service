@@ -134,6 +134,21 @@ enum RmaStatus {
   cancelled
 }
 
+/**
+ * Why an RMA case is on hold.
+ *
+ * The three `missing_*` values are things only the technician who handed the
+ * unit over can supply, so choosing one asks them for it by name. `other` is
+ * everything else: the desk types the reason and an administrator is told,
+ * because nothing automatic can resolve it.
+ */
+enum RmaHoldReason {
+  missing_damage_video
+  missing_damage_photo
+  missing_purchase_invoice
+  other
+}
+
 enum RmaDecision {
   repaired
   replaced
@@ -596,6 +611,11 @@ model RmaCase {
   // ── Handling ──
   handler_id  String?
   handler     User?   @relation("RmaHandler", fields: [handler_id], references: [id])
+  // Why the case is held, as a category the desk picks rather than prose.
+  // `hold_reason` carries the words; this carries the kind, because the kind is
+  // what decides whether the system goes back to the technician and asks for
+  // something — and what a report can later count.
+  hold_reason_code RmaHoldReason?
   hold_reason String? @db.Text
 
   // ── Vendor ──

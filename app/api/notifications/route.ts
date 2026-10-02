@@ -7,7 +7,9 @@ import { getSession } from "@/lib/session";
 
 export async function GET(request: Request) {
   const session = await getSession();
-  if (!session) return NextResponse.json([], { status: 401 });
+  // An empty array read like "no notifications" to anything that looked at the
+  // body without checking the status, which is the opposite of what a 401 means.
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const url = new URL(request.url);
   const countOnly = url.searchParams.get("count") === "1";

@@ -2,58 +2,36 @@
 
 import { useEffect, useState } from "react";
 import { Timer } from "lucide-react";
-
-interface TimeLog {
-  event: string;
-  created_at: string; // ISO string - we'll serialize from server
-}
+import {
+  calcWorkingMs,
+  formatMs,
+  isTimerPaused,
+  isTimerRunning,
+  type TimeLogEvent,
+} from "@/lib/working-time";
 
 interface Props {
-  timeLogs: TimeLog[];
+  timeLogs: TimeLogEvent[];
   isDone: boolean;
+  /**
+   * The clock as the server read it while rendering this page.
+   *
+   * It used to be read here instead, in a `useState` initialiser — which runs
+   * once on the server and again in the browser when it hydrates. Those two
+   * readings are separated by however long the response took, so a running
+   * timer rendered "6h 55m 2s" on the server and "6h 55m 36s" on the client,
+   * and React discarded the tree with a hydration mismatch.
+   *
+   * Taking the server's reading as a prop makes the first client render
+   * identical to the server's by construction. The real clock takes over a
+   * second later, from the interval below, where it is safe.
+   */
+  serverNow: number;
 }
 
-function calcWorkingMs(timeLogs: TimeLog[], now: number): number {
-  let totalMs = 0;
-  let lastStart: number | null = null;
-
-  for (const log of timeLogs) {
-    const t = new Date(log.created_at).getTime();
-    if (log.event === "START" || log.event === "RESUME") {
-      lastStart = t;
-    } else if (log.event === "PAUSE" || log.event === "DONE") {
-      if (lastStart) {
-        totalMs += t - lastStart;
-        lastStart = null;
-      }
-    }
-  }
-
-  // Still running (no DONE/PAUSE at the end) — add elapsed since last start
-  if (lastStart) {
-    totalMs += now - lastStart;
-  }
-
-  return totalMs;
-}
-
-function formatMs(ms: number): string {
-  if (ms < 1000) return "0s";
-  const totalSecs = Math.floor(ms / 1000);
-  const hours = Math.floor(totalSecs / 3600);
-  const mins = Math.floor((totalSecs % 3600) / 60);
-  const secs = totalSecs % 60;
-  if (hours > 0) return `${hours}h ${mins}m ${secs}s`;
-  if (mins > 0) return `${mins}m ${secs}s`;
-  return `${secs}s`;
-}
-
-export default function WorkingTimeDisplay({ timeLogs, isDone }: Props) {
-  const [ms, setMs] = useState(() => calcWorkingMs(timeLogs, Date.now()));
-
-  const isActive = !isDone && timeLogs.length > 0 &&
-    (timeLogs[timeLogs.length - 1].event === "START" ||
-     timeLogs[timeLogs.length - 1].event === "RESUME");
+export default function WorkingTimeDisplay({ timeLogs, isDone, serverNow }: Props) {
+  const [ms, setMs] = useState(() => calcWorkingMs(timeLogs, serverNow));
+  const isActive = isTimerRunning(timeLogs, isDone);
 
   useEffect(() => {
     if (!isActive) return;
@@ -65,8 +43,7 @@ export default function WorkingTimeDisplay({ timeLogs, isDone }: Props) {
 
   if (timeLogs.length === 0) return null;
 
-  const isPaused = !isDone && timeLogs.length > 0 &&
-    timeLogs[timeLogs.length - 1].event === "PAUSE";
+  const isPaused = isTimerPaused(timeLogs, isDone);
 
   const color = isDone ? "#16a34a" : isPaused ? "#d97706" : "#4f46e5";
   const bg = isDone ? "#f0fdf4" : isPaused ? "#fffbeb" : "#eef2ff";

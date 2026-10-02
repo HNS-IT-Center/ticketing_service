@@ -436,7 +436,7 @@ export default async function TechnicianTicketDetailPage({
 
           {/* Working Time Widget */}
           {ticket.time_logs.length > 0 && (
-            <WorkingTimeDisplay timeLogs={serializedTimeLogs} isDone={isDone} />
+            <WorkingTimeDisplay timeLogs={serializedTimeLogs} isDone={isDone} serverNow={Date.now()} />
           )}
 
           {/* Proof Attachments — shown below working time */}

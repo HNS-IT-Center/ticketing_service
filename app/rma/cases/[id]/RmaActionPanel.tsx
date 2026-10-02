@@ -2,10 +2,15 @@
 
 import { useMemo, useState, useTransition } from "react";
 import toast from "react-hot-toast";
-import type { RmaStatus, UnitOwnership } from "@prisma/client";
+import type { RmaStatus, UnitOwnership, RmaHoldReason } from "@prisma/client";
 import Modal from "@/components/ui/Modal";
 import FileUpload from "@/components/ui/FileUpload";
 import { transitionRmaAction } from "@/app/actions/rma";
+import {
+  RMA_HOLD_REASONS,
+  RMA_HOLD_REASON_ORDER,
+  holdReasonAsksTechnician,
+} from "@/lib/rma/hold-reason";
 import {
   canActOnRma,
   getAllowedTransitions,
@@ -27,6 +32,9 @@ const FIELD_INPUTS: Record<
   { label: string; placeholder: string; multiline?: boolean }
 > = {
   hold_reason: { label: "Alasan", placeholder: "Jelaskan apa yang kurang atau menghambat", multiline: true },
+  // Rendered as a dropdown below, not as a text box — listed here only so the
+  // record stays exhaustive over RmaTransitionField.
+  hold_reason_code: { label: "Alasan Ditahan", placeholder: "" },
   ineligibility_reason: {
     label: "Alasan Tidak Layak",
     placeholder: "Alasan ini ditampilkan ke customer di halaman pelacakan",
@@ -210,6 +218,11 @@ export default function RmaActionPanel({
         ...(active.to === "vendor_decided" && values.decision === "replaced"
           ? (["replacement_sn"] as RmaTransitionField[])
           : []),
+        // Mirrors validateRmaTransition: a named reason speaks for itself,
+        // "Lainnya" has to be written down.
+        ...(active.to === "on_hold" && values.hold_reason_code === "other"
+          ? (["hold_reason"] as RmaTransitionField[])
+          : []),
         ...(unitOwnership === "store_stock" &&
         (active.to === "verified" || active.to === "in_vendor_process")
           ? (["stock_transfer_number"] as RmaTransitionField[])
@@ -262,7 +275,33 @@ export default function RmaActionPanel({
             </p>
 
             {requiredFields.map((field) =>
-              field === "decision" ? (
+              field === "hold_reason_code" ? (
+                <div key={field} style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                  <label htmlFor={`rma-${field}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                    {FIELD_INPUTS[field].label} <span style={{ color: "var(--accent)" }}>*</span>
+                  </label>
+                  <select
+                    id={`rma-${field}`}
+                    className="form-input"
+                    value={values[field] ?? ""}
+                    onChange={(e) => setValue(field, e.target.value)}
+                  >
+                    <option value="">Pilih alasan</option>
+                    {RMA_HOLD_REASON_ORDER.map((code) => (
+                      <option key={code} value={code}>
+                        {RMA_HOLD_REASONS[code].label}
+                      </option>
+                    ))}
+                  </select>
+                  {values[field] && (
+                    <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+                      {holdReasonAsksTechnician(values[field] as RmaHoldReason)
+                        ? `Teknisi akan diminta mengirim ${RMA_HOLD_REASONS[values[field] as RmaHoldReason].asksTechnicianFor}, lewat panel di halaman tiketnya.`
+                        : "Administrator akan diberi tahu. Tidak ada permintaan otomatis ke teknisi."}
+                    </p>
+                  )}
+                </div>
+              ) : field === "decision" ? (
                 <div key={field} style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
                   <label htmlFor={`rma-${field}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
                     {FIELD_INPUTS[field].label} <span style={{ color: "var(--accent)" }}>*</span>

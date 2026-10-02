@@ -56,7 +56,7 @@ vi.mock("@/lib/session", () => ({
 }));
 
 const { db } = await import("@/lib/db");
-const { handoverToRmaAction, transitionRmaAction } = await import("./rma");
+const { handoverToRmaAction, transitionRmaAction, submitHoldEvidenceAction } = await import("./rma");
 const { updateTicketStatusAction } = await import("./technician");
 
 const RUN = `rmatest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -746,7 +746,7 @@ describe("transitionRmaAction — the desk turns a claim down", () => {
     const hold = new FormData();
     hold.append("rmaCaseId", caseId);
     hold.append("toStatus", "on_hold");
-    hold.append("hold_reason", "Menunggu nota asli dari customer");
+    hold.append("hold_reason_code", "missing_purchase_invoice");
     expect(await transitionRmaAction(hold)).toMatchObject({ success: true });
 
     expect(await transitionRmaAction(ineligibleForm(caseId))).toMatchObject({ success: true });
@@ -1119,7 +1119,7 @@ describe("transitionRmaAction — rules", () => {
   it("stores vendor fields, clears a stale hold reason and writes an event per step", async () => {
     const { rmaCaseId } = await freshCase();
     await driveTo(rmaCaseId, [
-      ["on_hold", { hold_reason: "Nota belum lengkap" }],
+      ["on_hold", { hold_reason_code: "missing_purchase_invoice" }],
       ["pending_verification", {}],
       ["verified", {}],
       ["submitted_to_vendor", { vendor_name: "Asus", vendor_rma_number: "V-77", shipping_tracking: "JNE-1" }],
@@ -1130,6 +1130,7 @@ describe("transitionRmaAction — rules", () => {
       select: {
         status: true,
         hold_reason: true,
+        hold_reason_code: true,
         vendor_name: true,
         vendor_rma_number: true,
         shipping_tracking: true,
@@ -1140,6 +1141,9 @@ describe("transitionRmaAction — rules", () => {
     });
     expect(rmaCase.status).toBe("submitted_to_vendor");
     expect(rmaCase.hold_reason).toBeNull();
+    // The category is cleared with the words — a stale "waiting for the
+    // invoice" would otherwise keep asking the technician for one.
+    expect(rmaCase.hold_reason_code).toBeNull();
     expect(rmaCase.vendor_name).toBe("Asus");
     expect(rmaCase.vendor_rma_number).toBe("V-77");
     expect(rmaCase.shipping_tracking).toBe("JNE-1");
@@ -1246,7 +1250,7 @@ describe("transitionRmaAction — concurrency", () => {
 
     const [a, b] = await Promise.all([
       transitionRmaAction(transitionForm(rmaCase.id, "verified")),
-      transitionRmaAction(transitionForm(rmaCase.id, "on_hold", { hold_reason: "Fisik tidak sesuai" })),
+      transitionRmaAction(transitionForm(rmaCase.id, "on_hold", { hold_reason_code: "missing_damage_photo" })),
     ]);
 
     const successes = [a, b].filter((r) => "success" in r && r.success);
@@ -1257,5 +1261,207 @@ describe("transitionRmaAction — concurrency", () => {
       select: { status: true },
     });
     expect(["verified", "on_hold"]).toContain(final.status);
+  });
+});
+
+describe("submitHoldEvidenceAction — the technician answers a hold", () => {
+  /** Opens a case and holds it for a reason that asks the technician for something. */
+  async function heldCase(code = "missing_damage_video") {
+    const ticket = await makeTicket();
+    session.userId = technicianId;
+    session.role = "Technician";
+    expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
+
+    const rmaCase = await db.rmaCase.findUniqueOrThrow({
+      where: { ticket_id: ticket.id },
+      select: { id: true },
+    });
+
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    const hold = new FormData();
+    hold.append("rmaCaseId", rmaCase.id);
+    hold.append("toStatus", "on_hold");
+    hold.append("hold_reason_code", code);
+    expect(await transitionRmaAction(hold)).toMatchObject({ success: true });
+
+    return { ticketId: ticket.id, caseId: rmaCase.id };
+  }
+
+  function evidenceForm(ticketId: string, files: File[]) {
+    const fd = new FormData();
+    fd.append("ticket_id", ticketId);
+    files.forEach((f) => fd.append("evidence_files", f));
+    return fd;
+  }
+
+  const video = () => new File(["mp4"], "rusak.mp4", { type: "video/mp4" });
+  const photo = () => new File(["jpg"], "rusak.jpg", { type: "image/jpeg" });
+
+  it("stores the category the desk chose", async () => {
+    const { caseId } = await heldCase("missing_damage_video");
+    const c = await db.rmaCase.findUniqueOrThrow({
+      where: { id: caseId },
+      select: { status: true, hold_reason_code: true },
+    });
+    expect(c.status).toBe("on_hold");
+    expect(c.hold_reason_code).toBe("missing_damage_video");
+  });
+
+  it("accepts the thing that was asked for, and tells the desk", async () => {
+    const { ticketId } = await heldCase("missing_damage_video");
+    session.userId = technicianId;
+    session.role = "Technician";
+
+    expect(await submitHoldEvidenceAction(evidenceForm(ticketId, [video()]))).toMatchObject({
+      success: true,
+      count: 1,
+    });
+
+    const attachments = await db.ticketAttachment.findMany({
+      where: { ticket_id: ticketId },
+      select: { file_type: true },
+    });
+    expect(attachments.some((a) => a.file_type === "video")).toBe(true);
+
+    const notified = await db.notification.findMany({
+      where: { ticket_id: ticketId, user_id: rmaUserId, type: "rma_update" },
+      select: { message: true },
+    });
+    expect(notified.length).toBeGreaterThan(0);
+  });
+
+  it("leaves the case held — releasing it is the desk's decision", async () => {
+    const { ticketId, caseId } = await heldCase("missing_damage_video");
+    session.userId = technicianId;
+    session.role = "Technician";
+    await submitHoldEvidenceAction(evidenceForm(ticketId, [video()]));
+
+    const c = await db.rmaCase.findUniqueOrThrow({
+      where: { id: caseId },
+      select: { status: true },
+    });
+    expect(c.status).toBe("on_hold");
+  });
+
+  it("records an event, so the answer is visible in the case history", async () => {
+    const { ticketId, caseId } = await heldCase("missing_damage_video");
+    session.userId = technicianId;
+    session.role = "Technician";
+    await submitHoldEvidenceAction(evidenceForm(ticketId, [video()]));
+
+    const events = await db.rmaEvent.findMany({
+      where: { rma_case_id: caseId },
+      select: { note: true, to_status: true },
+    });
+    expect(events.some((e) => (e.note ?? "").includes("Teknisi mengirim"))).toBe(true);
+  });
+
+  it("refuses a photo when the desk asked for a video", async () => {
+    // Sending the wrong kind leaves the case held for the very same reason.
+    const { ticketId } = await heldCase("missing_damage_video");
+    session.userId = technicianId;
+    session.role = "Technician";
+
+    expect(await submitHoldEvidenceAction(evidenceForm(ticketId, [photo()]))).toMatchObject({
+      error: expect.stringContaining("video"),
+    });
+  });
+
+  it("accepts a photo when the desk asked for a photo", async () => {
+    const { ticketId } = await heldCase("missing_damage_photo");
+    session.userId = technicianId;
+    session.role = "Technician";
+    expect(await submitHoldEvidenceAction(evidenceForm(ticketId, [photo()]))).toMatchObject({
+      success: true,
+    });
+  });
+
+  it("refuses an empty submission", async () => {
+    const { ticketId } = await heldCase();
+    session.userId = technicianId;
+    session.role = "Technician";
+    expect(await submitHoldEvidenceAction(evidenceForm(ticketId, []))).toMatchObject({
+      error: expect.stringContaining("Minimal satu berkas"),
+    });
+  });
+
+  it("refuses a technician who has nothing to do with the ticket", async () => {
+    const { ticketId } = await heldCase();
+    const stranger = await db.user.create({
+      data: {
+        name: `${RUN} stranger-hold`,
+        email: `${RUN}.stranger-hold@test.local`,
+        phone_number: "+628100000000",
+        address: "Test",
+        role: "Technician",
+        password: "x",
+      },
+      select: { id: true },
+    });
+    session.userId = stranger.id;
+    session.role = "Technician";
+
+    expect(await submitHoldEvidenceAction(evidenceForm(ticketId, [video()]))).toMatchObject({
+      error: expect.stringContaining("Hanya teknisi"),
+    });
+  });
+
+  it("refuses when the case is not held at all", async () => {
+    const ticket = await makeTicket();
+    session.userId = technicianId;
+    session.role = "Technician";
+    await handoverToRmaAction(validForm(ticket.id));
+
+    expect(await submitHoldEvidenceAction(evidenceForm(ticket.id, [video()]))).toMatchObject({
+      error: expect.stringContaining("sedang tidak ditahan"),
+    });
+  });
+
+  it("refuses when the hold was 'other' — nothing was asked of the technician", async () => {
+    const ticket = await makeTicket();
+    session.userId = technicianId;
+    session.role = "Technician";
+    await handoverToRmaAction(validForm(ticket.id));
+    const rmaCase = await db.rmaCase.findUniqueOrThrow({
+      where: { ticket_id: ticket.id },
+      select: { id: true },
+    });
+
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    const hold = new FormData();
+    hold.append("rmaCaseId", rmaCase.id);
+    hold.append("toStatus", "on_hold");
+    hold.append("hold_reason_code", "other");
+    hold.append("hold_reason", "Unit tertukar dengan tiket lain");
+    expect(await transitionRmaAction(hold)).toMatchObject({ success: true });
+
+    session.userId = technicianId;
+    session.role = "Technician";
+    expect(await submitHoldEvidenceAction(evidenceForm(ticket.id, [video()]))).toMatchObject({
+      error: expect.stringContaining("Tidak ada bukti yang diminta"),
+    });
+  });
+
+  it("refuses a hold category that is not one of ours", async () => {
+    const ticket = await makeTicket();
+    session.userId = technicianId;
+    session.role = "Technician";
+    await handoverToRmaAction(validForm(ticket.id));
+    const rmaCase = await db.rmaCase.findUniqueOrThrow({
+      where: { ticket_id: ticket.id },
+      select: { id: true },
+    });
+
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    const hold = new FormData();
+    hold.append("rmaCaseId", rmaCase.id);
+    hold.append("toStatus", "on_hold");
+    hold.append("hold_reason_code", "missing_everything");
+    expect(await transitionRmaAction(hold)).toMatchObject({
+      error: expect.stringContaining("tidak dikenal"),
+    });
   });
 });

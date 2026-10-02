@@ -214,14 +214,52 @@ describe("role guard", () => {
 });
 
 describe("required fields", () => {
-  it("requires hold_reason for every move into on_hold", () => {
+  it("requires a hold reason CATEGORY for every move into on_hold", () => {
+    // The category replaced free text as the required field: it is what decides
+    // whether the technician is asked for the missing thing by name.
     const intoHold = RMA_TRANSITIONS.filter((t) => t.to === "on_hold");
     expect(intoHold.length).toBeGreaterThan(0);
     for (const t of intoHold) {
-      expect(t.requires).toContain("hold_reason");
+      expect(t.requires).toContain("hold_reason_code");
       const result = validateRmaTransition({ role: "RMA", from: t.from, to: "on_hold" });
       expect(result.ok).toBe(false);
-      if (!result.ok) expect(result.missing).toContain("hold_reason");
+      if (!result.ok) expect(result.missing).toContain("hold_reason_code");
+    }
+  });
+
+  it("asks for words only when the category is 'other'", () => {
+    const intoHold = RMA_TRANSITIONS.filter((t) => t.to === "on_hold");
+    for (const t of intoHold) {
+      // A named reason speaks for itself — nothing more to type.
+      expect(
+        validateRmaTransition({
+          role: "RMA",
+          from: t.from,
+          to: "on_hold",
+          input: { hold_reason_code: "missing_damage_video" },
+        }).ok,
+        `${t.from} -> on_hold, named reason`
+      ).toBe(true);
+
+      // "Lainnya" resolves to nothing automatic, so it has to be written down.
+      const bare = validateRmaTransition({
+        role: "RMA",
+        from: t.from,
+        to: "on_hold",
+        input: { hold_reason_code: "other" },
+      });
+      expect(bare.ok, `${t.from} -> on_hold, other without words`).toBe(false);
+      if (!bare.ok) expect(bare.missing).toContain("hold_reason");
+
+      expect(
+        validateRmaTransition({
+          role: "RMA",
+          from: t.from,
+          to: "on_hold",
+          input: { hold_reason_code: "other", hold_reason: "Unit tertukar dengan NGW-000123" },
+        }).ok,
+        `${t.from} -> on_hold, other with words`
+      ).toBe(true);
     }
   });
 
@@ -361,7 +399,7 @@ describe("happy path — replaced unit, end to end", () => {
 
   it("walks the on_hold detour back into the vendor process", () => {
     const path: [RmaStatus, RmaStatus, Record<string, string>][] = [
-      ["pending_verification", "on_hold", { hold_reason: "Nota belum ada" }],
+      ["pending_verification", "on_hold", { hold_reason_code: "missing_purchase_invoice" }],
       ["on_hold", "pending_verification", {}],
       ["pending_verification", "verified", {}],
     ];
@@ -450,7 +488,7 @@ describe("store-stock transfer number", () => {
   // unit where it is, so none of them may demand a transfer that never happened.
   it.each([
     ["ineligible", { ineligibility_reason: "Kerusakan akibat cairan" }],
-    ["on_hold", { hold_reason: "Menunggu faktur" }],
+    ["on_hold", { hold_reason_code: "missing_purchase_invoice" }],
     ["cancelled", { hold_reason: "Ditarik oleh toko" }],
   ] as const)("does not demand it when moving to %s", (to, input) => {
     const r = validateRmaTransition({ ...base, to, unitOwnership: "store_stock", input });

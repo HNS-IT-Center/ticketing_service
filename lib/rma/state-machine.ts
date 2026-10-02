@@ -21,6 +21,7 @@ export function canActOnRma(role: string): role is RmaActorRole {
 // ── Fields a transition may demand ──────────────────────────────────────────
 export type RmaTransitionField =
   | "hold_reason"
+  | "hold_reason_code"
   | "stock_transfer_number"
   | "customer_ticket_number"
   | "ineligibility_reason"
@@ -32,6 +33,7 @@ export type RmaTransitionField =
 /** Payload supplied by the caller when requesting a transition. */
 export type RmaTransitionInput = {
   hold_reason?: string | null;
+  hold_reason_code?: string | null;
   stock_transfer_number?: string | null;
   customer_ticket_number?: string | null;
   ineligibility_reason?: string | null;
@@ -69,7 +71,7 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
     from: "pending_verification",
     to: "on_hold",
     label: "Tahan (Data Kurang)",
-    requires: ["hold_reason"],
+    requires: ["hold_reason_code"],
     description: "Ada dokumen atau data yang kurang. Wajib isi alasan.",
   },
   {
@@ -145,7 +147,7 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
     from: "submitted_to_vendor",
     to: "on_hold",
     label: "Tahan",
-    requires: ["hold_reason"],
+    requires: ["hold_reason_code"],
     description: "Pengajuan tertahan. Wajib isi alasan.",
   },
   {
@@ -160,7 +162,7 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
     from: "in_vendor_process",
     to: "on_hold",
     label: "Tahan",
-    requires: ["hold_reason"],
+    requires: ["hold_reason_code"],
     description: "Proses vendor tertahan. Wajib isi alasan.",
   },
   {
@@ -226,6 +228,7 @@ export type RmaValidationResult =
 
 const FIELD_LABELS: Record<RmaTransitionField, string> = {
   hold_reason: "Alasan",
+  hold_reason_code: "Kategori alasan ditahan",
   stock_transfer_number: "Nomor pemindahan stok",
   customer_ticket_number: "Nomor tiket user",
   ineligibility_reason: "Alasan tidak layak klaim",
@@ -282,6 +285,13 @@ export function validateRmaTransition(args: {
   }
 
   const required: RmaTransitionField[] = [...transition.requires];
+  // A held case now carries a category, and the category decides what else is
+  // needed. The three `missing_*` reasons say enough on their own — they go on
+  // to ask the technician for the thing by name. `other` resolves to nothing
+  // automatic, so the desk has to write what happened.
+  if (to === "on_hold" && input.hold_reason_code === "other") {
+    required.push("hold_reason");
+  }
   // Conditional requirement: a replaced unit must carry its new serial number.
   if (to === "vendor_decided" && input.decision === "replaced") {
     required.push("replacement_sn");

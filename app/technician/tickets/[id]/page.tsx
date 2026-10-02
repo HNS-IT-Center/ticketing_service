@@ -16,6 +16,8 @@ import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
 import ExtraPointsPanel from "./ExtraPointsPanel";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
+import HoldEvidencePanel from "./HoldEvidencePanel";
+import { holdReasonAsksTechnician } from "@/lib/rma/hold-reason";
 
 function getTicketBasePoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
@@ -67,6 +69,7 @@ export default async function TechnicianTicketDetailPage({
             fault_description: true,
             test_result: true,
             hold_reason: true,
+            hold_reason_code: true,
             vendor_name: true,
             vendor_rma_number: true,
             shipping_tracking: true,
@@ -310,6 +313,17 @@ export default async function TechnicianTicketDetailPage({
           )}
 
           {/* PC Build Handover Verification */}
+          {/* What the desk is waiting for, above the read-only case card: the
+              technician is the only one who can answer it. */}
+          {ticket.rma_case?.status === "on_hold" &&
+            holdReasonAsksTechnician(ticket.rma_case.hold_reason_code) && (
+              <HoldEvidencePanel
+                ticketId={ticket.id}
+                holdReasonCode={ticket.rma_case.hold_reason_code!}
+                holdReason={ticket.rma_case.hold_reason}
+              />
+            )}
+
           {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} />}
 
           {ticket.ticket_type === "pc_build" && (

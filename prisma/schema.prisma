@@ -559,7 +559,10 @@ model UserTitle {
   title_key   String   // e.g. "technician_2026_04" or "coordinator_2026_05"
   title_label String   // e.g. "Technician of April 2026"
   title_type  String   // "technician" | "coordinator"
-  emoji       String   @default("🏆")
+  // No DB-level default: MariaDB stores defaults in `character_set_system`
+  // (utf8mb3), so a four-byte emoji becomes '?'. Both callers in
+  // lib/performance.ts pass this explicitly. See the migration for the proof.
+  emoji       String
   awarded_at  DateTime @default(now())
 
   @@unique([user_id, title_key])

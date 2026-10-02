@@ -816,6 +816,29 @@ tunnel before the desk can be used.
 
 ---
 
+### SPRINT 2026-10-01 → 10-02 — QC run A–J, four fixes, list changes
+Branch `fix/qc-findings`, cut from `fix/public-ticket-page` (not from `main`, which is far
+behind and has neither the MariaDB port nor the RMA work). **583 tests**, `tsc` clean.
+
+QC of modules A–J was run as far as it goes without a browser: API routes, pure modules,
+database invariants and the rendered public page. ~27 scenarios verified, 11 findings, 10
+blockers. Results per row are in `docs/QC Flow — HNS IT Center Ticketing Service + RMA.md`;
+what is stale in the plan that produced it is in `docs/qc-run-2026-10-01.md`.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| Q1 | **Cross-store approval** | ✅ | `GET /api/ticket-requests` filtered by store, `POST` checked nothing — a coordinator could approve any store's ticket if they knew the `requestId`. The bell hid those rows; nothing refused them. Rule moved to `lib/assignment-authority.ts`, read by both halves. Verified: `raffi` (NGW) → 403 on an NGH ticket, `dennis` (NGH) and admin still pass |
+| Q2 | **Two pending requests on one ticket** | ✅ | `findFirst` then `upsert`, no transaction; `@@unique([ticket_id, technician_id])` does not stop two *different* technicians. Reproduced. MariaDB has no partial unique index, so the fix is `SELECT ... FOR UPDATE` on the ticket row around the check and the insert |
+| Q3 | **401s that lied** | ✅ | `upload-temp` used `requireSession()`, whose redirect surfaced as `500 {"error":"NEXT_REDIRECT"}`; `notifications` answered `401 []`, which reads as "no notifications" to anything not checking the status |
+| Q4 | **Warranty-claim chip + RMA stage in the lists** | ✅ | A claim leaves the portals (`rma_process`) and comes back (`done`), so a status chip could never find them all — the new chip filters on `ticket_type`. And `rma_process` covers nine RMA statuses, so the lists now show the case's own stage while the ticket is parked there. `lib/ticket-list-filter.ts` + `lib/rma/ticket-status-badge.ts`, shared by the admin, technician and RMA lists |
+| Q5 | **Damage evidence accepts video** | ✅ | Was images-only by an explicit decision. Reversed because a live case was held with "VIDEO KERUSAKAN BELUM DIKIRIMKAN" — the desk wanted a video the technician could not attach. Ceiling is `serverActions.bodySizeLimit`, 20 MB per submission. `FileType` and `FilePreview` already handled video |
+| Q6 | **Verification, not assertion** | ✅ | Every fix was re-tested against the running server with signed sessions, and the local database was restored afterwards (23 users · 521 tickets · 0 pending requests, unchanged) |
+
+⚠️ **Not done, and why it matters:** QC modules C, E, F and G scored **zero** — every one of
+their scenarios goes through a form submission, and the project has no browser driver (BL16).
+Four things have still never been exercised by a human since the cutover, the first being
+login with a real staff password. The rest is in `docs/qc-run-2026-10-01.md` § 3.
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.
@@ -865,6 +888,10 @@ Ordered roughly by how much is already decided.
 | BL19 | **RMA code allocation is retry-based, not serialised.** `pg_advisory_xact_lock` was transaction-scoped and had no MariaDB equivalent — `GET_LOCK()` is connection-scoped, so it cannot be held to commit without leaking on an error path. `allocateRmaCode` now absorbs contention through `MAX_ALLOCATION_ATTEMPTS = 10`: with N simultaneous handovers at one store the Nth needs its Nth attempt, and exhausting the budget returns "please try again" rather than a duplicate, because the unique index is the real guarantee. The deterministic fix is a per-prefix counter row whose InnoDB lock is held to commit and rolls back cleanly — a schema change, deliberately kept out of the port |
 | ~~BL21~~ | ✅ **DONE 2026-10-01** (`ca44816`), and the fix went further than the note: resolving by ticket code was also enumerable. Original note: ⛔ **The public share page is unreachable by the people it is for** — two independent faults, both pre-existing, found while testing the standalone build. (a) `proxy.ts` allows `/ticket*` but the page lives at `/[date]/[ticketCode]`, so `/2026-09-28/NGW-000001` redirects an anonymous visitor to `/login` (verified: 307 → /login). (b) `PublicShareButton` copies `/ticket/${shareToken}`, which passes the proxy but resolves against `findUnique({ ticket_code })` — a share token is not a ticket code, so the copied link finds nothing. `PUBLIC_ROUTES` in `proxy.ts` is declared and never read, the same dead-constant shape as `STATUS_STEPS`. Also worth noting: `date` is not used in the lookup, so it adds no secrecy. This makes the whole public-status work from the 2026-09-24 sprint invisible in production. **Own branch off `origin/main`** — unrelated to the MariaDB port |
 | BL20 | **`extra_services` should be a catalog table, not a Json column.** The six services and their points are hardcoded in `ExtraPointsPanel.tsx`, which is why a third point table exists (2/3/1/1/3/2 there, +3 flat on the list badges, 0 in `lib/points.ts`). `Upgrade` + `TicketUpgradeDetail` already model exactly this correctly. End state: `ExtraService` + `TicketExtraServiceDetail` with `@@unique([ticket_id, extra_service_id])`. Held back from the MariaDB port on purpose: a platform move and a redesign in one change make a failing test impossible to attribute. Related: `TicketUpgradeDetail` has **no** `@@unique`, so the same upgrade can be attached twice and counted twice |
+| BL22 | **`getFileType()` calls everything that is not an image or a video a `pdf`.** A `.txt` uploaded through `/api/upload-temp` is stored as `file_type: pdf` and renders with a PDF icon. Fixing it means a fourth value on the `FileType` enum — a schema change, which is blocked on there being no baseline migration (`docs/rma-deploy.md` § A). Found 2026-10-01 |
+| BL23 | **Image validation trusts the client's MIME type.** `f.type.startsWith("image/")` in `app/actions/rma.ts` (three places) is whatever the browser claimed; the bytes are never sniffed. Tightening it needs a decision first — HEIC from iOS has already caused trouble in this form, and content sniffing will reject some legitimate files |
+| BL24 | **The date segment of a public ticket URL is not validated.** `/2020-01-01/{token}` opens the page; only the token resolves it. Harmless today, but the segment reads as if it matters. Three options, all needing a decision: validate it (links already sent by WhatsApp with a mismatched date stop working), leave it decorative, or drop it from the route |
+| BL25 | **Stored `TechnicianPerformance` disagrees with a recomputation from the log** for 9 of 14 technicians (Rianto −8, Mitchel −9, Steaven −11, Raffi −15 …). The direction is consistent with history credited under the older point tables, so it is probably explanation rather than corruption — but it has not been traced, and recomputing would move leaderboard figures people have already seen. Measured 2026-10-01 |
 
 ---
 

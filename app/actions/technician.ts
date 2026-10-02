@@ -51,38 +51,69 @@ export async function requestTicketAssignmentAction(ticketId: string) {
 
   // ── Regular technician: create request and notify admins ──────────────────
 
-  // Block if ANY technician already has a pending request for this ticket (1 at a time rule)
-  const anyPendingRequest = await db.ticketAssignmentRequest.findFirst({
-    where: { ticket_id: ticketId, status: "pending" },
-    select: { technician_id: true },
-  });
+  // ── One pending request per ticket, enforced atomically ───────────────────
+  //
+  // Checking with `findFirst` and then creating is a read-then-write across two
+  // statements. Two technicians clicking at the same moment both saw no pending
+  // request and both inserted one: the unique index is on
+  // `(ticket_id, technician_id)`, and their technician ids differ, so nothing
+  // stopped the second. Proven against the local database — two pending rows on
+  // one ticket.
+  //
+  // MariaDB has no partial unique index, so the rule that actually wants
+  // enforcing — one pending row per `ticket_id` — cannot be written as a
+  // constraint. Locking the ticket row for the duration instead makes the check
+  // and the insert a single step, and serialises every requester behind the
+  // ticket they are competing for. The ticket's own state is re-read inside the
+  // lock too, because it can be assigned between the read above and this point.
+  const claim = await db.$transaction(async (tx) => {
+    await tx.$queryRaw`SELECT id FROM Ticket WHERE id = ${ticketId} FOR UPDATE`;
 
-  if (anyPendingRequest) {
-    if (anyPendingRequest.technician_id === session.userId) {
-      return { error: "You have already requested this ticket." };
+    const fresh = await tx.ticket.findUnique({
+      where: { id: ticketId },
+      select: { technician_id: true, status: true },
+    });
+    if (!fresh) return { error: "Ticket not found" as const };
+    if (fresh.technician_id) return { error: "Ticket already assigned" as const };
+    if (fresh.status !== "waiting") {
+      return { error: "Ticket is not in waiting status" as const };
     }
-    return { error: "Another technician has already requested this ticket." };
-  }
 
-  // Create Assignment Request (upsert handles the case where a prior rejected
-  // record already exists for this technician + ticket — avoids unique constraint crash)
-  await db.ticketAssignmentRequest.upsert({
-    where: {
-      ticket_id_technician_id: {
+    const anyPendingRequest = await tx.ticketAssignmentRequest.findFirst({
+      where: { ticket_id: ticketId, status: "pending" },
+      select: { technician_id: true },
+    });
+
+    if (anyPendingRequest) {
+      return anyPendingRequest.technician_id === session.userId
+        ? { error: "You have already requested this ticket." as const }
+        : { error: "Another technician has already requested this ticket." as const };
+    }
+
+    // `upsert` handles the case where a prior rejected record already exists for
+    // this technician + ticket — avoids a unique constraint crash.
+    await tx.ticketAssignmentRequest.upsert({
+      where: {
+        ticket_id_technician_id: {
+          ticket_id: ticketId,
+          technician_id: session.userId,
+        },
+      },
+      create: {
         ticket_id: ticketId,
         technician_id: session.userId,
+        status: "pending",
       },
-    },
-    create: {
-      ticket_id: ticketId,
-      technician_id: session.userId,
-      status: "pending",
-    },
-    update: {
-      status: "pending",
-      created_at: new Date(),
-    },
+      update: {
+        status: "pending",
+        created_at: new Date(),
+      },
+    });
+
+    return { ok: true as const };
   });
+
+  if ("error" in claim) return { error: claim.error };
 
   // Notify Admins and Team Leaders
   const adminsAndLeaders = await db.user.findMany({

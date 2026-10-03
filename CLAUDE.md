@@ -842,8 +842,8 @@ login with a real staff password. The rest is in `docs/qc-run-2026-10-01.md` § 
 ---
 
 ### SPRINT 2026-10-02 — hold reasons, a production outage, and a migration history
-Branch `feat/rma-hold-reason`, 4 commits above `main`. **618 tests**, `tsc` clean.
-`main` = `deploy` = `cf44ca4` and is what production runs.
+Branch `feat/rma-hold-reason`, **6 commits above `main`**, pushed. **638 tests**, `tsc` clean,
+lint clean on everything touched. `main` = `deploy` = `cf44ca4`, which is what production runs.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
@@ -854,6 +854,7 @@ Branch `feat/rma-hold-reason`, 4 commits above `main`. **618 tests**, `tsc` clea
 | H5 | **A migration history, at last** | ✅ | See the incident below. `00000000000000_baseline` is the schema **as it actually stood**, generated from the database rather than from `schema.prisma` — faults inherited from `db push` are corrected in migrations that can be read, not hidden inside a baseline. `migrate diff` between database and schema is now empty for the first time. ⚠️ **Production is not baselined yet** — `docs/migration-baseline.md` |
 | H6 | **`UserTitle.emoji` default dropped** | ✅ | Schema said `@default("🏆")`, the column said `'?'`, and they had disagreed since creation. Not a configuration mistake and no charset fixes it: MariaDB stores a column DEFAULT using `character_set_system` = `utf8mb3`, and U+1F3C6 is outside the BMP. Proven — `ALTER ... DEFAULT _utf8mb4 0xF09F8F86` from a fully utf8mb4 client still yields `'?'`. Nothing depended on it; both callers in `lib/performance.ts` pass `emoji` explicitly |
 | H7 | **A whole claim walked end to end, twice** | ✅ | Handover → held for a missing video → technician answers from the panel → verified → vendor → replaced → unit received → closed; and the other legal ending, the desk finding it ineligible. Pins what no single-step test sees: paid **once** at handover (read before and after, not assumed), ticket released exactly when the case ends, `hold_reason_code` cleared on the way out, evidence stored as a video attachment |
+| H8 | **Working-time widget broke hydration** | ✅ | A running timer rendered "6h 55m 2s" on the server and "6h 55m 36s" in the browser, so React discarded the tree. `useState(() => calcWorkingMs(timeLogs, Date.now()))` — a lazy initialiser runs once on the server while the page renders and again in the browser while it hydrates, separated by however long the response took. The clock is the server's now, passed as a prop, so the first client render is identical **by construction**; the live clock takes over from the interval a second later. Hit all three portals — admin, sales and technician share the component. Arithmetic moved to `lib/working-time.ts` with the clock as an argument, the rule `RmaStatusCard` already states. 20 tests, including QC **E-05** (10 worked + 5 paused + 10 worked = 20 min, not 25), which module E could never run |
 
 #### Production outage, 2026-10-02 — what happened and why
 
@@ -870,9 +871,25 @@ production by whoever remembered. That is what H5 exists to end. Until productio
 baselined too, the same failure is one schema change away.
 
 ⚠️ Two things remain unproven by a human: **a technician actually clicking the upload button**
-(the server side is covered from both directions — 618 tests through the real actions, and the
+(the server side is covered from both directions — 638 tests through the real actions, and the
 panel confirmed in the rendered HTML — but nobody has used it on screen), and **login with a
 real staff password**, still untested since the cutover.
+
+#### Where it stands, 2026-10-03
+
+| | |
+|---|---|
+| `origin/feat/rma-hold-reason` | `6b6fba2` — 6 commits, all pushed |
+| `origin/main` · `origin/deploy` | `cf44ca4` — unchanged, and what production runs |
+| Local database | on the migration history; production is **not** (BL26) |
+| Dev server | `npm run dev` now means webpack. Run it from a real terminal — a background one is capped at 2 hours |
+
+**Two decisions are waiting on the owner, and no code should move until they answer:**
+
+1. **BL27**, the cancelled tickets whose working time never stops. Two fixes, both change
+   figures people have already seen; the recommendation is in the entry.
+2. Whether `main` should be moved to `6b6fba2`. It was deliberately left alone — the last
+   push to `main` was asked for explicitly, this one was not.
 
 ## 📋 BACKLOG — what is likely to come next
 
@@ -911,6 +928,7 @@ Ordered roughly by how much is already decided.
 | BL12 | **RLS not enabled** on any table, now including `RmaCase` and `RmaEvent` |
 | BL13 | **Demo data** NGW-000004..NGW-000009 still in the local database |
 | BL14 | Production TLS: `rejectUnauthorized: false` in `lib/db.ts` is interim; the target is Supabase's CA bundle |
+| BL27 | **A cancelled ticket's working time never stops growing.** Cancelling writes no closing event — the log only ever holds `START`, `PAUSE`, `RESUME`, `DONE` — so the open interval is still measured against the clock. One ticket already displays **2457h** (~102 days), and the figure rises on every page load. 6 tickets affected. `isDone` does include `cancelled`, so it does not tick on screen and is labelled "Total Working Time", which makes it read as a settled fact rather than a bug. Two fixes: write a closing event on cancellation and backfill the six from `TicketStatusLog` (correct, touches data), or stop counting a dangling interval once the ticket is closed (one line, no data touched, but a ticket holding only a `START` would then show `0s`). **Recommended: the first** — the second trades one wrong number for another. Needs a decision; found 2026-10-02 |
 | BL26 | ⛔ **Production is not baselined.** The repo now has `prisma/migrations/` and the local database is on it, but production is not — so `prisma migrate deploy` there would still try to create 25 tables that already exist. Until this is done, every schema change still has to be typed into production by hand, which is exactly what took it down on 2026-10-02. Steps, including the verification gate that must be read before `migrate resolve` and the one ALTER that is the only acceptable output, are in `docs/migration-baseline.md`. Needs SSH + database credentials |
 | ~~BL15~~ | ✅ **DONE** — see sprint 2026-09-28. Original note kept for its reasoning: inventoried 2026-09-27 in `docs/plan-mariadb-port.md`. Bigger than the one-line note suggested: `extra_services String[]` is a scalar list, which Prisma supports on PostgreSQL only, so it fails `prisma validate` and forces a schema change plus data migration. Supabase Realtime dies entirely. 15 `mode: "insensitive"` usages must be dropped (MySQL collation is already case-insensitive). Plus the advisory lock, PascalCase table names, and 477 tests that currently run on Postgres |
 

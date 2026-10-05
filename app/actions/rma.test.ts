@@ -208,7 +208,13 @@ afterAll(async () => {
   await db.technicianPerformance.deleteMany({
     where: { technician_id: { in: userIds } },
   });
-  await db.user.deleteMany({ where: { id: { in: userIds } } });
+
+  // Deleted by prefix, not by the id list above. Tests that build an extra
+  // user inline — the stranger who may not submit hold evidence — never
+  // reached that list, so one technician survived every run and the local
+  // database had collected five of them by 2026-10-03. The prefix cannot
+  // drift from the fixtures the way a hand-kept list does.
+  await db.user.deleteMany({ where: { email: { startsWith: RUN } } });
   await db.storeLocation.deleteMany({ where: { id: storeId } });
   await db.$disconnect();
 });

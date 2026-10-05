@@ -232,6 +232,8 @@ model User {
   titles             UserTitle[]
   rma_handovers      RmaCase[]             @relation("RmaHandedOverBy")
   rma_cases_handled  RmaCase[]             @relation("RmaHandler")
+  tickets_deleted    DeletedTicketLog[]    @relation("TicketDeletedBy")
+  parts_recorded     TicketReplacedPart[]  @relation("PartRecordedBy")
   rma_events         RmaEvent[]
 
   @@index([email])
@@ -312,6 +314,7 @@ model Ticket {
   time_logs        TicketTimeLog[]
   notifications    Notification[]
   service_detail   TicketServiceDetail?
+  replaced_parts   TicketReplacedPart[]
   warranty_detail  TicketWarrantyDetail?
   cleaning_detail  TicketCleaningDetail?
   upgrade_details  TicketUpgradeDetail[]
@@ -663,4 +666,122 @@ model RmaEvent {
   created_at  DateTime   @default(now())
 
   @@index([rma_case_id])
+}
+
+/**
+ * What an administrator destroyed, kept after the thing itself is gone.
+ *
+ * Deleting a Ticket cascades into thirteen tables — TicketStatusLog,
+ * TicketMessage, TicketAttachment, TicketTimeLog, the per-type detail rows, and
+ * RmaCase, which takes its RmaEvent trail with it. Nothing survives that could
+ * answer "what happened to NGW-000123?" afterwards, which is why this row
+ * deliberately holds NO foreign key to Ticket: it has to outlive it.
+ *
+ * `snapshot` carries the ticket as it stood plus counts of everything the
+ * cascade removed and the URLs of its attachments, so an orphaned file in the
+ * bucket can still be traced back to the ticket it belonged to.
+ */
+model DeletedTicketLog {
+  id          String       @id @default(cuid())
+  ticket_code String
+  ticket_type TicketType
+  status      TicketStatus
+
+  customer_name   String? @db.Text
+  store_code      String?
+  technician_name String? @db.Text
+
+  deleted_by_id   String
+  deleted_by      User   @relation("TicketDeletedBy", fields: [deleted_by_id], references: [id])
+  deleted_by_name String @db.Text
+  reason          String @db.Text
+
+  /** The ticket as it stood, the cascade's body count, and attachment URLs. */
+  snapshot Json
+
+  /** Credits taken back off TechnicianPerformance, so the reversal is auditable. */
+  points_reversed  Int @default(0)
+  success_reversed Int @default(0)
+  failed_reversed  Int @default(0)
+
+  created_at DateTime @default(now())
+
+  @@index([ticket_code])
+  @@index([created_at])
+}
+
+/**
+ * Which component a service replaced.
+ *
+ * An enum and not free text, deliberately. `device_name` and `vendor_name` are
+ * both free text and both splintered — "ASUS ROG", "Asus TUF" and "ROG JANGKAR"
+ * are one manufacturer written three ways, which is why the dashboard's brand
+ * chart had to be withdrawn: it measured how people type, not what was claimed.
+ * A part picked from this list can be counted; a part typed as prose cannot.
+ *
+ * The specific item fitted still gets a free-text field beside it — that is the
+ * part number, and nobody counts part numbers.
+ */
+enum ServicePart {
+  lcd
+  battery
+  keyboard
+  charger
+  ram
+  storage
+  motherboard
+  fan
+  speaker
+  casing
+  other
+}
+
+/**
+ * One component replaced during a service, recorded by the technician who
+ * fitted it. A ticket may have several.
+ */
+model TicketReplacedPart {
+  id        String      @id @default(cuid())
+  ticket_id String
+  ticket    Ticket      @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  part ServicePart
+
+  /**
+   * What was actually fitted, e.g. "Baterai ASUS C31N1915". Optional, because
+   * a technician who swapped a generic fan has nothing useful to type, and
+   * required-but-meaningless fields get filled with a full stop.
+   */
+  item_name String? @db.Text
+
+  /** Free note: why it was replaced, what the old one did. */
+  notes String? @db.Text
+
+  recorded_by_id String
+  recorded_by    User   @relation("PartRecordedBy", fields: [recorded_by_id], references: [id])
+
+  /**
+   * Photos of what was fitted — the box and the label, which is what the
+   * technicians already photograph by habit. They belong to the part and not
+   * to the ticket: a ticket-level attachment cannot say which of three
+   * replaced components it is a picture of.
+   */
+  photos TicketReplacedPartPhoto[]
+
+  created_at DateTime @default(now())
+
+  @@index([ticket_id])
+}
+
+/** One photo of a replaced component. Dies with the part it documents. */
+model TicketReplacedPartPhoto {
+  id      String             @id @default(cuid())
+  part_id String
+  part    TicketReplacedPart @relation(fields: [part_id], references: [id], onDelete: Cascade)
+
+  file_url String @db.Text
+
+  created_at DateTime @default(now())
+
+  @@index([part_id])
 }

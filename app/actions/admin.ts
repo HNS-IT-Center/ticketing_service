@@ -6,7 +6,13 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireRole, requireSession } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
-import { performanceEffect } from "@/lib/kpi";
+import {
+  EARNING_STATUS_LOG_FILTER,
+  PERFORMANCE_FAILURE_STATUSES,
+  performanceEffect,
+} from "@/lib/kpi";
+import { getTicketPoints } from "@/lib/points";
+import { deleteFromStorage } from "@/lib/r2";
 
 // ─── Create User ───────────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
@@ -400,4 +406,255 @@ export async function togglePublicChatAction(ticketId: string, enabled: boolean)
   });
   revalidatePath(`/admin/tickets/${ticketId}`);
   return { success: true };
+}
+
+// ─── Delete Ticket (Administrator only, permanent) ──────────────────────────
+
+/**
+ * What deleting a ticket would destroy, so the confirmation dialog can say it
+ * out loud instead of asking "are you sure?" over an unknown quantity.
+ */
+export async function checkTicketDeletionAction(ticketId: string) {
+  await requireRole("Administrator");
+
+  const ticket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    select: {
+      ticket_code: true,
+      ticket_type: true,
+      status: true,
+      customer_name: true,
+      technician: { select: { name: true } },
+      store_location: { select: { code: true } },
+      rma_case: { select: { rma_code: true, _count: { select: { events: true } } } },
+      _count: {
+        select: {
+          status_logs: true,
+          messages: true,
+          attachments: true,
+          time_logs: true,
+        },
+      },
+    },
+  });
+
+  if (!ticket) return { error: "Tiket tidak ditemukan." };
+
+  // Credits this ticket handed the technician, counted from the log rather than
+  // from its current status: a warranty claim is paid at `rma_process` and then
+  // moves on to `done`, so where it sits now does not say what it earned.
+  // lib/kpi.ts owns that rule.
+  const [earningLogs, failureLogs] = await Promise.all([
+    db.ticketStatusLog.count({
+      where: { ticket_id: ticketId, ...EARNING_STATUS_LOG_FILTER },
+    }),
+    db.ticketStatusLog.count({
+      where: {
+        ticket_id: ticketId,
+        new_status: { in: [...PERFORMANCE_FAILURE_STATUSES] },
+      },
+    }),
+  ]);
+
+  return {
+    ticket: {
+      ticket_code: ticket.ticket_code,
+      ticket_type: ticket.ticket_type,
+      status: ticket.status,
+      customer_name: ticket.customer_name,
+      technician_name: ticket.technician?.name ?? null,
+      store_code: ticket.store_location?.code ?? null,
+    },
+    destroys: {
+      statusLogs: ticket._count.status_logs,
+      messages: ticket._count.messages,
+      attachments: ticket._count.attachments,
+      timeLogs: ticket._count.time_logs,
+      rmaCode: ticket.rma_case?.rma_code ?? null,
+      rmaEvents: ticket.rma_case?._count.events ?? 0,
+    },
+    credits: {
+      earningLogs,
+      failureLogs,
+      points: earningLogs * getTicketPoints(ticket.ticket_type, null, null),
+    },
+  };
+}
+
+/**
+ * Permanently delete a ticket. Administrator only, and irreversible.
+ *
+ * The owner chose this over a soft delete on 2026-10-03, having been told what
+ * it costs, so this code's job is to make the cost visible and recorded rather
+ * than to prevent it:
+ *
+ * 1. **The audit trail goes.** Every relation to Ticket is `onDelete: Cascade`
+ *    — status logs, messages, attachments, time logs, the per-type detail rows,
+ *    and RmaCase with its whole RmaEvent trail. `DeletedTicketLog` is written
+ *    first, in the same transaction, and holds no foreign key to Ticket so that
+ *    it outlives it. Without that, nothing afterwards could answer "what
+ *    happened to NGW-000123?".
+ *
+ * 2. **The two point figures would otherwise disagree.** The leaderboard is
+ *    computed live from TicketStatusLog, so a deleted ticket leaves it at once;
+ *    TechnicianPerformance is a stored counter with no relation to Ticket, so
+ *    it would keep the credit forever. The counters are reversed here by the
+ *    same lib/kpi.ts rule that granted them, and what was taken back is written
+ *    on the audit row. Clamped at zero: counters that have already drifted
+ *    (BL25) must not be driven negative.
+ *
+ * 3. **The files are not in the database.** Attachment URLs are removed from
+ *    storage afterwards, best effort, and whatever could not be removed stays
+ *    in the snapshot so an orphan in the bucket can still be traced back.
+ */
+export async function deleteTicketAction(
+  ticketId: string,
+  reason: string,
+  confirmation: string
+) {
+  const session = await requireRole("Administrator");
+
+  const ticket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    include: {
+      technician: { select: { id: true, name: true } },
+      store_location: { select: { code: true } },
+      attachments: { select: { file_url: true } },
+      rma_case: { select: { rma_code: true, status: true } },
+      _count: {
+        select: { status_logs: true, messages: true, attachments: true, time_logs: true },
+      },
+    },
+  });
+
+  if (!ticket) return { error: "Tiket tidak ditemukan." };
+
+  const trimmedReason = reason.trim();
+  if (!trimmedReason) {
+    return { error: "Alasan penghapusan wajib diisi." };
+  }
+
+  // Enforced on the server as well as in the dialog: a confirmation only the
+  // browser checks is not a confirmation.
+  if (confirmation.trim() !== ticket.ticket_code) {
+    return {
+      error: `Ketik kode tiket "${ticket.ticket_code}" persis seperti tertulis untuk mengonfirmasi.`,
+    };
+  }
+
+  const [earningLogs, failureLogs] = await Promise.all([
+    db.ticketStatusLog.count({
+      where: { ticket_id: ticketId, ...EARNING_STATUS_LOG_FILTER },
+    }),
+    db.ticketStatusLog.count({
+      where: {
+        ticket_id: ticketId,
+        new_status: { in: [...PERFORMANCE_FAILURE_STATUSES] },
+      },
+    }),
+  ]);
+
+  const pointsToReverse =
+    earningLogs * getTicketPoints(ticket.ticket_type, ticket.device_type, null);
+  const attachmentUrls = ticket.attachments.map((a) => a.file_url);
+
+  await db.$transaction(async (tx) => {
+    await tx.deletedTicketLog.create({
+      data: {
+        ticket_code: ticket.ticket_code,
+        ticket_type: ticket.ticket_type,
+        status: ticket.status,
+        customer_name: ticket.customer_name,
+        store_code: ticket.store_location?.code ?? null,
+        technician_name: ticket.technician?.name ?? null,
+        deleted_by_id: session.userId,
+        deleted_by_name: session.name,
+        reason: trimmedReason,
+        points_reversed: pointsToReverse,
+        success_reversed: earningLogs,
+        failed_reversed: failureLogs,
+        snapshot: {
+          ticket_id: ticket.id,
+          created_at: ticket.created_at.toISOString(),
+          device_name: ticket.device_name,
+          device_type: ticket.device_type,
+          device_sn: ticket.device_sn,
+          customer_email: ticket.customer_email,
+          technician_id: ticket.technician?.id ?? null,
+          rma_code: ticket.rma_case?.rma_code ?? null,
+          rma_status: ticket.rma_case?.status ?? null,
+          destroyed: {
+            status_logs: ticket._count.status_logs,
+            messages: ticket._count.messages,
+            attachments: ticket._count.attachments,
+            time_logs: ticket._count.time_logs,
+          },
+          attachment_urls: attachmentUrls,
+        },
+      },
+    });
+
+    // Take back what this ticket credited, so the stored counters and the
+    // log-derived leaderboard keep telling the same story.
+    if (ticket.technician?.id && (earningLogs > 0 || failureLogs > 0)) {
+      const performance = await tx.technicianPerformance.findUnique({
+        where: { technician_id: ticket.technician.id },
+        select: {
+          tickets_handled: true,
+          success_count: true,
+          failed_count: true,
+          total_points_completed: true,
+        },
+      });
+
+      if (performance) {
+        const floor = (n: number) => (n < 0 ? 0 : n);
+        await tx.technicianPerformance.update({
+          where: { technician_id: ticket.technician.id },
+          data: {
+            tickets_handled: floor(
+              performance.tickets_handled - earningLogs - failureLogs
+            ),
+            success_count: floor(performance.success_count - earningLogs),
+            failed_count: floor(performance.failed_count - failureLogs),
+            total_points_completed: floor(
+              performance.total_points_completed - pointsToReverse
+            ),
+          },
+        });
+      }
+    }
+
+    // Everything else goes with it, through thirteen cascading relations.
+    await tx.ticket.delete({ where: { id: ticketId } });
+  });
+
+  // After the transaction, and never allowed to fail it: the rows are already
+  // gone, so a storage error must not make a completed delete look undone.
+  const orphaned: string[] = [];
+  for (const url of attachmentUrls) {
+    if (!(await deleteFromStorage(url))) orphaned.push(url);
+  }
+  if (orphaned.length > 0) {
+    console.error(
+      `[deleteTicket] ${ticket.ticket_code}: ${orphaned.length} berkas tertinggal di storage`,
+      orphaned
+    );
+  }
+
+  if (ticket.technician?.id) {
+    revalidateTag("leaderboard-techs", "max");
+    revalidateTag("leaderboard-stores", "max");
+    revalidateTag("tech-month-winner", "max");
+    revalidateTag(`user-profile:${ticket.technician.id}`, "max");
+  }
+  revalidatePath("/admin/tickets");
+  revalidatePath("/admin/dashboard");
+
+  return {
+    success: true,
+    ticketCode: ticket.ticket_code,
+    pointsReversed: pointsToReverse,
+    orphanedFiles: orphaned.length,
+  };
 }

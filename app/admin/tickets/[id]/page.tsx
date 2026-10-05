@@ -16,6 +16,8 @@ import CustomerWhatsAppActions from "./CustomerWhatsAppActions";
 import WorkingTimeDisplay from "./WorkingTimeDisplay";
 import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
+import DeleteTicketPanel from "./DeleteTicketPanel";
+import { servicePartLabel } from "@/lib/service-parts";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -93,6 +95,13 @@ export default async function AdminTicketDetailPage({
         attachments: true,
         pc_build_detail: true,
         time_logs: { orderBy: { created_at: "asc" } },
+        replaced_parts: {
+          orderBy: { created_at: "asc" },
+          include: {
+            recorded_by: { select: { name: true } },
+            photos: { select: { id: true, file_url: true }, orderBy: { created_at: "asc" } },
+          },
+        },
         assignment_requests: {
           include: { technician: { select: { name: true } } },
         },
@@ -320,6 +329,73 @@ export default async function AdminTicketDetailPage({
             </div>
           )}
 
+          {/* Parts replaced during the service. Read-only here: the technician
+              who fitted them records them, on their own ticket page. */}
+          {ticket.replaced_parts.length > 0 && (
+            <div className="card">
+              <h3 style={{ marginBottom: "0.75rem" }}>Part yang Diganti</h3>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                {ticket.replaced_parts.map((p, i) => (
+                  <li
+                    key={p.id}
+                    style={{
+                      padding: "0.65rem 0",
+                      borderTop: i === 0 ? "none" : "1px solid var(--border-light)",
+                    }}
+                  >
+                    <div style={{ display: "flex", flexWrap: "wrap", gap: "0.45rem", alignItems: "center" }}>
+                      <span className="badge badge-technician">{servicePartLabel(p.part)}</span>
+                      {p.item_name && (
+                        <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{p.item_name}</span>
+                      )}
+                    </div>
+                    {p.notes && (
+                      <p
+                        style={{
+                          margin: "0.35rem 0 0",
+                          fontSize: "0.8125rem",
+                          color: "var(--text-secondary)",
+                          wordBreak: "break-word",
+                        }}
+                      >
+                        {p.notes}
+                      </p>
+                    )}
+                    {p.photos.length > 0 && (
+                      <div style={{ display: "flex", gap: "0.4rem", flexWrap: "wrap", marginTop: "0.5rem" }}>
+                        {p.photos.map((photo) => (
+                          <a
+                            key={photo.id}
+                            href={photo.file_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={{ display: "block", lineHeight: 0 }}
+                          >
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={photo.file_url}
+                              alt={`Foto ${servicePartLabel(p.part)}`}
+                              style={{
+                                width: "58px",
+                                height: "58px",
+                                objectFit: "cover",
+                                borderRadius: "8px",
+                                border: "1px solid var(--border-brand)",
+                              }}
+                            />
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                    <p style={{ margin: "0.5rem 0 0", fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                      {p.recorded_by.name} · {formatDateTime(p.created_at)}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {/* Upgrade details */}
           {ticket.upgrade_details.length > 0 && (
             <div className="card">
@@ -525,6 +601,12 @@ export default async function AdminTicketDetailPage({
               assignmentRequests={ticket.assignment_requests as any}
               ticketStatus={ticket.status}
             />
+          )}
+
+          {/* Permanent deletion — administrators only, and last on the page so
+              it is never the first thing a hand lands on. */}
+          {session.role === "Administrator" && (
+            <DeleteTicketPanel ticketId={ticket.id} ticketCode={ticket.ticket_code} />
           )}
         </div>
       </div>

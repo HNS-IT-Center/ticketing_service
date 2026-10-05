@@ -15,6 +15,7 @@ import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
 import ExtraPointsPanel from "./ExtraPointsPanel";
+import ReplacedPartsPanel from "./ReplacedPartsPanel";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import HoldEvidencePanel from "./HoldEvidencePanel";
 import { holdReasonAsksTechnician } from "@/lib/rma/hold-reason";
@@ -101,6 +102,13 @@ export default async function TechnicianTicketDetailPage({
         pc_components: true,
         pc_build_detail: true,
         time_logs: { orderBy: { created_at: "asc" } },
+        replaced_parts: {
+          orderBy: { created_at: "asc" },
+          include: {
+            recorded_by: { select: { name: true } },
+            photos: { select: { id: true, file_url: true }, orderBy: { created_at: "asc" } },
+          },
+        },
         assignment_requests: {
           include: { technician: { select: { name: true } } }
         },
@@ -494,6 +502,24 @@ export default async function TechnicianTicketDetailPage({
                 })}
               </div>
             </div>
+          )}
+
+          {/* Parts replaced — service tickets only; the other types have their
+              own detail tables and none of them means "a part was fitted". */}
+          {ticket.ticket_type === "service" && (
+            <ReplacedPartsPanel
+              ticketId={ticket.id}
+              canEdit={isAssigned}
+              parts={ticket.replaced_parts.map((p) => ({
+                id: p.id,
+                part: p.part,
+                item_name: p.item_name,
+                notes: p.notes,
+                recorded_by_name: p.recorded_by.name,
+                created_at: formatDateTime(p.created_at),
+                photos: p.photos,
+              }))}
+            />
           )}
 
           {/* Extra Services / Bonus Points Panel (only for assigned technician) */}

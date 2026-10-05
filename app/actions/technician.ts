@@ -4,9 +4,10 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
-import { uploadToR2, getExt, getFileType } from "@/lib/r2";
+import { uploadToR2, getExt, getFileType, deleteFromStorage } from "@/lib/r2";
 import { performanceEffect } from "@/lib/kpi";
 import { getTicketPoints } from "@/lib/points";
+import { isServicePart, requiresItemName, MAX_PART_PHOTOS } from "@/lib/service-parts";
 
 
 // ─── Request Ticket Assignment (Technician) ────────────────────────────────
@@ -443,5 +444,139 @@ export async function updateTicketNotesAction(ticketId: string, notes: string) {
 
   await db.ticket.update({ where: { id: ticketId }, data: { notes } });
   revalidatePath(`/technician/tickets/${ticketId}`);
+  return { success: true };
+}
+
+// ─── Replaced Parts (Technician, service tickets) ───────────────────────────
+
+/**
+ * Record a component the technician replaced during a service.
+ *
+ * Only the technician the ticket is assigned to may add one, and only on a
+ * `service` ticket — the other types have their own detail tables and none of
+ * them means "a part was fitted".
+ *
+ * The category comes from the `ServicePart` enum and the item name is free
+ * text beside it. That split is the whole point: `device_name` and
+ * `vendor_name` are free text and both splintered into variants of the same
+ * thing, which is why the dashboard's brand chart had to be withdrawn. A
+ * category can be counted; prose cannot.
+ */
+export async function addReplacedPartAction(formData: FormData) {
+  const session = await requireRole("Technician");
+
+  const ticketId = String(formData.get("ticket_id") ?? "");
+  const part = String(formData.get("part") ?? "");
+  const itemName = String(formData.get("item_name") ?? "");
+  const notes = String(formData.get("notes") ?? "");
+  const photos = (formData.getAll("photos") as File[]).filter((f) => f.size > 0);
+
+  if (!isServicePart(part)) {
+    return { error: "Jenis part tidak dikenal." };
+  }
+
+  if (photos.length > MAX_PART_PHOTOS) {
+    return { error: `Maksimal ${MAX_PART_PHOTOS} foto per part.` };
+  }
+  // Images only: this is a picture of a box and a label, and allowing video
+  // here would let a technician attach a clip the panel cannot preview.
+  const notAnImage = photos.find((f) => !f.type.startsWith("image/"));
+  if (notAnImage) {
+    return { error: "Foto part harus berupa gambar." };
+  }
+
+  const ticket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    select: { id: true, ticket_code: true, technician_id: true, ticket_type: true, status: true },
+  });
+
+  if (!ticket) return { error: "Tiket tidak ditemukan." };
+  if (ticket.technician_id !== session.userId) {
+    return { error: "Hanya teknisi yang memegang tiket ini yang dapat mencatat penggantian part." };
+  }
+  if (ticket.ticket_type !== "service") {
+    return { error: "Penggantian part hanya dicatat pada tiket service." };
+  }
+
+  const trimmedName = itemName.trim();
+  // `other` carries no meaning by itself, so the name is what says what was
+  // fitted. Every named category already describes itself.
+  if (requiresItemName(part) && !trimmedName) {
+    return { error: "Nama barang wajib diisi bila jenis part-nya Lainnya." };
+  }
+
+  // Uploaded before the row exists, the same way handoverToRmaAction does it:
+  // a failed upload then leaves nothing behind rather than a part record
+  // pointing at photos that were never stored.
+  const photoUrls: string[] = [];
+  for (const [i, file] of photos.entries()) {
+    const ext = getExt(file.type, file.name);
+    const path = `tickets/${ticketId}/part-${part}_${ticket.ticket_code}_${Date.now()}_${i + 1}.${ext}`;
+    try {
+      photoUrls.push(await uploadToR2(file, path));
+    } catch (err) {
+      console.error("[REPLACED PART PHOTO UPLOAD ERROR]", err);
+      return { error: "Gagal mengunggah foto part. Periksa ukuran file lalu coba lagi." };
+    }
+  }
+
+  await db.ticketReplacedPart.create({
+    data: {
+      ticket_id: ticketId,
+      part,
+      item_name: trimmedName || null,
+      notes: notes.trim() || null,
+      recorded_by_id: session.userId,
+      photos: { create: photoUrls.map((file_url) => ({ file_url })) },
+    },
+  });
+
+  revalidatePath(`/technician/tickets/${ticketId}`);
+  revalidatePath(`/admin/tickets/${ticketId}`);
+  return { success: true };
+}
+
+/**
+ * Remove a part the technician recorded by mistake.
+ *
+ * Scoped to the person who recorded it AND to the ticket they still hold, so
+ * a technician cannot delete a colleague's entry by guessing an id.
+ */
+export async function removeReplacedPartAction(partId: string) {
+  const session = await requireRole("Technician");
+
+  const existing = await db.ticketReplacedPart.findUnique({
+    where: { id: partId },
+    select: {
+      id: true,
+      recorded_by_id: true,
+      ticket_id: true,
+      ticket: { select: { technician_id: true } },
+      photos: { select: { file_url: true } },
+    },
+  });
+
+  if (!existing) return { error: "Catatan part tidak ditemukan." };
+  if (
+    existing.recorded_by_id !== session.userId ||
+    existing.ticket.technician_id !== session.userId
+  ) {
+    return { error: "Hanya teknisi yang mencatatnya yang dapat menghapus catatan ini." };
+  }
+
+  // The photo rows cascade with the part; the files in the bucket do not, so
+  // they are removed here. Best effort and after the delete: the record is
+  // already gone, and a storage error must not make a completed removal look
+  // like it failed.
+  await db.ticketReplacedPart.delete({ where: { id: partId } });
+
+  for (const photo of existing.photos) {
+    if (!(await deleteFromStorage(photo.file_url))) {
+      console.error(`[removeReplacedPart] berkas tertinggal: ${photo.file_url}`);
+    }
+  }
+
+  revalidatePath(`/technician/tickets/${existing.ticket_id}`);
+  revalidatePath(`/admin/tickets/${existing.ticket_id}`);
   return { success: true };
 }

@@ -1,5 +1,5 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
-import { mkdir, writeFile } from "fs/promises";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { mkdir, writeFile, unlink } from "fs/promises";
 import path from "path";
 
 /**
@@ -70,7 +70,9 @@ function getR2Client(): S3Client {
 }
 
 const BUCKET_NAME = process.env.R2_BUCKET_NAME || "dummy";
-const PUBLIC_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || "https://dummy";
+/** What PUBLIC_URL falls back to when the deployment never set one. */
+const PUBLIC_URL_PLACEHOLDER = "https://dummy";
+const PUBLIC_URL = process.env.NEXT_PUBLIC_R2_PUBLIC_URL || PUBLIC_URL_PLACEHOLDER;
 
 /** MIME type → file extension mapping (shared across actions) */
 export const MIME_TO_EXT: Record<string, string> = {
@@ -160,6 +162,82 @@ export async function uploadBufferToR2(
   );
 
   return `${PUBLIC_URL}/${key}`;
+}
+
+/**
+ * The object key inside a stored URL, or null when the URL did not come from
+ * this application's storage.
+ *
+ * Both drivers are understood: the local one serves `/uploads/<key>`, the S3
+ * one returns `${PUBLIC_URL}/<key>`. Anything else — a URL typed in by hand, a
+ * link to another host — returns null so the caller deletes nothing.
+ */
+export function storageKeyFromUrl(url: string): string | null {
+  if (!url) return null;
+
+  if (url.startsWith(`${LOCAL_URL_PREFIX}/`)) {
+    return url.slice(LOCAL_URL_PREFIX.length + 1) || null;
+  }
+
+  if (PUBLIC_URL !== PUBLIC_URL_PLACEHOLDER && url.startsWith(`${PUBLIC_URL}/`)) {
+    return url.slice(PUBLIC_URL.length + 1) || null;
+  }
+
+  return null;
+}
+
+/**
+ * Whether this deployment can work out the object key of its own uploads.
+ *
+ * `uploadToR2` builds the stored URL as `${PUBLIC_URL}/${key}`, so deleting
+ * one means recognising that prefix again. With NEXT_PUBLIC_R2_PUBLIC_URL
+ * unset, PUBLIC_URL is the placeholder, every stored URL fails to match, and
+ * every delete reports its files as orphans — which reads like a storage
+ * outage rather than a missing environment variable. Named here so the log
+ * says which it is.
+ */
+export function canResolveStorageKeys(): boolean {
+  return USE_LOCAL_STORAGE || PUBLIC_URL !== PUBLIC_URL_PLACEHOLDER;
+}
+
+/**
+ * Remove one stored file. Best effort by design.
+ *
+ * Callers use this after the database rows are already gone, so throwing would
+ * leave the caller unable to do anything useful: the ticket is deleted either
+ * way. It returns whether the object went, and the caller records the URLs it
+ * could not remove so an orphan can be found later rather than forgotten.
+ *
+ * A key outside this application's storage is not an error — it is simply not
+ * ours to delete.
+ */
+export async function deleteFromStorage(url: string): Promise<boolean> {
+  const key = storageKeyFromUrl(url);
+  if (!key) {
+    if (!canResolveStorageKeys()) {
+      console.error(
+        "[storage] NEXT_PUBLIC_R2_PUBLIC_URL is not set, so no uploaded file " +
+          "can be matched to its object key. Nothing will ever be deleted from " +
+          "the bucket until it is configured."
+      );
+    }
+    return false;
+  }
+
+  try {
+    if (USE_LOCAL_STORAGE) {
+      await unlink(path.join(LOCAL_ROOT, key));
+      return true;
+    }
+
+    await getR2Client().send(
+      new DeleteObjectCommand({ Bucket: BUCKET_NAME, Key: key })
+    );
+    return true;
+  } catch (error) {
+    console.error(`[storage] could not delete ${key}:`, error);
+    return false;
+  }
 }
 
 /** Derive file type category from MIME type */

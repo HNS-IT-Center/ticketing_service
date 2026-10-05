@@ -875,6 +875,33 @@ baselined too, the same failure is one schema change away.
 panel confirmed in the rendered HTML — but nobody has used it on screen), and **login with a
 real staff password**, still untested since the cutover.
 
+#### ⛔ Production outage, 2026-10-05 — and the fact that caused it
+
+**hPanel auto-deploys from `main`.** That was not known, and it is the single most
+important operational fact in this file. A push to `main` is a deploy. There is no
+`.github/workflows`, no Procfile and no Vercel config in the repo, so nothing in version
+control says so — the trigger lives in the Hostinger panel.
+
+What happened: thirteen commits were pushed to `main` while the production database did not
+yet have `TicketReplacedPart`. hPanel deployed them, and both ticket detail pages —
+`/admin/tickets/[id]` and `/technician/tickets/[id]` — answered 500, because each now selects
+`replaced_parts`. Everything else stayed up: the lists, the dashboards, login, RMA and the
+leaderboard never touch that table.
+
+The risk had been stated three times before the push and the push was made anyway, on the
+owner's instruction. The lesson is not "be more careful" — it is that `deploy` existed as a
+separate branch precisely so this could not happen, and `main` turned out to be wired to
+production as well.
+
+Fixed by baselining production and running `prisma migrate deploy` (BL26). No rebuild was
+needed: the deployed Prisma client already knew the models, only the tables were missing —
+exactly as on 2026-10-02.
+
+**The rule, now that production is baselined:**
+
+1. `prisma migrate deploy` against production **first**
+2. only then push to `main`
+
 #### Where it stands, 2026-10-03
 
 | | |
@@ -943,7 +970,7 @@ Ordered roughly by how much is already decided.
 | BL13 | **Demo data** NGW-000004..NGW-000009 still in the local database |
 | BL14 | Production TLS: `rejectUnauthorized: false` in `lib/db.ts` is interim; the target is Supabase's CA bundle |
 | BL27 | **A cancelled ticket's working time never stops growing.** Cancelling writes no closing event — the log only ever holds `START`, `PAUSE`, `RESUME`, `DONE` — so the open interval is still measured against the clock. One ticket already displays **2457h** (~102 days), and the figure rises on every page load. 6 tickets affected. `isDone` does include `cancelled`, so it does not tick on screen and is labelled "Total Working Time", which makes it read as a settled fact rather than a bug. Two fixes: write a closing event on cancellation and backfill the six from `TicketStatusLog` (correct, touches data), or stop counting a dangling interval once the ticket is closed (one line, no data touched, but a ticket holding only a `START` would then show `0s`). **Recommended: the first** — the second trades one wrong number for another. Needs a decision; found 2026-10-02 |
-| BL26 | ⛔ **Production is not baselined.** The repo now has `prisma/migrations/` and the local database is on it, but production is not — so `prisma migrate deploy` there would still try to create 25 tables that already exist. Until this is done, every schema change still has to be typed into production by hand, which is exactly what took it down on 2026-10-02. Steps, including the verification gate that must be read before `migrate resolve` and the one ALTER that is the only acceptable output, are in `docs/migration-baseline.md`. Needs SSH + database credentials |
+| ~~BL26~~ | ✅ **DONE 2026-10-05 — production is baselined.** The verification gate was run first and came back clean: one `ALTER TABLE UserTitle ALTER COLUMN emoji DROP DEFAULT`, three `CREATE TABLE`, four foreign keys, and **nothing else** — so production's 25 baseline tables matched the repo exactly and `migrate resolve` hid no drift. Then `migrate deploy` applied four migrations and `migrate status` answered "Database schema is up to date!". **From now on a schema change is just `prisma migrate deploy` before the code ships** — the hand-typed ALTERs that caused the 2026-10-02 outage are over. Original note kept for its reasoning: the repo had `prisma/migrations/` and the local database was on it, but production was not, so `prisma migrate deploy` there would have tried to create 25 tables that already existed |
 | ~~BL15~~ | ✅ **DONE** — see sprint 2026-09-28. Original note kept for its reasoning: inventoried 2026-09-27 in `docs/plan-mariadb-port.md`. Bigger than the one-line note suggested: `extra_services String[]` is a scalar list, which Prisma supports on PostgreSQL only, so it fails `prisma validate` and forces a schema change plus data migration. Supabase Realtime dies entirely. 15 `mode: "insensitive"` usages must be dropped (MySQL collation is already case-insensitive). Plus the advisory lock, PascalCase table names, and 477 tests that currently run on Postgres |
 
 ### Worth doing, nobody has asked yet

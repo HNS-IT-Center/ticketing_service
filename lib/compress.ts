@@ -168,6 +168,46 @@ export const VIDEO_TRANSCODE_MIN_BYTES = 8 * 1024 * 1024;
 export const VIDEO_TRANSCODE_TIMEOUT_MS = 45_000;
 
 /**
+ * How many bytes a transcoded clip may aim for.
+ *
+ * `serverActions.bodySizeLimit` is 20 MB for the whole submission, and a
+ * handover carries photos beside the video, so the clip targets 15 and leaves
+ * the rest as headroom.
+ */
+export const VIDEO_TARGET_BYTES = 15 * 1024 * 1024;
+
+/** Floor and ceiling for the computed bitrate, in bits per second. */
+export const VIDEO_MIN_BITRATE = 1_200_000;
+export const VIDEO_MAX_BITRATE = 6_000_000;
+
+/** Used when the clip's duration cannot be read. */
+export const VIDEO_FALLBACK_BITRATE = 2_500_000;
+
+/**
+ * The bitrate to ask MediaRecorder for, from how long the clip runs.
+ *
+ * MediaRecorder was constructed with **no** `videoBitsPerSecond` at all, and a
+ * real handover came out at **221 kbps for 1920×1080** — somewhere between
+ * fifteen and thirty times under what that resolution needs. The damage video
+ * the RMA desk is supposed to judge from arrived as coloured blocks.
+ *
+ * Spending the whole upload budget is the right default here: the file is
+ * evidence, it is uploaded once, and anything left unspent is quality thrown
+ * away for nothing. The clamps keep a very short clip from asking for an
+ * absurd bitrate and a very long one from going under what stays watchable.
+ */
+export function targetVideoBitrate(
+  durationSeconds: number,
+  budgetBytes: number = VIDEO_TARGET_BYTES
+): number {
+  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
+    return VIDEO_FALLBACK_BITRATE;
+  }
+  const bits = Math.floor((budgetBytes * 8) / durationSeconds);
+  return Math.max(VIDEO_MIN_BITRATE, Math.min(VIDEO_MAX_BITRATE, bits));
+}
+
+/**
  * Whether transcoding this video is worth a full playback. Pure, so the rule
  * can be tested without a browser.
  */
@@ -218,6 +258,18 @@ export async function compressVideo(file: File): Promise<File> {
     video.playsInline = true;
     video.src = objectUrl;
 
+    // The element has to be IN the document and painted, or captureStream()
+    // starves. The same handover that came out at 221 kbps also came out at
+    // **4.8 frames per second** over 31.8 seconds — 153 frames where there
+    // should have been near a thousand — because a detached <video> is never
+    // composited, so there are no frames to capture. `display: none` and
+    // `visibility: hidden` stop painting too, which is why this is a tiny,
+    // almost-transparent box rather than a hidden one. `cleanup` removes it.
+    video.style.cssText =
+      "position:fixed;top:0;left:0;width:2px;height:2px;opacity:0.01;" +
+      "pointer-events:none;z-index:-1";
+    document.body.appendChild(video);
+
     // Whichever path finishes first wins; the rest become no-ops. Without this
     // a stalled clip left the caller awaiting a promise that never settled.
     let settled = false;
@@ -258,7 +310,13 @@ export async function compressVideo(file: File): Promise<File> {
       let recorder: MediaRecorder;
 
       try {
-        recorder = new MediaRecorder(stream, { mimeType: supportedMime });
+        recorder = new MediaRecorder(stream, {
+          mimeType: supportedMime,
+          // Without these MediaRecorder picks for itself, and what it picked
+          // was 221 kbps at 1080p. See targetVideoBitrate.
+          videoBitsPerSecond: targetVideoBitrate(video.duration),
+          audioBitsPerSecond: 64_000,
+        });
       } catch {
         finish(file); // MediaRecorder constructor failed
         return;

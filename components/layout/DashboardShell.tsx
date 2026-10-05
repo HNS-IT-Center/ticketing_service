@@ -53,11 +53,13 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { href: "/rma/dashboard", label: "RMA", icon: <ShieldCheck size={18} /> },
     { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
   ],
+  // Log Aktivitas sits last on purpose: it is a reference page, read after the
+  // work, while the three above it are what the desk opens to act.
   rma: [
     { href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> },
     { href: "/rma/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
     { href: "/rma/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+    { href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> },
   ],
   sales: [
     { href: "/sales/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },

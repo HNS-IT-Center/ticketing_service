@@ -919,14 +919,15 @@ exactly as on 2026-10-02.
    push to `main` was asked for explicitly, this one was not.
 
 ### SPRINT 2026-10-08 → 10-16 — store-stock intake, backend QC, the Android upload crash
-Branch `feat/rma-hold-reason`. **748 tests**, `tsc` clean. Nothing pushed.
+Branch `feat/rma-hold-reason`. **749 tests**, `tsc` clean. `main` = `dcb0514` (K3/K4 live); K1, K5 and docs wait on a push.
 
 | # | Task | Status | Notes |
 |---|------|--------|-------|
-| K1 | **Unit ownership asked at intake** | ✅ `668d054` | Store-stock claims had to be opened with an invented customer name because ownership was first asked at RMA handover. Now the first question of the form; "Stok Toko" hides the customer fields. `TicketWarrantyDetail.unit_ownership` / `stock_origin`, `purchase_date` nullable — migration `20261008061124_warranty_intake_ownership`. ⛔ **`prisma migrate deploy` on production before this reaches `main`** |
+| K1 | **Unit ownership asked at intake** | ✅ `668d054` | Store-stock claims had to be opened with an invented customer name because ownership was first asked at RMA handover. Now the first question of the form; "Stok Toko" hides the customer fields. `TicketWarrantyDetail.unit_ownership` / `stock_origin`, `purchase_date` nullable — migration `20261008061124_warranty_intake_ownership`. ✅ **Migration applied to production 2026-10-16**, so the code can ship whenever `main` moves |
 | K2 | **Backend QC, 21 findings** | ✅ report | `docs/qc-run-2026-10-14.md`. 14 reproduced through the real actions against the local DB. Root cause of most: no central ticket transition table (BL7). Fix batches proposed there, **none applied yet** — see BL35 |
 | K3 | **Android Chrome upload crash** | ✅ `dcb0514` | Three stacked faults: the client video transcode (Chrome-only path, made heavy by `fa4132b`) ran phones out of memory; the real body ceiling is **10 MB** (`proxyClientMaxBodySize`, because `proxy.ts` runs on every route), not 20; and four upload forms had no catch while the app had no error boundary. Transcode removed, 9 MB budget enforced at pick time (`lib/upload-limit.ts`), catches added, `app/error.tsx` |
 | K4 | **Form drafts** | ✅ `dcb0514` | `lib/draft.ts`: create form and RMA handover autosave to localStorage and offer "Pulihkan" after a reload. Verified end to end in Chrome emulating a Pixel 7, 12/12. Phone testing over LAN: `DEV_LAN_ORIGIN=<lan ip> npx next dev --webpack -H 0.0.0.0` |
+| K5 | **Handover failed on a long "Hasil Tes"** | ✅ `4d10d27` | Reported from production with a phone screenshot: "Terjadi kesalahan di server". `RmaCase.test_result` was `VARCHAR(191)` while the rest of the form was `TEXT`, and `STRICT_TRANS_TABLES` refuses an over-long value — the one free-text column the MariaDB port (M3) missed; broken since the cutover. `stock_origin` (both tables) widened with it. Migration `20261016032623_rma_free_text_columns` **applied to production 2026-10-16** together with K1's, by the owner through the tunnel; `migrate status` up to date. The fix needed no code deploy. The remaining `VARCHAR(191)` strings hold codes and numbers |
 
 ## 📋 BACKLOG — what is likely to come next
 

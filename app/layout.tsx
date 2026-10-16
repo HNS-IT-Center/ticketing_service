@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { Toaster } from "react-hot-toast";
 import { Geist } from "next/font/google";
@@ -8,10 +8,18 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
+// Icons come from the brand kit (hns-ticketing-service-brand/favicon): Next
+// picks up app/favicon.ico, app/icon.svg and app/apple-icon.png by file
+// convention; the Android icons and the manifest are served from public/.
 export const metadata: Metadata = {
   title: "HNS Service Center — Service Ticket Management",
   description:
     "Manage your computer service requests, warranty claims, upgrades, and PC builds with ease.",
+  manifest: "/site.webmanifest",
+};
+
+export const viewport: Viewport = {
+  themeColor: "#1A4CA1",
 };
 
 export default function RootLayout({

@@ -70,5 +70,13 @@ export const config = {
   // them to /login, breaking proof media on the public tracking page, which has
   // no session by design. Inert in production: R2 returns absolute URLs on
   // another host, so /uploads is never requested there.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|public/|uploads/|_vercel|script\\.js).*)" ],
+  //
+  // Static files from public/ and the app icons are excluded too. Only
+  // favicon.ico was, so for anyone not signed in every other image was
+  // redirected to /login — which is why the logo on the login page itself has
+  // shown as a broken image, and why the brand icons and manifest would have
+  // failed the same way.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|public/|uploads/|_vercel|script\\.js|.*\\.(?:png|jpe?g|gif|svg|ico|webp|webmanifest)$).*)",
+  ],
 };

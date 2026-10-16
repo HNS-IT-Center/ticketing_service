@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<title>HNS Ticketing Service</title>
+<defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1A4CA1"/><stop offset="1" stop-color="#123A80"/></linearGradient></defs><rect rx="96" fill="url(#bg)"/>
+<g transform="translate(256 256) scale(1.0) rotate(-10) translate(-256 -256)">
+<path d="M80,122 H432 A40,40 0 0 1 472,162 V212.0 A44,44 0 0 0 472,300.0 V350 A40,40 0 0 1 432,390 H80 A40,40 0 0 1 40,350 V300.0 A44,44 0 0 0 40,212.0 V162 A40,40 0 0 1 80,122 Z" fill="#FFFFFF"/>
+
+    <g transform="translate(250 262) rotate(-45)" fill="#D7272A">
+      <path d="M148.27,23.12 L76.16,23.12 L76.16,-23.12 L148.27,-23.12 A68.00,68.00 0 1 0 148.27,23.12 Z"/>
+      <rect x="-125.12" y="-27.20" width="175.44" height="54.40" rx="27.20"/>
+      
+    </g>
+</g></svg>

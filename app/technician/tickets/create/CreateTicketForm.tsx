@@ -7,6 +7,8 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import FileUpload from "@/components/ui/FileUpload";
 import TagInput from "@/components/ui/TagInput";
+import DraftBanner from "@/components/ui/DraftBanner";
+import { useDraft } from "@/lib/draft";
 
 type Props = {
   storeLocations: { id: string; name: string; code: string }[];
@@ -74,6 +76,49 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   const [errors, setErrors] = useState<Record<string, string>>({});
+
+  // Everything typed so far, kept in the browser so a reload — Android
+  // discarding the tab while the camera is open, a dropped signal — does not
+  // cost the whole intake. Files are kept as their already-uploaded URLs; the
+  // confirmation tick is deliberately not kept, it must be given again.
+  const draftData = {
+    step, storeLocationId, technicianId, salesId,
+    customerName, customerEmail, phone, gridDevice, ticketType, deviceType,
+    deviceName, deviceSn, purchaseDate, conditions, selectedAccessories,
+    customAccessory, notes, checkDiagnosisFee, cleaningPackage, selectedUpgrades,
+    uploadedFileUrls, pcComponents, pickupMethod, isOvernight,
+  };
+  const draft = useDraft("create-ticket", draftData);
+
+  const restoreDraft = () => {
+    const d = draft.offer?.data;
+    if (!d) return;
+    setStep(d.step); setStoreLocationId(d.storeLocationId); setTechnicianId(d.technicianId);
+    setSalesId(d.salesId);
+    setCustomerName(d.customerName); setCustomerEmail(d.customerEmail); setPhone(d.phone);
+    setGridDevice(d.gridDevice); setTicketType(d.ticketType); setDeviceType(d.deviceType);
+    setDeviceName(d.deviceName); setDeviceSn(d.deviceSn); setPurchaseDate(d.purchaseDate);
+    setConditions(d.conditions); setSelectedAccessories(d.selectedAccessories);
+    setCustomAccessory(d.customAccessory); setNotes(d.notes);
+    setCheckDiagnosisFee(d.checkDiagnosisFee); setCleaningPackage(d.cleaningPackage);
+    setSelectedUpgrades(d.selectedUpgrades); setUploadedFileUrls(d.uploadedFileUrls);
+    setPcComponents(d.pcComponents); setPickupMethod(d.pickupMethod); setIsOvernight(d.isOvernight);
+  };
+
+  // Shown under the picker when the draft brought back uploads the picker
+  // itself cannot list (it only knows File objects, and those are gone).
+  const restoredUploads = files.length === 0 && uploadedFileUrls.length > 0 && (
+    <p className="form-help" style={{ marginTop: "0.5rem" }}>
+      {uploadedFileUrls.length} lampiran dari draft sudah terunggah.{" "}
+      <button
+        type="button"
+        onClick={() => setUploadedFileUrls([])}
+        style={{ background: "none", border: "none", color: "var(--primary)", textDecoration: "underline", cursor: "pointer", padding: 0 }}
+      >
+        Hapus
+      </button>
+    </p>
+  );
 
   const getAvailableCases = () => {
     // "warranty_claim" opens the claim intake and, later, the handover to RMA.
@@ -209,6 +254,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
           toast.error(result.error);
           setErrors({ submit: result.error });
         } else if (result?.redirectUrl) {
+          draft.finish();
           toast.success("Ticket created successfully!");
           router.push(result.redirectUrl);
         }
@@ -235,6 +281,17 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
 
   return (
     <div style={{ maxWidth: "700px", margin: "0 auto" }}>
+      {draft.offer && (
+        <div style={{ marginBottom: "1.5rem" }}>
+          <DraftBanner
+            savedAt={draft.offer.savedAt}
+            note={draft.offer.data.uploadedFileUrls.length > 0 ? "Lampiran yang sudah terunggah ikut dipulihkan." : undefined}
+            onRestore={restoreDraft}
+            onDiscard={draft.discard}
+          />
+        </div>
+      )}
+
       {/* Progress Steps */}
       <div style={{ display: "flex", gap: "0", marginBottom: "2rem" }}>
         {STEPS.map((label, i) => {
@@ -535,6 +592,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     unit ke RMA. Nota wajib ada sebelum klaim unit milik customer diserahkan ke RMA.
                   </p>
                   <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                  {restoredUploads}
                   {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
                 </div>
               </div>
@@ -568,6 +626,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   <label className="form-label">Ticket Attachment <span style={{ color: "var(--accent)" }}>*</span></label>
                   <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Upload any reference pictures or build lists.</p>
                   <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                  {restoredUploads}
                   {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
                   {errors.ticketFiles && <span className="form-error"><AlertCircle size={12} />{errors.ticketFiles}</span>}
                 </div>
@@ -678,6 +737,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   <label className="form-label">Ticket Attachment</label>
                   <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Upload photo/video of the device.</p>
                   <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                  {restoredUploads}
                   {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
                 </div>
               </div>
@@ -719,6 +779,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   <label className="form-label">Attachment (Upgraded Item) *</label>
                   <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Please attach a photo of the item to be upgraded.</p>
                   <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                  {restoredUploads}
                   {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
                 </div>
               </div>

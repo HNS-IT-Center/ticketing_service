@@ -4,11 +4,11 @@ import { useRef, useState, useEffect, DragEvent, ChangeEvent } from "react";
 import { Upload, X, FileText, Image as ImageIcon, Video, Loader2 } from "lucide-react";
 import {
   compressFile,
-  shouldTranscodeVideo,
   normalizeFileType,
   resolveMimeType,
   formatBytes,
 } from "@/lib/compress";
+import { uploadBudgetError, UPLOAD_BUDGET_MB } from "@/lib/upload-limit";
 
 interface FileItem {
   file: File;
@@ -21,13 +21,10 @@ interface FileUploadProps {
   onChange: (files: File[]) => void;
   value?: File[];
   accept?: string;
-  maxSizeMB?: number;
   maxFiles?: number;
   /** If set, the file input will use this capture mode (e.g. "environment" for rear camera) */
   capture?: "user" | "environment";
 }
-
-const MAX_SIZE_BYTES = 64 * 1024 * 1024; // 64 MB
 
 function getFileIcon(type: string) {
   if (type.startsWith("image/")) return <ImageIcon size={16} />;
@@ -39,7 +36,6 @@ export default function FileUpload({
   onChange,
   // Extended accept to include HEIC/HEIF (iOS camera) and common camera video formats
   accept = "image/*,video/*,.pdf,image/heic,image/heif,image/heif-sequence,video/quicktime",
-  maxSizeMB = 64,
   maxFiles = 10,
   capture,
   value,
@@ -48,9 +44,6 @@ export default function FileUpload({
   const [dragOver, setDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isCompressing, setIsCompressing] = useState(false);
-  // A video transcode runs at playback speed, so the wait is worth explaining
-  // rather than leaving as an unexplained spinner.
-  const [transcodingVideo, setTranscodingVideo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -68,14 +61,12 @@ export default function FileUpload({
     }
   }, [value, items.length]);
 
+  // The limit the server can actually take, not a round number: see
+  // lib/upload-limit.ts. Refusing here keeps the form intact; refusing on submit
+  // is what used to crash the page.
   const validate = (files: File[]): string | null => {
-    const totalSize = [...items.map((i) => i.file), ...files].reduce(
-      (acc, f) => acc + f.size,
-      0
-    );
-    if (totalSize > MAX_SIZE_BYTES) return `Total size exceeds ${maxSizeMB}MB limit`;
-    if (items.length + files.length > maxFiles) return `Maximum ${maxFiles} files allowed`;
-    return null;
+    if (items.length + files.length > maxFiles) return `Maksimal ${maxFiles} berkas.`;
+    return uploadBudgetError([...items.map((i) => i.file), ...files]);
   };
 
   const addFiles = async (rawFiles: File[]) => {
@@ -88,11 +79,7 @@ export default function FileUpload({
       // Step 1: Normalize MIME types (fixes empty/wrong types from mobile cameras)
       const normalized = rawFiles.map(normalizeFileType);
 
-      // Most videos are now left alone; only one big enough to be worth a full
-      // playback is transcoded, and only that case needs explaining.
-      setTranscodingVideo(normalized.some(shouldTranscodeVideo));
-
-      // Step 2: Compress each file (images → WebP, videos → WebM or fallback)
+      // Step 2: Compress images; videos pass through unchanged (lib/compress.ts)
       // Process sequentially to prevent mobile browsers from crashing due to memory limits (OOM)
       const compressed: File[] = [];
       for (const file of normalized) {
@@ -128,7 +115,6 @@ export default function FileUpload({
       setError("Failed to process one or more files. Please try again.");
     } finally {
       setIsCompressing(false);
-      setTranscodingVideo(false);
     }
   };
 
@@ -182,12 +168,10 @@ export default function FileUpload({
               }}
             />
             <p style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
-              {transcodingVideo ? "Mengonversi video…" : "Compressing files…"}
+              Memproses berkas…
             </p>
             <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-              {transcodingVideo
-                ? "Video diproses selama klipnya diputar, jadi lamanya mengikuti durasi video. Berhenti sendiri setelah 45 detik dan memakai berkas aslinya."
-                : "Converting to optimized format, please wait"}
+              Foto diperkecil sebelum dikirim
             </p>
           </>
         ) : (
@@ -197,7 +181,7 @@ export default function FileUpload({
               Drop files here or <span style={{ color: "var(--primary)", textDecoration: "underline", textDecorationStyle: "dotted" }}>click to browse</span>
             </p>
             <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-              Images, Videos, PDFs • Max {maxSizeMB}MB total • Camera photos supported
+              Foto, video, PDF • Maks. {UPLOAD_BUDGET_MB} MB total
             </p>
             <span style={{
               display: "inline-flex", alignItems: "center", gap: "0.25rem",

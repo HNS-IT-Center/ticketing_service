@@ -3,7 +3,7 @@
  *
  * Client-side file compression utilities.
  * - Images → WebP (Canvas API, 85% quality, max 2048×2048)
- * - Videos → WebM (MediaRecorder, fallback to original on iOS Safari)
+ * - Videos → uploaded as recorded (see compressVideo)
  * - PDFs   → pass-through (no compression)
  *
  * All processing happens in the browser before the file is sent to the server.
@@ -140,219 +140,26 @@ export async function compressImage(file: File): Promise<File> {
   });
 }
 
-// ── Video Compression ───────────────────────────────────────────────────────
+// ── Video ───────────────────────────────────────────────────────────────────
 
 /**
- * Below this, a video is uploaded as it is.
+ * Videos are uploaded exactly as recorded. There is deliberately no transcode.
  *
- * Transcoding here is not a cheap pass over the bytes: MediaRecorder records
- * `captureStream()` while the clip PLAYS, so it costs one full playback —
- * a two-minute video takes two minutes, whatever its file size. That is worth
- * paying only when the file would otherwise not fit. The upload budget is
- * `serverActions.bodySizeLimit`, 20 MB for a whole submission, so anything
- * comfortably under it is left alone and uploads immediately.
+ * Until 2026-10-14 this re-encoded clips of 8 MB and up to WebM with
+ * MediaRecorder over `captureStream()`. Only Chrome supports that pair, so only
+ * Chrome ran it — and on Android it killed the tab: fa4132b made it capture
+ * every frame at the clip's native resolution (1080p, often 4K) and encode VP8
+ * in software in real time at up to 6 Mbps. The phone ran out of memory, Chrome
+ * reloaded the page, and the technician lost the whole form. Firefox and other
+ * browsers never transcoded and kept working, which is how it was narrowed down.
  *
- * Reported as "stuck on Compressing files" for a 3.93 MB clip, which was never
- * about the 3.93 MB.
- */
-export const VIDEO_TRANSCODE_MIN_BYTES = 8 * 1024 * 1024;
-
-/**
- * A transcode is abandoned after this and the original kept.
- *
- * `onended` is the only thing that stopped the recorder. A clip that stalls
- * buffering, or a tab sent to the background — where browsers throttle media
- * and timers — never fires it, and the dialog sat on "Compressing files…" with
- * no way out. Real-time cost means this doubles as the ceiling on clip length.
- */
-export const VIDEO_TRANSCODE_TIMEOUT_MS = 45_000;
-
-/**
- * How many bytes a transcoded clip may aim for.
- *
- * `serverActions.bodySizeLimit` is 20 MB for the whole submission, and a
- * handover carries photos beside the video, so the clip targets 15 and leaves
- * the rest as headroom.
- */
-export const VIDEO_TARGET_BYTES = 15 * 1024 * 1024;
-
-/** Floor and ceiling for the computed bitrate, in bits per second. */
-export const VIDEO_MIN_BITRATE = 1_200_000;
-export const VIDEO_MAX_BITRATE = 6_000_000;
-
-/** Used when the clip's duration cannot be read. */
-export const VIDEO_FALLBACK_BITRATE = 2_500_000;
-
-/**
- * The bitrate to ask MediaRecorder for, from how long the clip runs.
- *
- * MediaRecorder was constructed with **no** `videoBitsPerSecond` at all, and a
- * real handover came out at **221 kbps for 1920×1080** — somewhere between
- * fifteen and thirty times under what that resolution needs. The damage video
- * the RMA desk is supposed to judge from arrived as coloured blocks.
- *
- * Spending the whole upload budget is the right default here: the file is
- * evidence, it is uploaded once, and anything left unspent is quality thrown
- * away for nothing. The clamps keep a very short clip from asking for an
- * absurd bitrate and a very long one from going under what stays watchable.
- */
-export function targetVideoBitrate(
-  durationSeconds: number,
-  budgetBytes: number = VIDEO_TARGET_BYTES
-): number {
-  if (!Number.isFinite(durationSeconds) || durationSeconds <= 0) {
-    return VIDEO_FALLBACK_BITRATE;
-  }
-  const bits = Math.floor((budgetBytes * 8) / durationSeconds);
-  return Math.max(VIDEO_MIN_BITRATE, Math.min(VIDEO_MAX_BITRATE, bits));
-}
-
-/**
- * Whether transcoding this video is worth a full playback. Pure, so the rule
- * can be tested without a browser.
- */
-export function shouldTranscodeVideo(file: { size: number; type: string }): boolean {
-  const mime = file.type;
-  if (!mime.startsWith("video/")) return false;
-  // Already the target container.
-  if (mime === "video/webm") return false;
-  return file.size >= VIDEO_TRANSCODE_MIN_BYTES;
-}
-
-/**
- * Attempts to transcode a video to WebM using MediaRecorder + captureStream().
- * - Returns the original file if:
- *   - It is small enough already (see VIDEO_TRANSCODE_MIN_BYTES)
- *   - The browser doesn't support MediaRecorder WebM encoding (iOS Safari)
- *   - The transcode outruns VIDEO_TRANSCODE_TIMEOUT_MS
- *   - The result is not actually smaller
- *   - The transcoding fails for any reason
- *
- * NOTE: iOS Safari does not support MediaRecorder with video/webm.
- * In that case, the original file is returned unchanged (graceful fallback).
+ * It was also aiming at the wrong number: it targeted 15 MB, and the real
+ * upload ceiling is under 10 MB (see lib/upload-limit.ts), so a "successful"
+ * transcode still could not be sent. A clip that is too big is now refused when
+ * it is picked, with the size and what to do about it.
  */
 export async function compressVideo(file: File): Promise<File> {
-  const mime = resolveMimeType(file);
-  if (!mime.startsWith("video/")) return file;
-
-  if (!shouldTranscodeVideo({ size: file.size, type: mime })) return file;
-
-  // Check if the browser supports WebM recording
-  const webmMime = "video/webm;codecs=vp8,opus";
-  const webmMimeFallback = "video/webm";
-  const supportedMime = MediaRecorder.isTypeSupported(webmMime)
-    ? webmMime
-    : MediaRecorder.isTypeSupported(webmMimeFallback)
-    ? webmMimeFallback
-    : null;
-
-  if (!supportedMime) {
-    // Browser doesn't support WebM recording (e.g. iOS Safari) — return original
-    return file;
-  }
-
-  return new Promise<File>((resolve) => {
-    const objectUrl = URL.createObjectURL(file);
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.src = objectUrl;
-
-    // The element has to be IN the document and painted, or captureStream()
-    // starves. The same handover that came out at 221 kbps also came out at
-    // **4.8 frames per second** over 31.8 seconds — 153 frames where there
-    // should have been near a thousand — because a detached <video> is never
-    // composited, so there are no frames to capture. `display: none` and
-    // `visibility: hidden` stop painting too, which is why this is a tiny,
-    // almost-transparent box rather than a hidden one. `cleanup` removes it.
-    video.style.cssText =
-      "position:fixed;top:0;left:0;width:2px;height:2px;opacity:0.01;" +
-      "pointer-events:none;z-index:-1";
-    document.body.appendChild(video);
-
-    // Whichever path finishes first wins; the rest become no-ops. Without this
-    // a stalled clip left the caller awaiting a promise that never settled.
-    let settled = false;
-
-    const cleanup = () => {
-      clearTimeout(timer);
-      URL.revokeObjectURL(objectUrl);
-      video.remove();
-    };
-
-    const finish = (result: File) => {
-      if (settled) return;
-      settled = true;
-      cleanup();
-      resolve(result);
-    };
-
-    // Declared after `cleanup`, which closes over it — `cleanup` only ever runs
-    // from `finish`, by which point this has been assigned.
-    const timer = setTimeout(() => {
-      try { video.pause(); } catch { /* noop */ }
-      finish(file); // took too long — upload what the technician chose
-    }, VIDEO_TRANSCODE_TIMEOUT_MS);
-
-    video.onerror = () => {
-      finish(file); // fallback
-    };
-
-    video.onloadedmetadata = () => {
-      // Use captureStream to get a MediaStream from the video element
-      const stream = (video as HTMLVideoElement & { captureStream?: () => MediaStream }).captureStream?.();
-      if (!stream) {
-        finish(file); // captureStream not supported
-        return;
-      }
-
-      const chunks: Blob[] = [];
-      let recorder: MediaRecorder;
-
-      try {
-        recorder = new MediaRecorder(stream, {
-          mimeType: supportedMime,
-          // Without these MediaRecorder picks for itself, and what it picked
-          // was 221 kbps at 1080p. See targetVideoBitrate.
-          videoBitsPerSecond: targetVideoBitrate(video.duration),
-          audioBitsPerSecond: 64_000,
-        });
-      } catch {
-        finish(file); // MediaRecorder constructor failed
-        return;
-      }
-
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) chunks.push(e.data);
-      };
-
-      recorder.onstop = () => {
-        const blob = new Blob(chunks, { type: "video/webm" });
-        // VP8 at MediaRecorder's default bitrate can come out LARGER than the
-        // H.264 the phone recorded. Keep whichever is smaller.
-        if (blob.size === 0 || blob.size >= file.size) {
-          finish(file);
-          return;
-        }
-        const baseName = file.name.replace(/\.[^/.]+$/, "").replace(/[^a-zA-Z0-9_-]/g, "_");
-        finish(new File([blob], `${baseName}.webm`, { type: "video/webm" }));
-      };
-
-      recorder.onerror = () => {
-        finish(file); // fallback on error
-      };
-
-      recorder.start();
-      void video.play().catch(() => {
-        // If play fails, stop recording and fall back
-        try { recorder.stop(); } catch { /* noop */ }
-      });
-
-      video.onended = () => {
-        try { recorder.stop(); } catch { /* noop */ }
-      };
-    };
-  });
+  return file;
 }
 
 // ── Router ──────────────────────────────────────────────────────────────────
@@ -360,7 +167,7 @@ export async function compressVideo(file: File): Promise<File> {
 /**
  * Compresses a file based on its type:
  * - image/* → WebP via Canvas
- * - video/* → WebM via MediaRecorder (fallback: original)
+ * - video/* → unchanged
  * - other   → pass-through
  */
 export async function compressFile(file: File): Promise<File> {

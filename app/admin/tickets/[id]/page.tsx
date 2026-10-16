@@ -18,6 +18,7 @@ import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import DeleteTicketPanel from "./DeleteTicketPanel";
 import { servicePartLabel } from "@/lib/service-parts";
+import { ticketPartyName } from "@/lib/ticket-party";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -254,7 +255,7 @@ export default async function AdminTicketDetailPage({
             </div>
             <div className="flex flex-col gap-4">
               {[
-                ["Name", ticket.is_for_self ? ticket.user?.name : ticket.customer_name],
+                ["Name", ticketPartyName(ticket)],
                 ["Email", ticket.is_for_self ? ticket.user?.email : ticket.customer_email],
                 ["Phone", ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone],
                 ["Address", ticket.is_for_self ? ticket.user?.address : ticket.customer_address],
@@ -285,7 +286,7 @@ export default async function AdminTicketDetailPage({
             
             <CustomerWhatsAppActions 
               customerPhone={(ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone) || ""}
-              customerName={(ticket.is_for_self ? ticket.user?.name : ticket.customer_name) || "Customer"}
+              customerName={(ticketPartyName(ticket)) || "Customer"}
               ticketCode={ticket.ticket_code}
               status={ticket.status}
               publicLink={publicTicketPath(ticket.created_at, ticket.public_share_token)?.slice(1) ?? null}
@@ -316,8 +317,23 @@ export default async function AdminTicketDetailPage({
             <div className="card">
               <h3 style={{ marginBottom: "0.5rem" }}>Warranty Information</h3>
               <p style={{ color: "var(--text-muted)" }}>
-                Purchase Date: <strong>{new Date(ticket.warranty_detail.purchase_date).toLocaleDateString("id-ID")}</strong>
+                Purchase Date:{" "}
+                <strong>
+                  {ticket.warranty_detail.purchase_date
+                    ? new Date(ticket.warranty_detail.purchase_date).toLocaleDateString("id-ID")
+                    : "—"}
+                </strong>
               </p>
+              {ticket.warranty_detail.unit_ownership && (
+                <p style={{ color: "var(--text-muted)" }}>
+                  Unit:{" "}
+                  <strong>
+                    {ticket.warranty_detail.unit_ownership === "store_stock"
+                      ? `Stok Toko — ${ticket.warranty_detail.stock_origin ?? ""}`
+                      : "Milik Customer"}
+                  </strong>
+                </p>
+              )}
             </div>
           )}
 

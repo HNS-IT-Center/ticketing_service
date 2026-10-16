@@ -166,7 +166,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
               <Field
                 label="Tanggal Pembelian"
                 value={
-                  ticket.warranty_detail
+                  ticket.warranty_detail?.purchase_date
                     ? new Date(ticket.warranty_detail.purchase_date).toLocaleDateString("id-ID")
                     : null
                 }

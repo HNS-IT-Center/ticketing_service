@@ -14,6 +14,7 @@ import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
+import { ticketPartyName } from "@/lib/ticket-party";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -186,6 +187,14 @@ export default async function SalesTicketDetailPage({
               pickupMethod={(ticket.pickup_method as "self_pickup" | "courier" | null) ?? "self_pickup"}
               isSalesMode={true}
               ticketType={ticket.ticket_type}
+              intakeOwnership={
+                ticket.warranty_detail?.unit_ownership
+                  ? {
+                      unit_ownership: ticket.warranty_detail.unit_ownership,
+                      stock_origin: ticket.warranty_detail.stock_origin,
+                    }
+                  : null
+              }
             />
           )}
           {ticket.public_share_token && (
@@ -215,7 +224,7 @@ export default async function SalesTicketDetailPage({
             </div>
             <div className="flex flex-col gap-4">
               {[
-                ["Name", ticket.is_for_self ? ticket.user?.name : ticket.customer_name],
+                ["Name", ticketPartyName(ticket)],
                 ["Email", ticket.is_for_self ? ticket.user?.email : ticket.customer_email],
                 ["Phone", ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone],
                 ["Address", ticket.is_for_self ? ticket.user?.address : ticket.customer_address],
@@ -246,7 +255,7 @@ export default async function SalesTicketDetailPage({
 
             <CustomerWhatsAppActions 
               customerPhone={(ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone) || ""}
-              customerName={(ticket.is_for_self ? ticket.user?.name : ticket.customer_name) || "Customer"}
+              customerName={(ticketPartyName(ticket)) || "Customer"}
               ticketCode={ticket.ticket_code}
               status={ticket.status}
               publicLink={publicTicketPath(ticket.created_at, ticket.public_share_token)?.slice(1) ?? null}

@@ -356,7 +356,18 @@ model TicketWarrantyDetail {
   id            String   @id @default(cuid())
   ticket_id     String   @unique
   ticket        Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
-  purchase_date DateTime
+  // Required for a customer's unit — it is what the warranty is measured from.
+  // Optional for store stock: the shop bought it from a supplier, and the
+  // customer-facing purchase date does not exist.
+  purchase_date DateTime?
+
+  // Who owns the unit, known at the counter the moment it arrives. Until
+  // 2026-10-08 this was first asked at handover to RMA, so a store-stock claim
+  // had to be opened with an invented customer name and phone number. Nullable
+  // because claims opened before then never recorded it; when set, the
+  // handover takes it from here rather than asking again.
+  unit_ownership UnitOwnership?
+  stock_origin   String?   // required when unit_ownership = store_stock
 
   // Set by the server when a technician closes a claim as ineligible. The
   // ticket still goes to `done` so the normal handover chain can return the

@@ -6,6 +6,7 @@ import { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import { ADMIN_TICKET_FILTERS, ticketListWhere } from "@/lib/ticket-list-filter";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ticketPartyName } from "@/lib/ticket-party";
 
 export const metadata = { title: "All Tickets — HNS IT Center" };
 const PAGE_SIZE = 10;
@@ -168,7 +169,7 @@ export default async function AdminTicketsPage({
               </thead>
               <tbody>
                 {tickets.map((t) => {
-                  const actualName = t.is_for_self ? t.user?.name : t.customer_name;
+                  const actualName = ticketPartyName(t);
                   const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
                   return (
                     <tr key={t.id}>

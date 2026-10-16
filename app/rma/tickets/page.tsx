@@ -6,6 +6,7 @@ import { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
 import { getTicketPoints } from "@/lib/points";
+import { ticketPartyName } from "@/lib/ticket-party";
 
 /**
  * Warranty claims, for the RMA desk.
@@ -261,7 +262,7 @@ export default async function RmaTicketsPage({
               </thead>
               <tbody>
                 {tickets.map((t) => {
-                  const actualName = t.is_for_self ? t.user?.name : t.customer_name;
+                  const actualName = ticketPartyName(t);
                   const pts = getTicketPoints(
                     t.ticket_type,
                     t.device_type,

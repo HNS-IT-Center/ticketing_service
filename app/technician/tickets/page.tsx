@@ -6,6 +6,7 @@ import { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import { TECHNICIAN_TICKET_FILTERS, ticketListWhere } from "@/lib/ticket-list-filter";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
+import { ticketPartyName } from "@/lib/ticket-party";
 
 function getTicketPoints(type: string, deviceType?: string | null, extraServices?: string[]): number {
   let base = 2;
@@ -220,7 +221,7 @@ export default async function TechnicianTicketsPage({
               </thead>
               <tbody>
                 {tickets.map((t) => {
-                  const actualName = t.is_for_self ? t.user?.name : t.customer_name;
+                  const actualName = ticketPartyName(t);
                   const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
                   const hasExtra = (t.extra_services as string[])?.length > 0;
                   return (
@@ -271,7 +272,7 @@ export default async function TechnicianTicketsPage({
             <p>No tickets found</p>
           </div>
         ) : tickets.map((t) => {
-          const actualName = t.is_for_self ? t.user?.name : t.customer_name;
+          const actualName = ticketPartyName(t);
           const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
           const hasExtra = (t.extra_services as string[])?.length > 0;
           return (

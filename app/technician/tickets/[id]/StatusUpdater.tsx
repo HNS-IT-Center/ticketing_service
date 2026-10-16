@@ -86,6 +86,7 @@ export default function StatusUpdater({
   isSalesMode = false,
   ticketType = "service",
   attachments = [],
+  intakeOwnership = null,
 }: {
   ticketId: string;
   currentStatus: Status;
@@ -95,6 +96,8 @@ export default function StatusUpdater({
   ticketType?: string;
   /** Existing ticket attachments, so the handover form can reuse the intake invoice. */
   attachments?: { id: string; file_url: string; file_type: string }[];
+  /** Ownership recorded at intake. When present the handover shows it instead of asking. */
+  intakeOwnership?: { unit_ownership: "customer" | "store_stock"; stock_origin: string | null } | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [activeDialog, setActiveDialog] = useState<
@@ -112,8 +115,10 @@ export default function StatusUpdater({
 
   // ── Warranty claim: RMA service form ──
   const isWarrantyClaim = ticketType === "warranty_claim";
-  const [unitOwnership, setUnitOwnership] = useState<"customer" | "store_stock">("customer");
-  const [stockOrigin, setStockOrigin] = useState("");
+  const [unitOwnership, setUnitOwnership] = useState<"customer" | "store_stock">(
+    intakeOwnership?.unit_ownership ?? "customer",
+  );
+  const [stockOrigin, setStockOrigin] = useState(intakeOwnership?.stock_origin ?? "");
   const [snVerified, setSnVerified] = useState(false);
   const [physicalCondition, setPhysicalCondition] = useState("");
   const [faultDescription, setFaultDescription] = useState("");
@@ -134,7 +139,8 @@ export default function StatusUpdater({
   const restoreHandoverDraft = () => {
     const d = handoverDraft.offer?.data;
     if (!d) return;
-    setUnitOwnership(d.unitOwnership);
+    // Ownership recorded at intake is not the draft's to change.
+    if (!intakeOwnership) setUnitOwnership(d.unitOwnership);
     setStockOrigin(d.stockOrigin); setSnVerified(d.snVerified);
     setPhysicalCondition(d.physicalCondition); setFaultDescription(d.faultDescription);
     setTestResult(d.testResult); setInvoiceUrl(d.invoiceUrl);
@@ -761,14 +767,22 @@ export default function StatusUpdater({
             <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
               Kepemilikan Unit <span style={{ color: "var(--accent-brand)" }}>*</span>
             </label>
-            <select
-              className="form-input"
-              value={unitOwnership}
-              onChange={(e) => setUnitOwnership(e.target.value as "customer" | "store_stock")}
-            >
-              <option value="customer">Milik Customer</option>
-              <option value="store_stock">Stok Toko</option>
-            </select>
+            {intakeOwnership ? (
+              // Decided at the counter when the unit arrived; not re-asked here.
+              <p className="form-input" style={{ background: "var(--cream-dark)", margin: 0 }}>
+                {intakeOwnership.unit_ownership === "store_stock" ? "Stok Toko" : "Milik Customer"}
+                <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}> — dicatat saat intake</span>
+              </p>
+            ) : (
+              <select
+                className="form-input"
+                value={unitOwnership}
+                onChange={(e) => setUnitOwnership(e.target.value as "customer" | "store_stock")}
+              >
+                <option value="customer">Milik Customer</option>
+                <option value="store_stock">Stok Toko</option>
+              </select>
+            )}
           </div>
 
           {unitOwnership === "store_stock" ? (

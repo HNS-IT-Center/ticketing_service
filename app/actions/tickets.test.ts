@@ -161,6 +161,87 @@ describe("createTicketAction — warranty claim", () => {
   });
 });
 
+describe("createTicketAction — unit ownership at intake", () => {
+  const stockForm = (overrides: Record<string, string | null> = {}) =>
+    claimForm({
+      unit_ownership: "store_stock",
+      stock_origin: "Gudang Nagoya rak B3",
+      customer_name: null,
+      phone: null,
+      purchase_date: null,
+      ...overrides,
+    });
+
+  it("opens a store-stock claim with no customer and no purchase date", async () => {
+    const result = await createTicketAction(stockForm({ device_sn: "SN-STOCK-1" }));
+    expect(result).toMatchObject({ success: true });
+
+    const ticket = await db.ticket.findFirst({
+      where: { store_location_id: storeId, device_sn: "SN-STOCK-1" },
+      select: {
+        customer_name: true,
+        customer_phone: true,
+        customer_email: true,
+        warranty_detail: { select: { unit_ownership: true, stock_origin: true, purchase_date: true } },
+      },
+    });
+    expect(ticket).toMatchObject({
+      customer_name: null,
+      customer_phone: null,
+      customer_email: null,
+      warranty_detail: {
+        unit_ownership: "store_stock",
+        stock_origin: "Gudang Nagoya rak B3",
+        purchase_date: null,
+      },
+    });
+  });
+
+  it("discards customer fields sent with a store-stock claim rather than storing them", async () => {
+    await createTicketAction(
+      stockForm({
+        device_sn: "SN-STOCK-2",
+        customer_name: "Nama Karangan",
+        phone: "+628111111111",
+        customer_email: "x@test.local",
+      }),
+    );
+    const ticket = await db.ticket.findFirst({
+      where: { store_location_id: storeId, device_sn: "SN-STOCK-2" },
+      select: { customer_name: true, customer_phone: true, customer_email: true },
+    });
+    expect(ticket).toEqual({ customer_name: null, customer_phone: null, customer_email: null });
+  });
+
+  it("refuses store stock without its origin", async () => {
+    const before = await db.ticket.count({ where: { store_location_id: storeId } });
+    const result = await createTicketAction(stockForm({ stock_origin: null }));
+    expect(result).toMatchObject({ error: expect.stringMatching(/asal stok/i) });
+    expect(await db.ticket.count({ where: { store_location_id: storeId } })).toBe(before);
+  });
+
+  it("refuses store stock on anything but a warranty claim", async () => {
+    const result = await createTicketAction(
+      stockForm({ ticket_type: "service", device_sn: null }),
+    );
+    expect(result).toMatchObject({ error: expect.stringMatching(/klaim garansi/i) });
+  });
+
+  it("refuses a customer claim without a customer name", async () => {
+    const result = await createTicketAction(claimForm({ customer_name: null }));
+    expect(result).toMatchObject({ error: expect.stringMatching(/nama/i) });
+  });
+
+  it("records a customer's claim as customer-owned", async () => {
+    await createTicketAction(claimForm({ device_sn: "SN-CUST-OWN" }));
+    const detail = await db.ticketWarrantyDetail.findFirst({
+      where: { ticket: { store_location_id: storeId, device_sn: "SN-CUST-OWN" } },
+      select: { unit_ownership: true, stock_origin: true },
+    });
+    expect(detail).toEqual({ unit_ownership: "customer", stock_origin: null });
+  });
+});
+
 describe("createTicketAction — ticket codes", () => {
   it("numbers tickets sequentially within a store", async () => {
     const seen: string[] = [];

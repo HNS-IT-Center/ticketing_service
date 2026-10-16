@@ -19,6 +19,7 @@ import ReplacedPartsPanel from "./ReplacedPartsPanel";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import HoldEvidencePanel from "./HoldEvidencePanel";
 import { holdReasonAsksTechnician } from "@/lib/rma/hold-reason";
+import { ticketPartyName } from "@/lib/ticket-party";
 
 function getTicketBasePoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
@@ -228,6 +229,14 @@ export default async function TechnicianTicketDetailPage({
               timeLogs={ticket.time_logs}
               pickupMethod={(ticket.pickup_method as "self_pickup" | "courier" | null) ?? "self_pickup"}
               ticketType={ticket.ticket_type}
+              intakeOwnership={
+                ticket.warranty_detail?.unit_ownership
+                  ? {
+                      unit_ownership: ticket.warranty_detail.unit_ownership,
+                      stock_origin: ticket.warranty_detail.stock_origin,
+                    }
+                  : null
+              }
               attachments={regularAttachments.map((a) => ({
                 id: a.id,
                 file_url: a.file_url,
@@ -262,7 +271,7 @@ export default async function TechnicianTicketDetailPage({
             </div>
             <div className="flex flex-col gap-4">
               {[
-                ["Name", ticket.is_for_self ? ticket.user?.name : ticket.customer_name],
+                ["Name", ticketPartyName(ticket)],
                 ["Email", ticket.is_for_self ? ticket.user?.email : ticket.customer_email],
                 ["Phone", ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone],
                 ["Address", ticket.is_for_self ? ticket.user?.address : ticket.customer_address],
@@ -293,7 +302,7 @@ export default async function TechnicianTicketDetailPage({
 
             <CustomerWhatsAppActions 
               customerPhone={(ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone) || ""}
-              customerName={(ticket.is_for_self ? ticket.user?.name : ticket.customer_name) || "Customer"}
+              customerName={(ticketPartyName(ticket)) || "Customer"}
               ticketCode={ticket.ticket_code}
               status={ticket.status}
               publicLink={publicTicketPath(ticket.created_at, ticket.public_share_token)?.slice(1) ?? null}

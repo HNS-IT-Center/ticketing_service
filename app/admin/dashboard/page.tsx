@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import { Users, Ticket, CheckCircle, Clock, AlertCircle, ArrowRight, Store } from "lucide-react";
+import { ticketPartyName } from "@/lib/ticket-party";
 
 export const metadata = { title: "Dashboard — HNS IT Center" };
 
@@ -102,7 +103,7 @@ export default async function AdminDashboard() {
                   <tr key={t.id}>
                     <td><Link href={`/admin/tickets/${t.id}`} style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</Link></td>
                     <td style={{ textTransform: "capitalize", fontSize: "0.875rem" }}>{t.ticket_type.replace("_", " ")}</td>
-                    <td style={{ fontSize: "0.875rem" }}>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</td>
+                    <td style={{ fontSize: "0.875rem" }}>{(ticketPartyName(t) || "Guest")}</td>
                     <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
                     <td style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{t.technician?.name ?? "—"}</td>
                   </tr>
@@ -139,7 +140,7 @@ export default async function AdminDashboard() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                   <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                  <span>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</span>
+                  <span>{(ticketPartyName(t) || "Guest")}</span>
                 </div>
                 {t.technician && (
                   <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>

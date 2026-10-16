@@ -39,10 +39,15 @@ export async function createTicketAction(formData: FormData) {
   const device_type = formData.get("device_type") as string;
   const notes = formData.get("notes") as string | null;
   const customer_type = (formData.get("customer_type") as string) || "User";
-  const customer_name = formData.get("customer_name") as string | null;
-  const customer_email = (formData.get("customer_email") as string | null) || null;
-  const customer_address = formData.get("customer_address") as string | null;
-  const customer_phone = formData.get("phone") as string;
+  // A store-stock unit has no customer: whatever arrived in the customer fields
+  // is discarded rather than stored, so no invented name ever reaches a list.
+  const unit_ownership_raw = (formData.get("unit_ownership") as string | null) || "customer";
+  const isStoreStock = unit_ownership_raw === "store_stock";
+  const stock_origin = ((formData.get("stock_origin") as string | null) || "").trim();
+  const customer_name = isStoreStock ? null : (formData.get("customer_name") as string | null);
+  const customer_email = isStoreStock ? null : (formData.get("customer_email") as string | null) || null;
+  const customer_address = isStoreStock ? null : (formData.get("customer_address") as string | null);
+  const customer_phone = isStoreStock ? null : (formData.get("phone") as string | null);
   const technician_id = (formData.get("technician_id") as string | null) || null;
   const sales_id = (formData.get("sales_id") as string | null) || null;
 
@@ -66,14 +71,34 @@ export async function createTicketAction(formData: FormData) {
   // Enforced here rather than in the form alone: the RMA desk verifies the unit
   // against its serial number and purchase date, so a claim cannot be opened
   // without both. Other ticket types are unaffected.
+  //
+  // Store stock is the exception for the date: the shop bought the unit from a
+  // supplier, and there is no customer purchase to date. Stock is only ever
+  // claimed, so it is refused on any other ticket type.
+  if (unit_ownership_raw !== "customer" && unit_ownership_raw !== "store_stock") {
+    return { error: "Kepemilikan unit tidak valid." };
+  }
+  if (isStoreStock && ticket_type !== "warranty_claim") {
+    return { error: "Unit stok toko hanya bisa dibuat sebagai tiket klaim garansi." };
+  }
+  if (isStoreStock && !stock_origin) {
+    return { error: "Asal stok wajib diisi untuk unit stok toko." };
+  }
   if (ticket_type === "warranty_claim") {
+    // Enforced so that a claim with no customer name always means store stock;
+    // lib/ticket-party.ts relies on it to label those rows.
+    if (!isStoreStock && (!customer_name?.trim() || !customer_phone?.trim())) {
+      return { error: "Nama dan nomor HP customer wajib diisi untuk klaim unit milik customer." };
+    }
     if (!device_sn?.trim()) {
       return { error: "Serial number (SN) wajib diisi untuk tiket klaim garansi." };
     }
-    const purchaseDateRaw = (formData.get("purchase_date") as string | null) || "";
-    const purchaseDate = new Date(purchaseDateRaw);
-    if (!purchaseDateRaw.trim() || Number.isNaN(purchaseDate.getTime())) {
+    const purchaseDateRaw = ((formData.get("purchase_date") as string | null) || "").trim();
+    if (!isStoreStock && !purchaseDateRaw) {
       return { error: "Tanggal pembelian wajib diisi untuk tiket klaim garansi." };
+    }
+    if (purchaseDateRaw && Number.isNaN(new Date(purchaseDateRaw).getTime())) {
+      return { error: "Tanggal pembelian tidak valid." };
     }
   }
 
@@ -232,10 +257,15 @@ export async function createTicketAction(formData: FormData) {
       followUps.push(db.ticketServiceDetail.create({ data: { ticket_id: ticket.id } }));
       break;
     case "warranty_claim": {
-      const purchaseDate = formData.get("purchase_date") as string;
+      const purchaseDate = ((formData.get("purchase_date") as string | null) || "").trim();
       followUps.push(
         db.ticketWarrantyDetail.create({
-          data: { ticket_id: ticket.id, purchase_date: new Date(purchaseDate) },
+          data: {
+            ticket_id: ticket.id,
+            purchase_date: purchaseDate ? new Date(purchaseDate) : null,
+            unit_ownership: isStoreStock ? "store_stock" : "customer",
+            stock_origin: isStoreStock ? stock_origin : null,
+          },
         })
       );
       break;

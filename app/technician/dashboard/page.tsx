@@ -6,6 +6,7 @@ import AvailableTickets from "./AvailableTickets";
 import RefreshButton from "./RefreshButton";
 import { Ticket, CheckCircle, Trophy, PlusCircle } from "lucide-react";
 import { getUserTitles } from "@/lib/performance";
+import { ticketPartyName } from "@/lib/ticket-party";
 
 export const metadata = { title: "Technician Dashboard — HNS IT Center" };
 
@@ -180,7 +181,7 @@ export default async function TechnicianDashboard() {
                       <tr key={t.id}>
                         <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
                         <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                        <td>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</td>
+                        <td>{(ticketPartyName(t) || "Guest")}</td>
                         {isCoordinator && <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{(t as any).technician?.name || <span style={{ opacity: 0.4 }}>Unassigned</span>}</td>}
                         <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type)} pts</span></td>
                         <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
@@ -203,7 +204,7 @@ export default async function TechnicianDashboard() {
                     </div>
                     <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
                       <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                      <span>{t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest")}</span>
+                      <span>{(ticketPartyName(t) || "Guest")}</span>
                     </div>
                     {isCoordinator && (t as any).technician?.name && (
                       <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
@@ -235,7 +236,7 @@ export default async function TechnicianDashboard() {
             ticket_type: t.ticket_type,
             device_type: t.device_type,
             created_at: t.created_at,
-            user: { name: t.is_for_self ? (t.user?.name || "Guest") : (t.customer_name || "Guest") }
+            user: { name: (ticketPartyName(t) || "Guest") }
           }))}
           myRequestedIds={Array.from(myRequestedIds)}
           otherRequestedIds={Array.from(otherRequestedIds)}

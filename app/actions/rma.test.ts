@@ -361,6 +361,26 @@ describe("handoverToRmaAction — service form validation", () => {
     expect(result).toMatchObject({ success: true });
   });
 
+  it("takes ownership from intake, not from the handover form", async () => {
+    // Intake said store stock; a stale or tampered form saying "customer" with
+    // no invoice must neither win nor be refused for the missing invoice.
+    const ticket = await makeTicket({ withInvoice: false });
+    await db.ticketWarrantyDetail.create({
+      data: { ticket_id: ticket.id, unit_ownership: "store_stock", stock_origin: "Gudang Batam Center" },
+    });
+    const fd = validForm(ticket.id);
+    fd.set("unit_ownership", "customer");
+    fd.delete("purchase_invoice_url");
+
+    const result = await handoverToRmaAction(fd);
+    expect(result).toMatchObject({ success: true });
+    const rmaCase = await db.rmaCase.findUnique({
+      where: { ticket_id: ticket.id },
+      select: { unit_ownership: true, stock_origin: true },
+    });
+    expect(rmaCase).toEqual({ unit_ownership: "store_stock", stock_origin: "Gudang Batam Center" });
+  });
+
   it.each([
     ["physical_condition", "Physical condition"],
     ["fault_description", "Fault description"],

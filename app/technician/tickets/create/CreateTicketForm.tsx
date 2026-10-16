@@ -37,6 +37,12 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [storeLocationId, setStoreLocationId] = useState(defaultStoreLocationId || "");
   const [technicianId, setTechnicianId] = useState("");
   const [salesId, setSalesId] = useState("");
+  // Asked first, because at the counter it is already known. A store-stock
+  // unit has no customer, so choosing it removes the customer fields entirely
+  // and narrows the ticket to a warranty claim — the only reason stock comes in.
+  const [unitOwnership, setUnitOwnership] = useState<"customer" | "store_stock">("customer");
+  const isStoreStock = unitOwnership === "store_stock";
+  const [stockOrigin, setStockOrigin] = useState("");
   const [customerName, setCustomerName] = useState("");
   const [customerEmail, setCustomerEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -82,7 +88,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   // cost the whole intake. Files are kept as their already-uploaded URLs; the
   // confirmation tick is deliberately not kept, it must be given again.
   const draftData = {
-    step, storeLocationId, technicianId, salesId,
+    step, storeLocationId, technicianId, salesId, unitOwnership, stockOrigin,
     customerName, customerEmail, phone, gridDevice, ticketType, deviceType,
     deviceName, deviceSn, purchaseDate, conditions, selectedAccessories,
     customAccessory, notes, checkDiagnosisFee, cleaningPackage, selectedUpgrades,
@@ -94,7 +100,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     const d = draft.offer?.data;
     if (!d) return;
     setStep(d.step); setStoreLocationId(d.storeLocationId); setTechnicianId(d.technicianId);
-    setSalesId(d.salesId);
+    setSalesId(d.salesId); setUnitOwnership(d.unitOwnership); setStockOrigin(d.stockOrigin);
     setCustomerName(d.customerName); setCustomerEmail(d.customerEmail); setPhone(d.phone);
     setGridDevice(d.gridDevice); setTicketType(d.ticketType); setDeviceType(d.deviceType);
     setDeviceName(d.deviceName); setDeviceSn(d.deviceSn); setPurchaseDate(d.purchaseDate);
@@ -121,6 +127,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   );
 
   const getAvailableCases = () => {
+    if (isStoreStock) return gridDevice && gridDevice !== "Build PC" ? ["warranty_claim"] : [];
     // "warranty_claim" opens the claim intake and, later, the handover to RMA.
     // It applies to any physical unit still under warranty; a Build PC is a
     // service we perform, not a unit that gets claimed.
@@ -136,10 +143,14 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     const errs: Record<string, string> = {};
     if (step === 1) {
       if (!storeLocationId) errs.storeLocationId = "Please select a store location.";
-      if (!customerName.trim()) errs.customerName = "Customer name is required.";
-      if (!phone.match(/^\d{9,13}$/)) errs.phone = "Enter valid phone number digits (9-13 digits).";
-      if (customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
-        errs.customerEmail = "Please enter a valid email address.";
+      if (isStoreStock) {
+        if (!stockOrigin.trim()) errs.stockOrigin = "Asal stok wajib diisi.";
+      } else {
+        if (!customerName.trim()) errs.customerName = "Customer name is required.";
+        if (!phone.match(/^\d{9,13}$/)) errs.phone = "Enter valid phone number digits (9-13 digits).";
+        if (customerEmail.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail)) {
+          errs.customerEmail = "Please enter a valid email address.";
+        }
       }
     }
     if (step === 2) {
@@ -154,7 +165,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (ticketType === "warranty_claim") {
         // The RMA desk verifies the unit against both, so intake must capture them.
         if (!deviceSn.trim()) errs.deviceSn = "SN wajib diisi untuk klaim garansi.";
-        if (!purchaseDate) errs.purchaseDate = "Tanggal pembelian wajib diisi untuk klaim garansi.";
+        if (!purchaseDate && !isStoreStock) errs.purchaseDate = "Tanggal pembelian wajib diisi untuk klaim garansi.";
         if (!notes.trim()) errs.notes = "Deskripsi keluhan wajib diisi untuk klaim garansi.";
       }
       if (ticketType === "cleaning" && !cleaningPackage) errs.cleaningPackage = "Cleaning package is required.";
@@ -204,9 +215,14 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (salesId) fd.append("sales_id", salesId);
 
       fd.append("customer_type", "User"); // Fixed as per new rules
-      fd.append("customer_name", customerName);
-      if (customerEmail) fd.append("customer_email", customerEmail);
-      fd.append("phone", `+62${phone}`);
+      fd.append("unit_ownership", unitOwnership);
+      if (isStoreStock) {
+        fd.append("stock_origin", stockOrigin.trim());
+      } else {
+        fd.append("customer_name", customerName);
+        if (customerEmail) fd.append("customer_email", customerEmail);
+        fd.append("phone", `+62${phone}`);
+      }
 
       fd.append("ticket_type", ticketType);
       
@@ -223,7 +239,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       fd.append("pickup_method", pickupMethod);
       if (deviceName) fd.append("device_name", deviceName);
       if (deviceSn) fd.append("device_sn", deviceSn);
-      if (ticketType === "warranty_claim") fd.append("purchase_date", purchaseDate);
+      if (ticketType === "warranty_claim" && purchaseDate) fd.append("purchase_date", purchaseDate);
       if (pcComponents.length > 0) {
         pcComponents.forEach((c) => fd.append("pcComponents", c));
       }
@@ -365,6 +381,52 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
 
             <hr style={{ margin: "1rem 0", borderColor: "var(--border)" }} />
 
+            <div className="form-group">
+              <label className="form-label">Unit milik *</label>
+              <div style={{ display: "flex", gap: "0.5rem" }}>
+                {([
+                  ["customer", "Customer"],
+                  ["store_stock", "Stok Toko"],
+                ] as const).map(([value, label]) => (
+                  <button
+                    key={value}
+                    type="button"
+                    onClick={() => {
+                      setUnitOwnership(value);
+                      // Stock only ever comes in as a claim; drop a device or
+                      // case chosen earlier that no longer applies.
+                      if (value === "store_stock") {
+                        if (gridDevice === "Build PC") setGridDevice("");
+                        setTicketType(gridDevice && gridDevice !== "Build PC" ? "warranty_claim" : "");
+                      }
+                    }}
+                    className={unitOwnership === value ? "btn btn-primary" : "btn btn-outline"}
+                    style={{ flex: 1 }}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              {isStoreStock && (
+                <p className="form-help">
+                  Unit stok toko tidak punya customer, dan hanya bisa dibuat sebagai klaim garansi.
+                </p>
+              )}
+            </div>
+
+            {isStoreStock ? (
+              <div className="form-group">
+                <label className="form-label">Asal Stok *</label>
+                <input
+                  className={`form-input ${errors.stockOrigin ? "error" : ""}`}
+                  value={stockOrigin}
+                  onChange={e => setStockOrigin(e.target.value)}
+                  placeholder="Misal: Gudang Nagoya rak B3"
+                />
+                {errors.stockOrigin && <span className="form-error"><AlertCircle size={12} />{errors.stockOrigin}</span>}
+              </div>
+            ) : (
+            <>
             <h3 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Customer Information</h3>
             
             <div className="form-group">
@@ -413,6 +475,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 {errors.customerEmail && <span className="form-error"><AlertCircle size={12} />{errors.customerEmail}</span>}
               </div>
             </div>
+            </>
+            )}
           </div>
         )}
 
@@ -431,7 +495,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
               maxWidth: "600px",
               margin: "0.5rem auto 0"
             }}>
-              {DEVICES.map(d => (
+              {DEVICES.filter(d => !(isStoreStock && d.id === "Build PC")).map(d => (
                 <button
                   key={d.id}
                   type="button"
@@ -439,7 +503,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     setGridDevice(d.id);
                     // Build PC has exactly one case, so it can be implied.
                     // Everything else waits for an explicit choice.
-                    setTicketType(d.id === "Build PC" ? "pc_build" : "");
+                    setTicketType(d.id === "Build PC" ? "pc_build" : isStoreStock ? "warranty_claim" : "");
                   }}
                   style={{
                     flex: "1 1 140px",
@@ -555,7 +619,10 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
 
                 <div className="form-group">
                   <label className="form-label">
-                    Tanggal Pembelian <span style={{ color: "var(--accent)" }}>*</span>
+                    Tanggal Pembelian{" "}
+                    {isStoreStock
+                      ? <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
+                      : <span style={{ color: "var(--accent)" }}>*</span>}
                   </label>
                   <input
                     type="date"
@@ -564,7 +631,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     max={new Date().toISOString().slice(0, 10)}
                     onChange={e => setPurchaseDate(e.target.value)}
                   />
-                  <p className="form-help">Sesuai tanggal pada nota pembelian.</p>
+                  <p className="form-help">
+                    {isStoreStock ? "Kosongkan bila tidak ada." : "Sesuai tanggal pada nota pembelian."}
+                  </p>
                   {errors.purchaseDate && <span className="form-error"><AlertCircle size={12} />{errors.purchaseDate}</span>}
                 </div>
 
@@ -589,7 +658,10 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   </label>
                   <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
                     Unggah foto/scan nota sekarang agar teknisi dapat memilihnya saat menyerahkan
-                    unit ke RMA. Nota wajib ada sebelum klaim unit milik customer diserahkan ke RMA.
+                    unit ke RMA.{" "}
+                    {isStoreStock
+                      ? "Untuk unit stok toko, nota tidak wajib."
+                      : "Nota wajib ada sebelum klaim unit milik customer diserahkan ke RMA."}
                   </p>
                   <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
                   {restoredUploads}
@@ -794,7 +866,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             <h2 style={{ marginBottom: "0.5rem" }}>Confirm Ticket Details</h2>
             <div style={{ background: "var(--cream)", padding: "1.5rem", borderRadius: "12px", fontSize: "0.95rem", lineHeight: "1.6" }}>
               <p><strong>Store:</strong> {storeLocations.find(s => s.id === storeLocationId)?.name}</p>
-              <p><strong>Customer:</strong> {customerName} - +62{phone}</p>
+              {isStoreStock
+                ? <p><strong>Unit:</strong> Stok Toko — {stockOrigin}</p>
+                : <p><strong>Customer:</strong> {customerName} - +62{phone}</p>}
               <p><strong>Device:</strong> {gridDevice} ({deviceType || "N/A"})</p>
               <p><strong>Case:</strong> <span style={{ textTransform: "capitalize" }}>{ticketType.replace(/_/g, " ")}</span></p>
               {ticketType === "cleaning" && <p><strong>Package:</strong> {cleaningPackage.replace(/_/g, " ")}</p>}

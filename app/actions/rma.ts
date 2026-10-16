@@ -93,8 +93,8 @@ export async function handoverToRmaAction(formData: FormData) {
     const session = await requireSession();
 
     const ticketId = formData.get("ticketId") as string;
-    const unitOwnership = formData.get("unit_ownership") as UnitOwnership | null;
-    const stockOrigin = ((formData.get("stock_origin") as string | null) || "").trim();
+    const unitOwnershipInput = formData.get("unit_ownership") as UnitOwnership | null;
+    const stockOriginInput = ((formData.get("stock_origin") as string | null) || "").trim();
     const snVerified = formData.get("sn_verified") === "1";
     const physicalCondition = ((formData.get("physical_condition") as string | null) || "").trim();
     const faultDescription = ((formData.get("fault_description") as string | null) || "").trim();
@@ -123,10 +123,21 @@ export async function handoverToRmaAction(formData: FormData) {
         technician_id: true,
         store_location: { select: { code: true } },
         rma_case: { select: { id: true } },
+        warranty_detail: { select: { unit_ownership: true, stock_origin: true } },
       },
     });
 
     if (!ticket) return { error: "Ticket not found" };
+
+    // Ownership recorded at intake is the answer; the handover does not get to
+    // re-ask it. A claim opened before intake recorded it falls back to the
+    // value the technician picks here, as it always did.
+    const intakeOwnership = ticket.warranty_detail?.unit_ownership ?? null;
+    const unitOwnership = intakeOwnership ?? unitOwnershipInput;
+    const stockOrigin =
+      intakeOwnership === "store_stock"
+        ? stockOriginInput || ticket.warranty_detail?.stock_origin?.trim() || ""
+        : stockOriginInput;
 
     // ── Authorization ──
     const isAdmin = session.role === "Administrator";

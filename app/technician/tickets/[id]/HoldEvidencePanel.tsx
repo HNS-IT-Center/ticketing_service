@@ -7,6 +7,7 @@ import FileUpload from "@/components/ui/FileUpload";
 import { submitHoldEvidenceAction } from "@/app/actions/rma";
 import { RMA_HOLD_REASONS } from "@/lib/rma/hold-reason";
 import { UploadCloud } from "lucide-react";
+import { uploadFailureMessage } from "@/lib/upload-limit";
 
 /**
  * What the RMA desk is waiting for, on the page of the person who can supply it.
@@ -47,8 +48,15 @@ export default function HoldEvidencePanel({
       fd.append("ticket_id", ticketId);
       chosen.forEach((f) => fd.append("evidence_files", f));
 
-      const res = await submitHoldEvidenceAction(fd);
-      if (res?.error) {
+      let res: Awaited<ReturnType<typeof submitHoldEvidenceAction>>;
+      try {
+        res = await submitHoldEvidenceAction(fd);
+      } catch (err) {
+        console.error("[hold evidence] send failed:", err);
+        toast.error(uploadFailureMessage(err));
+        return;
+      }
+      if ("error" in res && res.error) {
         toast.error(res.error);
         return;
       }

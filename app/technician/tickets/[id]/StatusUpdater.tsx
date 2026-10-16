@@ -11,6 +11,9 @@ import {
   ShieldCheck, FileText,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+import { uploadFailureMessage, UPLOAD_BUDGET_MB } from "@/lib/upload-limit";
+import DraftBanner from "@/components/ui/DraftBanner";
+import { useDraft } from "@/lib/draft";
 
 /** Matches MAX_DAMAGE_PHOTOS in app/actions/rma.ts. */
 const MAX_DAMAGE_PHOTOS = 5;
@@ -121,6 +124,23 @@ export default function StatusUpdater({
   const [recommendEligible, setRecommendEligible] = useState<"" | "yes" | "no">("");
   const [recommendNote, setRecommendNote] = useState("");
 
+  // The handover form is long and typed on a phone, beside the unit. Kept per
+  // ticket so a reload does not cost the technician the whole examination.
+  // Photos and video cannot be kept and must be picked again.
+  const handoverDraft = useDraft(`rma-handover:${ticketId}`, {
+    unitOwnership, stockOrigin, snVerified, physicalCondition, faultDescription,
+    testResult, invoiceUrl, recommendEligible, recommendNote,
+  });
+  const restoreHandoverDraft = () => {
+    const d = handoverDraft.offer?.data;
+    if (!d) return;
+    setUnitOwnership(d.unitOwnership);
+    setStockOrigin(d.stockOrigin); setSnVerified(d.snVerified);
+    setPhysicalCondition(d.physicalCondition); setFaultDescription(d.faultDescription);
+    setTestResult(d.testResult); setInvoiceUrl(d.invoiceUrl);
+    setRecommendEligible(d.recommendEligible); setRecommendNote(d.recommendNote);
+  };
+
   /**
    * Client-side copy of the server's handover rules.
    *
@@ -173,11 +193,20 @@ export default function StatusUpdater({
       fd.append("recommended_eligible", recommendEligible);
       if (recommendNote.trim()) fd.append("recommendation_note", recommendNote.trim());
 
-      const result = await handoverToRmaAction(fd);
+      // Caught so a failed send leaves the dialog open with everything typed.
+      let result: Awaited<ReturnType<typeof handoverToRmaAction>>;
+      try {
+        result = await handoverToRmaAction(fd);
+      } catch (err) {
+        console.error("[handover] send failed:", err);
+        toast.error(uploadFailureMessage(err));
+        return;
+      }
       if ("error" in result && result.error) {
         toast.error(result.error);
         return;
       }
+      handoverDraft.finish();
       toast.success(
         "rmaCode" in result && result.rmaCode
           ? `Unit diserahkan ke RMA — ${result.rmaCode}`
@@ -237,11 +266,7 @@ export default function StatusUpdater({
         }
       } catch (err: any) {
         console.error("Action error:", err);
-        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
-          toast.error("Upload failed: File size is too large. Please limit to 10MB.");
-        } else {
-          toast.error("An unexpected error occurred. Please try again.");
-        }
+        toast.error(uploadFailureMessage(err));
       }
     });
   };
@@ -723,6 +748,15 @@ export default function StatusUpdater({
             description="Isi hasil pemeriksaan unit. Data ini yang diverifikasi tim RMA sebelum klaim diajukan ke vendor."
           />
 
+          {handoverDraft.offer && (
+            <DraftBanner
+              savedAt={handoverDraft.offer.savedAt}
+              note="Foto/video kerusakan dan nota perlu dipilih ulang."
+              onRestore={restoreHandoverDraft}
+              onDiscard={handoverDraft.discard}
+            />
+          )}
+
           <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
             <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
               Kepemilikan Unit <span style={{ color: "var(--accent-brand)" }}>*</span>
@@ -868,7 +902,7 @@ export default function StatusUpdater({
               1–{MAX_DAMAGE_PHOTOS} berkas, foto atau video. Tim RMA memutuskan kelayakan klaim
               dari bukti ini — tanpa bukti mereka hanya punya tulisan. Untuk kerusakan yang
               kambuhan, video jauh lebih meyakinkan daripada foto. Total seluruh unggahan
-              maksimal 20 MB.
+              maksimal {UPLOAD_BUDGET_MB} MB — rekam video singkat, atau set kamera ke 720p.
             </p>
             <FileUpload
               onChange={setDamagePhotos}

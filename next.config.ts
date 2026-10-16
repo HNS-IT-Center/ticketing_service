@@ -12,6 +12,11 @@ const nextConfig: NextConfig = {
   // rather than `next start`.
   output: "standalone",
 
+  // Lets a phone on the same Wi-Fi open the dev server, so mobile-only faults
+  // (the Android Chrome upload crash) can be tried on a real device without a
+  // deploy. Dev-only; set DEV_LAN_ORIGIN to this machine's LAN IP when needed.
+  allowedDevOrigins: process.env.DEV_LAN_ORIGIN ? [process.env.DEV_LAN_ORIGIN] : [],
+
   experimental: {
     serverActions: {
       bodySizeLimit: "20mb",

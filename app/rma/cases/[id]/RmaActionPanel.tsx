@@ -20,6 +20,7 @@ import {
   type RmaTransitionField,
 } from "@/lib/rma/state-machine";
 import { Lock, ArrowRight } from "lucide-react";
+import { uploadFailureMessage } from "@/lib/upload-limit";
 
 /**
  * Every button here is derived from lib/rma/state-machine.ts — the same module
@@ -180,7 +181,14 @@ export default function RmaActionPanel({
       const photoField = active.to === "submitted_to_vendor" ? "receipt_files" : "damage_files";
       photos.filter((f) => f.size > 0).forEach((f) => fd.append(photoField, f));
 
-      const result = await transitionRmaAction(fd);
+      let result: Awaited<ReturnType<typeof transitionRmaAction>>;
+      try {
+        result = await transitionRmaAction(fd);
+      } catch (err) {
+        console.error("[rma transition] send failed:", err);
+        toast.error(uploadFailureMessage(err));
+        return;
+      }
       if ("error" in result && result.error) {
         toast.error(result.error);
         return;

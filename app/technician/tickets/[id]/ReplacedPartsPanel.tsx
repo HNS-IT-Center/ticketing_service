@@ -15,6 +15,7 @@ import {
   addReplacedPartAction,
   removeReplacedPartAction,
 } from "@/app/actions/technician";
+import { uploadFailureMessage } from "@/lib/upload-limit";
 
 export type ReplacedPartRow = {
   id: string;
@@ -73,8 +74,15 @@ export default function ReplacedPartsPanel({
       formData.append("notes", notes);
       for (const photo of photos) formData.append("photos", photo);
 
-      const result = await addReplacedPartAction(formData);
-      if (result?.error) {
+      let result: Awaited<ReturnType<typeof addReplacedPartAction>>;
+      try {
+        result = await addReplacedPartAction(formData);
+      } catch (err) {
+        console.error("[replaced part] send failed:", err);
+        toast.error(uploadFailureMessage(err));
+        return;
+      }
+      if ("error" in result && result.error) {
         toast.error(result.error);
         return;
       }

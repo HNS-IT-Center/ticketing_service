@@ -351,6 +351,26 @@ describe("handoverToRmaAction — service form validation", () => {
     expect(result).toMatchObject({ error: expect.stringContaining("Stock origin") });
   });
 
+  it("accepts the long free text a technician types on a phone", async () => {
+    // Production, 2026-10-16: a handover failed with the generic server error.
+    // `test_result` was VARCHAR(191) while every other field of the same form
+    // was TEXT, and STRICT_TRANS_TABLES turns an over-long value into an error.
+    const ticket = await makeTicket();
+    const long = "Tes stres 30 menit, layar berkedip di menit ke-12. ".repeat(12);
+    const fd = validForm(ticket.id, {
+      test_result: long,
+      physical_condition: long,
+      fault_description: long,
+    });
+    const result = await handoverToRmaAction(fd);
+    expect(result).toMatchObject({ success: true });
+    const saved = await db.rmaCase.findUnique({
+      where: { ticket_id: ticket.id },
+      select: { test_result: true },
+    });
+    expect(saved?.test_result).toBe(long.trim());
+  });
+
   it("accepts a store stock unit with a stock origin and no invoice", async () => {
     const ticket = await makeTicket();
     const fd = validForm(ticket.id);

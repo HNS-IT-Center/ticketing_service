@@ -90,8 +90,8 @@ export async function loadTicketCharges(ticketId: string, canViewCost: boolean):
 
 export function activeVendors(): Promise<VendorOption[]> {
   return db.vendor.findMany({
-    where: { is_active: true },
-    select: { id: true, name: true, kind: true },
+    where: { is_active: true, OR: [{ supplies_parts: true }, { repairs: true }] },
+    select: { id: true, name: true, supplies_parts: true, repairs: true },
     orderBy: { name: "asc" },
   });
 }

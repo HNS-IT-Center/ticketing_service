@@ -155,12 +155,22 @@ describe("labels and small rules", () => {
     expect(externalState({ kind: "part", sent_at: null, returned_at: null })).toBeNull();
   });
 
-  it("matches vendors to lines", () => {
-    expect(vendorFitsCharge("external_service", "repair_service")).toBe(true);
-    expect(vendorFitsCharge("external_service", "part_supplier")).toBe(false);
-    expect(vendorFitsCharge("part", "part_supplier")).toBe(true);
-    expect(vendorFitsCharge("part", "repair_service")).toBe(false);
-    expect(vendorFitsCharge("part", "both")).toBe(true);
-    expect(vendorFitsCharge("other", "repair_service")).toBe(true);
+  it("matches vendors to lines by their roles", () => {
+    const parts = { supplies_parts: true, repairs: false };
+    const repairer = { supplies_parts: false, repairs: true };
+    const both = { supplies_parts: true, repairs: true };
+    const claimsOnly = { supplies_parts: false, repairs: false };
+    expect(vendorFitsCharge("external_service", repairer)).toBe(true);
+    expect(vendorFitsCharge("external_service", parts)).toBe(false);
+    expect(vendorFitsCharge("part", parts)).toBe(true);
+    expect(vendorFitsCharge("part", repairer)).toBe(false);
+    expect(vendorFitsCharge("part", both)).toBe(true);
+    expect(vendorFitsCharge("other", repairer)).toBe(true);
+    // Only taking warranty claims is not a reason to be on a service bill.
+    for (const kind of ["part", "external_service", "other", "service_fee"] as const) {
+      expect(vendorFitsCharge(kind, claimsOnly)).toBe(false);
+    }
+    // The shop's own labour has no vendor.
+    expect(vendorFitsCharge("service_fee", both)).toBe(false);
   });
 });

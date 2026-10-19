@@ -8,9 +8,10 @@
  * ticket it is.
  */
 
-import type { ChargeKind, ExternalResult, ServicePart, TicketStatus, VendorKind } from "@prisma/client";
+import type { ChargeKind, ExternalResult, ServicePart, TicketStatus } from "@prisma/client";
 import type { Audience } from "@/lib/access";
 import { servicePartLabel } from "@/lib/service-parts";
+import { VENDOR_ROLE_INFO, type VendorRoles } from "@/lib/vendors";
 
 /** Per unit, in Rupiah. A billion is far above any part or repair this shop bills. */
 export const MAX_UNIT_AMOUNT = 999_999_999;
@@ -159,12 +160,39 @@ export function externalState(line: {
   return line.sent_at ? "at_vendor" : null;
 }
 
-/** Which vendors fit which kind of line: work sent out goes to a repairer, a part comes from a supplier. */
-export function vendorFitsCharge(kind: ChargeKind, vendorKind: VendorKind): boolean {
-  if (vendorKind === "both") return true;
-  if (kind === "external_service") return vendorKind === "repair_service";
-  if (kind === "part") return vendorKind === "part_supplier";
-  return true;
+type BillingRoles = Pick<VendorRoles, "supplies_parts" | "repairs">;
+
+/**
+ * Which vendors fit which kind of line: work sent out goes to a repairer, a
+ * part comes from a supplier. A vendor that only takes warranty claims is not
+ * someone the shop pays for a service, so it fits none of them.
+ */
+export function vendorFitsCharge(kind: ChargeKind, vendor: BillingRoles): boolean {
+  switch (kind) {
+    case "external_service":
+      return vendor.repairs;
+    case "part":
+      return vendor.supplies_parts;
+    case "other":
+      return vendor.supplies_parts || vendor.repairs;
+    case "service_fee":
+      return false;
+    default: {
+      const _exhaustive: never = kind;
+      return Boolean(_exhaustive);
+    }
+  }
+}
+
+/** Why a vendor does not fit a line, naming the role to tick in the vendor list. */
+export function vendorMismatchMessage(kind: ChargeKind): string {
+  const role =
+    kind === "external_service"
+      ? VENDOR_ROLE_INFO.repairs.label
+      : kind === "part"
+        ? VENDOR_ROLE_INFO.supplies_parts.label
+        : `${VENDOR_ROLE_INFO.supplies_parts.label} atau ${VENDOR_ROLE_INFO.repairs.label}`;
+  return `Vendor ini tidak ditandai sebagai ${role}. Centang perannya di Daftar Vendor bila keliru.`;
 }
 
 export type ChargePermissions = {
@@ -194,7 +222,7 @@ export type ChargeRow = {
   created_by_name: string;
 };
 
-export type VendorOption = { id: string; name: string; kind: VendorKind };
+export type VendorOption = { id: string; name: string } & BillingRoles;
 
 /** Statuses after which the bill is settled for everyone but the senior staff. */
 export const BILL_CLOSED_STATUSES: readonly TicketStatus[] = ["completed", "cancelled", "rejected"];

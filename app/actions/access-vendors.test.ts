@@ -38,7 +38,7 @@ const as = (key: string, role: string) => Object.assign(session, { userId: ids[k
 const vendorForm = (name: string, extra: Record<string, string> = {}) => {
   const fd = new FormData();
   fd.set("name", name);
-  fd.set("kind", "part_supplier");
+  fd.set("supplies_parts", "1");
   for (const [k, v] of Object.entries(extra)) fd.set(k, v);
   return fd;
 };
@@ -60,6 +60,7 @@ beforeAll(async () => {
   await user("tech", "Technician");
   await user("head", "Technician", { is_head_technician: true });
   await user("coord", "Technician", { is_team_leader: true });
+  await user("rma", "RMA");
 });
 
 beforeEach(async () => {
@@ -142,6 +143,27 @@ describe("vendors", () => {
     await saveAccessRulesAction(matrix(changed));
     as("tech", "Technician");
     expect(await createVendorAction(vendorForm(`${RUN} Diberi Akses`))).toMatchObject({ success: true });
+  });
+
+  it("stores every role ticked, and refuses a vendor with none", async () => {
+    const r = await createVendorAction(vendorForm(`${RUN} Distributor`, { handles_claims: "1" }));
+    const id = (r as { vendor: { id: string } }).vendor.id;
+    expect(await db.vendor.findUniqueOrThrow({ where: { id } })).toMatchObject({
+      supplies_parts: true,
+      repairs: false,
+      handles_claims: true,
+    });
+    const none = new FormData();
+    none.set("name", `${RUN} Tanpa Peran`);
+    expect(await createVendorAction(none)).toMatchObject({ error: expect.stringContaining("minimal satu peran") });
+  });
+
+  it("the RMA desk may add claim vendors by default", async () => {
+    as("rma", "RMA");
+    const fd = new FormData();
+    fd.set("name", `${RUN} Synnex`);
+    fd.set("handles_claims", "1");
+    expect(await createVendorAction(fd)).toMatchObject({ success: true });
   });
 
   it("deactivates a vendor without deleting it", async () => {

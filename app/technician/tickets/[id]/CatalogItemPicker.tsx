@@ -95,8 +95,13 @@ export default function CatalogItemPicker({
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
                     SKU {item.sku}
                     {item.category ? ` · ${item.category}` : ""}
-                    {here !== null ? ` · stok toko ini ${here}` : ""}
-                    {` · stok total ${item.stockTotal}`}
+                    {/* Service parts are ordered per job, so 0 is the normal case and
+                        not worth showing; only RAM and SSD are kept in stock. */}
+                    {here !== null && here > 0
+                      ? ` · stok toko ini ${here}`
+                      : item.stockTotal > 0
+                        ? ` · stok total ${item.stockTotal}`
+                        : ""}
                   </span>
                 </button>
               </li>

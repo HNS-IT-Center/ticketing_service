@@ -65,6 +65,7 @@ export async function updateUserAction(userId: string, formData: FormData) {
   const work_days = formData.get("work_days") as string | null;
   const max_points = formData.get("max_points") as string | null;
   const is_team_leader = formData.get("is_team_leader") === "1";
+  const is_head_technician = formData.get("is_head_technician") === "1";
 
   if (is_team_leader) {
     const stores = await db.technicianStoreAssignment.findMany({
@@ -96,6 +97,8 @@ export async function updateUserAction(userId: string, formData: FormData) {
       shift: shift ? (shift as any) : null,
       work_days: work_days ? JSON.parse(work_days) : null,
       is_team_leader,
+      // Only a technician can be one; the flag is dropped if the role changes.
+      is_head_technician: is_head_technician && formData.get("role") === "Technician",
     },
   });
 

@@ -345,7 +345,7 @@ export default function ReplacedPartsPanel({
                   <span className="text-xs" style={{ color: "#1e40af" }}>
                     SKU {selected.sku}
                     {selected.category ? ` · ${selected.category}` : ""}
-                    {stockAtStore(selected, storeName) !== null ? ` · stok toko ini ${stockAtStore(selected, storeName)}` : ""}
+                    {(stockAtStore(selected, storeName) ?? 0) > 0 ? ` · stok toko ini ${stockAtStore(selected, storeName)}` : ""}
                   </span>
                 </div>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>

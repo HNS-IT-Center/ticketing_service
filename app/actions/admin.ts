@@ -13,6 +13,8 @@ import {
 } from "@/lib/kpi";
 import { getTicketPoints } from "@/lib/points";
 import { deleteFromStorage } from "@/lib/r2";
+import { EXTERNAL_WORK_OUTSTANDING } from "@/lib/charges";
+import { hasExternalWorkOutstanding } from "@/lib/charges-server";
 
 // ─── Create User ───────────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
@@ -320,6 +322,12 @@ export async function adminUpdateTicketStatusAction(
         "Tiket klaim tidak bisa diselesaikan dari portal ini. Serahkan unit ke RMA — " +
         "kelayakan klaim diputuskan tim RMA.",
     };
+  }
+
+  // Mirrors guard 4 in updateTicketStatusAction: not finished while part of
+  // the work is still at a vendor.
+  if (newStatus === "done" && ticket.ticket_type === "service" && (await hasExternalWorkOutstanding(ticket.id))) {
+    return { error: EXTERNAL_WORK_OUTSTANDING };
   }
 
   await db.$transaction([

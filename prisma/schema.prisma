@@ -246,6 +246,8 @@ model User {
   rma_cases_handled  RmaCase[]             @relation("RmaHandler")
   tickets_deleted    DeletedTicketLog[]    @relation("TicketDeletedBy")
   parts_recorded     TicketReplacedPart[]  @relation("PartRecordedBy")
+  charges_created    TicketCharge[]        @relation("ChargeCreatedBy")
+  charges_updated    TicketCharge[]        @relation("ChargeUpdatedBy")
   sso_sessions       SsoSession[]
   rma_events         RmaEvent[]
 
@@ -328,6 +330,7 @@ model Ticket {
   notifications    Notification[]
   service_detail   TicketServiceDetail?
   replaced_parts   TicketReplacedPart[]
+  charges          TicketCharge[]
   warranty_detail  TicketWarrantyDetail?
   cleaning_detail  TicketCleaningDetail?
   upgrade_details  TicketUpgradeDetail[]
@@ -817,6 +820,9 @@ model TicketReplacedPart {
    */
   photos TicketReplacedPartPhoto[]
 
+  /** The line that prices this part in the ticket's Rincian Biaya. */
+  charge TicketCharge?
+
   created_at DateTime @default(now())
 
   @@index([ticket_id])
@@ -903,4 +909,76 @@ model Vendor {
   is_active  Boolean    @default(true)
   created_at DateTime   @default(now())
   updated_at DateTime   @updatedAt
+
+  charges TicketCharge[]
+}
+
+/// What a line of a service bill is for.
+enum ChargeKind {
+  part             // a component fitted; created together with the TicketReplacedPart it prices
+  external_service // work sent out to a vendor, e.g. IC or board repair
+  service_fee      // the shop's own labour
+  other
+}
+
+/// How external work came back from the vendor.
+enum ExternalResult {
+  repaired
+  not_repaired
+}
+
+// One line of a service ticket's bill — "Rincian Biaya".
+//
+// The shop holds no stock of most parts: an LCD, a battery or a keyboard is
+// bought from a supplier for the job, and board work goes to another vendor.
+// So every line can carry two prices: what the shop paid (`unit_cost`, "harga
+// modal") and what the customer is charged (`unit_price`, "harga jual"). Who
+// may see or set each is the owner's call, in Admin -> Pengaturan Akses
+// (`lib/access.ts`); the page never sends a cost to a browser that may not see
+// it, and the action never writes one the caller may not set.
+//
+// Rupiah, whole numbers. Null means "not filled in yet", which is different
+// from 0 — a warranty swap can be charged at 0 on purpose, and the bill says
+// so rather than looking unfinished.
+//
+// A part line is created with the TicketReplacedPart it prices and dies with
+// it, so a part cannot be removed while its price lingers on the bill.
+model TicketCharge {
+  id        String @id @default(cuid())
+  ticket_id String
+  ticket    Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  kind        ChargeKind
+  description String     @db.Text
+  quantity    Int        @default(1)
+
+  replaced_part_id String?             @unique
+  replaced_part    TicketReplacedPart? @relation(fields: [replaced_part_id], references: [id], onDelete: Cascade)
+
+  // Picked from the vendor list, never typed: free-text vendor names are what
+  // split one supplier into three in the RMA dashboard.
+  vendor_id String?
+  vendor    Vendor? @relation(fields: [vendor_id], references: [id], onDelete: SetNull)
+
+  unit_cost  Int?
+  unit_price Int?
+
+  // External work only: the trip to the vendor and back. `sent_at` set and
+  // `returned_at` empty means the work is at the vendor now.
+  sent_at         DateTime?
+  returned_at     DateTime?
+  external_result ExternalResult?
+  external_note   String?         @db.Text
+
+  created_by_id String
+  created_by    User    @relation("ChargeCreatedBy", fields: [created_by_id], references: [id])
+  updated_by_id String?
+  updated_by    User?   @relation("ChargeUpdatedBy", fields: [updated_by_id], references: [id], onDelete: SetNull)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([ticket_id])
+  @@index([vendor_id])
+  @@index([created_at])
 }

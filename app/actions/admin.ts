@@ -30,7 +30,14 @@ export async function createUserAction(formData: FormData) {
   const existing = await db.user.findUnique({ where: { email: data.email } });
   if (existing) return { error: "Email already in use" };
 
-  const hashedPassword = await bcrypt.hash(data.password, 12);
+  // No password = a staff account that signs in through HNS SSO only; the row
+  // is tied to the SSO identity by email on that person's first login. Hashing
+  // an empty string instead would create a password nobody chose.
+  const rawPassword = (data.password ?? "").trim();
+  if (rawPassword && rawPassword.length < 8) {
+    return { error: "Password minimal 8 karakter, atau kosongkan untuk login lewat SSO HNS." };
+  }
+  const hashedPassword = rawPassword ? await bcrypt.hash(rawPassword, 12) : null;
 
   const user = await db.user.create({
     data: {

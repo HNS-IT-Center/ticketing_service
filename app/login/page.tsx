@@ -1,17 +1,16 @@
 "use client";
 
 import { useActionState, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { loginAction, type FormState } from "@/app/actions/auth";
-import { AlertCircle, Eye, EyeOff } from "lucide-react";
-import Link from "next/link";
-import NativeSSOLoginButton from "@/components/NativeSSOLoginButton";
+import { AlertCircle, Eye, EyeOff, Info, KeyRound } from "lucide-react";
+import { useLoginOptions } from "./login-options";
 
 export default function LoginPage() {
-  const [state, action, pending] = useActionState<FormState, FormData>(
-    loginAction,
-    undefined
-  );
-  const [showPassword, setShowPassword] = useState(false);
+  const { ssoEnabled, localLogin } = useLoginOptions();
+  const searchParams = useSearchParams();
+  const ended = searchParams.get("ended") === "1";
+  const ssoOff = searchParams.get("sso") === "off";
 
   return (
     <div className="auth-container">
@@ -34,134 +33,36 @@ export default function LoginPage() {
           </p>
         </div>
 
-        {state?.message && (
-          <div
-            style={{
-              background: "#fee2e2",
-              border: "1px solid #fca5a5",
-              borderRadius: "var(--radius-md)",
-              padding: "0.75rem 1rem",
-              marginBottom: "1.25rem",
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-              color: "#991b1b",
-              fontSize: "0.9rem",
-            }}
-          >
-            <AlertCircle size={16} />
-            {state.message}
-          </div>
-        )}
+        {ended && <Notice>Sesi Anda telah berakhir. Silakan masuk lagi.</Notice>}
+        {ssoOff && <Notice>Masuk dengan SSO HNS belum diaktifkan di aplikasi ini.</Notice>}
 
-        <form
-          action={action}
-          style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-        >
-          <div className="form-group">
-            <label htmlFor="email" className="form-label">Email address</label>
-            <input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              required
-              className={`form-input ${state?.errors?.email ? "error" : ""}`}
-              placeholder="you@example.com"
-            />
-            {state?.errors?.email && (
-              <span className="form-error">
-                <AlertCircle size={12} />
-                {state.errors.email[0]}
-              </span>
-            )}
-          </div>
+        {ssoEnabled ? (
+          <div className="flex flex-col gap-4">
+            {/* A route handler that redirects to SSO: a full page navigation, not <Link>. */}
+            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+            <a href="/auth/sso/login" className="btn btn-primary btn-lg flex items-center justify-center gap-2" style={{ width: "100%" }}>
+              <KeyRound size={18} /> Masuk dengan SSO HNS
+            </a>
 
-          <div className="form-group">
-            <label htmlFor="password" className="form-label">Password</label>
-            <div style={{ position: "relative" }}>
-              <input
-                id="password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                required
-                minLength={6}
-                className={`form-input ${state?.errors?.password ? "error" : ""}`}
-                placeholder="Your password"
-                style={{ paddingRight: "2.75rem" }}
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                style={{
-                  position: "absolute",
-                  right: "0.75rem",
-                  top: "50%",
-                  transform: "translateY(-50%)",
-                  background: "none",
-                  border: "none",
-                  cursor: "pointer",
-                  color: "var(--text-muted)",
-                  padding: 0,
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-            {state?.errors?.password && (
-              <span className="form-error">
-                <AlertCircle size={12} />
-                {state.errors.password[0]}
-              </span>
-            )}
-          </div>
-
-          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "-0.25rem", marginBottom: "0.5rem" }}>
-            <input 
-              type="checkbox" 
-              id="rememberMe" 
-              name="rememberMe" 
-              defaultChecked={state?.rememberMe}
-              className="w-4 h-4 text-primary rounded border-gray-300 focus:ring-primary"
-              style={{ width: "1rem", height: "1rem", cursor: "pointer", accentColor: "var(--primary)" }} 
-            />
-            <label htmlFor="rememberMe" style={{ fontSize: "0.875rem", color: "var(--text-secondary)", cursor: "pointer", userSelect: "none" }}>
-              Remember me
-            </label>
-          </div>
-
-          <button
-            type="submit"
-            disabled={pending}
-            className="btn btn-primary btn-lg"
-            style={{ width: "100%", marginTop: "0.5rem" }}
-          >
-            {pending ? (
+            {localLogin === "all" ? (
               <>
-                <span className="spinner spinner-sm" />
-                Signing in...
+                <Divider label="atau masuk dengan password" />
+                <PasswordForm />
               </>
             ) : (
-              "Sign In"
+              <details className="rounded-lg border p-4" style={{ borderColor: "var(--border)" }}>
+                <summary className="cursor-pointer text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
+                  Login darurat (khusus admin)
+                </summary>
+                <div className="pt-4">
+                  <PasswordForm />
+                </div>
+              </details>
             )}
-          </button>
-        </form>
-
-        <div style={{ position: "relative", marginTop: "1.5rem", marginBottom: "1.5rem" }}>
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center" }}>
-            <div style={{ width: "100%", borderTop: "1px solid var(--border)", borderColor: "#e5e7eb" }}></div>
           </div>
-          <div style={{ position: "relative", display: "flex", justifyContent: "center", fontSize: "0.875rem" }}>
-            <span style={{ padding: "0 0.5rem", background: "var(--background, #fff)", color: "var(--text-muted, #6b7280)" }}>
-              Or sign in with
-            </span>
-          </div>
-        </div>
-
-        <NativeSSOLoginButton />
+        ) : (
+          <PasswordForm primary />
+        )}
 
         <p
           style={{
@@ -175,5 +76,160 @@ export default function LoginPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+function Notice({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      className="mb-5 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm"
+      style={{ background: "#eff6ff", borderColor: "#bfdbfe", color: "#1e40af" }}
+    >
+      <Info size={16} />
+      {children}
+    </div>
+  );
+}
+
+function Divider({ label }: { label: string }) {
+  return (
+    <div style={{ position: "relative" }}>
+      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center" }}>
+        <div style={{ width: "100%", borderTop: "1px solid #e5e7eb" }}></div>
+      </div>
+      <div style={{ position: "relative", display: "flex", justifyContent: "center", fontSize: "0.875rem" }}>
+        <span style={{ padding: "0 0.5rem", background: "var(--background, #fff)", color: "var(--text-muted, #6b7280)" }}>
+          {label}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+/** `primary` when the password form is the only way in, i.e. SSO is not configured. */
+function PasswordForm({ primary = false }: { primary?: boolean }) {
+  const [state, action, pending] = useActionState<FormState, FormData>(
+    loginAction,
+    undefined
+  );
+  const [showPassword, setShowPassword] = useState(false);
+
+  return (
+    <>
+      {state?.message && (
+        <div
+          style={{
+            background: "#fee2e2",
+            border: "1px solid #fca5a5",
+            borderRadius: "var(--radius-md)",
+            padding: "0.75rem 1rem",
+            marginBottom: "1.25rem",
+            display: "flex",
+            alignItems: "center",
+            gap: "0.5rem",
+            color: "#991b1b",
+            fontSize: "0.9rem",
+          }}
+        >
+          <AlertCircle size={16} />
+          {state.message}
+        </div>
+      )}
+
+      <form
+        action={action}
+        style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
+      >
+        <div className="form-group">
+          <label htmlFor="email" className="form-label">Email address</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            autoComplete="email"
+            required
+            className={`form-input ${state?.errors?.email ? "error" : ""}`}
+            placeholder="you@example.com"
+          />
+          {state?.errors?.email && (
+            <span className="form-error">
+              <AlertCircle size={12} />
+              {state.errors.email[0]}
+            </span>
+          )}
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="password" className="form-label">Password</label>
+          <div style={{ position: "relative" }}>
+            <input
+              id="password"
+              name="password"
+              type={showPassword ? "text" : "password"}
+              autoComplete="current-password"
+              required
+              minLength={6}
+              className={`form-input ${state?.errors?.password ? "error" : ""}`}
+              placeholder="Your password"
+              style={{ paddingRight: "2.75rem" }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              style={{
+                position: "absolute",
+                right: "0.75rem",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                cursor: "pointer",
+                color: "var(--text-muted)",
+                padding: 0,
+                display: "flex",
+                alignItems: "center",
+              }}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
+          </div>
+          {state?.errors?.password && (
+            <span className="form-error">
+              <AlertCircle size={12} />
+              {state.errors.password[0]}
+            </span>
+          )}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "-0.25rem", marginBottom: "0.5rem" }}>
+          <input
+            type="checkbox"
+            id="rememberMe"
+            name="rememberMe"
+            defaultChecked={state?.rememberMe}
+            style={{ width: "1rem", height: "1rem", cursor: "pointer", accentColor: "var(--primary)" }}
+          />
+          <label htmlFor="rememberMe" style={{ fontSize: "0.875rem", color: "var(--text-secondary)", cursor: "pointer", userSelect: "none" }}>
+            Remember me
+          </label>
+        </div>
+
+        <button
+          type="submit"
+          disabled={pending}
+          className={primary ? "btn btn-primary btn-lg" : "btn btn-outline btn-lg"}
+          style={{ width: "100%", marginTop: "0.5rem" }}
+        >
+          {pending ? (
+            <>
+              <span className="spinner spinner-sm" />
+              Signing in...
+            </>
+          ) : (
+            "Sign In"
+          )}
+        </button>
+      </form>
+    </>
   );
 }

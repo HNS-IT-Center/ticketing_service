@@ -6,7 +6,8 @@ import { UserPlus } from "lucide-react";
 
 export const metadata = { title: "User Management — HNS IT Center" };
 
-const ROLES = ["all", "Administrator", "Technician", "Sales", "Customer"] as const;
+// "Pending" are accounts that signed in through HNS SSO and still need a role.
+const ROLES = ["all", "Pending", "Administrator", "Technician", "Sales", "RMA", "Customer"] as const;
 
 export default async function AdminUsersPage({
   searchParams,
@@ -57,7 +58,7 @@ export default async function AdminUsersPage({
                 borderColor: roleFilter === r ? "var(--primary)" : "var(--border)",
               }}
             >
-              {r === "all" ? "All Roles" : r}
+              {r === "all" ? "All Roles" : r === "Pending" ? "Menunggu role" : r}
             </Link>
           ))}
         </div>
@@ -82,7 +83,12 @@ export default async function AdminUsersPage({
               {users.map((u) => (
                 <tr key={u.id}>
                   <td style={{ fontWeight: 600 }}>{u.name}</td>
-                  <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{u.email}</td>
+                  <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
+                    {u.email}
+                    {u.sso_sub && (
+                      <span className="badge badge-done" style={{ marginLeft: "0.5rem" }} title="Tertaut ke akun SSO HNS">SSO</span>
+                    )}
+                  </td>
                   <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{u.phone_number}</td>
                   <td><Badge variant={u.role} /></td>
                   <td>

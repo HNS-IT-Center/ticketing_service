@@ -11,7 +11,7 @@ const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 export default function CreateUserForm() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [role, setRole] = useState("Customer");
+  const [role, setRole] = useState("Technician");
   const [showPw, setShowPw] = useState(false);
   const [workDays, setWorkDays] = useState<string[]>([]);
 
@@ -66,13 +66,17 @@ export default function CreateUserForm() {
       </div>
 
       <div className="form-group">
-        <label className="form-label">Password *</label>
+        <label className="form-label">Password <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span></label>
+        <p className="form-help" style={{ marginBottom: "0.5rem" }}>
+          Kosongkan untuk staf yang masuk lewat SSO HNS: akun ini tertaut otomatis berdasarkan email
+          saat ia login pertama kali, dengan role yang dipilih di atas.
+        </p>
         <div style={{ position: "relative" }}>
           <input
             name="password"
             type={showPw ? "text" : "password"}
             className="form-input"
-            required
+            minLength={8}
             placeholder="Min 8 characters"
             style={{ paddingRight: "2.75rem" }}
           />

@@ -929,6 +929,19 @@ Branch `feat/rma-hold-reason`. **749 tests**, `tsc` clean. `main` = `dcb0514` (K
 | K4 | **Form drafts** | ✅ `dcb0514` | `lib/draft.ts`: create form and RMA handover autosave to localStorage and offer "Pulihkan" after a reload. Verified end to end in Chrome emulating a Pixel 7, 12/12. Phone testing over LAN: `DEV_LAN_ORIGIN=<lan ip> npx next dev --webpack -H 0.0.0.0` |
 | K5 | **Handover failed on a long "Hasil Tes"** | ✅ `4d10d27` | Reported from production with a phone screenshot: "Terjadi kesalahan di server". `RmaCase.test_result` was `VARCHAR(191)` while the rest of the form was `TEXT`, and `STRICT_TRANS_TABLES` refuses an over-long value — the one free-text column the MariaDB port (M3) missed; broken since the cutover. `stock_origin` (both tables) widened with it. Migration `20261016032623_rma_free_text_columns` **applied to production 2026-10-16** together with K1's, by the owner through the tunnel; `migrate status` up to date. The fix needed no code deploy. The remaining `VARCHAR(191)` strings hold codes and numbers |
 
+### SPRINT 2026-10-19 — HNS SSO client (OpenID Connect)
+Branch `feat/rma-hold-reason`. **806 tests**, `tsc` clean, production build passes. Not pushed.
+Runbook: `docs/sso-hns.md`. Spec: `HNS-SSO-CLIENT.md`.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| SSO1 | **Confidential client, `openid-client` v6** | ✅ | `/auth/sso/login`, `/callback`, `/backchannel-logout`, `/error`, `/auth/session-ended`. PKCE S256, state/nonce/iss checked, id_token verified via JWKS. Redirect URLs come from `SSO_REDIRECT_URI`, never `request.url` (internal behind Hostinger's proxy). **Off until `SSO_*` is set** — the password login is unchanged until then |
+| SSO2 | **Sessions checked against the database on every request** | ✅ | `lib/session.ts` now verifies: account active, role unchanged since the cookie was issued, `SsoSession` not revoked (and refreshed when due, with a lock), password allowed under `LOCAL_LOGIN`. Closes QC **H4** (deactivated accounts kept working 7 days). A dead session goes to `/auth/session-ended`, which clears the cookie — straight to `/login` would loop through the proxy. `proxy.ts` now imports `lib/session-token.ts` so it stays free of Prisma |
+| SSO3 | **Schema** | ✅ | `User.sso_sub` (unique), `Role.Pending`, `SsoSession`. Migration `20261019020000_sso_client` — ⛔ **`migrate deploy` on production before this reaches `main`** |
+| SSO4 | **Account lifecycle** | ✅ | Link by `sub`, else first link by email, else auto-create as `Pending` (no access; `/unauthorized` says so). Customers never linked. `npm run sso:export-users` (CSV outside the repo, refused inside it) and `npm run sso:link-users` (dry run default, `--apply`, `--clear-staff-passwords`). Users page: "Menunggu role" filter, SSO badge, password optional on create |
+| SSO5 | **Old SSO removed** | ✅ | `/api/auth/sso-sync` (`sso_token` + `JWT_SECRET`) and the "Sign in with Google (SSO)" button. It deactivated RMA accounts on login and reactivated accounts an admin had disabled (QC M6) |
+| SSO6 | Verified | ⚠️ | 23 integration tests drive the real routes with openid-client's own validation (SSO stubbed at the HTTP layer). Against the live server: discovery works and the authorize redirect is correct. **Not yet exercised: a real sign-in** — needs the app registered (dev client recommended). Scripts unit tested, not run on real data |
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.

@@ -19,6 +19,10 @@ enum Role {
   Sales
   Customer
   RMA          // Handles warranty claims sent to vendors
+  // Signed in through HNS SSO but not yet given a role here. SSO decides who
+  // may enter the app at all; what they may do inside it is this app's call,
+  // and every other role opens customer data, so none is a safe default.
+  Pending
 }
 
 enum Shift {
@@ -211,6 +215,10 @@ model User {
   // Soft-delete flag — false = deactivated (cannot log in, hidden from UI)
   is_active    Boolean  @default(true)
 
+  // HNS SSO subject (`sub` claim): the stable identity this row is tied to.
+  // Matched on every SSO login; email is used only to make the first link.
+  sso_sub      String?  @unique
+
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
 
@@ -234,6 +242,7 @@ model User {
   rma_cases_handled  RmaCase[]             @relation("RmaHandler")
   tickets_deleted    DeletedTicketLog[]    @relation("TicketDeletedBy")
   parts_recorded     TicketReplacedPart[]  @relation("PartRecordedBy")
+  sso_sessions       SsoSession[]
   rma_events         RmaEvent[]
 
   @@index([email])
@@ -797,4 +806,37 @@ model TicketReplacedPartPhoto {
   created_at DateTime @default(now())
 
   @@index([part_id])
+}
+
+// One row per local sign-in through HNS SSO.
+//
+// The app's own session is a signed cookie with nothing behind it, so on its own
+// it cannot be ended from outside. SSO back-channel logout names an SSO session
+// (`sid`), and this row is how that name reaches the cookies it issued: the
+// cookie carries this row's id, and every request checks the row has not been
+// revoked. Tokens stay here, on the server, never in the browser.
+model SsoSession {
+  id      String  @id @default(cuid())
+  sid     String? // SSO session id from the id_token; changes on every SSO login
+  sub     String
+  user_id String
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  id_token          String    @db.Text
+  access_token      String    @db.Text
+  refresh_token     String?   @db.Text
+  access_expires_at DateTime
+
+  // Refresh tokens rotate and a reused one revokes the whole chain, so only one
+  // request may refresh at a time. Taken with a conditional update.
+  refresh_locked_until DateTime?
+
+  revoked_at     DateTime?
+  revoked_reason String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([sid])
+  @@index([user_id])
 }

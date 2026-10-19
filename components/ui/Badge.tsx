@@ -13,7 +13,9 @@ type BadgeVariant =
   | "Administrator"
   | "Technician"
   | "Sales"
-  | "Customer";
+  | "Customer"
+  | "RMA"
+  | "Pending";
 
 const BADGE_LABELS: Record<string, string> = {
   waiting: "⏳ Waiting",
@@ -31,6 +33,8 @@ const BADGE_LABELS: Record<string, string> = {
   Technician: "Technician",
   Sales: "CS",
   Customer: "Customer",
+  RMA: "RMA",
+  Pending: "⏳ Menunggu role",
 };
 
 const BADGE_CLASSES: Record<string, string> = {
@@ -49,6 +53,8 @@ const BADGE_CLASSES: Record<string, string> = {
   Technician: "badge badge-technician",
   Sales: "badge badge-sales",
   Customer: "badge badge-customer",
+  RMA: "badge badge-sales",
+  Pending: "badge badge-waiting",
 };
 
 export default function Badge({

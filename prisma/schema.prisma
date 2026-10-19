@@ -427,12 +427,22 @@ model TicketPcBuildComponent {
 // ATTACHMENTS & MESSAGES
 // ─────────────────────────────────────────────
 
+// What an attachment is, where the app needs to tell: the invoice the RMA desk
+// verifies, and the photos of a claimed unit taken when it was received. Null
+// for everything else (work proof, handover photos, PC build layouts), which
+// is told apart by its file name as before.
+enum AttachmentKind {
+  invoice
+  unit_photo
+}
+
 model TicketAttachment {
   id         String   @id @default(cuid())
   ticket_id  String
   ticket     Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   file_url   String @db.Text
   file_type  FileType
+  kind       AttachmentKind?
   created_at DateTime @default(now())
 }
 

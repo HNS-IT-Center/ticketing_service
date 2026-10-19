@@ -9,6 +9,7 @@ import FileUpload from "@/components/ui/FileUpload";
 import TagInput from "@/components/ui/TagInput";
 import DraftBanner from "@/components/ui/DraftBanner";
 import { useDraft } from "@/lib/draft";
+import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 
 type Props = {
   storeLocations: { id: string; name: string; code: string }[];
@@ -71,6 +72,10 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   // This avoids keeping File objects in state across step navigation (causes hydration issues)
   const [uploadedFileUrls, setUploadedFileUrls] = useState<string[]>([]);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  // Warranty claim: photos of the unit as it arrived, kept apart from the invoice.
+  const [unitPhotos, setUnitPhotos] = useState<File[]>([]);
+  const [unitPhotoUrls, setUnitPhotoUrls] = useState<string[]>([]);
+  const [isUploadingUnitPhotos, setIsUploadingUnitPhotos] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [pcComponents, setPcComponents] = useState<string[]>([]);
   
@@ -92,7 +97,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     customerName, customerEmail, phone, gridDevice, ticketType, deviceType,
     deviceName, deviceSn, purchaseDate, conditions, selectedAccessories,
     customAccessory, notes, checkDiagnosisFee, cleaningPackage, selectedUpgrades,
-    uploadedFileUrls, pcComponents, pickupMethod, isOvernight,
+    uploadedFileUrls, unitPhotoUrls, pcComponents, pickupMethod, isOvernight,
   };
   const draft = useDraft("create-ticket", draftData);
 
@@ -108,6 +113,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     setCustomAccessory(d.customAccessory); setNotes(d.notes);
     setCheckDiagnosisFee(d.checkDiagnosisFee); setCleaningPackage(d.cleaningPackage);
     setSelectedUpgrades(d.selectedUpgrades); setUploadedFileUrls(d.uploadedFileUrls);
+    setUnitPhotoUrls(d.unitPhotoUrls ?? []);
     setPcComponents(d.pcComponents); setPickupMethod(d.pickupMethod); setIsOvernight(d.isOvernight);
   };
 
@@ -180,6 +186,28 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
 
   const next = () => { if (validateStep()) setStep(s => s + 1); };
   const back = () => setStep(s => s - 1);
+
+  /** Same pre-upload as the invoice box, into its own list. */
+  const handleUnitPhotoUpload = async (picked: File[]) => {
+    setUnitPhotos(picked);
+    if (picked.length === 0) {
+      setUnitPhotoUrls([]);
+      return;
+    }
+    setIsUploadingUnitPhotos(true);
+    try {
+      const fd = new FormData();
+      picked.forEach((f) => fd.append("files", f));
+      const res = await fetch("/api/upload-temp", { method: "POST", body: fd });
+      const json = (await res.json()) as { uploaded?: { url: string }[]; error?: string };
+      if (json.error) toast.error(`Upload foto gagal: ${json.error}`);
+      else setUnitPhotoUrls((json.uploaded ?? []).map((u) => u.url));
+    } catch {
+      toast.error("Upload foto gagal. Coba lagi.");
+    } finally {
+      setIsUploadingUnitPhotos(false);
+    }
+  };
 
   const handleFileUpload = async (files: File[]) => {
     setFiles(files);
@@ -262,6 +290,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       }
       
       uploadedFileUrls.forEach(url => fd.append("preuploaded_urls", url));
+      if (ticketType === "warranty_claim") {
+        unitPhotoUrls.forEach((url) => fd.append("unit_photo_urls", url));
+      }
       fd.append("is_for_self", "0");
 
       try {
@@ -666,6 +697,29 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
                   {restoredUploads}
                   {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Foto Barang yang Diklaim{" "}
+                    <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional, maks {MAX_UNIT_PHOTOS})</span>
+                  </label>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                    Foto kondisi unit saat diterima: tampak depan dan belakang, label serial number, dan
+                    bagian yang dikeluhkan. Menjadi catatan kondisi unit saat masuk, terpisah dari nota.
+                  </p>
+                  <FileUpload
+                    value={unitPhotos}
+                    onChange={handleUnitPhotoUpload}
+                    maxFiles={MAX_UNIT_PHOTOS}
+                    accept="image/*,image/heic,image/heif"
+                  />
+                  {unitPhotos.length === 0 && unitPhotoUrls.length > 0 && (
+                    <p className="form-help" style={{ marginTop: "0.5rem" }}>
+                      {unitPhotoUrls.length} foto dari draft sudah terunggah.
+                    </p>
+                  )}
+                  {isUploadingUnitPhotos && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Mengunggah foto…</p>}
                 </div>
               </div>
             )}

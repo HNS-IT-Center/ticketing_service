@@ -239,11 +239,14 @@ export default async function TechnicianTicketDetailPage({
                     }
                   : null
               }
-              attachments={regularAttachments.map((a) => ({
-                id: a.id,
-                file_url: a.file_url,
-                file_type: a.file_type,
-              }))}
+              // The handover's invoice picker: never offer a photo of the unit.
+              attachments={regularAttachments
+                .filter((a) => a.kind !== "unit_photo")
+                .map((a) => ({
+                  id: a.id,
+                  file_url: a.file_url,
+                  file_type: a.file_type,
+                }))}
             />
           )}
           {ticket.public_share_token && (

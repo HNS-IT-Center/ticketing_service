@@ -942,6 +942,21 @@ Runbook: `docs/sso-hns.md`. Spec: `HNS-SSO-CLIENT.md`.
 | SSO5 | **Old SSO removed** | ✅ | `/api/auth/sso-sync` (`sso_token` + `JWT_SECRET`) and the "Sign in with Google (SSO)" button. It deactivated RMA accounts on login and reactivated accounts an admin had disabled (QC M6) |
 | SSO6 | Verified | ⚠️ | 23 integration tests drive the real routes with openid-client's own validation (SSO stubbed at the HTTP layer). Against the live server: discovery works and the authorize redirect is correct. **Not yet exercised: a real sign-in** — needs the app registered (dev client recommended). Scripts unit tested, not run on real data |
 
+### SPRINT W4 OCT (2026-10-19 → 24) — Service & Claim, owner's card
+Owner's checklist: (1) input nama barang yang dibeli customer, (2) detail harga service,
+(3) flow service eksternal, (4) report summary seperti faktur, (5) attachment foto barang
+yang diajukan klaim. **Not pushed.** ⛔ Three migrations wait for production before `main`
+moves: `20261019020000_sso_client`, `20261019060000_replaced_part_catalog`,
+`20261019080000_attachment_kind`. Production also needs `HNS_API_URL` / `HNS_API_TOKEN`.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| W4-0 | **Replaced parts from the Accurate catalogue** | ✅ `701cf3d` `e8a52b7` | data.hnsitcenter.id `/api/v1/items` (Bearer token, `q` search, `GET /items/{id}`), a **read-only** mirror of Accurate — nothing is written back; purchasing/stock/PO live there. Picker in the parts panel, quantity, server re-reads the item by id. `/admin/reports/parts` + CSV. Facts worth keeping: the API's `price` is **0 for every item**, the first request after idling took 12.5 s (timeout 15 s), and **service parts are not stocked except laptop RAM and SSD** — they are ordered per job, so stock 0 is normal and is not shown |
+| W4-5 | **Photos of the claimed unit at intake** | ✅ | Separate uploader in the claim step (images, max 5). New `TicketAttachment.kind` (`invoice` / `unit_photo`, null for the rest): the claim's intake upload is marked `invoice`, the photos `unit_photo`. The RMA case page labels them; the handover's invoice picker no longer offers unit photos. 5 tests |
+| W4-1 | Input nama barang yang dibeli customer | ⬜ | Waiting: is it the claimed product (catalogue picker on intake) or items bought during service? |
+| W4-2 / W4-4 | Detail harga + summary faktur | ⬜ | No money model exists (BL32). Waiting: who enters prices and when. 4 depends on 2 |
+| W4-3 | Flow service eksternal | ⬜ | Needs the flow agreed first |
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.

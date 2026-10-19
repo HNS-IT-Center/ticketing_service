@@ -242,6 +242,65 @@ describe("createTicketAction — unit ownership at intake", () => {
   });
 });
 
+describe("createTicketAction — photos of the claimed unit", () => {
+  const R2 = "https://r2.test/temp/u1";
+  function withFiles(form: FormData, field: string, urls: string[]) {
+    for (const u of urls) form.append(field, u);
+    return form;
+  }
+
+  it("stores the intake upload as the invoice and the unit photos apart", async () => {
+    const form = claimForm({ device_sn: "SN-PHOTOS-1" });
+    withFiles(form, "preuploaded_urls", [`${R2}/nota.jpg`]);
+    withFiles(form, "unit_photo_urls", [`${R2}/depan.jpg`, `${R2}/label-sn.png`]);
+    expect(await createTicketAction(form)).toMatchObject({ success: true });
+
+    const ticket = await db.ticket.findFirst({
+      where: { store_location_id: storeId, device_sn: "SN-PHOTOS-1" },
+      select: { attachments: { select: { file_url: true, file_type: true, kind: true }, orderBy: { file_url: "asc" } } },
+    });
+    expect(ticket?.attachments).toEqual([
+      { file_url: `${R2}/depan.jpg`, file_type: "image", kind: "unit_photo" },
+      { file_url: `${R2}/label-sn.png`, file_type: "image", kind: "unit_photo" },
+      { file_url: `${R2}/nota.jpg`, file_type: "image", kind: "invoice" },
+    ]);
+  });
+
+  it("refuses a unit photo that is not an image", async () => {
+    const form = withFiles(claimForm({ device_sn: "SN-PHOTOS-2" }), "unit_photo_urls", [`${R2}/video.mp4`]);
+    expect(await createTicketAction(form)).toMatchObject({ error: expect.stringContaining("gambar") });
+  });
+
+  it("refuses more than five unit photos", async () => {
+    const urls = Array.from({ length: 6 }, (_, i) => `${R2}/f${i}.jpg`);
+    const form = withFiles(claimForm({ device_sn: "SN-PHOTOS-3" }), "unit_photo_urls", urls);
+    expect(await createTicketAction(form)).toMatchObject({ error: expect.stringContaining("Maksimal 5") });
+  });
+
+  it("refuses unit photos on a ticket that is not a claim", async () => {
+    const form = withFiles(
+      claimForm({ ticket_type: "service", device_sn: null, purchase_date: null }),
+      "unit_photo_urls",
+      [`${R2}/x.jpg`]
+    );
+    expect(await createTicketAction(form)).toMatchObject({ error: expect.stringContaining("klaim garansi") });
+  });
+
+  it("leaves the uploads of other ticket types unmarked", async () => {
+    const form = withFiles(
+      claimForm({ ticket_type: "service", device_sn: "SN-SERVICE-UPLOAD", purchase_date: null }),
+      "preuploaded_urls",
+      [`${R2}/kondisi.jpg`]
+    );
+    expect(await createTicketAction(form)).toMatchObject({ success: true });
+    const ticket = await db.ticket.findFirst({
+      where: { store_location_id: storeId, device_sn: "SN-SERVICE-UPLOAD" },
+      select: { attachments: { select: { kind: true } } },
+    });
+    expect(ticket?.attachments).toEqual([{ kind: null }]);
+  });
+});
+
 describe("createTicketAction — ticket codes", () => {
   it("numbers tickets sequentially within a store", async () => {
     const seen: string[] = [];

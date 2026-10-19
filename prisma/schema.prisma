@@ -209,6 +209,10 @@ model User {
   // Team leader flag — excluded from leaderboard display but can still work on tickets
   is_team_leader Boolean @default(false)
 
+  // Head technician: a senior technician who, with store coordinators, may see
+  // purchase costs and margins. What each group may do lives in AccessRule.
+  is_head_technician Boolean @default(false)
+
   // Achievement title inventory — stores which title_key is currently equipped
   active_title String?
 
@@ -864,4 +868,39 @@ model SsoSession {
 
   @@index([sid])
   @@index([user_id])
+}
+
+// Who may see and change what, beyond the defaults in lib/access.ts.
+// One row per (capability, audience) the owner has changed from its default;
+// no row means the default applies. Capabilities and audiences are the string
+// keys listed in lib/access.ts, so adding one needs no migration.
+model AccessRule {
+  id            String   @id @default(cuid())
+  capability    String
+  audience      String
+  allowed       Boolean
+  updated_by_id String?
+  updated_at    DateTime @updatedAt
+
+  @@unique([capability, audience])
+}
+
+enum VendorKind {
+  part_supplier   // sells the parts fitted during a service
+  repair_service  // repairs what the shop does not, e.g. board / IC work
+  both
+}
+
+// Suppliers and outside repairers. Picked from a list rather than typed, so
+// one vendor is one row — the free-text vendor_name on RmaCase splintered into
+// several spellings of the same company.
+model Vendor {
+  id         String     @id @default(cuid())
+  name       String     @unique // the collation is case-insensitive: "ACME" == "Acme"
+  kind       VendorKind @default(part_supplier)
+  contact    String?    @db.Text
+  notes      String?    @db.Text
+  is_active  Boolean    @default(true)
+  created_at DateTime   @default(now())
+  updated_at DateTime   @updatedAt
 }

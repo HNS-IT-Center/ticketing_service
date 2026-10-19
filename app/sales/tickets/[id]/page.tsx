@@ -15,6 +15,8 @@ import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import { ticketPartyName } from "@/lib/ticket-party";
+import ChargesPanel from "@/components/service/ChargesPanel";
+import { loadChargesPanel } from "@/lib/charges-server";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -99,6 +101,10 @@ export default async function SalesTicketDetailPage({
 
   const isAssignedSales = ticket.sales_id === session.userId;
   const isAssignedTechnician = ticket.technician_id === session.userId;
+
+  // The bill — service tickets only. A cost the viewer may not see is removed
+  // on the server, before anything reaches the browser.
+  const chargesPanel = await loadChargesPanel(session.userId, ticket);
 
   const isPaused = ticket.time_logs.length > 0 && ticket.time_logs[ticket.time_logs.length - 1].event === "PAUSE";
   const isDone = ["completed", "cancelled", "rejected"].includes(ticket.status);
@@ -269,6 +275,8 @@ export default async function SalesTicketDetailPage({
               <div className="tiptap-content" style={{ minHeight: "unset" }} dangerouslySetInnerHTML={{ __html: ticket.notes }} />
             </div>
           )}
+
+          {chargesPanel && <ChargesPanel ticketId={ticket.id} {...chargesPanel} />}
 
           {/* PC Components */}
           {ticket.pc_components.length > 0 && (

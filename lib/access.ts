@@ -50,7 +50,7 @@ export const CAPABILITY_INFO: Record<Capability, { label: string; hint: string; 
   },
   edit_cost: {
     label: "Isi / ubah harga modal",
-    hint: "Selama harga beli belum tersedia dari Accurate, harga modal diisi manual.",
+    hint: "Selama harga beli belum tersedia dari Accurate, harga modal diisi manual. Perlu juga akses Lihat harga modal.",
     defaults: SENIOR,
   },
   edit_price: {
@@ -60,7 +60,7 @@ export const CAPABILITY_INFO: Record<Capability, { label: string; hint: string; 
   },
   view_margin: {
     label: "Lihat margin",
-    hint: "Selisih harga jual dan harga modal.",
+    hint: "Selisih harga jual dan harga modal. Hanya tampil bagi yang juga boleh melihat harga modal — margin dan total bersama-sama membuka harga modal.",
     defaults: SENIOR,
   },
   view_finance_report: {

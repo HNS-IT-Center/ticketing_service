@@ -21,6 +21,8 @@ import HoldEvidencePanel from "./HoldEvidencePanel";
 import { holdReasonAsksTechnician } from "@/lib/rma/hold-reason";
 import { ticketPartyName } from "@/lib/ticket-party";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
+import ChargesPanel from "@/components/service/ChargesPanel";
+import { loadChargesPanel } from "@/lib/charges-server";
 
 function getTicketBasePoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
@@ -127,6 +129,10 @@ export default async function TechnicianTicketDetailPage({
 
   const isAssigned = ticket.technician_id === session.userId;
   const isTeamLeader = currentUser?.is_team_leader || false;
+
+  // The bill — service tickets only. A cost the viewer may not see is removed
+  // on the server, before anything reaches the browser.
+  const chargesPanel = await loadChargesPanel(session.userId, ticket);
 
   const isPaused = ticket.time_logs.length > 0 && ticket.time_logs[ticket.time_logs.length - 1].event === "PAUSE";
   // isDone = no more technician actions possible (fully terminal statuses only)
@@ -539,6 +545,8 @@ export default async function TechnicianTicketDetailPage({
               }))}
             />
           )}
+
+          {chargesPanel && <ChargesPanel ticketId={ticket.id} {...chargesPanel} />}
 
           {/* Extra Services / Bonus Points Panel (only for assigned technician) */}
           {isAssigned && !isDone && (

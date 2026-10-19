@@ -19,6 +19,8 @@ import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import DeleteTicketPanel from "./DeleteTicketPanel";
 import { servicePartLabel } from "@/lib/service-parts";
 import { ticketPartyName } from "@/lib/ticket-party";
+import ChargesPanel from "@/components/service/ChargesPanel";
+import { loadChargesPanel } from "@/lib/charges-server";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -126,6 +128,10 @@ export default async function AdminTicketDetailPage({
   if (session.role === "Sales" && ticket.sales_id !== session.userId) {
     notFound();
   }
+
+  // The bill — service tickets only. A cost the viewer may not see is removed
+  // on the server, before anything reaches the browser.
+  const chargesPanel = await loadChargesPanel(session.userId, ticket);
 
   const isPaused = ticket.time_logs.length > 0 && ticket.time_logs[ticket.time_logs.length - 1].event === "PAUSE";
   const workingTimeMs = calculateWorkingTimeMs(ticket.time_logs);
@@ -417,6 +423,8 @@ export default async function AdminTicketDetailPage({
               </ul>
             </div>
           )}
+
+          {chargesPanel && <ChargesPanel ticketId={ticket.id} {...chargesPanel} />}
 
           {/* Upgrade details */}
           {ticket.upgrade_details.length > 0 && (

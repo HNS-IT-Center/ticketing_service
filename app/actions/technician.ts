@@ -10,6 +10,8 @@ import { getTicketPoints } from "@/lib/points";
 import { isServicePart, requiresItemName, MAX_PART_PHOTOS } from "@/lib/service-parts";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
 import { MAX_QUANTITY, type CatalogItem } from "@/lib/catalog/items";
+import { EXTERNAL_WORK_OUTSTANDING, partChargeDescription } from "@/lib/charges";
+import { hasExternalWorkOutstanding } from "@/lib/charges-server";
 
 
 // ─── Request Ticket Assignment (Technician) ────────────────────────────────
@@ -217,6 +219,12 @@ export async function updateTicketStatusAction(formData: FormData) {
           "Tiket klaim tidak bisa diselesaikan dari sini. Serahkan unit ke RMA — " +
           "kelayakan klaim diputuskan tim RMA.",
       };
+    }
+
+    // ── Guard 4: a service is not finished while part of it is still at a
+    // vendor. Its result decides what the customer is told and billed.
+    if (newStatus === "done" && ticket.ticket_type === "service" && (await hasExternalWorkOutstanding(ticket.id))) {
+      return { error: EXTERNAL_WORK_OUTSTANDING };
     }
 
     const HANDOVER_CHAIN: Record<string, string> = {
@@ -560,6 +568,17 @@ export async function addReplacedPartAction(formData: FormData) {
       quantity,
       recorded_by_id: session.userId,
       photos: { create: photoUrls.map((file_url) => ({ file_url })) },
+      // Its line on the bill, unpriced until someone allowed to sets the
+      // price. Created here so the bill can never miss a fitted part.
+      charge: {
+        create: {
+          ticket_id: ticketId,
+          kind: "part",
+          description: partChargeDescription(part, trimmedName),
+          quantity,
+          created_by_id: session.userId,
+        },
+      },
     },
   });
 

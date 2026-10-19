@@ -6,6 +6,7 @@ import { formatDateTime } from "@/lib/utils";
 import RmaStatusCard, { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import RmaActionPanel from "./RmaActionPanel";
 import FilePreview from "@/components/ui/FilePreview";
+import { attachmentKindLabel } from "@/lib/attachment-kind";
 import { ArrowLeft } from "lucide-react";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
@@ -95,7 +96,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
           // three lines of typed text.
           attachments: {
             orderBy: { created_at: "asc" },
-            select: { id: true, file_url: true, file_type: true, created_at: true },
+            select: { id: true, file_url: true, file_type: true, kind: true, created_at: true },
           },
         },
       },
@@ -271,7 +272,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                       key={a.id}
                       url={a.file_url}
                       fileType={a.file_type}
-                      label={`${LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`}
+                      label={`${attachmentKindLabel(a.kind) ?? LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`}
                       title={`Lampiran ${i + 1} — ${ticket.ticket_code}`}
                       className="btn btn-outline"
                     />

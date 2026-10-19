@@ -12,8 +12,11 @@ import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { sendTicketStatusEmail } from "@/lib/email";
 import { ticketsListHrefForRoleName } from "@/lib/routes";
+import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
+
+const IMAGE_URL = /\.(jpe?g|png|gif|webp|heic|heif)(\?.*)?$/i;
 
 
 // ─── Ticket Point Calculator ───────────────────────────────────────────────
@@ -99,6 +102,22 @@ export async function createTicketAction(formData: FormData) {
     }
     if (purchaseDateRaw && Number.isNaN(new Date(purchaseDateRaw).getTime())) {
       return { error: "Tanggal pembelian tidak valid." };
+    }
+  }
+
+  // Photos of the claimed unit as it arrived, taken at the counter. Kept apart
+  // from the invoice (AttachmentKind) so the RMA desk sees which is which and
+  // the handover's invoice picker never offers a photo of the laptop.
+  const unitPhotoUrls = (formData.getAll("unit_photo_urls") as string[]).filter(Boolean);
+  if (unitPhotoUrls.length > 0) {
+    if (ticket_type !== "warranty_claim") {
+      return { error: "Foto barang klaim hanya untuk tiket klaim garansi." };
+    }
+    if (unitPhotoUrls.length > MAX_UNIT_PHOTOS) {
+      return { error: `Maksimal ${MAX_UNIT_PHOTOS} foto barang klaim.` };
+    }
+    if (unitPhotoUrls.some((u) => !IMAGE_URL.test(u))) {
+      return { error: "Foto barang klaim harus berupa gambar." };
     }
   }
 
@@ -228,17 +247,24 @@ export async function createTicketAction(formData: FormData) {
 
   const followUps: Promise<unknown>[] = [];
 
-  // Write attachment records
-  if (uploadedFiles.length > 0) {
-    followUps.push(
-      db.ticketAttachment.createMany({
-        data: uploadedFiles.map(f => ({
-          ticket_id: ticket.id,
-          file_url: f.publicUrl,
-          file_type: f.fileType,
-        }))
-      })
-    );
+  // Write attachment records. On a claim, the intake upload box is the
+  // purchase invoice, and is marked as such.
+  const attachmentRows = [
+    ...uploadedFiles.map((f) => ({
+      ticket_id: ticket.id,
+      file_url: f.publicUrl,
+      file_type: f.fileType,
+      kind: ticket_type === "warranty_claim" ? ("invoice" as const) : null,
+    })),
+    ...unitPhotoUrls.map((url) => ({
+      ticket_id: ticket.id,
+      file_url: url,
+      file_type: "image" as const,
+      kind: "unit_photo" as const,
+    })),
+  ];
+  if (attachmentRows.length > 0) {
+    followUps.push(db.ticketAttachment.createMany({ data: attachmentRows }));
   }
 
   followUps.push(

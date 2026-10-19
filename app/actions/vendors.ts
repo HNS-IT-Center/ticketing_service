@@ -1,19 +1,23 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { Prisma, type VendorKind } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { accessFor } from "@/lib/access-server";
-
-const KINDS: VendorKind[] = ["part_supplier", "repair_service", "both"];
+import { readVendorRoles, vendorRolesOf } from "@/lib/vendors";
 
 function readVendor(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim().replace(/\s+/g, " ");
-  const kind = String(formData.get("kind") ?? "part_supplier") as VendorKind;
   const contact = String(formData.get("contact") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  return { name, kind, contact, notes };
+  return { name, contact, notes, ...readVendorRoles(formData) };
+}
+
+function invalid(v: ReturnType<typeof readVendor>): string | null {
+  if (v.name.length < 2) return "Nama vendor minimal 2 karakter.";
+  if (vendorRolesOf(v).length === 0) return "Centang minimal satu peran vendor.";
+  return null;
 }
 
 async function mayManage(): Promise<boolean> {
@@ -25,17 +29,22 @@ function duplicate(err: unknown): boolean {
   return err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002";
 }
 
+function revalidateVendorPages() {
+  revalidatePath("/admin/vendors");
+  revalidatePath("/rma/vendors");
+}
+
 export async function createVendorAction(formData: FormData) {
   if (!(await mayManage())) return { error: "Anda tidak punya akses untuk mengelola vendor." };
   const v = readVendor(formData);
-  if (v.name.length < 2) return { error: "Nama vendor minimal 2 karakter." };
-  if (!KINDS.includes(v.kind)) return { error: "Jenis vendor tidak dikenal." };
+  const problem = invalid(v);
+  if (problem) return { error: problem };
   try {
-    const vendor = await db.vendor.create({ data: v, select: { id: true, name: true, kind: true } });
-    revalidatePath("/admin/vendors");
+    const vendor = await db.vendor.create({ data: v, select: { id: true, name: true } });
+    revalidateVendorPages();
     return { success: true, vendor };
   } catch (err) {
-    if (duplicate(err)) return { error: `Vendor "${v.name}" sudah ada di daftar.` };
+    if (duplicate(err)) return { error: `Vendor "${v.name}" sudah ada di daftar. Ubah perannya di sana.` };
     throw err;
   }
 }
@@ -43,8 +52,8 @@ export async function createVendorAction(formData: FormData) {
 export async function updateVendorAction(id: string, formData: FormData) {
   if (!(await mayManage())) return { error: "Anda tidak punya akses untuk mengelola vendor." };
   const v = readVendor(formData);
-  if (v.name.length < 2) return { error: "Nama vendor minimal 2 karakter." };
-  if (!KINDS.includes(v.kind)) return { error: "Jenis vendor tidak dikenal." };
+  const problem = invalid(v);
+  if (problem) return { error: problem };
   const is_active = formData.get("is_active") === "1";
   try {
     await db.vendor.update({ where: { id }, data: { ...v, is_active } });
@@ -52,6 +61,6 @@ export async function updateVendorAction(id: string, formData: FormData) {
     if (duplicate(err)) return { error: `Vendor "${v.name}" sudah ada di daftar.` };
     throw err;
   }
-  revalidatePath("/admin/vendors");
+  revalidateVendorPages();
   return { success: true };
 }

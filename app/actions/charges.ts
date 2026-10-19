@@ -12,6 +12,7 @@ import {
   isExternalResult,
   parseRupiah,
   vendorFitsCharge,
+  vendorMismatchMessage,
   type ChargePermissions,
 } from "@/lib/charges";
 
@@ -109,16 +110,12 @@ async function readVendor(
     return { vendor_id: null };
   }
   if (id === current) return { vendor_id: id };
-  const vendor = await db.vendor.findUnique({ where: { id }, select: { kind: true, is_active: true } });
+  const vendor = await db.vendor.findUnique({
+    where: { id },
+    select: { supplies_parts: true, repairs: true, is_active: true },
+  });
   if (!vendor || !vendor.is_active) return { error: "Vendor tidak ditemukan atau sudah nonaktif." };
-  if (!vendorFitsCharge(kind, vendor.kind)) {
-    return {
-      error:
-        kind === "external_service"
-          ? "Vendor ini terdaftar sebagai supplier part, bukan service eksternal. Ubah jenisnya di Daftar Vendor bila keliru."
-          : "Vendor ini terdaftar sebagai service eksternal, bukan supplier part. Ubah jenisnya di Daftar Vendor bila keliru.",
-    };
-  }
+  if (!vendorFitsCharge(kind, vendor)) return { error: vendorMismatchMessage(kind) };
   return { vendor_id: id };
 }
 

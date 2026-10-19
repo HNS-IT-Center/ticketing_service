@@ -383,7 +383,7 @@ function VendorSelect({
   vendors: VendorOption[];
   current?: { id: string; name: string } | null;
 }) {
-  const options = vendors.filter((v) => vendorFitsCharge(kind, v.kind));
+  const options = vendors.filter((v) => vendorFitsCharge(kind, v));
   // A vendor already on the line stays selectable even after it was deactivated.
   const keepCurrent = current && !options.some((v) => v.id === current.id);
   const required = kind === "external_service";

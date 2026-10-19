@@ -665,6 +665,11 @@ model RmaCase {
 
   // ── Vendor ──
   vendor_name       String?
+  // The vendor picked from the list. `vendor_name` keeps the name as it was
+  // when the claim went out, so history and the dashboard read the same
+  // after a vendor is renamed; this is what ties cases of one vendor together.
+  vendor_id         String?
+  vendor            Vendor?   @relation(fields: [vendor_id], references: [id], onDelete: SetNull)
   // The claim number raised with the supplier. Only a store-stock unit has one:
   // the shop claims against its own supplier. Labelled "Nomor Klaim Pemasok".
   vendor_rma_number String?   // internal only — never shown on the public page
@@ -690,6 +695,7 @@ model RmaCase {
 
   @@index([status])
   @@index([handler_id])
+  @@index([vendor_id])
 }
 
 // Append-only audit trail of every RMA state change.
@@ -891,26 +897,28 @@ model AccessRule {
   @@unique([capability, audience])
 }
 
-enum VendorKind {
-  part_supplier   // sells the parts fitted during a service
-  repair_service  // repairs what the shop does not, e.g. board / IC work
-  both
-}
-
 // Suppliers and outside repairers. Picked from a list rather than typed, so
 // one vendor is one row — the free-text vendor_name on RmaCase splintered into
 // several spellings of the same company.
 model Vendor {
-  id         String     @id @default(cuid())
-  name       String     @unique // the collation is case-insensitive: "ACME" == "Acme"
-  kind       VendorKind @default(part_supplier)
-  contact    String?    @db.Text
-  notes      String?    @db.Text
-  is_active  Boolean    @default(true)
-  created_at DateTime   @default(now())
-  updated_at DateTime   @updatedAt
+  id   String @id @default(cuid())
+  name String @unique // the collation is case-insensitive: "ACME" == "Acme"
 
-  charges TicketCharge[]
+  // What the shop uses this vendor for. Flags rather than one choice, because
+  // one company is often several: a distributor that sells parts also takes the
+  // warranty claims for its brand. At least one is set; the action refuses none.
+  supplies_parts Boolean @default(false) // sells the parts fitted during a service
+  repairs        Boolean @default(false) // repairs what the shop does not, e.g. board / IC work
+  handles_claims Boolean @default(false) // takes warranty claims from the RMA desk
+
+  contact    String?  @db.Text
+  notes      String?  @db.Text
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  charges   TicketCharge[]
+  rma_cases RmaCase[]
 }
 
 /// What a line of a service bill is for.

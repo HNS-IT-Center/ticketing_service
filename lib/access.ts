@@ -75,8 +75,9 @@ export const CAPABILITY_INFO: Record<Capability, { label: string; hint: string; 
   },
   manage_vendors: {
     label: "Kelola daftar vendor",
-    hint: "Tambah, ubah dan nonaktifkan vendor/supplier.",
-    defaults: SENIOR,
+    hint: "Tambah, ubah dan nonaktifkan vendor: supplier part, service eksternal dan vendor klaim garansi.",
+    // RMA too: the desk is who knows which distributor takes which brand's claims.
+    defaults: [...SENIOR, "rma"],
   },
 };
 

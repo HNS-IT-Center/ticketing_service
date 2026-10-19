@@ -55,6 +55,87 @@ const FIELD_INPUTS: Record<
   replacement_sn: { label: "Serial Number Pengganti", placeholder: "SN unit pengganti" },
 };
 
+type ClaimVendorOption = { id: string; name: string };
+const TYPE_NEW_VENDOR = "__new__";
+
+/**
+ * The vendor a claim goes to: picked from the vendor list, or typed when it is
+ * not on it yet. Picking sets both the id and the name, so the shared
+ * validateRmaTransition sees a vendor either way.
+ */
+function ClaimVendorField({
+  vendors,
+  vendorId,
+  vendorName,
+  onChange,
+}: {
+  vendors: ClaimVendorOption[];
+  vendorId: string;
+  vendorName: string;
+  onChange: (vendorId: string, vendorName: string) => void;
+}) {
+  const [typing, setTyping] = useState(vendors.length === 0);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+      <label htmlFor="rma-vendor" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+        Vendor Klaim <span style={{ color: "var(--accent)" }}>*</span>
+      </label>
+      {typing ? (
+        <>
+          <input
+            id="rma-vendor"
+            className="form-input"
+            value={vendorName}
+            onChange={(e) => onChange("", e.target.value)}
+            placeholder={FIELD_INPUTS.vendor_name.placeholder}
+            autoComplete="off"
+          />
+          <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>
+            Vendor baru otomatis masuk Daftar Vendor sebagai vendor klaim. Bila namanya sudah ada (beda
+            huruf besar/kecil pun), yang lama yang dipakai.
+          </p>
+          {vendors.length > 0 && (
+            <button
+              type="button"
+              className="btn btn-ghost btn-sm"
+              style={{ alignSelf: "flex-start" }}
+              onClick={() => {
+                setTyping(false);
+                onChange("", "");
+              }}
+            >
+              Pilih dari daftar
+            </button>
+          )}
+        </>
+      ) : (
+        <select
+          id="rma-vendor"
+          className="form-input"
+          value={vendorId}
+          onChange={(e) => {
+            if (e.target.value === TYPE_NEW_VENDOR) {
+              setTyping(true);
+              onChange("", "");
+              return;
+            }
+            const picked = vendors.find((v) => v.id === e.target.value);
+            onChange(picked?.id ?? "", picked?.name ?? "");
+          }}
+        >
+          <option value="">Pilih vendor klaim</option>
+          {vendors.map((v) => (
+            <option key={v.id} value={v.id}>
+              {v.name}
+            </option>
+          ))}
+          <option value={TYPE_NEW_VENDOR}>+ Vendor lain (ketik nama)</option>
+        </select>
+      )}
+    </div>
+  );
+}
+
 /** Fields that are useful on a transition without being required by it. */
 /** Matches MAX_DAMAGE_PHOTOS in app/actions/rma.ts. */
 const MAX_INELIGIBLE_PHOTOS = 5;
@@ -97,7 +178,7 @@ export default function RmaActionPanel({
   currentStatus,
   role,
   unitOwnership,
-  knownVendors = [],
+  claimVendors = [],
 }: {
   rmaCaseId: string;
   currentStatus: RmaStatus;
@@ -105,10 +186,9 @@ export default function RmaActionPanel({
   /** Drives the store-stock transfer-number requirement. The server checks it
    *  too; this only lets the dialog ask before a round trip. */
   unitOwnership: UnitOwnership;
-  /** Vendor names already in use, offered as suggestions so the same vendor is
-   *  not entered under three different spellings. The server folds near-matches
-   *  anyway (lib/rma/vendor.ts); this just makes the right choice the easy one. */
-  knownVendors?: string[];
+  /** Active claim vendors from the vendor list. A name typed instead joins the
+   *  list on the server, matched to an existing vendor case-insensitively. */
+  claimVendors?: ClaimVendorOption[];
 }) {
   const [isPending, startTransition] = useTransition();
   const [active, setActive] = useState<RmaTransition | null>(null);
@@ -309,6 +389,14 @@ export default function RmaActionPanel({
                     </p>
                   )}
                 </div>
+              ) : field === "vendor_name" ? (
+                <ClaimVendorField
+                  key={field}
+                  vendors={claimVendors}
+                  vendorId={values.vendor_id ?? ""}
+                  vendorName={values.vendor_name ?? ""}
+                  onChange={(vendor_id, vendor_name) => setValues((prev) => ({ ...prev, vendor_id, vendor_name }))}
+                />
               ) : field === "decision" ? (
                 <div key={field} style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
                   <label htmlFor={`rma-${field}`} style={{ fontSize: "0.875rem", fontWeight: 600 }}>
@@ -343,24 +431,14 @@ export default function RmaActionPanel({
                       placeholder={FIELD_INPUTS[field].placeholder}
                     />
                   ) : (
-                    <>
-                      <input
-                        id={`rma-${field}`}
-                        className="form-input"
-                        value={values[field] ?? ""}
-                        onChange={(e) => setValue(field, e.target.value)}
-                        placeholder={FIELD_INPUTS[field].placeholder}
-                        list={field === "vendor_name" ? "rma-known-vendors" : undefined}
-                        autoComplete="off"
-                      />
-                      {field === "vendor_name" && knownVendors.length > 0 && (
-                        <datalist id="rma-known-vendors">
-                          {knownVendors.map((v) => (
-                            <option key={v} value={v} />
-                          ))}
-                        </datalist>
-                      )}
-                    </>
+                    <input
+                      id={`rma-${field}`}
+                      className="form-input"
+                      value={values[field] ?? ""}
+                      onChange={(e) => setValue(field, e.target.value)}
+                      placeholder={FIELD_INPUTS[field].placeholder}
+                      autoComplete="off"
+                    />
                   )}
                 </div>
               )

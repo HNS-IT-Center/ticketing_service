@@ -114,12 +114,13 @@ beforeAll(async () => {
       { technician_id: ids.coordB, store_id: ids.storeB },
     ],
   });
-  for (const [key, kind, is_active] of [
-    ["repairer", "repair_service", true],
-    ["supplier", "part_supplier", true],
-    ["closedRepairer", "repair_service", false],
+  for (const [key, roles] of [
+    ["repairer", { repairs: true }],
+    ["supplier", { supplies_parts: true }],
+    ["closedRepairer", { repairs: true, is_active: false }],
+    ["claimsOnly", { handles_claims: true }],
   ] as const) {
-    const v = await db.vendor.create({ data: { name: `${RUN} ${key}`, kind, is_active }, select: { id: true } });
+    const v = await db.vendor.create({ data: { name: `${RUN} ${key}`, ...roles }, select: { id: true } });
     ids[key] = v.id;
   }
 });
@@ -277,7 +278,7 @@ describe("part lines follow the parts", () => {
       vendor_id: ids.supplier,
       unit_price: 900000,
     });
-    expect(await updateChargeAction(line.id, form({ vendor_id: ids.repairer }))).toMatchObject({ error: expect.stringContaining("bukan supplier part") });
+    expect(await updateChargeAction(line.id, form({ vendor_id: ids.repairer }))).toMatchObject({ error: expect.stringContaining("Supplier part") });
 
     expect(await removeChargeAction(line.id)).toMatchObject({ error: expect.stringContaining("Part yang Diganti") });
     const part = await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t } });
@@ -300,7 +301,10 @@ describe("external work: to the vendor and back", () => {
     const t = await makeTicket();
     const base = { kind: "external_service", description: "Perbaikan IC power" };
     expect(await add(t, base)).toMatchObject({ error: expect.stringContaining("Pilih vendor") });
-    expect(await add(t, { ...base, vendor_id: ids.supplier })).toMatchObject({ error: expect.stringContaining("bukan service eksternal") });
+    expect(await add(t, { ...base, vendor_id: ids.supplier })).toMatchObject({ error: expect.stringContaining("Service eksternal") });
+    // A vendor that only takes warranty claims is not paid for service work.
+    expect(await add(t, { ...base, vendor_id: ids.claimsOnly })).toMatchObject({ error: expect.stringContaining("Service eksternal") });
+    expect(await add(t, { kind: "other", description: "Kabel", vendor_id: ids.claimsOnly })).toMatchObject({ error: expect.stringContaining("tidak ditandai") });
     expect(await add(t, { ...base, vendor_id: ids.closedRepairer })).toMatchObject({ error: expect.stringContaining("nonaktif") });
     expect(await add(t, { ...base, vendor_id: "nope" })).toMatchObject({ error: expect.stringContaining("tidak ditemukan") });
     expect(await lines(t)).toHaveLength(0);

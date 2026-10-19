@@ -103,23 +103,13 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
     },
   });
 
-  // Spellings already in use, offered as suggestions in the vendor field.
-
-  const knownVendors = (
-
-    await db.rmaCase.findMany({
-
-      where: { vendor_name: { not: null } },
-
-      distinct: ["vendor_name"],
-
-      orderBy: { vendor_name: "asc" },
-
-      select: { vendor_name: true },
-
-    })
-
-  ).map((v) => v.vendor_name!).filter(Boolean);
+  // The claim vendors on the list, offered when the case is sent out. A name
+  // typed instead joins the list (transitionRmaAction).
+  const claimVendors = await db.vendor.findMany({
+    where: { is_active: true, handles_claims: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
 
 
   if (!rmaCase) notFound();
@@ -291,7 +281,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             currentStatus={rmaCase.status}
             role={session.role}
             unitOwnership={rmaCase.unit_ownership}
-            knownVendors={knownVendors}
+            claimVendors={claimVendors}
           />
         </div>
       </div>

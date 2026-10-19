@@ -1,11 +1,12 @@
 /**
- * Vendor names are free text, so the same vendor arrives spelled several ways.
- * The live data already holds "Asus Service Center" and "ASUS SERVICE CENTER"
- * as two separate vendors, which splits every per-vendor figure in half.
+ * Vendor names as people type them.
  *
- * This does not introduce a vendor table — it just stops the splitting getting
- * worse, by folding a newly typed name onto one already in use whenever the two
- * only differ by case or spacing.
+ * Claim vendors now live in the vendor list (`Vendor`, with `handles_claims`),
+ * and a typed name is matched there by the unique index, which already ignores
+ * case. What stays here is the part the index cannot do — collapsing sloppy
+ * whitespace before the lookup — and the key the dashboard groups the stored
+ * `RmaCase.vendor_name` text by, which still holds "Asus Service Center" and
+ * "ASUS SERVICE CENTER" side by side for cases sent before the list existed.
  */
 
 /** Whitespace collapsed, ends trimmed. What comparison and storage both use. */
@@ -16,21 +17,4 @@ export function cleanVendorName(raw: string): string {
 /** The form used for matching: cleaned, then case-folded. */
 export function vendorKey(raw: string): string {
   return cleanVendorName(raw).toLowerCase();
-}
-
-/**
- * Pick the spelling to store.
- *
- * If an existing vendor differs only by case or spacing, its spelling wins —
- * so the group stays one group instead of becoming two. Otherwise the cleaned
- * input is stored as typed, because a genuinely new vendor's own capitalisation
- * ("MSI", "iBox") is better than anything this could impose on it.
- */
-export function canonicalVendorName(raw: string, known: readonly string[]): string {
-  const cleaned = cleanVendorName(raw);
-  if (!cleaned) return "";
-
-  const key = vendorKey(cleaned);
-  const match = known.find((k) => vendorKey(k) === key);
-  return match ? cleanVendorName(match) : cleaned;
 }

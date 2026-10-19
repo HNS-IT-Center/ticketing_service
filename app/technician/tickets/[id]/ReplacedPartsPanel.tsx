@@ -16,11 +16,15 @@ import {
   removeReplacedPartAction,
 } from "@/app/actions/technician";
 import { uploadFailureMessage } from "@/lib/upload-limit";
+import { MAX_QUANTITY, stockAtStore, type CatalogItem } from "@/lib/catalog/items";
+import CatalogItemPicker from "./CatalogItemPicker";
 
 export type ReplacedPartRow = {
   id: string;
   part: ServicePart;
   item_name: string | null;
+  sku: string | null;
+  quantity: number;
   notes: string | null;
   recorded_by_name: string;
   created_at: string;
@@ -36,25 +40,41 @@ export type ReplacedPartRow = {
  * unreadable to any report — the same fault that forced the dashboard's brand
  * chart to be withdrawn, where "ASUS ROG" and "ROG JANGKAR" counted as two
  * manufacturers.
+ *
+ * The item itself is picked from the company catalogue when it is there
+ * (Accurate, read through data.hnsitcenter.id), so the record carries a SKU a
+ * report can count. Typing it by hand stays possible for what the catalogue
+ * does not hold.
  */
 export default function ReplacedPartsPanel({
   ticketId,
   parts,
   canEdit,
+  catalogEnabled = false,
+  storeName = null,
 }: {
   ticketId: string;
   parts: ReplacedPartRow[];
   canEdit: boolean;
+  /** Whether the catalogue API is configured; without it only free text is offered. */
+  catalogEnabled?: boolean;
+  /** The ticket's store, to show that store's stock in the search. */
+  storeName?: string | null;
 }) {
   const router = useRouter();
   const [part, setPart] = useState<ServicePart>("lcd");
   const [itemName, setItemName] = useState("");
+  const [selected, setSelected] = useState<CatalogItem | null>(null);
+  const [manual, setManual] = useState(!catalogEnabled);
+  const [quantity, setQuantity] = useState("1");
   const [notes, setNotes] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [isPending, startTransition] = useTransition();
 
   const nameRequired = requiresItemName(part);
-  const canSubmit = !nameRequired || itemName.trim().length > 0;
+  const qty = Number(quantity);
+  const qtyValid = Number.isInteger(qty) && qty >= 1 && qty <= MAX_QUANTITY;
+  const canSubmit = qtyValid && (!nameRequired || selected !== null || itemName.trim().length > 0);
 
   const pickPhotos = (chosen: FileList | null) => {
     if (!chosen) return;
@@ -70,7 +90,9 @@ export default function ReplacedPartsPanel({
       const formData = new FormData();
       formData.append("ticket_id", ticketId);
       formData.append("part", part);
-      formData.append("item_name", itemName);
+      formData.append("item_name", selected ? "" : itemName);
+      if (selected) formData.append("catalog_item_id", String(selected.id));
+      formData.append("quantity", String(qty));
       formData.append("notes", notes);
       for (const photo of photos) formData.append("photos", photo);
 
@@ -88,6 +110,8 @@ export default function ReplacedPartsPanel({
       }
       toast.success(`${servicePartLabel(part)} dicatat.`);
       setItemName("");
+      setSelected(null);
+      setQuantity("1");
       setNotes("");
       setPhotos([]);
       router.refresh();
@@ -128,8 +152,8 @@ export default function ReplacedPartsPanel({
         )}
       </div>
       <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 1rem" }}>
-        Pilih jenis part-nya, lalu tulis nama barang yang dipasang. Jenisnya yang nanti bisa
-        dihitung di laporan; nama barangnya untuk catatan.
+        Pilih jenis part-nya, lalu cari barang yang dipasang di katalog. Jenis dan SKU-nya
+        yang nanti dihitung di laporan.
       </p>
 
       {parts.length === 0 ? (
@@ -175,6 +199,12 @@ export default function ReplacedPartsPanel({
                   </span>
                   {row.item_name && (
                     <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{row.item_name}</span>
+                  )}
+                  {row.quantity > 1 && (
+                    <span style={{ fontSize: "0.8125rem", fontWeight: 700 }}>× {row.quantity}</span>
+                  )}
+                  {row.sku && (
+                    <span style={{ fontSize: "0.71875rem", color: "var(--text-muted)" }}>SKU {row.sku}</span>
                   )}
                 </div>
                 {row.notes && (
@@ -281,22 +311,80 @@ export default function ReplacedPartsPanel({
             </label>
 
             <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-              <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>
-                Nama barang{" "}
-                {nameRequired ? (
-                  <span style={{ color: "#991b1b" }}>*</span>
-                ) : (
-                  <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
-                )}
-              </span>
+              <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>Jumlah</span>
               <input
-                type="text"
-                value={itemName}
-                onChange={(e) => setItemName(e.target.value)}
-                className="form-input"
-                placeholder="Contoh: Baterai ASUS C31N1915"
+                type="number"
+                inputMode="numeric"
+                min={1}
+                max={MAX_QUANTITY}
+                value={quantity}
+                onChange={(e) => setQuantity(e.target.value)}
+                onWheel={(e) => (e.target as HTMLInputElement).blur()}
+                className={`form-input ${qtyValid ? "" : "error"}`}
               />
             </label>
+          </div>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
+            <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>
+              Barang yang dipasang{" "}
+              {nameRequired ? (
+                <span style={{ color: "#991b1b" }}>*</span>
+              ) : (
+                <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
+              )}
+            </span>
+
+            {selected ? (
+              <div
+                className="flex items-start justify-between gap-3 rounded-lg border p-3"
+                style={{ borderColor: "#bfdbfe", background: "#eff6ff" }}
+              >
+                <div className="flex flex-col gap-1">
+                  <span className="text-sm font-semibold" style={{ color: "#1e3a8a" }}>{selected.name}</span>
+                  <span className="text-xs" style={{ color: "#1e40af" }}>
+                    SKU {selected.sku}
+                    {selected.category ? ` · ${selected.category}` : ""}
+                    {stockAtStore(selected, storeName) !== null ? ` · stok toko ini ${stockAtStore(selected, storeName)}` : ""}
+                  </span>
+                </div>
+                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>
+                  Ganti
+                </button>
+              </div>
+            ) : manual ? (
+              <>
+                <input
+                  type="text"
+                  value={itemName}
+                  onChange={(e) => setItemName(e.target.value)}
+                  className="form-input"
+                  placeholder="Contoh: Baterai ASUS C31N1915"
+                />
+                {catalogEnabled && (
+                  <button
+                    type="button"
+                    className="self-start text-xs underline"
+                    style={{ background: "none", border: 0, color: "var(--primary)", cursor: "pointer", padding: 0 }}
+                    onClick={() => setManual(false)}
+                  >
+                    Cari di katalog barang
+                  </button>
+                )}
+              </>
+            ) : (
+              <>
+                <CatalogItemPicker storeName={storeName} onPick={setSelected} />
+                <button
+                  type="button"
+                  className="self-start text-xs underline"
+                  style={{ background: "none", border: 0, color: "var(--primary)", cursor: "pointer", padding: 0 }}
+                  onClick={() => setManual(true)}
+                >
+                  Tidak ada di katalog? Tulis manual
+                </button>
+              </>
+            )}
           </div>
 
           <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>

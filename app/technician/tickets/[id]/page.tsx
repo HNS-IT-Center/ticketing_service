@@ -20,6 +20,7 @@ import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import HoldEvidencePanel from "./HoldEvidencePanel";
 import { holdReasonAsksTechnician } from "@/lib/rma/hold-reason";
 import { ticketPartyName } from "@/lib/ticket-party";
+import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 
 function getTicketBasePoints(type: string, deviceType?: string | null): number {
   if (type === "pc_build") return 4;
@@ -49,6 +50,7 @@ export default async function TechnicianTicketDetailPage({
       include: {
         user: { select: { name: true, email: true, phone_number: true, address: true } },
         technician: { select: { name: true } },
+        store_location: { select: { name: true } },
         messages: {
           orderBy: { created_at: "asc" },
           include: { sender: { select: { name: true, role: true } } },
@@ -519,10 +521,14 @@ export default async function TechnicianTicketDetailPage({
             <ReplacedPartsPanel
               ticketId={ticket.id}
               canEdit={isAssigned}
+              catalogEnabled={isCatalogConfigured()}
+              storeName={ticket.store_location?.name ?? null}
               parts={ticket.replaced_parts.map((p) => ({
                 id: p.id,
                 part: p.part,
                 item_name: p.item_name,
+                sku: p.sku,
+                quantity: p.quantity,
                 notes: p.notes,
                 recorded_by_name: p.recorded_by.name,
                 created_at: formatDateTime(p.created_at),

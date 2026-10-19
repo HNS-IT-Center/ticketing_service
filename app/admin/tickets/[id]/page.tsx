@@ -364,6 +364,12 @@ export default async function AdminTicketDetailPage({
                       {p.item_name && (
                         <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{p.item_name}</span>
                       )}
+                      {p.quantity > 1 && (
+                        <span style={{ fontSize: "0.8125rem", fontWeight: 700 }}>× {p.quantity}</span>
+                      )}
+                      {p.sku && (
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>SKU {p.sku}</span>
+                      )}
                     </div>
                     {p.notes && (
                       <p

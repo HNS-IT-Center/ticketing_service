@@ -779,6 +779,19 @@ model TicketReplacedPart {
   /** Free note: why it was replaced, what the old one did. */
   notes String? @db.Text
 
+  /**
+   * The item as it stands in the company catalogue (Accurate, read through
+   * data.hnsitcenter.id), when the technician picked it from the search rather
+   * than typing it. Copied at the time of recording — a snapshot, not a live
+   * link — so a report still reads the same after the catalogue changes. This
+   * app never writes back to Accurate: purchasing and stock live there; this is
+   * the technicians' own record of what they fitted.
+   */
+  catalog_item_id  Int?
+  sku              String?
+  catalog_category String?
+  quantity         Int     @default(1)
+
   recorded_by_id String
   recorded_by    User   @relation("PartRecordedBy", fields: [recorded_by_id], references: [id])
 
@@ -793,6 +806,8 @@ model TicketReplacedPart {
   created_at DateTime @default(now())
 
   @@index([ticket_id])
+  @@index([sku])
+  @@index([created_at])
 }
 
 /** One photo of a replaced component. Dies with the part it documents. */

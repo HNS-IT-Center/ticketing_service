@@ -8,6 +8,8 @@ import { uploadToR2, getExt, getFileType, deleteFromStorage } from "@/lib/r2";
 import { performanceEffect } from "@/lib/kpi";
 import { getTicketPoints } from "@/lib/points";
 import { isServicePart, requiresItemName, MAX_PART_PHOTOS } from "@/lib/service-parts";
+import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
+import { MAX_QUANTITY, type CatalogItem } from "@/lib/catalog/items";
 
 
 // ─── Request Ticket Assignment (Technician) ────────────────────────────────
@@ -470,6 +472,8 @@ export async function addReplacedPartAction(formData: FormData) {
   const itemName = String(formData.get("item_name") ?? "");
   const notes = String(formData.get("notes") ?? "");
   const photos = (formData.getAll("photos") as File[]).filter((f) => f.size > 0);
+  const catalogIdRaw = String(formData.get("catalog_item_id") ?? "").trim();
+  const quantity = Number(String(formData.get("quantity") ?? "1").trim() || "1");
 
   if (!isServicePart(part)) {
     return { error: "Jenis part tidak dikenal." };
@@ -498,7 +502,31 @@ export async function addReplacedPartAction(formData: FormData) {
     return { error: "Penggantian part hanya dicatat pada tiket service." };
   }
 
-  const trimmedName = itemName.trim();
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY) {
+    return { error: `Jumlah harus angka 1–${MAX_QUANTITY}.` };
+  }
+
+  // Picked from the catalogue: re-read it there by id, so the SKU and name on
+  // record are the catalogue's and not whatever the browser sent.
+  let catalog: CatalogItem | null = null;
+  if (catalogIdRaw) {
+    const catalogId = Number(catalogIdRaw);
+    if (!Number.isInteger(catalogId) || catalogId <= 0) {
+      return { error: "Barang katalog tidak valid." };
+    }
+    try {
+      catalog = await getCatalogItem(catalogId);
+    } catch (err) {
+      if (!(err instanceof CatalogUnavailableError)) throw err;
+      console.error("[CATALOG LOOKUP]", err.message);
+      return {
+        error: "Katalog barang sedang tidak dapat dihubungi. Hapus pilihan katalog dan isi nama barang secara manual.",
+      };
+    }
+    if (!catalog) return { error: "Barang tidak ditemukan di katalog." };
+  }
+
+  const trimmedName = catalog?.name ?? itemName.trim();
   // `other` carries no meaning by itself, so the name is what says what was
   // fitted. Every named category already describes itself.
   if (requiresItemName(part) && !trimmedName) {
@@ -526,6 +554,10 @@ export async function addReplacedPartAction(formData: FormData) {
       part,
       item_name: trimmedName || null,
       notes: notes.trim() || null,
+      catalog_item_id: catalog?.id ?? null,
+      sku: catalog?.sku ?? null,
+      catalog_category: catalog?.category ?? null,
+      quantity,
       recorded_by_id: session.userId,
       photos: { create: photoUrls.map((file_url) => ({ file_url })) },
     },

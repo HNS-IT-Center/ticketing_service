@@ -21,6 +21,7 @@ import {
   Activity,
   Store,
   ShieldCheck,
+  Package,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import NotificationBell from "./NotificationBell";
@@ -48,6 +49,7 @@ const NAV_ITEMS: Record<string, NavItem[]> = {
     { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
     { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
     { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
+    { href: "/admin/reports/parts", label: "Laporan Part", icon: <Package size={18} /> },
     { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
     { href: "/admin/logs", label: "Logs", icon: <Activity size={18} /> },
     { href: "/rma/dashboard", label: "RMA", icon: <ShieldCheck size={18} /> },

@@ -23,6 +23,9 @@ import {
   ShieldCheck,
   Package,
   Truck,
+  ChevronDown,
+  BarChart3,
+  Database,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import NotificationBell from "./NotificationBell";
@@ -32,48 +35,119 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ReactNode;
+  /** Other paths that belong to this entry, e.g. a case page reached from the RMA dashboard. */
+  also?: string[];
 };
 
-const NAV_ITEMS: Record<string, NavItem[]> = {
-  technician: [
+/**
+ * A group in the sidebar. A titled section folds open and closed; an untitled
+ * one, or one holding a single entry, is shown as plain links.
+ */
+type NavSection = {
+  key: string;
+  title?: string;
+  icon?: React.ReactNode;
+  /** Open until the user closes it — for what is opened all day. */
+  defaultOpen?: boolean;
+  items: NavItem[];
+};
+
+const flat = (items: NavItem[]): NavSection[] => [{ key: "main", items }];
+
+const NAV_SECTIONS: Record<string, NavSection[]> = {
+  technician: flat([
     { href: "/technician/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/technician/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
     { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
     { href: "/technician/schedule", label: "Schedule", icon: <Users size={18} /> },
     { href: "/technician/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
     { href: "/technician/profile", label: "Profile", icon: <User size={18} /> },
-  ],
+  ]),
+  // Grouped by what the page is for. Profile is not here: it is in the menu
+  // under the name at the top right.
   admin: [
-    { href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
-    { href: "/admin/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-    { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
-    { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
-    { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
-    { href: "/admin/reports/parts", label: "Laporan Part", icon: <Package size={18} /> },
-    { href: "/admin/vendors", label: "Vendor", icon: <Truck size={18} /> },
-    { href: "/admin/settings/access", label: "Pengaturan Akses", icon: <ShieldCheck size={18} /> },
-    { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
-    { href: "/admin/logs", label: "Logs", icon: <Activity size={18} /> },
-    { href: "/rma/dashboard", label: "RMA", icon: <ShieldCheck size={18} /> },
-    { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
+    {
+      key: "home",
+      items: [{ href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
+    },
+    {
+      key: "tickets",
+      title: "Tiket",
+      icon: <Ticket size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
+        { href: "/admin/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+      ],
+    },
+    // The RMA desk's own pages, opened inside the admin portal: an
+    // administrator stays in this sidebar instead of being moved to the desk's.
+    {
+      key: "rma",
+      title: "Klaim & RMA",
+      icon: <ShieldCheck size={18} />,
+      items: [
+        { href: "/rma/dashboard", label: "Dashboard RMA", icon: <LayoutDashboard size={18} />, also: ["/rma/cases"] },
+        { href: "/rma/tickets", label: "Tiket Klaim", icon: <Ticket size={18} /> },
+        { href: "/rma/logs", label: "Log RMA", icon: <Activity size={18} /> },
+      ],
+    },
+    {
+      key: "reports",
+      title: "Laporan",
+      icon: <BarChart3 size={18} />,
+      items: [
+        { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
+        { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
+        { href: "/admin/reports/parts", label: "Laporan Part", icon: <Package size={18} /> },
+        { href: "/admin/logs", label: "Log Tiket", icon: <Activity size={18} /> },
+      ],
+    },
+    {
+      key: "master",
+      title: "Data Master",
+      icon: <Database size={18} />,
+      items: [
+        { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
+        { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
+        { href: "/admin/vendors", label: "Vendor", icon: <Truck size={18} />, also: ["/rma/vendors"] },
+      ],
+    },
+    {
+      key: "settings",
+      items: [{ href: "/admin/settings/access", label: "Pengaturan Akses", icon: <Settings size={18} /> }],
+    },
   ],
-  // Log Aktivitas sits last on purpose: it is a reference page, read after the
-  // work, while the three above it are what the desk opens to act.
-  rma: [
-    { href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
+  // Log Aktivitas sits after the work pages on purpose: it is a reference page,
+  // read after the work, while the three above it are what the desk opens to act.
+  rma: flat([
+    { href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} />, also: ["/rma/cases"] },
     { href: "/rma/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
     { href: "/rma/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
     { href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> },
     { href: "/rma/vendors", label: "Vendor", icon: <Truck size={18} /> },
-  ],
-  sales: [
+  ]),
+  sales: flat([
     { href: "/sales/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
     { href: "/sales/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
     { href: "/sales/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
     { href: "/sales/profile", label: "Profile", icon: <User size={18} /> },
-  ],
+  ]),
 };
+
+/**
+ * How closely a page belongs to an entry: the length of the matching path, so
+ * the most specific entry wins ("/admin/tickets/create" over "/admin/tickets").
+ * A portal's dashboard matches only itself, or every page would light it up.
+ */
+function matchScore(item: NavItem, pathname: string, dashboard: string): number {
+  let best = 0;
+  for (const path of [item.href, ...(item.also ?? [])]) {
+    const hit = pathname === path || (path !== dashboard && pathname.startsWith(`${path}/`));
+    if (hit && path.length > best) best = path.length;
+  }
+  return best;
+}
 
 const ROLE_LABELS: Record<string, string> = {
   technician: "Technician",
@@ -191,7 +265,8 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
     setSwipeOffset(0);
   };
 
-  const navItems = NAV_ITEMS[role] || [];
+  const sections = NAV_SECTIONS[role] || [];
+  const navItems = sections.flatMap((section) => section.items);
   const initials = userName
     .split(" ")
     .map((n) => n[0])
@@ -205,16 +280,54 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
   // dropdown entries are hidden rather than pointed at a route that 404s.
   const showPersonalLinks = role !== "rma";
 
-  const currentLabel =
-    navItems.find((n) => pathname === n.href || pathname.startsWith(n.href))?.label ?? "Dashboard";
-
-  // find the longest matching href for accurate active state
-  const activeItem = navItems.reduce((acc, item) => {
-    if (pathname === item.href || (item.href !== `/${role}/dashboard` && pathname.startsWith(item.href))) {
-      return !acc || item.href.length > acc.href.length ? item : acc;
+  // The entry for this page: the longest matching path wins.
+  const dashboard = `/${role}/dashboard`;
+  let activeItem: NavItem | null = null;
+  let activeScore = 0;
+  for (const item of navItems) {
+    const score = matchScore(item, pathname, dashboard);
+    if (score > activeScore) {
+      activeItem = item;
+      activeScore = score;
     }
-    return acc;
-  }, null as NavItem | null);
+  }
+  const currentLabel = activeItem?.label ?? "Dashboard";
+  const activeSectionKey = sections.find((section) => activeItem && section.items.includes(activeItem))?.key;
+
+  // A group is open when the user opened it, or — until they say otherwise —
+  // when it holds the page on screen or is one opened all day. Arriving on a
+  // page of a group the user had closed opens it again, adjusted during render
+  // rather than in an effect, so there is no closed-then-open flash.
+  const [openOverride, setOpenOverride] = useState<Record<string, boolean>>({});
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    setLastPath(pathname);
+    if (activeSectionKey && openOverride[activeSectionKey] === false) {
+      setOpenOverride((prev) => ({ ...prev, [activeSectionKey]: true }));
+    }
+  }
+  const isOpen = (section: NavSection) =>
+    openOverride[section.key] ?? (section.key === activeSectionKey || Boolean(section.defaultOpen));
+  const toggle = (section: NavSection) =>
+    setOpenOverride((prev) => ({ ...prev, [section.key]: !isOpen(section) }));
+
+  const renderLink = (item: NavItem, sub: boolean) => {
+    const isActive = activeItem?.href === item.href;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`sidebar-link ${sub ? "sidebar-sublink" : ""} ${isActive ? "active" : ""} ${collapsed ? "collapsed" : ""}`.trim().replace(/\s+/g, " ")}
+        onClick={() => setSidebarOpen(false)}
+        title={collapsed ? item.label : undefined}
+        aria-current={isActive ? "page" : undefined}
+        suppressHydrationWarning
+      >
+        {item.icon}
+        {!collapsed && <span>{item.label}</span>}
+      </Link>
+    );
+  };
 
   return (
     <div 
@@ -273,20 +386,48 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
 
         {/* Nav links */}
         <nav className="sidebar-nav">
-          {navItems.map((item) => {
-            const isActive = activeItem?.href === item.href;
+          {sections.map((section, i) => {
+            // Icon-only: every entry stays one click away, groups shown as a rule between them.
+            if (collapsed) {
+              return (
+                <div key={section.key} className="sidebar-plain-group">
+                  {i > 0 && section.title && <div className="sidebar-divider" role="separator" />}
+                  {section.items.map((item) => renderLink(item, false))}
+                </div>
+              );
+            }
+            if (!section.title || section.items.length === 1) {
+              return (
+                <div key={section.key} className="sidebar-plain-group">
+                  {section.items.map((item) => renderLink(item, false))}
+                </div>
+              );
+            }
+            const open = isOpen(section);
+            const holdsActive = section.key === activeSectionKey;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`sidebar-link ${isActive ? "active" : ""} ${collapsed ? "collapsed" : ""}`.trim().replace(/\s+/g, " ")}
-                onClick={() => setSidebarOpen(false)}
-                title={collapsed ? item.label : undefined}
-                suppressHydrationWarning
-              >
-                {item.icon}
-                {!collapsed && <span>{item.label}</span>}
-              </Link>
+              <div key={section.key} className="sidebar-group">
+                <button
+                  type="button"
+                  className={`sidebar-link sidebar-group-btn ${holdsActive && !open ? "has-active" : ""}`.trim()}
+                  aria-expanded={open}
+                  aria-controls={`nav-group-${section.key}`}
+                  onClick={() => toggle(section)}
+                >
+                  {section.icon}
+                  <span>{section.title}</span>
+                  <ChevronDown
+                    className="sidebar-group-chevron"
+                    style={{ transform: open ? "rotate(180deg)" : undefined }}
+                    aria-hidden
+                  />
+                </button>
+                {open && (
+                  <div id={`nav-group-${section.key}`} className="sidebar-group-items">
+                    {section.items.map((item) => renderLink(item, true))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>

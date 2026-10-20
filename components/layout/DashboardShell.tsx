@@ -26,6 +26,7 @@ import {
   ChevronDown,
   BarChart3,
   Database,
+  CalendarDays,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import NotificationBell from "./NotificationBell";
@@ -52,19 +53,36 @@ type NavSection = {
   items: NavItem[];
 };
 
-const flat = (items: NavItem[]): NavSection[] => [{ key: "main", items }];
-
+// Grouped by what the page is for, the same groups in every portal. Profile is
+// in none of them: it is in the menu under the name at the top right. The small
+// portals keep their groups open — they fold only when someone folds them.
 const NAV_SECTIONS: Record<string, NavSection[]> = {
-  technician: flat([
-    { href: "/technician/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/technician/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
-    { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-    { href: "/technician/schedule", label: "Schedule", icon: <Users size={18} /> },
-    { href: "/technician/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
-    { href: "/technician/profile", label: "Profile", icon: <User size={18} /> },
-  ]),
-  // Grouped by what the page is for. Profile is not here: it is in the menu
-  // under the name at the top right.
+  technician: [
+    {
+      key: "home",
+      items: [{ href: "/technician/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
+    },
+    {
+      key: "tickets",
+      title: "Tiket",
+      icon: <Ticket size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/technician/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
+        { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+      ],
+    },
+    {
+      key: "team",
+      title: "Tim",
+      icon: <Users size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/technician/schedule", label: "Schedule", icon: <CalendarDays size={18} /> },
+        { href: "/technician/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
+      ],
+    },
+  ],
   admin: [
     {
       key: "home",
@@ -119,20 +137,49 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
     },
   ],
   // Log Aktivitas sits after the work pages on purpose: it is a reference page,
-  // read after the work, while the three above it are what the desk opens to act.
-  rma: flat([
-    { href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} />, also: ["/rma/cases"] },
-    { href: "/rma/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
-    { href: "/rma/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-    { href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> },
-    { href: "/rma/vendors", label: "Vendor", icon: <Truck size={18} /> },
-  ]),
-  sales: flat([
-    { href: "/sales/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/sales/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
-    { href: "/sales/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-    { href: "/sales/profile", label: "Profile", icon: <User size={18} /> },
-  ]),
+  // read after the work, while the ones above it are what the desk opens to act.
+  rma: [
+    {
+      key: "home",
+      items: [{ href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} />, also: ["/rma/cases"] }],
+    },
+    {
+      key: "tickets",
+      title: "Tiket",
+      icon: <Ticket size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/rma/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
+        { href: "/rma/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+      ],
+    },
+    {
+      key: "reports",
+      title: "Laporan",
+      items: [{ href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> }],
+    },
+    {
+      key: "master",
+      title: "Data Master",
+      items: [{ href: "/rma/vendors", label: "Vendor", icon: <Truck size={18} /> }],
+    },
+  ],
+  sales: [
+    {
+      key: "home",
+      items: [{ href: "/sales/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
+    },
+    {
+      key: "tickets",
+      title: "Tiket",
+      icon: <Ticket size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/sales/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
+        { href: "/sales/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+      ],
+    },
+  ],
 };
 
 /**
@@ -163,6 +210,20 @@ interface DashboardShellProps {
   userId: string;
   isCoordinator?: boolean;
 }
+
+// Only Administrator and Technician have a profile page. Sales had a sidebar
+// entry to /sales/profile, which does not exist, and a menu entry to
+// /admin/profile, which is Administrator-only — so for Sales and RMA the
+// entry is hidden rather than pointed at a page that refuses them.
+const PROFILE_HREF: Partial<Record<DashboardShellProps["role"], string>> = {
+  admin: "/admin/profile",
+  technician: "/technician/profile",
+};
+const TICKETS_HREF: Partial<Record<DashboardShellProps["role"], string>> = {
+  admin: "/admin/tickets",
+  technician: "/technician/tickets",
+  sales: "/sales/tickets",
+};
 
 export default function DashboardShell({ children, role, userName, userId, isCoordinator = false }: DashboardShellProps) {
   const pathname = usePathname();
@@ -274,11 +335,8 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
     .slice(0, 2)
     .toUpperCase();
 
-  const profileHref = role === "sales" ? "/admin/profile" : `/${role}/profile`;
-  const ticketsHref = role === "admin" || role === "sales" ? "/admin/tickets" : `/${role}/tickets`;
-  // The RMA portal has neither a profile page nor a ticket list, so those two
-  // dropdown entries are hidden rather than pointed at a route that 404s.
-  const showPersonalLinks = role !== "rma";
+  const profileHref = PROFILE_HREF[role];
+  const ticketsHref = TICKETS_HREF[role];
 
   // The entry for this page: the longest matching path wins.
   const dashboard = `/${role}/dashboard`;
@@ -530,8 +588,7 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
 
                   {/* Menu items */}
                   <div style={{ padding: "0.375rem" }}>
-                    {showPersonalLinks && (
-                      <>
+                    {profileHref && (
                     <Link
                       href={profileHref}
                       onClick={() => setProfileOpen(false)}
@@ -546,6 +603,8 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
                       <User size={15} style={{ flexShrink: 0 }} />
                       Profile
                     </Link>
+                    )}
+                    {ticketsHref && (
                     <Link
                       href={ticketsHref}
                       onClick={() => setProfileOpen(false)}
@@ -560,9 +619,10 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
                       <Ticket size={15} style={{ flexShrink: 0 }} />
                       My Tickets
                     </Link>
+                    )}
 
-                    <div style={{ borderTop: "1px solid var(--border-light)", margin: "0.375rem 0" }} />
-                      </>
+                    {(profileHref || ticketsHref) && (
+                      <div style={{ borderTop: "1px solid var(--border-light)", margin: "0.375rem 0" }} />
                     )}
 
                     <form action={logoutAction}>

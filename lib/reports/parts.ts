@@ -12,6 +12,8 @@ export type PartReportRow = {
   part: string;
   itemName: string | null;
   sku: string | null;
+  /** The catalogue item's id, to look its stock up; absent on typed parts. */
+  catalogItemId?: number | null;
   catalogCategory: string | null;
   quantity: number;
   notes: string | null;

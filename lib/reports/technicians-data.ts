@@ -17,15 +17,20 @@ import type { TargetLine, TechnicianRef } from "./technicians";
  */
 export async function loadTargetData(
   month: string,
-  storeId: string | null
+  storeId: string | null,
+  /** Only this technician's work — the dashboard's own-progress card. */
+  technicianId: string | null = null
 ): Promise<{ technicians: TechnicianRef[]; doneTickets: { ticketId: string; technicianId: string }[]; lines: TargetLine[] } | null> {
   const range = monthRange(month);
   if (!range) return null;
-  const storeFilter = storeId ? { store_location_id: storeId } : {};
+  const ticketFilter = {
+    ...(storeId ? { store_location_id: storeId } : {}),
+    ...(technicianId ? { technician_id: technicianId } : {}),
+  };
 
   const firstDone = await db.ticketStatusLog.groupBy({
     by: ["ticket_id"],
-    where: { new_status: "done", created_at: { lt: range.end }, ticket: { ticket_type: "service", ...storeFilter } },
+    where: { new_status: "done", created_at: { lt: range.end }, ticket: { ticket_type: "service", ...ticketFilter } },
     _min: { created_at: true },
   });
   const ticketIds = firstDone
@@ -51,6 +56,7 @@ export async function loadTargetData(
         role: "Technician",
         is_active: true,
         ...(storeId ? { store_assignments: { some: { store_id: storeId } } } : {}),
+        ...(technicianId ? { id: technicianId } : {}),
       },
       select: { id: true, name: true },
       orderBy: { name: "asc" },

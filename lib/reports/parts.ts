@@ -39,6 +39,14 @@ export function monthRange(month: string): { start: Date; end: Date } | null {
   };
 }
 
+const MONTH_LABEL = new Intl.DateTimeFormat("id-ID", { month: "short", year: "numeric", timeZone: "UTC" });
+
+/** "2026-10" → "Okt 2026". */
+export function monthLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return MONTH_LABEL.format(Date.UTC(y, m - 1, 1));
+}
+
 /** The current month in WIB, as "YYYY-MM". The clock is passed in. */
 export function currentMonth(now: number): string {
   const d = new Date(now + WIB_OFFSET_MS);

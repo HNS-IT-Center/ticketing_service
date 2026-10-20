@@ -1028,3 +1028,27 @@ model ServiceJob {
 
   charges TicketCharge[]
 }
+
+// A monthly target for the Target Teknisi report. `scope` is "default" — every
+// technician — or one technician's user id, which overrides the default.
+//
+// A row holds from its month until a later row of the same scope, so a target
+// changed in November leaves October judged against October's target: a month
+// already shown is never rewritten. A technician's row can also send them back
+// to the default (`use_default`). A null measure means "no target on this one".
+// No foreign key: "default" is not a user, and an old target row for someone
+// since removed harms nothing.
+model TechnicianTarget {
+  id              String   @id @default(cuid())
+  scope           String
+  effective_month String // "YYYY-MM", WIB
+  jobs            Int?
+  revenue         Int? // Rupiah of job takings
+  points          Int?
+  use_default     Boolean  @default(false)
+  updated_by_id   String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@unique([scope, effective_month])
+}

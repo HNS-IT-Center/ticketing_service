@@ -1,6 +1,6 @@
 import { ClipboardList } from "lucide-react";
 import { db } from "@/lib/db";
-import { NewServiceJobForm, ServiceJobRow } from "./ServiceJobForms";
+import { ApplyAccurateItemForm, NewServiceJobForm, ServiceJobRow } from "./ServiceJobForms";
 
 /**
  * The Daftar Jasa, as the admin and the technician portal show it. The caller
@@ -15,6 +15,8 @@ export default async function ServiceJobDirectory({ canManage }: { canManage: bo
       default_price: true,
       points: true,
       is_active: true,
+      accurate_sku: true,
+      accurate_name: true,
       _count: { select: { charges: true } },
     },
   });
@@ -33,6 +35,7 @@ export default async function ServiceJobDirectory({ canManage }: { canManage: bo
       </div>
 
       {canManage && <NewServiceJobForm />}
+      {canManage && <ApplyAccurateItemForm unmapped={jobs.filter((j) => !j.accurate_sku).length} />}
 
       <div className="card">
         {jobs.length === 0 ? (
@@ -47,6 +50,7 @@ export default async function ServiceJobDirectory({ canManage }: { canManage: bo
                   <th>Jasa</th>
                   <th>Harga default</th>
                   <th>Poin</th>
+                  <th>Kode Accurate</th>
                   <th>Dipakai</th>
                   <th>Status</th>
                   <th></th>
@@ -56,7 +60,16 @@ export default async function ServiceJobDirectory({ canManage }: { canManage: bo
                 {jobs.map((j) => (
                   <ServiceJobRow
                     key={j.id}
-                    job={{ id: j.id, name: j.name, default_price: j.default_price, points: j.points, is_active: j.is_active, used: j._count.charges }}
+                    job={{
+                      id: j.id,
+                      name: j.name,
+                      default_price: j.default_price,
+                      points: j.points,
+                      is_active: j.is_active,
+                      used: j._count.charges,
+                      accurate_sku: j.accurate_sku,
+                      accurate_name: j.accurate_name,
+                    }}
                     canManage={canManage}
                   />
                 ))}

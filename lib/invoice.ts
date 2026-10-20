@@ -15,6 +15,8 @@ import { externalState, type ChargeRow } from "@/lib/charges";
 
 export type InvoiceLine = {
   no: number;
+  /** The Accurate code the cashier types; null when it is picked by hand there. */
+  code: string | null;
   description: string;
   quantity: number;
   unitPrice: number | null;
@@ -41,11 +43,11 @@ export function buildInvoice(rows: readonly ChargeRow[]): InvoiceSummary {
     if (externalState(r) === "at_vendor") atVendor += 1;
     if (r.unit_price === null) {
       unpriced += 1;
-      return { no: i + 1, description: r.description, quantity: r.quantity, unitPrice: null, amount: null };
+      return { no: i + 1, code: r.accurate_code ?? null, description: r.description, quantity: r.quantity, unitPrice: null, amount: null };
     }
     const amount = r.unit_price * r.quantity;
     total += amount;
-    return { no: i + 1, description: r.description, quantity: r.quantity, unitPrice: r.unit_price, amount };
+    return { no: i + 1, code: r.accurate_code ?? null, description: r.description, quantity: r.quantity, unitPrice: r.unit_price, amount };
   });
   const reasons: string[] = [];
   if (rows.length === 0) reasons.push("Belum ada biaya yang dicatat.");

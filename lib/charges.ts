@@ -231,6 +231,12 @@ export type ChargeRow = {
   service_job: { id: string; name: string } | null;
   /** The job's points as given when the line was recorded. */
   job_points: number | null;
+  /**
+   * The Accurate code the cashier enters for this line: a catalogue part's SKU,
+   * or the Accurate item its job is mapped to. Null when the cashier must pick
+   * it in Accurate by hand.
+   */
+  accurate_code?: string | null;
   /** What this part usually sells for, from past bills — given only to whoever sets prices. */
   price_reference?: PriceReference | null;
   is_part: boolean;

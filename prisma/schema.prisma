@@ -1023,6 +1023,15 @@ model ServiceJob {
   default_price Int?     // Rupiah, put on the bill; whoever may set prices can change it there
   points        Int      @default(0)
   is_active     Boolean  @default(true)
+
+  // The Accurate service item the cashier enters for this job, e.g. 100688
+  // "JASA SERVICE". Printed on the invoice beside the line, so the cashier
+  // types a code instead of searching Accurate. A snapshot of the catalogue,
+  // like a replaced part's; nothing is ever written to Accurate.
+  accurate_item_id Int?
+  accurate_sku     String?
+  accurate_name    String? @db.Text
+
   created_at    DateTime @default(now())
   updated_at    DateTime @updatedAt
 

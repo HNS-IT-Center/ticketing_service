@@ -160,6 +160,7 @@ export default async function InvoicePage({
           <thead>
             <tr>
               {!struk && <th className="inv-no">No</th>}
+              {!struk && <th className="inv-code-col">Kode</th>}
               <th>Keterangan</th>
               <th className="inv-num">Qty</th>
               {!struk && <th className="inv-num">Harga</th>}
@@ -169,7 +170,7 @@ export default async function InvoicePage({
           <tbody>
             {invoice.lines.length === 0 ? (
               <tr>
-                <td colSpan={struk ? 3 : 5} className="inv-muted">
+                <td colSpan={struk ? 3 : 6} className="inv-muted">
                   Belum ada biaya.
                 </td>
               </tr>
@@ -177,7 +178,9 @@ export default async function InvoicePage({
               invoice.lines.map((l) => (
                 <tr key={l.no}>
                   {!struk && <td className="inv-no">{l.no}</td>}
+                  {!struk && <td className="inv-code-col">{l.code ?? "—"}</td>}
                   <td>
+                    {struk && <div className="inv-code-col">{l.code ?? "—"}</div>}
                     {l.description}
                     {struk && l.unitPrice !== null && l.quantity > 1 && (
                       <div className="inv-muted">
@@ -194,7 +197,7 @@ export default async function InvoicePage({
           </tbody>
           <tfoot>
             <tr>
-              <td colSpan={struk ? 2 : 4} className="inv-total-label">
+              <td colSpan={struk ? 2 : 5} className="inv-total-label">
                 TOTAL
               </td>
               <td className="inv-num inv-total">{formatRupiah(invoice.total)}</td>
@@ -218,6 +221,7 @@ export default async function InvoicePage({
         )}
 
         <footer className="inv-foot">
+          <div className="inv-muted">Kode = nomor barang/jasa di Accurate untuk kasir. &ldquo;—&rdquo; dipilih langsung di Accurate.</div>
           <div>Terima kasih telah mempercayakan service Anda kepada HNS IT Center.</div>
           <div className="inv-muted">Dicetak {printedAt()}</div>
         </footer>
@@ -264,6 +268,8 @@ const INVOICE_CSS = `
 .inv-struk .inv-table th, .inv-struk .inv-table td { padding: 5px 2px; }
 .inv-table tbody tr:hover { background: none; }
 .inv-no { width: 32px; color: #6b7280; }
+.inv-code-col { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; color: #374151; white-space: nowrap; }
+.inv-struk .inv-code-col { font-size: 11px; color: #6b7280; }
 .inv-num { text-align: right; white-space: nowrap; }
 .inv-total-label { text-align: right; font-weight: 800; letter-spacing: 0.06em; border-bottom: none; padding-top: 12px; }
 .inv-total { font-weight: 800; font-size: 16px; border-bottom: none; padding-top: 12px; }

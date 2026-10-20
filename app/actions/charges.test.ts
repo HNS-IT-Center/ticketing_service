@@ -37,6 +37,7 @@ const { addChargeAction, updateChargeAction, removeChargeAction, receiveExternal
 const { addReplacedPartAction, removeReplacedPartAction, updateTicketStatusAction } = await import("./technician");
 const { adminUpdateTicketStatusAction } = await import("./admin");
 const { saveAccessRulesAction } = await import("./access");
+const { createServiceJobAction, updateServiceJobAction } = await import("./service-jobs");
 const { loadChargesPanel, hasExternalWorkOutstanding } = await import("@/lib/charges-server");
 const access = await import("@/lib/access");
 const { EXTERNAL_WORK_OUTSTANDING } = await import("@/lib/charges");
@@ -123,6 +124,13 @@ beforeAll(async () => {
     const v = await db.vendor.create({ data: { name: `${RUN} ${key}`, ...roles }, select: { id: true } });
     ids[key] = v.id;
   }
+  for (const [key, data] of [
+    ["job", { name: `${RUN} Ganti LCD`, default_price: 150000, points: 2 }],
+    ["job2", { name: `${RUN} Install Ulang OS`, default_price: 100000, points: 1 }],
+    ["oldJob", { name: `${RUN} Jasa Lama`, default_price: 50000, points: 5, is_active: false }],
+  ] as const) {
+    ids[key] = (await db.serviceJob.create({ data, select: { id: true } })).id;
+  }
 });
 
 beforeEach(async () => {
@@ -135,6 +143,7 @@ afterAll(async () => {
   if (savedRules.length) await db.accessRule.createMany({ data: savedRules });
   await db.ticket.deleteMany({ where: { ticket_code: { startsWith: RUN } } });
   await db.vendor.deleteMany({ where: { name: { startsWith: RUN } } });
+  await db.serviceJob.deleteMany({ where: { name: { startsWith: RUN } } });
   await db.user.deleteMany({ where: { email: { startsWith: RUN } } });
   await db.storeLocation.deleteMany({ where: { name: { startsWith: RUN } } });
   await db.$disconnect();
@@ -143,8 +152,10 @@ afterAll(async () => {
 describe("prices and who may set them", () => {
   it("a technician adds their labour with a selling price, written as people type it", async () => {
     const t = await makeTicket();
-    expect(await add(t, { kind: "service_fee", description: "Jasa ganti LCD", unit_price: "Rp 150.000" })).toEqual({ success: true });
-    expect(await lines(t)).toMatchObject([{ kind: "service_fee", description: "Jasa ganti LCD", unit_price: 150000, unit_cost: null, quantity: 1 }]);
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job, unit_price: "Rp 175.000" })).toEqual({ success: true });
+    expect(await lines(t)).toMatchObject([
+      { kind: "service_fee", description: `${RUN} Ganti LCD`, unit_price: 175000, unit_cost: null, quantity: 1, job_points: 2 },
+    ]);
   });
 
   it("a technician may not set a cost by default — refused, not silently dropped", async () => {
@@ -166,7 +177,7 @@ describe("prices and who may set them", () => {
 
   it("an empty price clears it; garbage is refused", async () => {
     const t = await makeTicket();
-    await add(t, { kind: "service_fee", description: "Jasa", unit_price: "100000" });
+    await add(t, { kind: "service_fee", service_job_id: ids.job, unit_price: "100000" });
     const [line] = await lines(t);
     expect(await updateChargeAction(line.id, form({ unit_price: "seratus" }))).toMatchObject({ error: expect.stringContaining("tidak valid") });
     expect(await updateChargeAction(line.id, form({ unit_price: "" }))).toEqual({ success: true });
@@ -184,9 +195,10 @@ describe("prices and who may set them", () => {
   it("the owner can take the selling price away from technicians", async () => {
     const t = await makeTicket();
     await grant([], ["edit_price:technician"]);
-    expect(await add(t, { kind: "service_fee", description: "Jasa", unit_price: "1" })).toMatchObject({ error: expect.stringContaining("harga jual") });
-    // Still allowed to record the line itself, unpriced.
-    expect(await add(t, { kind: "service_fee", description: "Jasa" })).toEqual({ success: true });
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job, unit_price: "1" })).toMatchObject({ error: expect.stringContaining("harga jual") });
+    // Still allowed to record the job — at the price the Daftar Jasa gives it.
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job })).toEqual({ success: true });
+    expect((await lines(t))[0].unit_price).toBe(150000);
   });
 });
 
@@ -216,7 +228,7 @@ describe("what reaches the browser", () => {
   it("a ticket that is not a service has no bill", async () => {
     const ticket = await db.ticket.findUniqueOrThrow({ where: { id: await makeTicket({ type: "cleaning" }) } });
     expect(await loadChargesPanel(ids.tech, ticket)).toBeNull();
-    expect(await add(ticket.id, { kind: "service_fee", description: "x" })).toMatchObject({ error: expect.stringContaining("tiket service") });
+    expect(await add(ticket.id, { kind: "service_fee", service_job_id: ids.job })).toMatchObject({ error: expect.stringContaining("tiket service") });
   });
 });
 
@@ -225,30 +237,30 @@ describe("whose bill it is", () => {
     const t = await makeTicket();
     for (const key of ["other", "rma"]) {
       as(key);
-      expect(await add(t, { kind: "service_fee", description: "x" })).toMatchObject({ error: expect.stringContaining("tidak dapat") });
+      expect(await add(t, { kind: "service_fee", service_job_id: ids.job })).toMatchObject({ error: expect.stringContaining("tidak dapat") });
     }
   });
 
   it("a coordinator edits their own store's tickets only", async () => {
     const t = await makeTicket({ store: "storeA" });
     as("coordB");
-    expect(await add(t, { kind: "service_fee", description: "x" })).toMatchObject({ error: expect.stringContaining("tidak dapat") });
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job })).toMatchObject({ error: expect.stringContaining("tidak dapat") });
     as("coordA");
-    expect(await add(t, { kind: "service_fee", description: "x", unit_cost: "1000" })).toEqual({ success: true });
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job, unit_cost: "1000" })).toEqual({ success: true });
   });
 
   it("the assigned sales may record a line, but not price it by default", async () => {
     const t = await makeTicket();
     as("sales");
-    expect(await add(t, { kind: "service_fee", description: "x", unit_price: "1" })).toMatchObject({ error: expect.stringContaining("harga jual") });
-    expect(await add(t, { kind: "service_fee", description: "x" })).toEqual({ success: true });
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job, unit_price: "1" })).toMatchObject({ error: expect.stringContaining("harga jual") });
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job })).toEqual({ success: true });
   });
 
   it("a completed ticket's bill is closed to the technician, open to a head technician", async () => {
     const t = await makeTicket({ status: "completed" });
-    expect(await add(t, { kind: "service_fee", description: "x" })).toMatchObject({ error: expect.stringContaining("tidak dapat") });
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job })).toMatchObject({ error: expect.stringContaining("tidak dapat") });
     as("head");
-    expect(await add(t, { kind: "service_fee", description: "x" })).toEqual({ success: true });
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job })).toEqual({ success: true });
   });
 });
 
@@ -366,18 +378,121 @@ describe("external work: to the vendor and back", () => {
 describe("input checks", () => {
   it("refuses an empty description, a silly quantity, and an unknown kind", async () => {
     const t = await makeTicket();
-    expect(await add(t, { kind: "service_fee", description: "  " })).toMatchObject({ error: expect.stringContaining("Keterangan") });
-    expect(await add(t, { kind: "service_fee", description: "x", quantity: "0" })).toMatchObject({ error: expect.stringContaining("Jumlah") });
-    expect(await add(t, { kind: "service_fee", description: "x", quantity: "1.5" })).toMatchObject({ error: expect.stringContaining("Jumlah") });
+    expect(await add(t, { kind: "other", description: "  " })).toMatchObject({ error: expect.stringContaining("Keterangan") });
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job, quantity: "0" })).toMatchObject({ error: expect.stringContaining("Jumlah") });
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job, quantity: "1.5" })).toMatchObject({ error: expect.stringContaining("Jumlah") });
     expect(await add(t, { kind: "refund", description: "x" })).toMatchObject({ error: expect.any(String) });
-    expect(await add(t, { kind: "service_fee", description: "x".repeat(301) })).toMatchObject({ error: expect.stringContaining("maksimal") });
+    expect(await add(t, { kind: "other", description: "x".repeat(301) })).toMatchObject({ error: expect.stringContaining("maksimal") });
     expect(await lines(t)).toHaveLength(0);
   });
 
   it("reports a missing ticket or line instead of throwing", async () => {
-    expect(await add("missing", { kind: "service_fee", description: "x" })).toMatchObject({ error: expect.stringContaining("tidak ditemukan") });
+    expect(await add("missing", { kind: "service_fee", service_job_id: ids.job })).toMatchObject({ error: expect.stringContaining("tidak ditemukan") });
     expect(await updateChargeAction("missing", form({}))).toMatchObject({ error: expect.stringContaining("tidak ditemukan") });
     expect(await removeChargeAction("missing")).toMatchObject({ error: expect.stringContaining("tidak ditemukan") });
     expect(await receiveExternalAction("missing", form({}))).toMatchObject({ error: expect.stringContaining("tidak ditemukan") });
+  });
+});
+
+describe("labour comes from the Daftar Jasa", () => {
+  it("refuses a labour line with no job, an unknown one, or one switched off", async () => {
+    const t = await makeTicket();
+    for (const extra of [{}, { service_job_id: "" }, { service_job_id: "nope" }, { service_job_id: ids.oldJob }] as Record<string, string>[]) {
+      expect(await add(t, { kind: "service_fee", description: "Jasa ketik bebas", ...extra })).toMatchObject({
+        error: expect.stringMatching(/Daftar Jasa/),
+      });
+    }
+    expect(await lines(t)).toHaveLength(0);
+  });
+
+  it("the sales, who may not set prices, gets the job's default price", async () => {
+    const t = await makeTicket();
+    as("sales");
+    expect(await add(t, { kind: "service_fee", service_job_id: ids.job2 })).toEqual({ success: true });
+    expect(await lines(t)).toMatchObject([{ description: `${RUN} Install Ulang OS`, unit_price: 100000, job_points: 1 }]);
+  });
+
+  it("choosing another job renames the line, gives its points, and — without a price sent — its price", async () => {
+    const t = await makeTicket();
+    as("sales");
+    await add(t, { kind: "service_fee", service_job_id: ids.job });
+    const [line] = await lines(t);
+    expect(await updateChargeAction(line.id, form({ service_job_id: ids.job2 }))).toEqual({ success: true });
+    expect(await db.ticketCharge.findUniqueOrThrow({ where: { id: line.id } })).toMatchObject({
+      service_job_id: ids.job2,
+      description: `${RUN} Install Ulang OS`,
+      job_points: 1,
+      unit_price: 100000,
+    });
+  });
+
+  it("a line keeps the points it was given after the job is re-weighted, so last month does not move", async () => {
+    const t = await makeTicket();
+    await add(t, { kind: "service_fee", service_job_id: ids.job, unit_price: "150000" });
+    await db.serviceJob.update({ where: { id: ids.job }, data: { points: 9 } });
+    try {
+      const [line] = await lines(t);
+      expect(await updateChargeAction(line.id, form({ service_job_id: ids.job, unit_price: "160000" }))).toEqual({ success: true });
+      expect(await db.ticketCharge.findUniqueOrThrow({ where: { id: line.id } })).toMatchObject({ job_points: 2, unit_price: 160000 });
+    } finally {
+      await db.serviceJob.update({ where: { id: ids.job }, data: { points: 2 } });
+    }
+  });
+
+  it("a job switched off after it was recorded stays on the line", async () => {
+    const t = await makeTicket();
+    await add(t, { kind: "service_fee", service_job_id: ids.job2 });
+    await db.serviceJob.update({ where: { id: ids.job2 }, data: { is_active: false } });
+    try {
+      const [line] = await lines(t);
+      expect(await updateChargeAction(line.id, form({ service_job_id: ids.job2, quantity: "2" }))).toEqual({ success: true });
+      expect((await db.ticketCharge.findUniqueOrThrow({ where: { id: line.id } })).quantity).toBe(2);
+    } finally {
+      await db.serviceJob.update({ where: { id: ids.job2 }, data: { is_active: true } });
+    }
+  });
+
+  it("a typed description cannot overwrite a job's name", async () => {
+    const t = await makeTicket();
+    await add(t, { kind: "service_fee", service_job_id: ids.job });
+    const [line] = await lines(t);
+    expect(await updateChargeAction(line.id, form({ description: "nama lain" }))).toEqual({ success: true });
+    expect((await db.ticketCharge.findUniqueOrThrow({ where: { id: line.id } })).description).toBe(`${RUN} Ganti LCD`);
+  });
+});
+
+describe("the Daftar Jasa itself", () => {
+  const jobForm = (fields: Record<string, string>) => form(fields);
+
+  it("a head technician may add a job; a plain technician may not", async () => {
+    as("head");
+    expect(await createServiceJobAction(jobForm({ name: `${RUN} Ganti Engsel`, default_price: "Rp 85.000", points: "3" }))).toMatchObject({
+      success: true,
+    });
+    expect(await db.serviceJob.findUniqueOrThrow({ where: { name: `${RUN} Ganti Engsel` } })).toMatchObject({
+      default_price: 85000,
+      points: 3,
+      is_active: true,
+    });
+    as("tech");
+    expect(await createServiceJobAction(jobForm({ name: `${RUN} Lain` }))).toMatchObject({ error: expect.stringContaining("akses") });
+  });
+
+  it("refuses the same name in another case, bad points and a bad price", async () => {
+    as("admin");
+    expect(await createServiceJobAction(jobForm({ name: `${RUN} GANTI LCD` }))).toMatchObject({ error: expect.stringContaining("sudah ada") });
+    expect(await createServiceJobAction(jobForm({ name: `${RUN} Poin Aneh`, points: "-1" }))).toMatchObject({ error: expect.stringContaining("Poin") });
+    expect(await createServiceJobAction(jobForm({ name: `${RUN} Poin Aneh`, points: "1.5" }))).toMatchObject({ error: expect.stringContaining("Poin") });
+    expect(await createServiceJobAction(jobForm({ name: `${RUN} Harga Aneh`, default_price: "seratus" }))).toMatchObject({
+      error: expect.stringContaining("Harga"),
+    });
+  });
+
+  it("switches a job off without deleting it", async () => {
+    as("admin");
+    const r = await createServiceJobAction(jobForm({ name: `${RUN} Sementara` }));
+    const id = (r as { job: { id: string } }).job.id;
+    expect(await updateServiceJobAction(id, jobForm({ name: `${RUN} Sementara`, points: "0" }))).toEqual({ success: true });
+    expect(await db.serviceJob.findUniqueOrThrow({ where: { id } })).toMatchObject({ is_active: false });
   });
 });

@@ -977,6 +977,15 @@ model TicketCharge {
   vendor_id String?
   vendor    Vendor? @relation(fields: [vendor_id], references: [id], onDelete: SetNull)
 
+  // The job a "Jasa service" line is for, picked from the Daftar Jasa. What a
+  // technician's month is counted by; `description` keeps the name it had.
+  service_job_id String?
+  service_job    ServiceJob? @relation(fields: [service_job_id], references: [id], onDelete: SetNull)
+  // The job's points when it was put on the bill. Kept on the line, like the
+  // price, so re-weighting a job in the Daftar Jasa does not rewrite a month
+  // of targets people have already seen.
+  job_points     Int?
+
   unit_cost  Int?
   unit_price Int?
 
@@ -997,5 +1006,25 @@ model TicketCharge {
 
   @@index([ticket_id])
   @@index([vendor_id])
+  @@index([service_job_id])
   @@index([created_at])
+}
+
+// A job the shop does — "Daftar Jasa". Picked from this list on a service bill
+// instead of typed, so a technician's month can be counted per job, its takings
+// added up and its points weighed against a target.
+//
+// The points are the target's own measure. They are not credited to the
+// leaderboard or TechnicianPerformance, whose rules live in lib/kpi.ts and
+// lib/points.ts and already disagree among themselves (BL3).
+model ServiceJob {
+  id            String   @id @default(cuid())
+  name          String   @unique // case-insensitive collation: one job, one row
+  default_price Int?     // Rupiah, put on the bill; whoever may set prices can change it there
+  points        Int      @default(0)
+  is_active     Boolean  @default(true)
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  charges TicketCharge[]
 }

@@ -37,6 +37,7 @@ export const CAPABILITIES = [
   "view_finance_report",
   "print_invoice",
   "manage_vendors",
+  "manage_service_jobs",
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
@@ -78,6 +79,11 @@ export const CAPABILITY_INFO: Record<Capability, { label: string; hint: string; 
     hint: "Tambah, ubah dan nonaktifkan vendor: supplier part, service eksternal dan vendor klaim garansi.",
     // RMA too: the desk is who knows which distributor takes which brand's claims.
     defaults: [...SENIOR, "rma"],
+  },
+  manage_service_jobs: {
+    label: "Kelola Daftar Jasa",
+    hint: "Tambah jasa, ubah harga default dan poin, nonaktifkan. Poin dan jumlah jasa jadi ukuran target teknisi.",
+    defaults: SENIOR,
   },
 };
 

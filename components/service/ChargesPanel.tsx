@@ -27,6 +27,7 @@ import {
 } from "@/lib/charges";
 import { formatDateTime } from "@/lib/utils";
 import RupiahInput from "./RupiahInput";
+import type { ServiceJobOption } from "@/lib/service-jobs";
 
 type ActionResult = { error: string } | { success: true };
 
@@ -76,11 +77,14 @@ export default function ChargesPanel({
   lines,
   perms,
   vendors,
+  serviceJobs,
 }: {
   ticketId: string;
   lines: ChargeRow[];
   perms: ChargePermissions;
   vendors: VendorOption[];
+  /** The Daftar Jasa, for "Jasa service" lines. */
+  serviceJobs: ServiceJobOption[];
 }) {
   const router = useRouter();
   const [editing, setEditing] = useState<string | null>(null);
@@ -159,7 +163,7 @@ export default function ChargesPanel({
                   className="flex flex-col gap-3 rounded-lg"
                   style={{ background: "var(--cream)", padding: "0.875rem" }}
                 >
-                  <LineFields kind={line.kind} line={line} perms={perms} vendors={vendors} />
+                  <LineFields kind={line.kind} line={line} perms={perms} vendors={vendors} serviceJobs={serviceJobs} />
                   <FormButtons pending={pending} label="Simpan" onCancel={() => setEditing(null)} />
                 </form>
               ) : (
@@ -219,6 +223,7 @@ export default function ChargesPanel({
           <AddForm
             perms={perms}
             vendors={vendors}
+            serviceJobs={serviceJobs}
             pending={pending}
             onCancel={() => setAdding(false)}
             onSubmit={(e) =>
@@ -269,7 +274,17 @@ function LineView({
             {line.description}
           </span>
           {line.quantity > 1 && <span className="text-[0.8125rem] font-bold">× {line.quantity}</span>}
+          {line.job_points !== null && line.job_points > 0 && (
+            <Pill bg="#fef9c3" fg="#854d0e" border="#fde68a">
+              +{line.job_points * line.quantity} poin
+            </Pill>
+          )}
         </div>
+        {line.kind === "service_fee" && !line.service_job && perms.canEdit && (
+          <p className="m-0 text-xs" style={{ color: "#b45309" }}>
+            Diketik bebas, belum dari Daftar Jasa — tidak terhitung di target. Pilih jasanya lewat Ubah.
+          </p>
+        )}
 
         {(line.vendor || state) && (
           <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
@@ -418,12 +433,15 @@ function LineFields({
   line,
   perms,
   vendors,
+  serviceJobs,
 }: {
   kind: ChargeKind;
   line?: ChargeRow;
   perms: ChargePermissions;
   vendors: VendorOption[];
+  serviceJobs: ServiceJobOption[];
 }) {
+  if (kind === "service_fee") return <JobFields line={line} perms={perms} serviceJobs={serviceJobs} />;
   const ownFields = !line?.is_part;
   return (
     <>
@@ -459,7 +477,7 @@ function LineFields({
           </label>
         </div>
       )}
-      {kind !== "service_fee" && <VendorSelect kind={kind} vendors={vendors} current={line?.vendor} />}
+      <VendorSelect kind={kind} vendors={vendors} current={line?.vendor} />
       {kind === "external_service" && (
         <label className="flex flex-col gap-1">
           <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
@@ -473,15 +491,105 @@ function LineFields({
   );
 }
 
+/**
+ * A labour line: the job is picked from the Daftar Jasa, never typed. Choosing
+ * a job puts its default price in the box — still changeable by whoever may set
+ * prices; a line keeping its job keeps its own price.
+ */
+function JobFields({
+  line,
+  perms,
+  serviceJobs,
+}: {
+  line?: ChargeRow;
+  perms: ChargePermissions;
+  serviceJobs: ServiceJobOption[];
+}) {
+  const current = line?.service_job ?? null;
+  const [jobId, setJobId] = useState(current?.id ?? "");
+  const job = serviceJobs.find((j) => j.id === jobId);
+  // A job already on the line stays selectable after it was deactivated.
+  const keepCurrent = current && !serviceJobs.some((j) => j.id === current.id) ? current : null;
+  const keepsJob = line !== undefined && jobId === (current?.id ?? "");
+  const suggestedPrice = keepsJob ? line.unit_price : (job?.default_price ?? null);
+  return (
+    <>
+      <div className="grid gap-3 sm:grid-cols-[1fr_6rem]">
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+            Jasa
+          </span>
+          <select
+            name="service_job_id"
+            value={jobId}
+            onChange={(e) => setJobId(e.target.value)}
+            required
+            className="form-input"
+          >
+            <option value="">Pilih jasa…</option>
+            {keepCurrent && <option value={keepCurrent.id}>{keepCurrent.name} (nonaktif)</option>}
+            {serviceJobs.map((j) => (
+              <option key={j.id} value={j.id}>
+                {j.name}
+                {j.points > 0 ? ` · ${j.points} poin` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+            Jumlah
+          </span>
+          <input
+            name="quantity"
+            type="number"
+            min={1}
+            max={MAX_CHARGE_QUANTITY}
+            defaultValue={line?.quantity ?? 1}
+            required
+            className="form-input"
+            onWheel={(e) => e.currentTarget.blur()}
+          />
+        </label>
+      </div>
+      {line && !current && (
+        <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>
+          Baris lama ini diketik &ldquo;{line.description}&rdquo;. Pilih jasa yang sesuai supaya terhitung di target.
+        </p>
+      )}
+      {serviceJobs.length === 0 && (
+        <p className="m-0 flex items-center gap-1 text-xs" style={{ color: "#b45309" }}>
+          <AlertTriangle size={12} /> Daftar Jasa masih kosong. Minta Admin atau Head Teknisi mengisinya.
+        </p>
+      )}
+      {(perms.canEditPrice || perms.canEditCost) && (
+        // Keyed on the job, so choosing another one refills the price.
+        <div key={jobId} className="grid gap-3 sm:grid-cols-2">
+          {perms.canEditPrice && <RupiahInput name="unit_price" label="Harga jual / unit" defaultValue={suggestedPrice} />}
+          {perms.canEditCost && <RupiahInput name="unit_cost" label="Harga modal / unit" defaultValue={line?.unit_cost} />}
+        </div>
+      )}
+      {!perms.canEditPrice && job && (
+        <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>
+          Harga jual mengikuti Daftar Jasa
+          {job.default_price !== null ? `: ${formatRupiah(job.default_price)}` : " (belum ada harga default)"}.
+        </p>
+      )}
+    </>
+  );
+}
+
 function AddForm({
   perms,
   vendors,
+  serviceJobs,
   pending,
   onCancel,
   onSubmit,
 }: {
   perms: ChargePermissions;
   vendors: VendorOption[];
+  serviceJobs: ServiceJobOption[];
   pending: boolean;
   onCancel: () => void;
   onSubmit: (e: FormEvent<HTMLFormElement>) => void;
@@ -507,7 +615,7 @@ function AddForm({
         </select>
       </label>
       {/* Keyed on the kind so switching it starts the fields afresh. */}
-      <LineFields key={kind} kind={kind} perms={perms} vendors={vendors} />
+      <LineFields key={kind} kind={kind} perms={perms} vendors={vendors} serviceJobs={serviceJobs} />
       {kind === "external_service" && (
         <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>
           Tercatat dikirim ke vendor sekarang. Saat kembali, klik <strong>Terima</strong> lalu catat hasil dan harganya.

@@ -214,6 +214,10 @@ export type ChargeRow = {
   unit_price: number | null;
   unit_cost?: number | null;
   vendor: { id: string; name: string } | null;
+  /** The Daftar Jasa entry of a "Jasa service" line; null on older, typed lines. */
+  service_job: { id: string; name: string } | null;
+  /** The job's points as given when the line was recorded. */
+  job_points: number | null;
   is_part: boolean;
   sent_at: string | null;
   returned_at: string | null;

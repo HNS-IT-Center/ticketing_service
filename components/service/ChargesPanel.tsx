@@ -3,7 +3,7 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Receipt, Plus, Pencil, Trash2, Truck, PackageCheck, AlertTriangle, EyeOff } from "lucide-react";
+import { Receipt, Plus, Pencil, Trash2, Truck, PackageCheck, AlertTriangle, EyeOff, Printer } from "lucide-react";
 import type { ChargeKind } from "@prisma/client";
 import {
   addChargeAction,
@@ -217,6 +217,18 @@ export default function ChargesPanel({
       )}
 
       {lines.length > 0 && <SummaryView summary={summary} perms={perms} />}
+
+      {perms.canPrintInvoice && lines.length > 0 && (
+        <a
+          href={`/faktur/${ticketId}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="btn btn-secondary btn-sm self-start"
+          style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+        >
+          <Printer size={14} /> Cetak faktur
+        </a>
+      )}
 
       {perms.canEdit &&
         (adding ? (

@@ -361,6 +361,10 @@ export default function ReplacedPartsPanel({
                   className="form-input"
                   placeholder="Contoh: Baterai ASUS C31N1915"
                 />
+                <p className="text-xs" style={{ color: "var(--text-muted)", margin: 0 }}>
+                  Tercatat sebagai &ldquo;di luar katalog&rdquo; di laporan, supaya admin tahu barang ini perlu
+                  ditambahkan ke Accurate. Pilih dari katalog bila barangnya ada.
+                </p>
                 {catalogEnabled && (
                   <button
                     type="button"

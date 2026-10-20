@@ -11,10 +11,14 @@ export function resolveReportMonth(requested: string | null | undefined): string
 export async function loadPartRows(month: string, storeId: string | null): Promise<PartReportRow[] | null> {
   const range = monthRange(month);
   if (!range) return null;
+  return loadPartRowsBetween(range.start, range.end, storeId);
+}
 
+/** Replaced parts recorded in [start, end), optionally for one store. */
+export async function loadPartRowsBetween(start: Date, end: Date, storeId: string | null): Promise<PartReportRow[]> {
   const rows = await db.ticketReplacedPart.findMany({
     where: {
-      created_at: { gte: range.start, lt: range.end },
+      created_at: { gte: start, lt: end },
       ...(storeId ? { ticket: { store_location_id: storeId } } : {}),
     },
     orderBy: { created_at: "desc" },
@@ -24,6 +28,7 @@ export async function loadPartRows(month: string, storeId: string | null): Promi
       part: true,
       item_name: true,
       sku: true,
+      catalog_item_id: true,
       catalog_category: true,
       quantity: true,
       notes: true,
@@ -40,6 +45,7 @@ export async function loadPartRows(month: string, storeId: string | null): Promi
     part: r.part,
     itemName: r.item_name,
     sku: r.sku,
+    catalogItemId: r.catalog_item_id,
     catalogCategory: r.catalog_category,
     quantity: r.quantity,
     notes: r.notes,

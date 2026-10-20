@@ -1,17 +1,61 @@
 import Link from "next/link";
 import type { ServicePart } from "@prisma/client";
-import { Download, Package } from "lucide-react";
+import { Download, Package, TrendingUp, PackageX, AlertTriangle } from "lucide-react";
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { formatDateTime } from "@/lib/utils";
 import { servicePartLabel } from "@/lib/service-parts";
 import { summarizeParts } from "@/lib/reports/parts";
-import { loadPartRows, resolveReportMonth } from "@/lib/reports/parts-data";
+import { loadPartRows, loadPartRowsBetween, resolveReportMonth } from "@/lib/reports/parts-data";
+import {
+  DEMAND_MONTHS,
+  STOCK_HINT_MIN_USES,
+  demandWindow,
+  outsideCatalog,
+  rankCatalogDemand,
+  worthStocking,
+  type DemandRow,
+} from "@/lib/reports/part-demand";
+import { CatalogUnavailableError, getCatalogItem, isCatalogConfigured } from "@/lib/catalog/hns-data";
+import { stockAtStore } from "@/lib/catalog/items";
 
 export const metadata = { title: "Laporan Pergantian Part — HNS IT Center" };
 
 /** Detail rows shown on screen; the CSV export always carries all of them. */
 const DETAIL_LIMIT = 300;
+/** Items whose stock is looked up in the catalogue — one API call each. */
+const DEMAND_LIMIT = 15;
+
+const MONTH_LABEL = new Intl.DateTimeFormat("id-ID", { month: "short", year: "numeric", timeZone: "UTC" });
+function monthLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return MONTH_LABEL.format(Date.UTC(y, m - 1, 1));
+}
+
+type StockNow = { here: number | null; total: number };
+
+/**
+ * What the catalogue holds now for the most-used items. One lookup each, in
+ * parallel; a lookup that fails shows as unknown rather than failing the page.
+ */
+async function stockFor(rows: DemandRow[], storeName: string | null): Promise<{ stock: Map<string, StockNow>; unavailable: boolean }> {
+  const stock = new Map<string, StockNow>();
+  if (!isCatalogConfigured()) return { stock, unavailable: true };
+  let unavailable = false;
+  await Promise.all(
+    rows.map(async (r) => {
+      if (!r.catalogItemId) return;
+      try {
+        const item = await getCatalogItem(r.catalogItemId);
+        if (item) stock.set(r.sku, { here: stockAtStore(item, storeName), total: item.stockTotal });
+      } catch (err) {
+        if (!(err instanceof CatalogUnavailableError)) throw err;
+        unavailable = true;
+      }
+    })
+  );
+  return { stock, unavailable };
+}
 
 export default async function PartsReportPage({
   searchParams,
@@ -29,6 +73,15 @@ export default async function PartsReportPage({
   ]);
   const data = rows ?? [];
   const summary = summarizeParts(data);
+
+  // What to stock: the last few months, not just the one on screen.
+  const span = demandWindow(month)!;
+  const demandRows = await loadPartRowsBetween(span.start, span.end, storeId);
+  const demand = rankCatalogDemand(demandRows).slice(0, DEMAND_LIMIT);
+  const outside = outsideCatalog(demandRows);
+  const storeName = storeId ? (stores.find((s) => s.id === storeId)?.name ?? null) : null;
+  const { stock, unavailable: stockUnavailable } = await stockFor(demand, storeName);
+  const windowLabel = `${monthLabel(span.firstMonth)} – ${monthLabel(month)}`;
   const exportHref = `/admin/reports/parts/export?month=${month}${storeId ? `&store=${storeId}` : ""}`;
   const catalogShare = summary.entries ? Math.round((summary.fromCatalog / summary.entries) * 100) : 0;
 
@@ -72,6 +125,123 @@ export default async function PartsReportPage({
         <Stat value={summary.tickets} label="Tiket" />
         <Stat value={`${catalogShare}%`} label={`Dari katalog (${summary.fromCatalog}/${summary.entries})`} />
       </div>
+
+      <section className="card flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h3 className="flex items-center gap-2" style={{ margin: 0 }}>
+            <TrendingUp size={18} /> Sering dipakai — {windowLabel}
+          </h3>
+          <p className="text-sm" style={{ color: "var(--text-muted)", margin: 0 }}>
+            Barang dari katalog Accurate yang paling sering dipasang dalam {DEMAND_MONTHS} bulan terakhir
+            {storeName ? ` di ${storeName}` : ""}, dengan stok sekarang. Dipakai minimal {STOCK_HINT_MIN_USES}× dan
+            stoknya kosong ditandai — bahan pertimbangan untuk distok, bukan pesanan otomatis.
+          </p>
+          {stockUnavailable && (
+            <p className="flex items-center gap-1.5 text-xs" style={{ color: "#92400e", margin: 0 }}>
+              <AlertTriangle size={12} /> Stok sebagian barang tidak bisa diambil dari katalog saat ini.
+            </p>
+          )}
+        </div>
+        {demand.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--text-muted)", margin: 0 }}>
+            Belum ada part dari katalog yang dipasang pada periode ini.
+          </p>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Barang</th>
+                  <th>SKU</th>
+                  <th>Dipakai</th>
+                  <th>Unit</th>
+                  <th>Bulan</th>
+                  <th>Stok sekarang</th>
+                  <th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {demand.map((d) => {
+                  const s = stock.get(d.sku);
+                  const decisive = s ? (storeName && s.here !== null ? s.here : s.total) : null;
+                  return (
+                    <tr key={d.sku}>
+                      <td style={{ fontWeight: 600 }}>{d.name}</td>
+                      <td>{d.sku}</td>
+                      <td style={{ fontWeight: 700 }}>{d.uses}×</td>
+                      <td>{d.quantity}</td>
+                      <td>
+                        {d.months}/{DEMAND_MONTHS}
+                      </td>
+                      <td>
+                        {!s ? (
+                          <span style={{ color: "var(--text-muted)" }}>—</span>
+                        ) : storeName ? (
+                          <>
+                            {s.here ?? "—"} <span style={{ color: "var(--text-muted)" }}>(total {s.total})</span>
+                          </>
+                        ) : (
+                          s.total
+                        )}
+                      </td>
+                      <td>
+                        {worthStocking(d, decisive) && (
+                          <span
+                            className="whitespace-nowrap rounded-full text-xs font-bold"
+                            style={{ background: "#fef3c7", color: "#92400e", border: "1px solid #fde68a", padding: "0.1rem 0.6rem" }}
+                          >
+                            Pertimbangkan stok
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+
+      <section className="card flex flex-col gap-3">
+        <div className="flex flex-col gap-1">
+          <h3 className="flex items-center gap-2" style={{ margin: 0 }}>
+            <PackageX size={18} /> Di luar katalog Accurate — {windowLabel}
+          </h3>
+          <p className="text-sm" style={{ color: "var(--text-muted)", margin: 0 }}>
+            Part yang diketik manual karena tidak ada di katalog. Yang sering muncul layak ditambahkan ke Accurate,
+            supaya berikutnya bisa dipilih teknisi dan dihitung per SKU.
+          </p>
+        </div>
+        {outside.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--text-muted)", margin: 0 }}>
+            Semua part pada periode ini dipilih dari katalog.
+          </p>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Jenis</th>
+                  <th>Nama yang diketik</th>
+                  <th>Dipakai</th>
+                  <th>Unit</th>
+                </tr>
+              </thead>
+              <tbody>
+                {outside.map((o) => (
+                  <tr key={`${o.part}:${o.name}`}>
+                    <td>{servicePartLabel(o.part as ServicePart)}</td>
+                    <td style={{ fontWeight: 600 }}>{o.name}</td>
+                    <td style={{ fontWeight: 700 }}>{o.uses}×</td>
+                    <td>{o.quantity}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
 
       {data.length === 0 ? (
         <div className="card p-6 text-center text-sm" style={{ color: "var(--text-muted)" }}>

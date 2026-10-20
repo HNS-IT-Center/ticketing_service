@@ -120,8 +120,35 @@ async function readVendor(
 }
 
 /**
+ * The job a "Jasa service" line is for, picked from the Daftar Jasa. A job
+ * already on the line may stay after it was deactivated; choosing one anew
+ * requires an active one.
+ */
+async function readServiceJob(
+  formData: FormData,
+  current: string | null,
+): Promise<Fail | { id: string; name: string; default_price: number | null; points: number } | undefined> {
+  if (!formData.has("service_job_id")) return undefined;
+  const id = String(formData.get("service_job_id") ?? "").trim();
+  if (!id) return { error: "Pilih jasa dari Daftar Jasa." };
+  const job = await db.serviceJob.findUnique({
+    where: { id },
+    select: { id: true, name: true, default_price: true, points: true, is_active: true },
+  });
+  if (!job || (!job.is_active && id !== current)) {
+    return { error: "Jasa tidak ditemukan atau sudah nonaktif di Daftar Jasa." };
+  }
+  return job;
+}
+
+/**
  * Add a line by hand: the shop's labour, work sent to a vendor, or anything
  * else. Adding external work IS sending it — the line is created at the vendor.
+ *
+ * The shop's labour is picked from the Daftar Jasa, never typed: that is what
+ * a technician's month is counted by. Its name becomes the line's description,
+ * its points are kept on the line, and its default price is used unless
+ * someone allowed to set prices sent one.
  */
 export async function addChargeAction(formData: FormData): Promise<Fail | Ok> {
   const ticketId = String(formData.get("ticket_id") ?? "");
@@ -132,12 +159,19 @@ export async function addChargeAction(formData: FormData): Promise<Fail | Ok> {
   if (!isAddableChargeKind(kind)) {
     return { error: "Baris part dibuat dari panel Part yang Diganti." };
   }
-  const description = readDescription(formData);
+  let job: Awaited<ReturnType<typeof readServiceJob>> = undefined;
+  if (kind === "service_fee") {
+    job = await readServiceJob(formData, null);
+    if (!job) return { error: "Pilih jasa dari Daftar Jasa." };
+    if ("error" in job) return job;
+  }
+  const description = job ? job.name : readDescription(formData);
   if (typeof description !== "string") return description;
   const quantity = readQuantity(formData);
   if (typeof quantity !== "number") return quantity;
   const prices = readPrices(formData, guard.perms);
   if ("error" in prices) return prices;
+  if (job && prices.unit_price === undefined) prices.unit_price = job.default_price;
   const vendor = await readVendor(formData, kind, null);
   if (vendor && "error" in vendor) return vendor;
   if (kind === "external_service" && !vendor?.vendor_id) {
@@ -151,6 +185,8 @@ export async function addChargeAction(formData: FormData): Promise<Fail | Ok> {
       description,
       quantity,
       vendor_id: vendor?.vendor_id ?? null,
+      service_job_id: job?.id ?? null,
+      job_points: job?.points ?? null,
       ...prices,
       sent_at: kind === "external_service" ? new Date() : null,
       external_note: kind === "external_service" ? String(formData.get("external_note") ?? "").trim() || null : null,
@@ -169,15 +205,29 @@ export async function addChargeAction(formData: FormData): Promise<Fail | Ok> {
 export async function updateChargeAction(chargeId: string, formData: FormData): Promise<Fail | Ok> {
   const charge = await db.ticketCharge.findUnique({
     where: { id: chargeId },
-    select: { ticket_id: true, kind: true, vendor_id: true },
+    select: { ticket_id: true, kind: true, vendor_id: true, service_job_id: true },
   });
   if (!charge) return { error: "Baris biaya tidak ditemukan." };
   const guard = await guardTicket(charge.ticket_id);
   if ("error" in guard) return guard;
 
   const data: Prisma.TicketChargeUncheckedUpdateInput = { updated_by_id: guard.userId };
+  // A labour line names its job. Choosing another one renames the line and
+  // gives it that job's points; keeping the same one keeps the points it had.
+  let newJobPrice: number | null | undefined;
+  if (charge.kind === "service_fee") {
+    const job = await readServiceJob(formData, charge.service_job_id);
+    if (job && "error" in job) return job;
+    if (job && job.id !== charge.service_job_id) {
+      data.service_job_id = job.id;
+      data.description = job.name;
+      data.job_points = job.points;
+      newJobPrice = job.default_price;
+    }
+  }
   if (charge.kind !== "part") {
-    if (formData.has("description")) {
+    // Typed only on lines that are not a job from the list.
+    if (formData.has("description") && !(charge.kind === "service_fee" && (data.service_job_id || charge.service_job_id))) {
       const description = readDescription(formData);
       if (typeof description !== "string") return description;
       data.description = description;
@@ -193,6 +243,9 @@ export async function updateChargeAction(chargeId: string, formData: FormData): 
   }
   const prices = readPrices(formData, guard.perms);
   if ("error" in prices) return prices;
+  // Another job without a price sent — someone who may not set prices — takes
+  // that job's default, rather than keeping the old job's price under a new name.
+  if (newJobPrice !== undefined && prices.unit_price === undefined) prices.unit_price = newJobPrice;
   Object.assign(data, prices);
   const vendor = await readVendor(formData, charge.kind, charge.vendor_id);
   if (vendor && "error" in vendor) return vendor;

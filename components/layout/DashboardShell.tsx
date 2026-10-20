@@ -27,6 +27,7 @@ import {
   BarChart3,
   Database,
   CalendarDays,
+  ClipboardList,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import NotificationBell from "./NotificationBell";
@@ -128,6 +129,7 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
       items: [
         { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
         { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
+        { href: "/admin/service-jobs", label: "Daftar Jasa", icon: <ClipboardList size={18} /> },
         { href: "/admin/vendors", label: "Vendor", icon: <Truck size={18} />, also: ["/rma/vendors"] },
       ],
     },
@@ -183,6 +185,22 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
 };
 
 /**
+ * The sidebar for one user. A technician who may manage the Daftar Jasa or the
+ * vendor list — a head technician or a coordinator, by default — gets a Data
+ * Master group for it; nobody else in the portal sees one.
+ */
+function sectionsFor(role: string, manage: DashboardShellProps["manage"]): NavSection[] {
+  const base = NAV_SECTIONS[role] || [];
+  if (role !== "technician" || !(manage?.vendors || manage?.serviceJobs)) return base;
+  const items: NavItem[] = [];
+  if (manage.serviceJobs) {
+    items.push({ href: "/technician/service-jobs", label: "Daftar Jasa", icon: <ClipboardList size={18} /> });
+  }
+  if (manage.vendors) items.push({ href: "/technician/vendors", label: "Vendor", icon: <Truck size={18} /> });
+  return [...base, { key: "master", title: "Data Master", icon: <Database size={18} />, defaultOpen: true, items }];
+}
+
+/**
  * How closely a page belongs to an entry: the length of the matching path, so
  * the most specific entry wins ("/admin/tickets/create" over "/admin/tickets").
  * A portal's dashboard matches only itself, or every page would light it up.
@@ -209,6 +227,8 @@ interface DashboardShellProps {
   userName: string;
   userId: string;
   isCoordinator?: boolean;
+  /** Data Master pages this technician may manage; decided by the server from the access settings. */
+  manage?: { vendors?: boolean; serviceJobs?: boolean };
 }
 
 // Only Administrator and Technician have a profile page. Sales had a sidebar
@@ -225,7 +245,7 @@ const TICKETS_HREF: Partial<Record<DashboardShellProps["role"], string>> = {
   sales: "/sales/tickets",
 };
 
-export default function DashboardShell({ children, role, userName, userId, isCoordinator = false }: DashboardShellProps) {
+export default function DashboardShell({ children, role, userName, userId, isCoordinator = false, manage }: DashboardShellProps) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);     // mobile drawer
   const [collapsed, setCollapsed] = useState(false);          // desktop collapse
@@ -326,7 +346,7 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
     setSwipeOffset(0);
   };
 
-  const sections = NAV_SECTIONS[role] || [];
+  const sections = sectionsFor(role, manage);
   const navItems = sections.flatMap((section) => section.items);
   const initials = userName
     .split(" ")

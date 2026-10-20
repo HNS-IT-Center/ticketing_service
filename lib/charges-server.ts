@@ -3,8 +3,9 @@ import type { ChargeKind, TicketStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { accessFor } from "@/lib/access-server";
 import { mayEditCharges, type ChargePermissions, type ChargeRow, type VendorOption } from "@/lib/charges";
+import type { ServiceJobOption } from "@/lib/service-jobs";
 
-export type { ChargePermissions, ChargeRow, VendorOption };
+export type { ChargePermissions, ChargeRow, VendorOption, ServiceJobOption };
 
 type TicketScope = {
   technician_id: string | null;
@@ -66,6 +67,8 @@ export async function loadTicketCharges(ticketId: string, canViewCost: boolean):
       external_result: true,
       external_note: true,
       vendor: { select: { id: true, name: true } },
+      service_job: { select: { id: true, name: true } },
+      job_points: true,
       created_by: { select: { name: true } },
     },
   });
@@ -78,6 +81,8 @@ export async function loadTicketCharges(ticketId: string, canViewCost: boolean):
       unit_price: r.unit_price,
       ...(canViewCost ? { unit_cost: r.unit_cost } : {}),
       vendor: r.vendor,
+      service_job: r.service_job,
+      job_points: r.job_points,
       is_part: r.replaced_part_id !== null,
       sent_at: r.sent_at?.toISOString() ?? null,
       returned_at: r.returned_at?.toISOString() ?? null,
@@ -92,6 +97,15 @@ export function activeVendors(): Promise<VendorOption[]> {
   return db.vendor.findMany({
     where: { is_active: true, OR: [{ supplies_parts: true }, { repairs: true }] },
     select: { id: true, name: true, supplies_parts: true, repairs: true },
+    orderBy: { name: "asc" },
+  });
+}
+
+/** The jobs a "Jasa service" line may be for. */
+export function activeServiceJobs(): Promise<ServiceJobOption[]> {
+  return db.serviceJob.findMany({
+    where: { is_active: true },
+    select: { id: true, name: true, default_price: true, points: true },
     orderBy: { name: "asc" },
   });
 }
@@ -112,12 +126,18 @@ export async function hasExternalWorkOutstanding(ticketId: string): Promise<bool
 export async function loadChargesPanel(
   userId: string,
   ticket: TicketScope & { id: string; ticket_type: string },
-): Promise<{ perms: ChargePermissions; lines: ChargeRow[]; vendors: VendorOption[] } | null> {
+): Promise<{
+  perms: ChargePermissions;
+  lines: ChargeRow[];
+  vendors: VendorOption[];
+  serviceJobs: ServiceJobOption[];
+} | null> {
   if (ticket.ticket_type !== "service") return null;
   const perms = await chargePermissions(userId, ticket);
-  const [lines, vendors] = await Promise.all([
+  const [lines, vendors, serviceJobs] = await Promise.all([
     loadTicketCharges(ticket.id, perms.canViewCost),
     perms.canEdit ? activeVendors() : Promise.resolve([]),
+    perms.canEdit ? activeServiceJobs() : Promise.resolve([]),
   ]);
-  return { perms, lines, vendors };
+  return { perms, lines, vendors, serviceJobs };
 }

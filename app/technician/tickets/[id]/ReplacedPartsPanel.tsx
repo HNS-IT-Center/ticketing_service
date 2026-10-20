@@ -17,7 +17,7 @@ import {
 } from "@/app/actions/technician";
 import { uploadFailureMessage } from "@/lib/upload-limit";
 import { MAX_QUANTITY, stockAtStore, type CatalogItem } from "@/lib/catalog/items";
-import CatalogItemPicker from "./CatalogItemPicker";
+import CatalogItemPicker from "@/components/catalog/CatalogItemPicker";
 
 export type ReplacedPartRow = {
   id: string;

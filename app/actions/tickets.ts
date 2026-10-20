@@ -13,6 +13,8 @@ import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { sendTicketStatusEmail } from "@/lib/email";
 import { ticketsListHrefForRoleName } from "@/lib/routes";
 import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
+import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
+import type { CatalogItem } from "@/lib/catalog/items";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
@@ -121,6 +123,29 @@ export async function createTicketAction(formData: FormData) {
     }
   }
 
+  // The unit picked from the catalogue at intake: re-read there by id, so the
+  // name and SKU on record are the catalogue's and not whatever the browser
+  // sent — the rule addReplacedPartAction follows for parts. Read only: this
+  // app never writes to Accurate.
+  const deviceCatalogRaw = ((formData.get("device_catalog_item_id") as string | null) || "").trim();
+  let deviceCatalog: CatalogItem | null = null;
+  if (deviceCatalogRaw) {
+    const catalogId = Number(deviceCatalogRaw);
+    if (!Number.isInteger(catalogId) || catalogId <= 0) {
+      return { error: "Unit dari katalog tidak valid." };
+    }
+    try {
+      deviceCatalog = await getCatalogItem(catalogId);
+    } catch (err) {
+      if (!(err instanceof CatalogUnavailableError)) throw err;
+      console.error("[CATALOG LOOKUP]", err.message);
+      return {
+        error: "Katalog barang sedang tidak dapat dihubungi. Hapus pilihan katalog dan ketik nama unit secara manual.",
+      };
+    }
+    if (!deviceCatalog) return { error: "Unit tidak ditemukan di katalog." };
+  }
+
   // Generate ticket code
   const store = store_location_id
     ? await db.storeLocation.findUnique({
@@ -212,7 +237,10 @@ export async function createTicketAction(formData: FormData) {
       service_category: service_category as any,
       accessories,
       device_condition,
-      device_name,
+      device_name: deviceCatalog?.name ?? device_name,
+      device_catalog_item_id: deviceCatalog?.id ?? null,
+      device_sku: deviceCatalog?.sku ?? null,
+      device_catalog_category: deviceCatalog?.category ?? null,
       device_sn,
       warranty_status,
       is_overnight,

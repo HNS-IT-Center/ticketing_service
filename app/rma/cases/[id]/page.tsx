@@ -85,6 +85,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
           customer_name: true,
           customer_phone: true,
           device_name: true,
+          device_sku: true,
           device_sn: true,
           device_type: true,
           notes: true,
@@ -152,6 +153,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
               <Field label="Customer" value={ticket.customer_name} />
               <Field label="Telepon" value={ticket.customer_phone} />
               <Field label="Perangkat" value={ticket.device_name} />
+              {ticket.device_sku && <Field label="SKU (katalog Accurate)" value={ticket.device_sku} mono />}
               <Field label="Kategori" value={ticket.device_type.replace(/_/g, " ")} />
               <Field label="Serial Number" value={ticket.device_sn} mono />
               <Field

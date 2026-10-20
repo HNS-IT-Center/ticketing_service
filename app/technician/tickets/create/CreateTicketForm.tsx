@@ -10,6 +10,7 @@ import TagInput from "@/components/ui/TagInput";
 import DraftBanner from "@/components/ui/DraftBanner";
 import { useDraft } from "@/lib/draft";
 import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
+import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
 
 type Props = {
   storeLocations: { id: string; name: string; code: string }[];
@@ -17,6 +18,8 @@ type Props = {
   sales: { id: string; name: string }[];
   upgrades: { id: string; name: string }[];
   defaultStoreLocationId?: string;
+  /** Whether the Accurate catalogue is reachable; without it the unit is typed. */
+  catalogEnabled?: boolean;
 };
 
 const STEPS = ["Intake & Assign", "Choose Device", "Service Details", "Confirm"];
@@ -29,7 +32,7 @@ const DEVICES = [
   { id: "Build PC", icon: Cpu, label: "Build PC" },
 ];
 
-export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades, defaultStoreLocationId }: Props) {
+export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades, defaultStoreLocationId, catalogEnabled = false }: Props) {
   const [step, setStep] = useState(1);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -59,6 +62,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [ticketType, setTicketType] = useState("");
   const [deviceType, setDeviceType] = useState(""); // actual Prisma enum: Laptop_Office, PC_Office, etc.
   const [deviceName, setDeviceName] = useState(""); // "Device Type (Optional)" in user terms
+  // The unit as picked from the Accurate catalogue; null when typed.
+  const [deviceCatalog, setDeviceCatalog] = useState<PickedUnit | null>(null);
   const [deviceSn, setDeviceSn] = useState("");
   const [purchaseDate, setPurchaseDate] = useState("");
   const [conditions, setConditions] = useState<string[]>([]); // Garansi Aktif, Garansi Habis, Segel Utuh, Fisik Mulus
@@ -95,7 +100,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const draftData = {
     step, storeLocationId, technicianId, salesId, unitOwnership, stockOrigin,
     customerName, customerEmail, phone, gridDevice, ticketType, deviceType,
-    deviceName, deviceSn, purchaseDate, conditions, selectedAccessories,
+    deviceName, deviceCatalog, deviceSn, purchaseDate, conditions, selectedAccessories,
     customAccessory, notes, checkDiagnosisFee, cleaningPackage, selectedUpgrades,
     uploadedFileUrls, unitPhotoUrls, pcComponents, pickupMethod, isOvernight,
   };
@@ -108,7 +113,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     setSalesId(d.salesId); setUnitOwnership(d.unitOwnership); setStockOrigin(d.stockOrigin);
     setCustomerName(d.customerName); setCustomerEmail(d.customerEmail); setPhone(d.phone);
     setGridDevice(d.gridDevice); setTicketType(d.ticketType); setDeviceType(d.deviceType);
-    setDeviceName(d.deviceName); setDeviceSn(d.deviceSn); setPurchaseDate(d.purchaseDate);
+    setDeviceName(d.deviceName); setDeviceCatalog(d.deviceCatalog ?? null);
+    setDeviceSn(d.deviceSn); setPurchaseDate(d.purchaseDate);
     setConditions(d.conditions); setSelectedAccessories(d.selectedAccessories);
     setCustomAccessory(d.customAccessory); setNotes(d.notes);
     setCheckDiagnosisFee(d.checkDiagnosisFee); setCleaningPackage(d.cleaningPackage);
@@ -266,6 +272,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       
       fd.append("pickup_method", pickupMethod);
       if (deviceName) fd.append("device_name", deviceName);
+      if (deviceCatalog) fd.append("device_catalog_item_id", String(deviceCatalog.id));
       if (deviceSn) fd.append("device_sn", deviceSn);
       if (ticketType === "warranty_claim" && purchaseDate) fd.append("purchase_date", purchaseDate);
       if (pcComponents.length > 0) {
@@ -620,18 +627,14 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             {ticketType === "warranty_claim" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
-                  <div className="form-group">
-                    <label className="form-label">
-                      Nama Perangkat{" "}
-                      <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
-                    </label>
-                    <input
-                      className="form-input"
-                      value={deviceName}
-                      onChange={e => setDeviceName(e.target.value)}
-                      placeholder="Misal: ASUS ROG G15"
-                    />
-                  </div>
+                  <UnitField
+                    catalogEnabled={catalogEnabled}
+                    unit={deviceCatalog}
+                    onUnitChange={setDeviceCatalog}
+                    name={deviceName}
+                    onNameChange={setDeviceName}
+                    label="Nama Perangkat"
+                  />
 
                   <div className="form-group">
                     <label className="form-label">
@@ -803,10 +806,14 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     {errors.deviceType && <span className="form-error"><AlertCircle size={12} />{errors.deviceType}</span>}
                   </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Device Type (Nama) <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span></label>
-                    <input className="form-input" value={deviceName} onChange={e => setDeviceName(e.target.value)} placeholder="Misal: ASUS ROG G15" />
-                  </div>
+                  <UnitField
+                    catalogEnabled={catalogEnabled}
+                    unit={deviceCatalog}
+                    onUnitChange={setDeviceCatalog}
+                    name={deviceName}
+                    onNameChange={setDeviceName}
+                    label="Nama Unit"
+                  />
 
                   <div className="form-group">
                     <label className="form-label">SN <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span></label>
@@ -924,6 +931,12 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 ? <p><strong>Unit:</strong> Stok Toko — {stockOrigin}</p>
                 : <p><strong>Customer:</strong> {customerName} - +62{phone}</p>}
               <p><strong>Device:</strong> {gridDevice} ({deviceType || "N/A"})</p>
+              {deviceName && (
+                <p>
+                  <strong>Unit:</strong> {deviceName}
+                  {deviceCatalog && ` (SKU ${deviceCatalog.sku}, katalog Accurate)`}
+                </p>
+              )}
               <p><strong>Case:</strong> <span style={{ textTransform: "capitalize" }}>{ticketType.replace(/_/g, " ")}</span></p>
               {ticketType === "cleaning" && <p><strong>Package:</strong> {cleaningPackage.replace(/_/g, " ")}</p>}
               {ticketType === "service" && <p><strong>Problem:</strong> {notes}</p>}

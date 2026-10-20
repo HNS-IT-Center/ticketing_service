@@ -31,6 +31,21 @@ vi.mock("@/lib/email", () => ({
   EMAIL_MILESTONES: [],
 }));
 
+// The catalogue API (data.hnsitcenter.id) is replaced; everything else is real.
+const catalog = vi.hoisted(() => ({ items: new Map<number, unknown>(), down: false }));
+vi.mock("@/lib/catalog/hns-data", () => {
+  class CatalogUnavailableError extends Error {}
+  return {
+    CatalogUnavailableError,
+    isCatalogConfigured: () => true,
+    searchCatalog: async () => [],
+    getCatalogItem: async (id: number) => {
+      if (catalog.down) throw new CatalogUnavailableError("catalog answered 502");
+      return catalog.items.get(id) ?? null;
+    },
+  };
+});
+
 const session = { userId: "", role: "Technician", name: "Test Technician" };
 vi.mock("@/lib/session", () => ({
   requireSession: async () => session,
@@ -353,5 +368,88 @@ describe("createTicketAction — ticket codes", () => {
       select: { ticket_code: true },
     });
     expect(new Set(all.map((t) => t.ticket_code)).size).toBe(all.length);
+  });
+});
+
+describe("createTicketAction — the unit picked from the Accurate catalogue", () => {
+  const vivobook = {
+    id: 9101,
+    sku: "LPT-ASUS-A416",
+    name: "ASUS VIVOBOOK 14 A416 I3",
+    category: "LAPTOP ASUS",
+    brand: null,
+    type: "INVENTORY",
+    unit: "PCS",
+    serialized: true,
+    stockTotal: 0,
+    warehouses: [],
+  };
+  const unitOf = (sn: string) =>
+    db.ticket.findFirstOrThrow({
+      where: { store_location_id: storeId, device_sn: sn },
+      select: { device_name: true, device_sku: true, device_catalog_item_id: true, device_catalog_category: true },
+    });
+
+  it("records the catalogue's name, SKU and category, not what the browser sent", async () => {
+    catalog.items.set(vivobook.id, vivobook);
+    const fd = claimForm({
+      ticket_type: "service",
+      device_sn: "SN-CATALOG-1",
+      purchase_date: null,
+      device_name: "laptop asus biru",
+      device_catalog_item_id: String(vivobook.id),
+    });
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    expect(await unitOf("SN-CATALOG-1")).toEqual({
+      device_name: "ASUS VIVOBOOK 14 A416 I3",
+      device_sku: "LPT-ASUS-A416",
+      device_catalog_item_id: 9101,
+      device_catalog_category: "LAPTOP ASUS",
+    });
+  });
+
+  it("works for a warranty claim too", async () => {
+    catalog.items.set(vivobook.id, vivobook);
+    const fd = claimForm({ device_sn: "SN-CATALOG-2", device_catalog_item_id: String(vivobook.id) });
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    expect((await unitOf("SN-CATALOG-2")).device_sku).toBe("LPT-ASUS-A416");
+  });
+
+  it("keeps a typed unit as typed, with no catalogue fields", async () => {
+    const fd = claimForm({ ticket_type: "service", device_sn: "SN-TYPED-1", purchase_date: null, device_name: "Laptop rakitan lama" });
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    expect(await unitOf("SN-TYPED-1")).toEqual({
+      device_name: "Laptop rakitan lama",
+      device_sku: null,
+      device_catalog_item_id: null,
+      device_catalog_category: null,
+    });
+  });
+
+  it("refuses an id the catalogue does not know, or that is not an id", async () => {
+    for (const id of ["424242", "abc", "-3"]) {
+      const fd = claimForm({ ticket_type: "service", device_sn: `SN-BAD-${id}`, purchase_date: null, device_catalog_item_id: id });
+      expect(await createTicketAction(fd), id).toMatchObject({ error: expect.stringMatching(/katalog/i) });
+    }
+    expect(await db.ticket.count({ where: { store_location_id: storeId, device_sn: { startsWith: "SN-BAD-" } } })).toBe(0);
+  });
+
+  it("says so when the catalogue is down, and creates nothing", async () => {
+    catalog.down = true;
+    try {
+      const fd = claimForm({ ticket_type: "service", device_sn: "SN-DOWN-1", purchase_date: null, device_catalog_item_id: "9101" });
+      expect(await createTicketAction(fd)).toMatchObject({ error: expect.stringContaining("ketik nama unit secara manual") });
+      expect(await db.ticket.count({ where: { device_sn: "SN-DOWN-1" } })).toBe(0);
+    } finally {
+      catalog.down = false;
+    }
+  });
+
+  it("stores a catalogue name longer than the old 191-character column", async () => {
+    const long = { ...vivobook, id: 9102, sku: "LONG-1", name: "X".repeat(240) };
+    catalog.items.set(long.id, long);
+    const fd = claimForm({ ticket_type: "service", device_sn: "SN-LONG-1", purchase_date: null, device_catalog_item_id: "9102" });
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    expect((await unitOf("SN-LONG-1")).device_name).toHaveLength(240);
   });
 });

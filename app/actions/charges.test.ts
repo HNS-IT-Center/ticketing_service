@@ -15,12 +15,20 @@ vi.mock("@/lib/r2", () => ({
   getFileType: () => "image",
   getExt: () => "jpg",
 }));
-vi.mock("@/lib/catalog/hns-data", () => ({
-  CatalogUnavailableError: class extends Error {},
-  isCatalogConfigured: () => false,
-  searchCatalog: async () => [],
-  getCatalogItem: async () => null,
-}));
+// The catalogue API (data.hnsitcenter.id) is replaced; everything else is real.
+const catalog = vi.hoisted(() => ({ items: new Map<number, unknown>(), down: false }));
+vi.mock("@/lib/catalog/hns-data", () => {
+  class CatalogUnavailableError extends Error {}
+  return {
+    CatalogUnavailableError,
+    isCatalogConfigured: () => false,
+    searchCatalog: async () => [],
+    getCatalogItem: async (id: number) => {
+      if (catalog.down) throw new CatalogUnavailableError("catalog answered 502");
+      return catalog.items.get(id) ?? null;
+    },
+  };
+});
 
 const session = { userId: "", role: "Technician", name: "QC" };
 vi.mock("@/lib/session", () => ({
@@ -37,7 +45,8 @@ const { addChargeAction, updateChargeAction, removeChargeAction, receiveExternal
 const { addReplacedPartAction, removeReplacedPartAction, updateTicketStatusAction } = await import("./technician");
 const { adminUpdateTicketStatusAction } = await import("./admin");
 const { saveAccessRulesAction } = await import("./access");
-const { createServiceJobAction, updateServiceJobAction } = await import("./service-jobs");
+const { createServiceJobAction, updateServiceJobAction, setServiceJobAccurateItemAction, applyAccurateItemToUnmappedAction } =
+  await import("./service-jobs");
 const { loadChargesPanel, loadTicketCharges, hasExternalWorkOutstanding } = await import("@/lib/charges-server");
 const access = await import("@/lib/access");
 const { EXTERNAL_WORK_OUTSTANDING } = await import("@/lib/charges");
@@ -534,5 +543,78 @@ describe("what a part usually sells for", () => {
     expect(salesView!.lines.find((l) => l.id === mine)).not.toHaveProperty("price_reference");
     const invoiceLines = await loadTicketCharges(t, false);
     expect(invoiceLines.find((l) => l.id === mine)).not.toHaveProperty("price_reference");
+  });
+});
+
+describe("Accurate codes for the cashier", () => {
+  const jasaService = { id: 100688, sku: "100688", name: "JASA SERVICE", category: "JASA", brand: null, type: "SERVICE", unit: null, serialized: false, stockTotal: 0, warehouses: [] };
+  const pengecekan = { ...jasaService, id: 101003, sku: "101003", name: "Penggantian & Pengecekan" };
+  const accurateForm = (id: string) => form({ accurate_item_id: id });
+
+  it("maps a job to an Accurate item read from the catalogue, and the line carries its code", async () => {
+    catalog.items.set(jasaService.id, jasaService);
+    as("head");
+    expect(await setServiceJobAccurateItemAction(ids.job, accurateForm("100688"))).toEqual({ success: true });
+    expect(await db.serviceJob.findUniqueOrThrow({ where: { id: ids.job } })).toMatchObject({
+      accurate_item_id: 100688,
+      accurate_sku: "100688",
+      accurate_name: "JASA SERVICE",
+    });
+    as("tech");
+    const t = await makeTicket();
+    await add(t, { kind: "service_fee", service_job_id: ids.job });
+    await addReplacedPartAction(form({ ticket_id: t, part: "battery", item_name: "Baterai" }));
+    const part = await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t } });
+    await db.ticketReplacedPart.update({ where: { id: part.id }, data: { sku: "2508000007" } });
+    await add(t, { kind: "other", description: "Kabel" });
+
+    const lines = await loadTicketCharges(t, false);
+    const byKind = Object.fromEntries(lines.map((l) => [l.kind, l.accurate_code]));
+    expect(byKind).toEqual({ service_fee: "100688", part: "2508000007", other: null });
+  });
+
+  it("can be cleared, and refuses an unknown item or a catalogue that is down", async () => {
+    as("admin");
+    expect(await setServiceJobAccurateItemAction(ids.job, accurateForm(""))).toEqual({ success: true });
+    expect((await db.serviceJob.findUniqueOrThrow({ where: { id: ids.job } })).accurate_sku).toBeNull();
+    expect(await setServiceJobAccurateItemAction(ids.job, accurateForm("999999"))).toMatchObject({ error: expect.stringContaining("tidak ditemukan") });
+    catalog.down = true;
+    try {
+      expect(await setServiceJobAccurateItemAction(ids.job, accurateForm("100688"))).toMatchObject({
+        error: expect.stringContaining("tidak dapat dihubungi"),
+      });
+    } finally {
+      catalog.down = false;
+    }
+  });
+
+  it("applies one item to every job not yet mapped, leaving mapped ones alone", async () => {
+    catalog.items.set(jasaService.id, jasaService);
+    catalog.items.set(pengecekan.id, pengecekan);
+    as("admin");
+    // The action reaches every job in the database, the real ones included:
+    // remember which were unmapped and put them back afterwards.
+    const realUnmapped = (
+      await db.serviceJob.findMany({ where: { accurate_item_id: null, NOT: { name: { startsWith: RUN } } }, select: { id: true } })
+    ).map((j) => j.id);
+    try {
+      await setServiceJobAccurateItemAction(ids.job2, accurateForm("101003"));
+      const r = await applyAccurateItemToUnmappedAction(accurateForm("100688"));
+      expect(r).toMatchObject({ success: true });
+      expect((await db.serviceJob.findUniqueOrThrow({ where: { id: ids.job2 } })).accurate_sku).toBe("101003");
+      expect((await db.serviceJob.findUniqueOrThrow({ where: { id: ids.job } })).accurate_sku).toBe("100688");
+      expect(await applyAccurateItemToUnmappedAction(accurateForm(""))).toMatchObject({ error: expect.stringContaining("Pilih item") });
+    } finally {
+      await db.serviceJob.updateMany({
+        where: { id: { in: realUnmapped } },
+        data: { accurate_item_id: null, accurate_sku: null, accurate_name: null },
+      });
+    }
+  });
+
+  it("is for whoever manages the Daftar Jasa only", async () => {
+    as("tech");
+    expect(await setServiceJobAccurateItemAction(ids.job, accurateForm("100688"))).toMatchObject({ error: expect.stringContaining("akses") });
+    expect(await applyAccurateItemToUnmappedAction(accurateForm("100688"))).toMatchObject({ error: expect.stringContaining("akses") });
   });
 });

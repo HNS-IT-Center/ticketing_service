@@ -28,6 +28,7 @@ import {
   Database,
   CalendarDays,
   ClipboardList,
+  Target,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import NotificationBell from "./NotificationBell";
@@ -117,6 +118,7 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
       icon: <BarChart3 size={18} />,
       items: [
         { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
+        { href: "/admin/reports/technicians", label: "Target Teknisi", icon: <Target size={18} /> },
         { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
         { href: "/admin/reports/parts", label: "Laporan Part", icon: <Package size={18} /> },
         { href: "/admin/logs", label: "Log Tiket", icon: <Activity size={18} /> },

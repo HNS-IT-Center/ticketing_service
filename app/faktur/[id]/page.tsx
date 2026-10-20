@@ -239,7 +239,8 @@ const INVOICE_CSS = `
 .inv-sheet { position: relative; background: #fff; margin: 0 auto; box-shadow: 0 6px 24px rgba(0,0,0,0.08); border-radius: 6px; }
 .inv-a4 .inv-sheet { max-width: 794px; padding: 40px 44px; }
 .inv-struk .inv-sheet { max-width: 302px; padding: 14px 12px; font-size: 12px; }
-.inv-draft { position: absolute; top: 14px; right: 14px; border: 2px solid #b91c1c; color: #b91c1c; font-weight: 800; letter-spacing: 0.06em; padding: 4px 10px; border-radius: 6px; transform: rotate(-4deg); font-size: 12px; background: #fff; }
+.inv-draft { border: 2px solid #b91c1c; color: #b91c1c; font-weight: 800; letter-spacing: 0.1em; padding: 6px 10px; border-radius: 6px; text-align: center; font-size: 13px; margin-bottom: 14px; }
+.inv-struk .inv-draft { font-size: 11px; padding: 4px 6px; margin-bottom: 8px; }
 .inv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; border-bottom: 2px solid #111827; padding-bottom: 14px; }
 .inv-struk .inv-head { flex-direction: column; align-items: center; text-align: center; gap: 6px; padding-bottom: 8px; border-bottom-style: dashed; border-bottom-width: 1px; }
 .inv-brand { display: flex; align-items: center; gap: 12px; }

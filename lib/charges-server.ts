@@ -1,9 +1,10 @@
 import "server-only";
-import type { ChargeKind, TicketStatus } from "@prisma/client";
+import type { ChargeKind, ServicePart, TicketStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { accessFor } from "@/lib/access-server";
 import { mayEditCharges, type ChargePermissions, type ChargeRow, type VendorOption } from "@/lib/charges";
 import type { ServiceJobOption } from "@/lib/service-jobs";
+import { priceReference, type PriceSample } from "@/lib/price-reference";
 
 export type { ChargePermissions, ChargeRow, VendorOption, ServiceJobOption };
 
@@ -50,7 +51,12 @@ const KIND_ORDER: Record<ChargeKind, number> = { part: 0, external_service: 1, s
  * the server, when the viewer may not see it — hiding it in the browser would
  * still send it there.
  */
-export async function loadTicketCharges(ticketId: string, canViewCost: boolean): Promise<ChargeRow[]> {
+export async function loadTicketCharges(
+  ticketId: string,
+  canViewCost: boolean,
+  /** Add what each part usually sells for — for whoever sets selling prices. */
+  withPriceReferences = false
+): Promise<ChargeRow[]> {
   const rows = await db.ticketCharge.findMany({
     where: { ticket_id: ticketId },
     orderBy: { created_at: "asc" },
@@ -62,6 +68,7 @@ export async function loadTicketCharges(ticketId: string, canViewCost: boolean):
       unit_price: true,
       unit_cost: true,
       replaced_part_id: true,
+      replaced_part: { select: { part: true, sku: true, item_name: true } },
       sent_at: true,
       returned_at: true,
       external_result: true,
@@ -72,6 +79,9 @@ export async function loadTicketCharges(ticketId: string, canViewCost: boolean):
       created_by: { select: { name: true } },
     },
   });
+  const samples = withPriceReferences
+    ? await loadPriceSamples(rows.flatMap((r) => (r.replaced_part ? [r.replaced_part.part] : [])))
+    : [];
   return rows
     .map((r) => ({
       id: r.id,
@@ -89,8 +99,39 @@ export async function loadTicketCharges(ticketId: string, canViewCost: boolean):
       external_result: r.external_result,
       external_note: r.external_note,
       created_by_name: r.created_by.name,
+      ...(withPriceReferences && r.replaced_part
+        ? {
+            price_reference: priceReference(
+              { chargeId: r.id, part: r.replaced_part.part, sku: r.replaced_part.sku, name: r.replaced_part.item_name },
+              samples
+            ),
+          }
+        : {}),
     }))
     .sort((a, b) => KIND_ORDER[a.kind] - KIND_ORDER[b.kind]);
+}
+
+/** Parts priced on any bill over the last year, of the categories asked about. */
+const REFERENCE_WINDOW_MS = 365 * 24 * 60 * 60 * 1000;
+
+async function loadPriceSamples(categories: ServicePart[]): Promise<PriceSample[]> {
+  if (categories.length === 0) return [];
+  const rows = await db.ticketCharge.findMany({
+    where: {
+      kind: "part",
+      unit_price: { not: null },
+      created_at: { gte: new Date(Date.now() - REFERENCE_WINDOW_MS) },
+      replaced_part: { part: { in: [...new Set(categories)] } },
+    },
+    orderBy: { created_at: "desc" },
+    take: 2000,
+    select: { id: true, unit_price: true, created_at: true, replaced_part: { select: { part: true, sku: true, item_name: true } } },
+  });
+  return rows.flatMap((r) =>
+    r.replaced_part && r.unit_price !== null
+      ? [{ chargeId: r.id, part: r.replaced_part.part, sku: r.replaced_part.sku, name: r.replaced_part.item_name, price: r.unit_price, at: r.created_at }]
+      : []
+  );
 }
 
 export function activeVendors(): Promise<VendorOption[]> {
@@ -135,7 +176,7 @@ export async function loadChargesPanel(
   if (ticket.ticket_type !== "service") return null;
   const perms = await chargePermissions(userId, ticket);
   const [lines, vendors, serviceJobs] = await Promise.all([
-    loadTicketCharges(ticket.id, perms.canViewCost),
+    loadTicketCharges(ticket.id, perms.canViewCost, perms.canEditPrice),
     perms.canEdit ? activeVendors() : Promise.resolve([]),
     perms.canEdit ? activeServiceJobs() : Promise.resolve([]),
   ]);

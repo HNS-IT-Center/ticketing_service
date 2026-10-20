@@ -14,7 +14,6 @@ import CustomerWhatsAppActions from "@/app/admin/tickets/[id]/CustomerWhatsAppAc
 import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
-import ExtraPointsPanel from "./ExtraPointsPanel";
 import ReplacedPartsPanel from "./ReplacedPartsPanel";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import HoldEvidencePanel from "./HoldEvidencePanel";
@@ -23,13 +22,6 @@ import { ticketPartyName } from "@/lib/ticket-party";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 import ChargesPanel from "@/components/service/ChargesPanel";
 import { loadChargesPanel } from "@/lib/charges-server";
-
-function getTicketBasePoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -551,14 +543,9 @@ export default async function TechnicianTicketDetailPage({
 
           {chargesPanel && <ChargesPanel ticketId={ticket.id} {...chargesPanel} />}
 
-          {/* Extra Services / Bonus Points Panel (only for assigned technician) */}
-          {isAssigned && !isDone && (
-            <ExtraPointsPanel
-              ticketId={ticket.id}
-              initialServices={(ticket.extra_services || []) as string[]}
-              basePoints={getTicketBasePoints(ticket.ticket_type, ticket.device_type)}
-            />
-          )}
+          {/* The "Extra Services" ticks were retired for the Daftar Jasa: labour is
+              now a job on the bill, counted per technician (W4-J). Old tickets
+              keep their ticks in extra_services; nothing writes new ones. */}
 
           {/* Assignment panel (Admin & Store Coordinator only) */}
           {isTeamLeader && (

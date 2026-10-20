@@ -543,38 +543,3 @@ export async function updatePickupMethodAction(ticketId: string, pickupMethod: "
   revalidatePath(`/technician/tickets/${ticketId}`);
   return { success: true };
 }
-
-// ─── Toggle Extra Service (Bonus Points) ──────────────────────────────────
-// Only the assigned technician can toggle extra services.
-// Each extra service adds +3 points to the ticket's effective point value.
-export async function toggleExtraServiceAction(ticketId: string, serviceName: string, isAdding: boolean) {
-  const session = await requireSession();
-  if (session.role !== "Technician" && session.role !== "Administrator") {
-    return { error: "Unauthorized" };
-  }
-
-  const ticket = await db.ticket.findUnique({
-    where: { id: ticketId },
-    select: { technician_id: true, extra_services: true },
-  });
-
-  if (!ticket) return { error: "Ticket not found" };
-  // Only assigned technician or admin can modify
-  if (session.role === "Technician" && ticket.technician_id !== session.userId) {
-    return { error: "You are not assigned to this ticket" };
-  }
-
-  const current = ticket.extra_services as string[];
-  const updated = isAdding
-    ? [...new Set([...current, serviceName])]
-    : current.filter((s) => s !== serviceName);
-
-  await db.ticket.update({
-    where: { id: ticketId },
-    data: { extra_services: updated },
-  });
-
-  revalidatePath(`/technician/tickets/${ticketId}`);
-  revalidatePath(`/admin/tickets/${ticketId}`);
-  return { success: true, extra_services: updated };
-}

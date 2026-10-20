@@ -99,6 +99,18 @@ export function formatRupiah(amount: number): string {
   return RUPIAH.format(amount);
 }
 
+const RUPIAH_COMPACT = new Intl.NumberFormat("id-ID", {
+  style: "currency",
+  currency: "IDR",
+  notation: "compact",
+  maximumFractionDigits: 1,
+});
+
+/** For a stat card, where the full figure does not fit: "Rp 450 rb", "Rp 12,4 jt". */
+export function formatRupiahCompact(amount: number): string {
+  return RUPIAH_COMPACT.format(amount);
+}
+
 /** Digits grouped the Indonesian way, for an input box: 150000 → "150.000". */
 export function groupDigits(raw: string): string {
   const digits = raw.replace(/\D/g, "").replace(/^0+(?=\d)/, "");

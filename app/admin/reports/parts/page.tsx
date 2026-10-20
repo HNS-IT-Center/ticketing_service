@@ -5,7 +5,7 @@ import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { formatDateTime } from "@/lib/utils";
 import { servicePartLabel } from "@/lib/service-parts";
-import { summarizeParts } from "@/lib/reports/parts";
+import { monthLabel, summarizeParts } from "@/lib/reports/parts";
 import { loadPartRows, loadPartRowsBetween, resolveReportMonth } from "@/lib/reports/parts-data";
 import {
   DEMAND_MONTHS,
@@ -25,12 +25,6 @@ export const metadata = { title: "Laporan Pergantian Part — HNS IT Center" };
 const DETAIL_LIMIT = 300;
 /** Items whose stock is looked up in the catalogue — one API call each. */
 const DEMAND_LIMIT = 15;
-
-const MONTH_LABEL = new Intl.DateTimeFormat("id-ID", { month: "short", year: "numeric", timeZone: "UTC" });
-function monthLabel(month: string): string {
-  const [y, m] = month.split("-").map(Number);
-  return MONTH_LABEL.format(Date.UTC(y, m - 1, 1));
-}
 
 type StockNow = { here: number | null; total: number };
 

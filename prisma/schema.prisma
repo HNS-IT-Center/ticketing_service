@@ -294,8 +294,16 @@ model Ticket {
   // CS intake fields
   accessories      String? @db.Text // accessories included with device
   device_condition String? @db.Text // customer-described physical condition
-  device_name      String?        // Optional device name
+  device_name      String? @db.Text // Typed, or the catalogue name; long either way
   device_sn        String?        // Optional device serial number
+
+  // The unit as it stands in the company catalogue (Accurate, through
+  // data.hnsitcenter.id) when it was picked there at intake rather than typed.
+  // A snapshot, like a replaced part's: device_name then holds the catalogue's
+  // name, and a report can count units by SKU instead of by spelling.
+  device_catalog_item_id  Int?
+  device_sku              String?
+  device_catalog_category String?
   warranty_status  String?        // 'active' or 'inactive'
   is_overnight     Boolean  @default(false)  // true = multi-day service
   is_overnight_check Boolean @default(false)
@@ -343,6 +351,7 @@ model Ticket {
   @@index([technician_id])
   @@index([store_location_id])
   @@index([public_share_token])
+  @@index([device_sku])
 }
 
 model TicketAssignmentRequest {

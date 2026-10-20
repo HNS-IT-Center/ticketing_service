@@ -6,13 +6,19 @@ import { MIN_QUERY, stockAtStore, type CatalogItem } from "@/lib/catalog/items";
 
 /**
  * Search the company catalogue (Accurate, read through data.hnsitcenter.id) and
- * pick the item that was fitted. Read only: nothing here touches stock.
+ * pick an item: the part that was fitted, or the unit that came in. Read only:
+ * nothing here touches stock or writes to Accurate.
  */
 export default function CatalogItemPicker({
-  storeName,
+  storeName = null,
+  showStock = true,
+  placeholder = "Cari nama barang atau SKU, mis. baterai asus",
   onPick,
 }: {
-  storeName: string | null;
+  storeName?: string | null;
+  /** Off for a customer's own unit: the shop's stock says nothing about it. */
+  showStock?: boolean;
+  placeholder?: string;
   onPick: (item: CatalogItem) => void;
 }) {
   const [query, setQuery] = useState("");
@@ -59,7 +65,7 @@ export default function CatalogItemPicker({
             }
           }}
           className="form-input"
-          placeholder="Cari nama barang atau SKU, mis. baterai asus"
+          placeholder={placeholder}
           style={{ paddingLeft: "2.25rem" }}
           aria-label="Cari barang di katalog"
         />
@@ -88,8 +94,8 @@ export default function CatalogItemPicker({
                 <button
                   type="button"
                   onClick={() => onPick(item)}
-                  className="flex w-full flex-col gap-1 px-3 py-2 text-left hover:bg-[var(--cream)]"
-                  style={{ background: "transparent", border: 0, cursor: "pointer" }}
+                  className="flex w-full flex-col gap-1 text-left hover:bg-[var(--cream)]"
+                  style={{ background: "transparent", border: 0, cursor: "pointer", padding: "0.5rem 0.75rem" }}
                 >
                   <span className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{item.name}</span>
                   <span className="text-xs" style={{ color: "var(--text-muted)" }}>
@@ -97,11 +103,13 @@ export default function CatalogItemPicker({
                     {item.category ? ` · ${item.category}` : ""}
                     {/* Service parts are ordered per job, so 0 is the normal case and
                         not worth showing; only RAM and SSD are kept in stock. */}
-                    {here !== null && here > 0
-                      ? ` · stok toko ini ${here}`
-                      : item.stockTotal > 0
-                        ? ` · stok total ${item.stockTotal}`
-                        : ""}
+                    {!showStock
+                      ? ""
+                      : here !== null && here > 0
+                        ? ` · stok toko ini ${here}`
+                        : item.stockTotal > 0
+                          ? ` · stok total ${item.stockTotal}`
+                          : ""}
                   </span>
                 </button>
               </li>

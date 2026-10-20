@@ -200,6 +200,9 @@ export default async function AdminTicketDetailPage({
           {ticket.device_name && (
             <p style={{ fontSize: "0.8125rem", color: "var(--text-primary)", marginTop: "0.15rem", fontWeight: 500 }}>
               Device: {ticket.device_name}
+              {ticket.device_sku && (
+                <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> · SKU {ticket.device_sku}</span>
+              )}
             </p>
           )}
           {ticket.device_sn && (

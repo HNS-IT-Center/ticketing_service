@@ -19,6 +19,7 @@ import {
   externalResultLabel,
   externalState,
   formatRupiah,
+  formatRupiahCompact,
   summarizeCharges,
   vendorFitsCharge,
   type ChargePermissions,
@@ -28,6 +29,7 @@ import {
 import { formatDateTime } from "@/lib/utils";
 import RupiahInput from "./RupiahInput";
 import type { ServiceJobOption } from "@/lib/service-jobs";
+import type { PriceReference } from "@/lib/price-reference";
 
 type ActionResult = { error: string } | { success: true };
 
@@ -331,7 +333,15 @@ function LineView({
           <span>
             Harga jual:{" "}
             {line.unit_price === null ? (
-              <Missing>belum diisi</Missing>
+              <>
+                <Missing>belum diisi</Missing>
+                {line.price_reference && (
+                  <>
+                    {" · "}
+                    <PriceHint reference={line.price_reference} />
+                  </>
+                )}
+              </>
             ) : (
               <strong>
                 {formatRupiah(line.unit_price)}
@@ -391,11 +401,37 @@ function LineView({
   );
 }
 
+const SHORT_DATE = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", timeZone: "Asia/Jakarta" });
+
+/**
+ * What this part usually sells for, from past bills: a guide for whoever sets
+ * the price, never a rule. Parts are bought per job and marked up on the spot,
+ * so this is the only common ground the technicians have.
+ */
+function PriceHint({ reference }: { reference: PriceReference }) {
+  const last = `${formatRupiahCompact(reference.last)}, ${SHORT_DATE.format(new Date(reference.lastAt))}`;
+  return (
+    <span className="text-xs" style={{ color: "#1e40af" }}>
+      {reference.count === 1 || reference.min === reference.max
+        ? `Terakhir dijual ${last}`
+        : `Biasanya ${formatRupiahCompact(reference.min)}–${formatRupiahCompact(reference.max)} · tengah ${formatRupiahCompact(
+            reference.median
+          )} · ${reference.count}× · terakhir ${last}`}{" "}
+      <span style={{ color: "var(--text-muted)" }}>({reference.label})</span>
+    </span>
+  );
+}
+
 function PriceFields({ line, perms }: { line?: ChargeRow; perms: ChargePermissions }) {
   if (!perms.canEditPrice && !perms.canEditCost) return null;
   return (
     <div className="grid gap-3 sm:grid-cols-2">
-      {perms.canEditPrice && <RupiahInput name="unit_price" label="Harga jual / unit" defaultValue={line?.unit_price} />}
+      {perms.canEditPrice && (
+        <div className="flex flex-col gap-1">
+          <RupiahInput name="unit_price" label="Harga jual / unit" defaultValue={line?.unit_price} />
+          {line?.price_reference && <PriceHint reference={line.price_reference} />}
+        </div>
+      )}
       {perms.canEditCost && <RupiahInput name="unit_cost" label="Harga modal / unit" defaultValue={line?.unit_cost} />}
     </div>
   );

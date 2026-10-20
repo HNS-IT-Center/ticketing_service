@@ -38,7 +38,7 @@ const { addReplacedPartAction, removeReplacedPartAction, updateTicketStatusActio
 const { adminUpdateTicketStatusAction } = await import("./admin");
 const { saveAccessRulesAction } = await import("./access");
 const { createServiceJobAction, updateServiceJobAction } = await import("./service-jobs");
-const { loadChargesPanel, hasExternalWorkOutstanding } = await import("@/lib/charges-server");
+const { loadChargesPanel, loadTicketCharges, hasExternalWorkOutstanding } = await import("@/lib/charges-server");
 const access = await import("@/lib/access");
 const { EXTERNAL_WORK_OUTSTANDING } = await import("@/lib/charges");
 
@@ -494,5 +494,45 @@ describe("the Daftar Jasa itself", () => {
     const id = (r as { job: { id: string } }).job.id;
     expect(await updateServiceJobAction(id, jobForm({ name: `${RUN} Sementara`, points: "0" }))).toEqual({ success: true });
     expect(await db.serviceJob.findUniqueOrThrow({ where: { id } })).toMatchObject({ is_active: false });
+  });
+});
+
+describe("what a part usually sells for", () => {
+  /** A part recorded the way the technician records it, then priced. */
+  async function pricedPart(ticketId: string, sku: string | null, name: string, price: number | null) {
+    await addReplacedPartAction(form({ ticket_id: ticketId, part: "battery", item_name: name }));
+    const part = await db.ticketReplacedPart.findFirstOrThrow({
+      where: { ticket_id: ticketId },
+      orderBy: { created_at: "desc" },
+      select: { id: true, charge: { select: { id: true } } },
+    });
+    if (sku) await db.ticketReplacedPart.update({ where: { id: part.id }, data: { sku } });
+    if (price !== null) await db.ticketCharge.update({ where: { id: part.charge!.id }, data: { unit_price: price } });
+    return part.charge!.id;
+  }
+
+  it("gives whoever sets prices the recent prices of the same item, from other bills", async () => {
+    const sku = `${RUN}-BAT`;
+    for (const price of [400000, 500000, 450000]) await pricedPart(await makeTicket(), sku, "Baterai X", price);
+    const t = await makeTicket();
+    const mine = await pricedPart(t, sku, "Baterai X", null);
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: t } });
+
+    const techView = await loadChargesPanel(ids.tech, ticket);
+    const line = techView!.lines.find((l) => l.id === mine)!;
+    expect(line.price_reference).toMatchObject({ basis: "sku", count: 3, min: 400000, max: 500000, median: 450000 });
+  });
+
+  it("is not given to someone who cannot set prices, nor printed on the invoice", async () => {
+    const sku = `${RUN}-BAT2`;
+    await pricedPart(await makeTicket(), sku, "Baterai Y", 300000);
+    const t = await makeTicket();
+    const mine = await pricedPart(t, sku, "Baterai Y", null);
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: t } });
+
+    const salesView = await loadChargesPanel(ids.sales, ticket);
+    expect(salesView!.lines.find((l) => l.id === mine)).not.toHaveProperty("price_reference");
+    const invoiceLines = await loadTicketCharges(t, false);
+    expect(invoiceLines.find((l) => l.id === mine)).not.toHaveProperty("price_reference");
   });
 });

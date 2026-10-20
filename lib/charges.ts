@@ -12,6 +12,7 @@ import type { ChargeKind, ExternalResult, ServicePart, TicketStatus } from "@pri
 import type { Audience } from "@/lib/access";
 import { servicePartLabel } from "@/lib/service-parts";
 import { VENDOR_ROLE_INFO, type VendorRoles } from "@/lib/vendors";
+import type { PriceReference } from "@/lib/price-reference";
 
 /** Per unit, in Rupiah. A billion is far above any part or repair this shop bills. */
 export const MAX_UNIT_AMOUNT = 999_999_999;
@@ -230,6 +231,8 @@ export type ChargeRow = {
   service_job: { id: string; name: string } | null;
   /** The job's points as given when the line was recorded. */
   job_points: number | null;
+  /** What this part usually sells for, from past bills — given only to whoever sets prices. */
+  price_reference?: PriceReference | null;
   is_part: boolean;
   sent_at: string | null;
   returned_at: string | null;

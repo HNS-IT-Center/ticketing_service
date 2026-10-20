@@ -44,19 +44,27 @@ const nextConfig: NextConfig = {
           },
         ],
       },
-      // ─── Static JS/CSS chunks: long-term cache (safe — filenames are hashed) ─
-      // Next.js already fingerprints these by content hash, so they can be
-      // cached forever. The browser will fetch new chunks automatically because
-      // the HTML (above) always returns fresh, pointing to the new chunk names.
-      {
-        source: "/_next/static/(.*)",
-        headers: [
-          {
-            key: "Cache-Control",
-            value: "public, max-age=31536000, immutable",
-          },
-        ],
-      },
+      // ─── Static JS/CSS chunks: long-term cache, production only ─────────────
+      // A production build fingerprints these by content hash, so they can be
+      // cached forever: the HTML (above) always comes fresh and points at the
+      // new names. `next dev` does NOT hash them — app/admin/layout.js keeps
+      // its name across edits — so a year-long immutable cache there made the
+      // browser run yesterday's client code against today's server: a
+      // hydration mismatch, and a sidebar that "did not change" after a fix.
+      // Next warns about exactly this in the dev log.
+      ...(process.env.NODE_ENV === "production"
+        ? [
+            {
+              source: "/_next/static/(.*)",
+              headers: [
+                {
+                  key: "Cache-Control",
+                  value: "public, max-age=31536000, immutable",
+                },
+              ],
+            },
+          ]
+        : []),
     ];
   },
 };

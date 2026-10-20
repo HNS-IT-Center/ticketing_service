@@ -88,8 +88,9 @@ export function summarizeParts(rows: PartReportRow[]): PartsSummary {
     t.entries++;
     byTech.set(r.technicianName, t);
 
-    // A SKU identifies an item; a typed name is grouped as typed, ignoring case.
-    const name = r.itemName?.trim() || "(tanpa nama barang)";
+    // A SKU identifies an item; a typed name is grouped as typed, ignoring
+    // case and spacing — the rule the "di luar katalog" list follows too.
+    const name = r.itemName?.replace(/\s+/g, " ").trim() || "(tanpa nama barang)";
     const key = r.sku ? `sku:${r.sku}` : `name:${r.part}:${name.toLowerCase()}`;
     const item = byItem.get(key) ?? {
       key,

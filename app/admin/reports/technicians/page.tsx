@@ -1,7 +1,7 @@
 import { Target, AlertTriangle } from "lucide-react";
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
-import { formatRupiah } from "@/lib/charges";
+import { formatRupiah, formatRupiahCompact } from "@/lib/charges";
 import { summarizeTargets } from "@/lib/reports/technicians";
 import { loadTargetData } from "@/lib/reports/technicians-data";
 import { resolveReportMonth } from "@/lib/reports/parts-data";
@@ -60,9 +60,9 @@ export default async function TechnicianTargetPage({
       </form>
 
       <div className="admin-stats-grid">
-        <Stat value={totals.tickets} label="Tiket service selesai" />
+        <Stat value={totals.tickets} label="Tiket selesai" />
         <Stat value={totals.jobs} label="Jasa dikerjakan" />
-        <Stat value={formatRupiah(totals.revenue)} label="Omzet jasa" />
+        <Stat value={formatRupiahCompact(totals.revenue)} label="Omzet jasa" />
         <Stat value={totals.points} label="Poin jasa" />
       </div>
 

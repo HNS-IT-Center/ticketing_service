@@ -1020,6 +1020,13 @@ needs it.
 
 Ordered roughly by how much is already decided.
 
+### Asked by the owner 2026-10-26
+
+| # | Item | Where |
+|---|------|-------|
+| BL37 | 🔄 **Customer self-service requests + "service eksternal".** Customer with an **e-commerce account** submits a request from `hnsitcenter.id`'s profile page; staff schedule the arrival (drop-off or technician on-site) and the request becomes a ticket when the unit is handled. Design only, waiting on the owner's decisions (§9 of the plan). Key constraints found: HNS SSO is workforce-only and forbids customers; ticketing has no customer portal; `ecommerce-hns` already owns customer accounts — so e-commerce hosts the form and calls a server-to-server ticketing API. A request is **not** a ticket (no code, no KPI until the unit is in hand) | `docs/plan-pengajuan-servis.md` |
+| BL38 | ⬜ **PC Build components and Upgrade items from the Accurate catalogue.** Today PC Build components are free-text tags (`TicketPcBuildComponent.component_name`) and upgrades come from the internal `Upgrade` table. Owner chose both. Needs a migration, so it ships after the release of W4 | `CreateTicketForm.tsx`, `components/catalog/` |
+
 ### Asked by the owner 2026-10-03 — mockup made, waiting on approval
 
 | # | Item | Where |

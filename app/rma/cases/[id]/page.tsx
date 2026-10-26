@@ -6,6 +6,7 @@ import { formatDateTime } from "@/lib/utils";
 import RmaStatusCard, { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import RmaActionPanel from "./RmaActionPanel";
 import FilePreview from "@/components/ui/FilePreview";
+import { attachmentKindLabel } from "@/lib/attachment-kind";
 import { ArrowLeft } from "lucide-react";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
@@ -84,6 +85,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
           customer_name: true,
           customer_phone: true,
           device_name: true,
+          device_sku: true,
           device_sn: true,
           device_type: true,
           notes: true,
@@ -95,30 +97,20 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
           // three lines of typed text.
           attachments: {
             orderBy: { created_at: "asc" },
-            select: { id: true, file_url: true, file_type: true, created_at: true },
+            select: { id: true, file_url: true, file_type: true, kind: true, created_at: true },
           },
         },
       },
     },
   });
 
-  // Spellings already in use, offered as suggestions in the vendor field.
-
-  const knownVendors = (
-
-    await db.rmaCase.findMany({
-
-      where: { vendor_name: { not: null } },
-
-      distinct: ["vendor_name"],
-
-      orderBy: { vendor_name: "asc" },
-
-      select: { vendor_name: true },
-
-    })
-
-  ).map((v) => v.vendor_name!).filter(Boolean);
+  // The claim vendors on the list, offered when the case is sent out. A name
+  // typed instead joins the list (transitionRmaAction).
+  const claimVendors = await db.vendor.findMany({
+    where: { is_active: true, handles_claims: true },
+    orderBy: { name: "asc" },
+    select: { id: true, name: true },
+  });
 
 
   if (!rmaCase) notFound();
@@ -161,6 +153,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
               <Field label="Customer" value={ticket.customer_name} />
               <Field label="Telepon" value={ticket.customer_phone} />
               <Field label="Perangkat" value={ticket.device_name} />
+              {ticket.device_sku && <Field label="SKU (katalog Accurate)" value={ticket.device_sku} mono />}
               <Field label="Kategori" value={ticket.device_type.replace(/_/g, " ")} />
               <Field label="Serial Number" value={ticket.device_sn} mono />
               <Field
@@ -271,7 +264,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                       key={a.id}
                       url={a.file_url}
                       fileType={a.file_type}
-                      label={`${LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`}
+                      label={`${attachmentKindLabel(a.kind) ?? LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`}
                       title={`Lampiran ${i + 1} — ${ticket.ticket_code}`}
                       className="btn btn-outline"
                     />
@@ -290,7 +283,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             currentStatus={rmaCase.status}
             role={session.role}
             unitOwnership={rmaCase.unit_ownership}
-            knownVendors={knownVendors}
+            claimVendors={claimVendors}
           />
         </div>
       </div>

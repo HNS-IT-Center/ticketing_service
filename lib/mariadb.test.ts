@@ -36,6 +36,8 @@ const ENTRY_POINTS = [
   "prisma/seed-admin.ts",
   "prisma/restore-admin.ts",
   "scripts/create-user.ts",
+  "scripts/sso-export-users.ts",
+  "scripts/sso-link-users.ts",
   "scripts/migrate-to-r2.ts",
   "scratch/update_upgrades.ts",
 ];

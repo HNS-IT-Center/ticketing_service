@@ -28,6 +28,24 @@ vi.mock("@/lib/r2", () => ({
   getExt: () => "jpg",
 }));
 
+// The catalogue API (data.hnsitcenter.id) is replaced; everything else is real.
+const catalog = vi.hoisted(() => ({
+  items: new Map<number, unknown>(),
+  down: false,
+}));
+vi.mock("@/lib/catalog/hns-data", () => {
+  class CatalogUnavailableError extends Error {}
+  return {
+    CatalogUnavailableError,
+    isCatalogConfigured: () => true,
+    searchCatalog: async () => [],
+    getCatalogItem: async (id: number) => {
+      if (catalog.down) throw new CatalogUnavailableError("catalog answered 502");
+      return catalog.items.get(id) ?? null;
+    },
+  };
+});
+
 const session = { userId: "", role: "Technician", name: "Test Tech" };
 vi.mock("@/lib/session", () => ({
   requireSession: async () => session,
@@ -355,5 +373,83 @@ describe("photos of the fitted part", () => {
     await removeReplacedPartAction(row!.id);
 
     expect(await db.ticketReplacedPartPhoto.count({ where: { part_id: row!.id } })).toBe(0);
+  });
+});
+
+describe("addReplacedPartAction — catalogue items", () => {
+  const lcd = {
+    id: 7311,
+    sku: "2505000019",
+    name: "NEW LCD LAPTOP ASUS VIVOBOOOK A1400E 14 INCH",
+    category: "SPAREPART SERVICE",
+    brand: null,
+    type: "INVENTORY",
+    unit: "PCS",
+    serialized: false,
+    stockTotal: 3,
+    warehouses: [],
+  };
+
+  async function addFromCatalog(ticketId: string, extra: Record<string, string>) {
+    const fd = new FormData();
+    fd.append("ticket_id", ticketId);
+    fd.append("part", "lcd");
+    fd.append("notes", "");
+    for (const [k, v] of Object.entries(extra)) fd.append(k, v);
+    return addReplacedPartAction(fd);
+  }
+
+  beforeEach(() => {
+    catalog.items.set(lcd.id, lcd);
+    catalog.down = false;
+  });
+
+  it("records the catalogue's SKU, name and category, not what the browser sent", async () => {
+    const ticket = await makeTicket();
+    const result = await addFromCatalog(ticket.id, {
+      catalog_item_id: String(lcd.id),
+      item_name: "nama palsu dari browser",
+      quantity: "2",
+    });
+    expect(result).toMatchObject({ success: true });
+    const row = await db.ticketReplacedPart.findFirst({
+      where: { ticket_id: ticket.id },
+      select: { item_name: true, sku: true, catalog_item_id: true, catalog_category: true, quantity: true },
+    });
+    expect(row).toEqual({
+      item_name: lcd.name,
+      sku: lcd.sku,
+      catalog_item_id: lcd.id,
+      catalog_category: "SPAREPART SERVICE",
+      quantity: 2,
+    });
+  });
+
+  it("refuses an id the catalogue does not know", async () => {
+    const ticket = await makeTicket();
+    const result = await addFromCatalog(ticket.id, { catalog_item_id: "999999" });
+    expect(result).toMatchObject({ error: "Barang tidak ditemukan di katalog." });
+    expect(await db.ticketReplacedPart.count({ where: { ticket_id: ticket.id } })).toBe(0);
+  });
+
+  it("says so when the catalogue is down, and records nothing", async () => {
+    catalog.down = true;
+    const ticket = await makeTicket();
+    const result = await addFromCatalog(ticket.id, { catalog_item_id: String(lcd.id) });
+    expect(result).toMatchObject({ error: expect.stringContaining("tidak dapat dihubungi") });
+    expect(await db.ticketReplacedPart.count({ where: { ticket_id: ticket.id } })).toBe(0);
+  });
+
+  it.each(["0", "100", "1.5", "abc"])("refuses quantity %j", async (q) => {
+    const ticket = await makeTicket();
+    const result = await addFromCatalog(ticket.id, { catalog_item_id: String(lcd.id), quantity: q });
+    expect(result).toMatchObject({ error: expect.stringContaining("Jumlah") });
+  });
+
+  it("a typed part with no quantity counts as one", async () => {
+    const ticket = await makeTicket();
+    await addPart(ticket.id, "battery", "Baterai generik");
+    const row = await db.ticketReplacedPart.findFirst({ where: { ticket_id: ticket.id }, select: { quantity: true, sku: true } });
+    expect(row).toEqual({ quantity: 1, sku: null });
   });
 });

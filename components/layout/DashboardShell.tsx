@@ -21,6 +21,14 @@ import {
   Activity,
   Store,
   ShieldCheck,
+  Package,
+  Truck,
+  ChevronDown,
+  BarChart3,
+  Database,
+  CalendarDays,
+  ClipboardList,
+  Target,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import NotificationBell from "./NotificationBell";
@@ -30,44 +38,183 @@ type NavItem = {
   href: string;
   label: string;
   icon: React.ReactNode;
+  /** Other paths that belong to this entry, e.g. a case page reached from the RMA dashboard. */
+  also?: string[];
 };
 
-const NAV_ITEMS: Record<string, NavItem[]> = {
+/**
+ * A group in the sidebar. A titled section folds open and closed; an untitled
+ * one, or one holding a single entry, is shown as plain links.
+ */
+type NavSection = {
+  key: string;
+  title?: string;
+  icon?: React.ReactNode;
+  /** Open until the user closes it — for what is opened all day. */
+  defaultOpen?: boolean;
+  items: NavItem[];
+};
+
+// Grouped by what the page is for, the same groups in every portal. Profile is
+// in none of them: it is in the menu under the name at the top right. The small
+// portals keep their groups open — they fold only when someone folds them.
+const NAV_SECTIONS: Record<string, NavSection[]> = {
   technician: [
-    { href: "/technician/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/technician/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
-    { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-    { href: "/technician/schedule", label: "Schedule", icon: <Users size={18} /> },
-    { href: "/technician/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
-    { href: "/technician/profile", label: "Profile", icon: <User size={18} /> },
+    {
+      key: "home",
+      items: [{ href: "/technician/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
+    },
+    {
+      key: "tickets",
+      title: "Tiket",
+      icon: <Ticket size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/technician/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
+        { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+      ],
+    },
+    {
+      key: "team",
+      title: "Tim",
+      icon: <Users size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/technician/schedule", label: "Schedule", icon: <CalendarDays size={18} /> },
+        { href: "/technician/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
+      ],
+    },
   ],
   admin: [
-    { href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
-    { href: "/admin/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-    { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
-    { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
-    { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
-    { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
-    { href: "/admin/logs", label: "Logs", icon: <Activity size={18} /> },
-    { href: "/rma/dashboard", label: "RMA", icon: <ShieldCheck size={18} /> },
-    { href: "/admin/profile", label: "Profile", icon: <User size={18} /> },
+    {
+      key: "home",
+      items: [{ href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
+    },
+    {
+      key: "tickets",
+      title: "Tiket",
+      icon: <Ticket size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
+        { href: "/admin/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+      ],
+    },
+    // The RMA desk's own pages, opened inside the admin portal: an
+    // administrator stays in this sidebar instead of being moved to the desk's.
+    {
+      key: "rma",
+      title: "Klaim & RMA",
+      icon: <ShieldCheck size={18} />,
+      items: [
+        { href: "/rma/dashboard", label: "Dashboard RMA", icon: <LayoutDashboard size={18} />, also: ["/rma/cases"] },
+        { href: "/rma/tickets", label: "Tiket Klaim", icon: <Ticket size={18} /> },
+        { href: "/rma/logs", label: "Log RMA", icon: <Activity size={18} /> },
+      ],
+    },
+    {
+      key: "reports",
+      title: "Laporan",
+      icon: <BarChart3 size={18} />,
+      items: [
+        { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
+        { href: "/admin/reports/technicians", label: "Target Teknisi", icon: <Target size={18} /> },
+        { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
+        { href: "/admin/reports/parts", label: "Laporan Part", icon: <Package size={18} /> },
+        { href: "/admin/logs", label: "Log Tiket", icon: <Activity size={18} /> },
+      ],
+    },
+    {
+      key: "master",
+      title: "Data Master",
+      icon: <Database size={18} />,
+      items: [
+        { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
+        { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
+        { href: "/admin/service-jobs", label: "Daftar Jasa", icon: <ClipboardList size={18} /> },
+        { href: "/admin/vendors", label: "Vendor", icon: <Truck size={18} />, also: ["/rma/vendors"] },
+      ],
+    },
+    {
+      key: "settings",
+      items: [{ href: "/admin/settings/access", label: "Pengaturan Akses", icon: <Settings size={18} /> }],
+    },
   ],
-  // Log Aktivitas sits last on purpose: it is a reference page, read after the
-  // work, while the three above it are what the desk opens to act.
+  // Log Aktivitas sits after the work pages on purpose: it is a reference page,
+  // read after the work, while the ones above it are what the desk opens to act.
   rma: [
-    { href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/rma/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
-    { href: "/rma/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-    { href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> },
+    {
+      key: "home",
+      items: [{ href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} />, also: ["/rma/cases"] }],
+    },
+    {
+      key: "tickets",
+      title: "Tiket",
+      icon: <Ticket size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/rma/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
+        { href: "/rma/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+      ],
+    },
+    {
+      key: "reports",
+      title: "Laporan",
+      items: [{ href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> }],
+    },
+    {
+      key: "master",
+      title: "Data Master",
+      items: [{ href: "/rma/vendors", label: "Vendor", icon: <Truck size={18} /> }],
+    },
   ],
   sales: [
-    { href: "/sales/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> },
-    { href: "/sales/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
-    { href: "/sales/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-    { href: "/sales/profile", label: "Profile", icon: <User size={18} /> },
+    {
+      key: "home",
+      items: [{ href: "/sales/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
+    },
+    {
+      key: "tickets",
+      title: "Tiket",
+      icon: <Ticket size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/sales/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
+        { href: "/sales/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
+      ],
+    },
   ],
 };
+
+/**
+ * The sidebar for one user. A technician who may manage the Daftar Jasa or the
+ * vendor list — a head technician or a coordinator, by default — gets a Data
+ * Master group for it; nobody else in the portal sees one.
+ */
+function sectionsFor(role: string, manage: DashboardShellProps["manage"]): NavSection[] {
+  const base = NAV_SECTIONS[role] || [];
+  if (role !== "technician" || !(manage?.vendors || manage?.serviceJobs)) return base;
+  const items: NavItem[] = [];
+  if (manage.serviceJobs) {
+    items.push({ href: "/technician/service-jobs", label: "Daftar Jasa", icon: <ClipboardList size={18} /> });
+  }
+  if (manage.vendors) items.push({ href: "/technician/vendors", label: "Vendor", icon: <Truck size={18} /> });
+  return [...base, { key: "master", title: "Data Master", icon: <Database size={18} />, defaultOpen: true, items }];
+}
+
+/**
+ * How closely a page belongs to an entry: the length of the matching path, so
+ * the most specific entry wins ("/admin/tickets/create" over "/admin/tickets").
+ * A portal's dashboard matches only itself, or every page would light it up.
+ */
+function matchScore(item: NavItem, pathname: string, dashboard: string): number {
+  let best = 0;
+  for (const path of [item.href, ...(item.also ?? [])]) {
+    const hit = pathname === path || (path !== dashboard && pathname.startsWith(`${path}/`));
+    if (hit && path.length > best) best = path.length;
+  }
+  return best;
+}
 
 const ROLE_LABELS: Record<string, string> = {
   technician: "Technician",
@@ -82,9 +229,25 @@ interface DashboardShellProps {
   userName: string;
   userId: string;
   isCoordinator?: boolean;
+  /** Data Master pages this technician may manage; decided by the server from the access settings. */
+  manage?: { vendors?: boolean; serviceJobs?: boolean };
 }
 
-export default function DashboardShell({ children, role, userName, userId, isCoordinator = false }: DashboardShellProps) {
+// Only Administrator and Technician have a profile page. Sales had a sidebar
+// entry to /sales/profile, which does not exist, and a menu entry to
+// /admin/profile, which is Administrator-only — so for Sales and RMA the
+// entry is hidden rather than pointed at a page that refuses them.
+const PROFILE_HREF: Partial<Record<DashboardShellProps["role"], string>> = {
+  admin: "/admin/profile",
+  technician: "/technician/profile",
+};
+const TICKETS_HREF: Partial<Record<DashboardShellProps["role"], string>> = {
+  admin: "/admin/tickets",
+  technician: "/technician/tickets",
+  sales: "/sales/tickets",
+};
+
+export default function DashboardShell({ children, role, userName, userId, isCoordinator = false, manage }: DashboardShellProps) {
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);     // mobile drawer
   const [collapsed, setCollapsed] = useState(false);          // desktop collapse
@@ -185,7 +348,8 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
     setSwipeOffset(0);
   };
 
-  const navItems = NAV_ITEMS[role] || [];
+  const sections = sectionsFor(role, manage);
+  const navItems = sections.flatMap((section) => section.items);
   const initials = userName
     .split(" ")
     .map((n) => n[0])
@@ -193,22 +357,57 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
     .slice(0, 2)
     .toUpperCase();
 
-  const profileHref = role === "sales" ? "/admin/profile" : `/${role}/profile`;
-  const ticketsHref = role === "admin" || role === "sales" ? "/admin/tickets" : `/${role}/tickets`;
-  // The RMA portal has neither a profile page nor a ticket list, so those two
-  // dropdown entries are hidden rather than pointed at a route that 404s.
-  const showPersonalLinks = role !== "rma";
+  const profileHref = PROFILE_HREF[role];
+  const ticketsHref = TICKETS_HREF[role];
 
-  const currentLabel =
-    navItems.find((n) => pathname === n.href || pathname.startsWith(n.href))?.label ?? "Dashboard";
-
-  // find the longest matching href for accurate active state
-  const activeItem = navItems.reduce((acc, item) => {
-    if (pathname === item.href || (item.href !== `/${role}/dashboard` && pathname.startsWith(item.href))) {
-      return !acc || item.href.length > acc.href.length ? item : acc;
+  // The entry for this page: the longest matching path wins.
+  const dashboard = `/${role}/dashboard`;
+  let activeItem: NavItem | null = null;
+  let activeScore = 0;
+  for (const item of navItems) {
+    const score = matchScore(item, pathname, dashboard);
+    if (score > activeScore) {
+      activeItem = item;
+      activeScore = score;
     }
-    return acc;
-  }, null as NavItem | null);
+  }
+  const currentLabel = activeItem?.label ?? "Dashboard";
+  const activeSectionKey = sections.find((section) => activeItem && section.items.includes(activeItem))?.key;
+
+  // A group is open when the user opened it, or — until they say otherwise —
+  // when it holds the page on screen or is one opened all day. Arriving on a
+  // page of a group the user had closed opens it again, adjusted during render
+  // rather than in an effect, so there is no closed-then-open flash.
+  const [openOverride, setOpenOverride] = useState<Record<string, boolean>>({});
+  const [lastPath, setLastPath] = useState(pathname);
+  if (lastPath !== pathname) {
+    setLastPath(pathname);
+    if (activeSectionKey && openOverride[activeSectionKey] === false) {
+      setOpenOverride((prev) => ({ ...prev, [activeSectionKey]: true }));
+    }
+  }
+  const isOpen = (section: NavSection) =>
+    openOverride[section.key] ?? (section.key === activeSectionKey || Boolean(section.defaultOpen));
+  const toggle = (section: NavSection) =>
+    setOpenOverride((prev) => ({ ...prev, [section.key]: !isOpen(section) }));
+
+  const renderLink = (item: NavItem, sub: boolean) => {
+    const isActive = activeItem?.href === item.href;
+    return (
+      <Link
+        key={item.href}
+        href={item.href}
+        className={`sidebar-link ${sub ? "sidebar-sublink" : ""} ${isActive ? "active" : ""} ${collapsed ? "collapsed" : ""}`.trim().replace(/\s+/g, " ")}
+        onClick={() => setSidebarOpen(false)}
+        title={collapsed ? item.label : undefined}
+        aria-current={isActive ? "page" : undefined}
+        suppressHydrationWarning
+      >
+        {item.icon}
+        {!collapsed && <span>{item.label}</span>}
+      </Link>
+    );
+  };
 
   return (
     <div 
@@ -267,20 +466,48 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
 
         {/* Nav links */}
         <nav className="sidebar-nav">
-          {navItems.map((item) => {
-            const isActive = activeItem?.href === item.href;
+          {sections.map((section, i) => {
+            // Icon-only: every entry stays one click away, groups shown as a rule between them.
+            if (collapsed) {
+              return (
+                <div key={section.key} className="sidebar-plain-group">
+                  {i > 0 && section.title && <div className="sidebar-divider" role="separator" />}
+                  {section.items.map((item) => renderLink(item, false))}
+                </div>
+              );
+            }
+            if (!section.title || section.items.length === 1) {
+              return (
+                <div key={section.key} className="sidebar-plain-group">
+                  {section.items.map((item) => renderLink(item, false))}
+                </div>
+              );
+            }
+            const open = isOpen(section);
+            const holdsActive = section.key === activeSectionKey;
             return (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`sidebar-link ${isActive ? "active" : ""} ${collapsed ? "collapsed" : ""}`.trim().replace(/\s+/g, " ")}
-                onClick={() => setSidebarOpen(false)}
-                title={collapsed ? item.label : undefined}
-                suppressHydrationWarning
-              >
-                {item.icon}
-                {!collapsed && <span>{item.label}</span>}
-              </Link>
+              <div key={section.key} className="sidebar-group">
+                <button
+                  type="button"
+                  className={`sidebar-link sidebar-group-btn ${holdsActive && !open ? "has-active" : ""}`.trim()}
+                  aria-expanded={open}
+                  aria-controls={`nav-group-${section.key}`}
+                  onClick={() => toggle(section)}
+                >
+                  {section.icon}
+                  <span>{section.title}</span>
+                  <ChevronDown
+                    className="sidebar-group-chevron"
+                    style={{ transform: open ? "rotate(180deg)" : undefined }}
+                    aria-hidden
+                  />
+                </button>
+                {open && (
+                  <div id={`nav-group-${section.key}`} className="sidebar-group-items">
+                    {section.items.map((item) => renderLink(item, true))}
+                  </div>
+                )}
+              </div>
             );
           })}
         </nav>
@@ -383,8 +610,7 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
 
                   {/* Menu items */}
                   <div style={{ padding: "0.375rem" }}>
-                    {showPersonalLinks && (
-                      <>
+                    {profileHref && (
                     <Link
                       href={profileHref}
                       onClick={() => setProfileOpen(false)}
@@ -399,6 +625,8 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
                       <User size={15} style={{ flexShrink: 0 }} />
                       Profile
                     </Link>
+                    )}
+                    {ticketsHref && (
                     <Link
                       href={ticketsHref}
                       onClick={() => setProfileOpen(false)}
@@ -413,9 +641,10 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
                       <Ticket size={15} style={{ flexShrink: 0 }} />
                       My Tickets
                     </Link>
+                    )}
 
-                    <div style={{ borderTop: "1px solid var(--border-light)", margin: "0.375rem 0" }} />
-                      </>
+                    {(profileHref || ticketsHref) && (
+                      <div style={{ borderTop: "1px solid var(--border-light)", margin: "0.375rem 0" }} />
                     )}
 
                     <form action={logoutAction}>

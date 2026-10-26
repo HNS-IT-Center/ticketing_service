@@ -2,11 +2,17 @@
 
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import * as oidc from "openid-client";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { destinationForRoleName } from "@/lib/routes";
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { createSession, deleteSession } from "@/lib/session";
+import { decrypt, SESSION_COOKIE } from "@/lib/session-token";
+import { mayUsePassword } from "@/lib/auth/local-login";
+import { getSsoConfig, ssoEnv } from "@/lib/sso/config";
+import { revokeSsoSession } from "@/lib/sso/sso-session";
 
 // ─── Schemas ───────────────────────────────────────────────────────────────
 
@@ -71,6 +77,15 @@ export async function loginAction(
     return { message: "This account has been deactivated. Please contact an administrator.", rememberMe };
   }
 
+  // Once LOCAL_LOGIN=break-glass, staff sign in through HNS SSO; only the
+  // listed emergency administrators may still use a password.
+  if (!mayUsePassword({ email: user.email, role: user.role })) {
+    return {
+      message: "Login dengan password sudah dinonaktifkan. Gunakan tombol \"Masuk dengan SSO HNS\".",
+      rememberMe,
+    };
+  }
+
   try {
     await createSession(user.id, user.role, user.name, rememberMe);
   } catch (err) {
@@ -95,8 +110,43 @@ export async function loginAction(
 
 // ─── Logout ────────────────────────────────────────────────────────────────
 
+/**
+ * Sign out. A server action, so Next's own origin check stands in for CSRF
+ * protection.
+ *
+ * The local session goes first, whatever happens next. For an SSO session the
+ * server-side record is revoked too, and the browser is sent to SSO's end
+ * session endpoint with the id_token as hint, which ends the SSO session and
+ * returns to the registered post-logout URI. If SSO cannot be reached the user
+ * is still signed out of this app.
+ */
 export async function logoutAction(): Promise<void> {
+  const cookieStore = await cookies();
+  const payload = await decrypt(cookieStore.get(SESSION_COOKIE)?.value);
   await deleteSession();
   revalidatePath("/", "layout");
-  redirect("/login");
+
+  let endSessionUrl: string | null = null;
+  if (payload?.sso) {
+    const row = await db.ssoSession.findUnique({
+      where: { id: payload.sso },
+      select: { id_token: true },
+    });
+    await revokeSsoSession(payload.sso, "logout");
+    const env = ssoEnv();
+    if (row && env) {
+      try {
+        const config = await getSsoConfig();
+        endSessionUrl = oidc.buildEndSessionUrl(config, {
+          id_token_hint: row.id_token,
+          post_logout_redirect_uri: env.postLogoutRedirectUri,
+        }).href;
+      } catch (err) {
+        console.error("[SSO LOGOUT ERROR]", err);
+      }
+    }
+  }
+
+  // redirect() throws; kept outside the try above so it is never swallowed.
+  redirect(endSessionUrl ?? "/login");
 }

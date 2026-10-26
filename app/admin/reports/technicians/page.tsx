@@ -1,0 +1,263 @@
+import { Target, AlertTriangle } from "lucide-react";
+import { requireRole } from "@/lib/session";
+import { db } from "@/lib/db";
+import { formatRupiah, formatRupiahCompact } from "@/lib/charges";
+import { summarizeTargets } from "@/lib/reports/technicians";
+import { loadTargetData } from "@/lib/reports/technicians-data";
+import { resolveReportMonth } from "@/lib/reports/parts-data";
+import { monthLabel } from "@/lib/reports/parts";
+import { DEFAULT_SCOPE, defaultTarget, progress, targetFor } from "@/lib/reports/targets";
+import { loadTargetRows } from "@/lib/reports/targets-data";
+import ProgressBar from "@/components/targets/ProgressBar";
+import TargetEditor from "./TargetEditor";
+
+export const metadata = { title: "Target Teknisi — HNS IT Center" };
+
+export default async function TechnicianTargetPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string; store?: string }>;
+}) {
+  await requireRole("Administrator");
+  const params = await searchParams;
+  const month = resolveReportMonth(params.month);
+  const storeId = params.store || null;
+
+  const [stores, data, targetRows] = await Promise.all([
+    db.storeLocation.findMany({ where: { is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    loadTargetData(month, storeId),
+    loadTargetRows(month),
+  ]);
+  const summary = summarizeTargets(data?.technicians ?? [], data?.doneTickets ?? [], data?.lines ?? []);
+  const { totals } = summary;
+  const shopTarget = defaultTarget(targetRows, month);
+  const monthText = monthLabel(month);
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="flex items-center gap-2">
+          <Target size={22} /> Target Teknisi
+        </h1>
+        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          Pekerjaan tiket service yang <strong>pertama kali selesai (Done)</strong> di bulan ini, dikreditkan ke
+          teknisi tiketnya. Jasa dihitung dari Daftar Jasa: berapa kali dikerjakan, omzetnya (harga jual ×
+          jumlah), dan poinnya. Poin di sini ukuran target sendiri, tidak masuk Leaderboard.
+        </p>
+      </div>
+
+      <form className="card flex flex-wrap items-end gap-3">
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-semibold">Bulan</span>
+          <input type="month" name="month" defaultValue={month} className="form-input" />
+        </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-semibold">Toko</span>
+          <select name="store" defaultValue={storeId ?? ""} className="form-input">
+            <option value="">Semua toko</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button type="submit" className="btn btn-primary">
+          Tampilkan
+        </button>
+      </form>
+
+      <section className="card flex flex-wrap items-start justify-between gap-4">
+        <div className="flex flex-col gap-1">
+          <h3 style={{ margin: 0 }}>Target umum per teknisi — {monthText}</h3>
+          {shopTarget.source === "none" ? (
+            <p className="text-sm" style={{ color: "var(--text-muted)", margin: 0 }}>
+              Belum ada target. Atur di sini; teknisi juga bisa diberi target khusus di tabel di bawah.
+            </p>
+          ) : (
+            <p className="text-sm" style={{ margin: 0 }}>
+              {[
+                shopTarget.jobs !== null && `${shopTarget.jobs} jasa`,
+                shopTarget.revenue !== null && `omzet ${formatRupiah(shopTarget.revenue)}`,
+                shopTarget.points !== null && `${shopTarget.points} poin`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}{" "}
+              <span style={{ color: "var(--text-muted)" }}>— berlaku sejak {monthLabel(shopTarget.since!)}</span>
+            </p>
+          )}
+        </div>
+        <TargetEditor
+          scope={DEFAULT_SCOPE}
+          month={month}
+          monthText={monthText}
+          initial={shopTarget}
+          buttonLabel={shopTarget.source === "none" ? "Atur target umum" : "Ubah target umum"}
+        />
+      </section>
+
+      <div className="admin-stats-grid">
+        <Stat value={totals.tickets} label="Tiket selesai" />
+        <Stat value={totals.jobs} label="Jasa dikerjakan" />
+        <Stat value={formatRupiahCompact(totals.revenue)} label="Omzet jasa" />
+        <Stat value={totals.points} label="Poin jasa" />
+      </div>
+
+      {(totals.unpriced > 0 || totals.untyped > 0) && (
+        <div className="card flex flex-col gap-1.5 text-sm" style={{ borderColor: "#fde68a", background: "#fffbeb" }}>
+          {totals.unpriced > 0 && (
+            <p className="m-0 flex items-center gap-1.5" style={{ color: "#92400e" }}>
+              <AlertTriangle size={14} /> {totals.unpriced} baris jasa belum ada harga jual — omzet di bawah belum lengkap.
+            </p>
+          )}
+          {totals.untyped > 0 && (
+            <p className="m-0 flex items-center gap-1.5" style={{ color: "#92400e" }}>
+              <AlertTriangle size={14} /> {totals.untyped} jasa masih diketik bebas (sebelum Daftar Jasa) — terhitung sebagai
+              pekerjaan, tapi tidak per jenis dan tanpa poin.
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="card flex flex-col gap-3">
+        <h3 style={{ margin: 0 }}>Per teknisi</h3>
+        {summary.rows.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--text-muted)", margin: 0 }}>
+            Belum ada teknisi aktif{storeId ? " di toko ini" : ""}.
+          </p>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Teknisi</th>
+                  <th>Tiket</th>
+                  <th>Jasa</th>
+                  <th>Omzet jasa</th>
+                  <th>Poin</th>
+                  <th>Rincian jasa</th>
+                  <th>Target</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.rows.map((r) => {
+                  const target = targetFor(targetRows, r.technician.id, month);
+                  return (
+                    <tr key={r.technician.id}>
+                      <td style={{ fontWeight: 600 }}>{r.technician.name}</td>
+                      <td>{r.tickets}</td>
+                      <td>
+                        <div className="flex flex-col gap-1">
+                          <span>
+                            {r.jobs}
+                            {r.untyped > 0 && (
+                              <span className="text-xs" style={{ color: "#92400e" }}>
+                                {" "}
+                                (+{r.untyped} diketik)
+                              </span>
+                            )}
+                          </span>
+                          <ProgressBar progress={progress(r.jobs, target.jobs)} />
+                        </div>
+                      </td>
+                      <td>
+                        <div className="flex flex-col gap-1">
+                          <span>
+                            {formatRupiah(r.revenue)}
+                            {r.unpriced > 0 && (
+                              <span className="text-xs" style={{ color: "#92400e" }}>
+                                {" "}
+                                ({r.unpriced} tanpa harga)
+                              </span>
+                            )}
+                          </span>
+                          <ProgressBar progress={progress(r.revenue, target.revenue)} format={formatRupiahCompact} />
+                        </div>
+                      </td>
+                      <td>
+                        <div className="flex flex-col gap-1">
+                          <strong>{r.points}</strong>
+                          <ProgressBar progress={progress(r.points, target.points)} />
+                        </div>
+                      </td>
+                      <td>
+                        {r.byJob.length === 0 ? (
+                          <span style={{ color: "var(--text-muted)" }}>—</span>
+                        ) : (
+                          <details>
+                            <summary style={{ cursor: "pointer" }}>{r.byJob.length} jenis jasa</summary>
+                            <ul className="flex flex-col gap-0.5 text-sm" style={{ margin: "0.4rem 0 0", paddingLeft: "1.1rem" }}>
+                              {r.byJob.map((j) => (
+                                <li key={j.jobId}>
+                                  {j.name} <strong>× {j.count}</strong>
+                                </li>
+                              ))}
+                            </ul>
+                          </details>
+                        )}
+                      </td>
+                      <td>
+                        <div className="flex flex-col items-start gap-1.5">
+                          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                            {target.source === "custom" ? "Khusus" : target.source === "default" ? "Umum" : "Tanpa target"}
+                          </span>
+                          <TargetEditor
+                            scope={r.technician.id}
+                            month={month}
+                            monthText={monthText}
+                            initial={target}
+                            buttonLabel="Atur"
+                            canUseDefault={target.source === "custom"}
+                          />
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      <div className="card flex flex-col gap-3">
+        <h3 style={{ margin: 0 }}>Jasa terbanyak</h3>
+        {summary.jobs.length === 0 ? (
+          <p className="text-sm" style={{ color: "var(--text-muted)", margin: 0 }}>
+            Belum ada jasa dari Daftar Jasa pada periode ini.
+          </p>
+        ) : (
+          <div className="table-wrapper">
+            <table>
+              <thead>
+                <tr>
+                  <th>Jasa</th>
+                  <th>Dikerjakan</th>
+                </tr>
+              </thead>
+              <tbody>
+                {summary.jobs.map((j) => (
+                  <tr key={j.jobId}>
+                    <td>{j.name}</td>
+                    <td style={{ fontWeight: 600 }}>{j.count}×</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function Stat({ value, label }: { value: number | string; label: string }) {
+  return (
+    <div className="stat-card">
+      <div className="stat-card-body">
+        <div className="stat-card-value">{value}</div>
+        <div className="stat-card-label">{label}</div>
+      </div>
+    </div>
+  );
+}

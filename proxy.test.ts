@@ -13,7 +13,7 @@ vi.mock("server-only", () => ({}));
 const currentSession: { value: { userId: string; role: string; name: string } | null } = {
   value: null,
 };
-vi.mock("@/lib/session", () => ({
+vi.mock("@/lib/session-token", () => ({
   decrypt: async (cookie?: string) => (cookie ? currentSession.value : null),
 }));
 
@@ -74,6 +74,33 @@ describe("public routes", () => {
 
   it("passes API routes straight through", async () => {
     expect(await visit("/api/notifications", null)).toEqual({ kind: "next" });
+  });
+});
+
+describe("HNS SSO routes", () => {
+  // The back-channel call comes from SSO's server with no cookie at all; its
+  // JWT is the credential. Sending it to /login would silently drop every
+  // logout SSO announces.
+  it.each([
+    "/auth/sso/login",
+    "/auth/sso/callback",
+    "/auth/sso/backchannel-logout",
+    "/auth/sso/error",
+    "/auth/session-ended",
+  ])("%s is served with no session", async (path) => {
+    expect(await visit(path, null)).toEqual({ kind: "next" });
+  });
+
+  it("static images and the manifest are never redirected to /login", async () => {
+    for (const path of ["/logo-hns.jpg", "/android-chrome-192x192.png", "/site.webmanifest"]) {
+      // The matcher keeps the proxy off these entirely; prove the pattern does.
+      const { config } = await import("./proxy");
+      const pattern = new RegExp(`^${config.matcher[0]}$`);
+      expect(pattern.test(path)).toBe(false);
+    }
+    // ...while pages still go through it.
+    const { config } = await import("./proxy");
+    expect(new RegExp(`^${config.matcher[0]}$`).test("/admin/dashboard")).toBe(true);
   });
 });
 

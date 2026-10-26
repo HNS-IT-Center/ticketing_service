@@ -60,6 +60,9 @@ const { handoverToRmaAction, transitionRmaAction, submitHoldEvidenceAction } = a
 const { updateTicketStatusAction } = await import("./technician");
 
 const RUN = `rmatest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+// A typed claim vendor now joins the vendor list, so the names carry the run
+// prefix and are removed with everything else.
+const ASUS = `${RUN} Asus`;
 // Store codes are alphanumeric in production (e.g. "NGW") and feed straight into
 // rma_code, so the fixture uses the same shape rather than the RUN prefix.
 const STORE_CODE = `T${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
@@ -215,6 +218,7 @@ afterAll(async () => {
   // database had collected five of them by 2026-10-03. The prefix cannot
   // drift from the fixtures the way a hand-kept list does.
   await db.user.deleteMany({ where: { email: { startsWith: RUN } } });
+  await db.vendor.deleteMany({ where: { name: { startsWith: RUN } } });
   await db.storeLocation.deleteMany({ where: { id: storeId } });
   await db.$disconnect();
 });
@@ -812,7 +816,7 @@ describe("transitionRmaAction — the desk turns a claim down", () => {
     const { caseId } = await openCase();
     for (const [to, extra] of [
       ["verified", {}],
-      ["submitted_to_vendor", { vendor_name: "Asus Service Center", vendor_rma_number: "V-1" }],
+      ["submitted_to_vendor", { vendor_name: `${ASUS} Service Center`, vendor_rma_number: "V-1" }],
     ] as const) {
       const fd = new FormData();
       fd.append("rmaCaseId", caseId);
@@ -956,7 +960,7 @@ describe("KPI parity — both exits from a claim pay the same", () => {
         fd.append("rmaCaseId", rmaCase!.id);
         fd.append("toStatus", to);
         if (to === "submitted_to_vendor") {
-          fd.append("vendor_name", "Vendor Uji");
+          fd.append("vendor_name", `${RUN} Vendor Uji`);
           fd.append("vendor_rma_number", "V-001");
         }
         expect(await transitionRmaAction(fd), to).toMatchObject({ success: true });
@@ -1141,7 +1145,7 @@ describe("transitionRmaAction — rules", () => {
     session.role = "RMA";
 
     const result = await transitionRmaAction(
-      transitionForm(rmaCaseId, "submitted_to_vendor", { vendor_name: "Asus" })
+      transitionForm(rmaCaseId, "submitted_to_vendor", { vendor_name: ASUS })
     );
     expect(result).toMatchObject({ success: true });
   });
@@ -1150,7 +1154,7 @@ describe("transitionRmaAction — rules", () => {
     const { rmaCaseId } = await freshCase();
     await driveTo(rmaCaseId, [
       ["verified", {}],
-      ["submitted_to_vendor", { vendor_name: "Asus", vendor_rma_number: "V-1" }],
+      ["submitted_to_vendor", { vendor_name: ASUS, vendor_rma_number: "V-1" }],
       ["in_vendor_process", {}],
     ]);
     session.userId = rmaUserId;
@@ -1168,7 +1172,7 @@ describe("transitionRmaAction — rules", () => {
       ["on_hold", { hold_reason_code: "missing_purchase_invoice" }],
       ["pending_verification", {}],
       ["verified", {}],
-      ["submitted_to_vendor", { vendor_name: "Asus", vendor_rma_number: "V-77", shipping_tracking: "JNE-1" }],
+      ["submitted_to_vendor", { vendor_name: ASUS, vendor_rma_number: "V-77", shipping_tracking: "JNE-1" }],
     ]);
 
     const rmaCase = await db.rmaCase.findUniqueOrThrow({
@@ -1190,7 +1194,7 @@ describe("transitionRmaAction — rules", () => {
     // The category is cleared with the words — a stale "waiting for the
     // invoice" would otherwise keep asking the technician for one.
     expect(rmaCase.hold_reason_code).toBeNull();
-    expect(rmaCase.vendor_name).toBe("Asus");
+    expect(rmaCase.vendor_name).toBe(ASUS);
     expect(rmaCase.vendor_rma_number).toBe("V-77");
     expect(rmaCase.shipping_tracking).toBe("JNE-1");
     expect(rmaCase.submitted_at).toBeInstanceOf(Date);
@@ -1211,7 +1215,7 @@ describe("transitionRmaAction — releasing the ticket", () => {
 
     await driveTo(rmaCase.id, [
       ["verified", {}],
-      ["submitted_to_vendor", { vendor_name: "Asus", vendor_rma_number: "V-9" }],
+      ["submitted_to_vendor", { vendor_name: ASUS, vendor_rma_number: "V-9" }],
       ["in_vendor_process", {}],
       ["vendor_decided", { decision: "replaced", replacement_sn: "SN-NEW-9" }],
       ["unit_received", {}],
@@ -1582,7 +1586,7 @@ describe("alur klaim lengkap — dari serah terima sampai case ditutup", () => {
     await driveTo(caseId, [
       ["pending_verification", {}],
       ["verified", {}],
-      ["submitted_to_vendor", { vendor_name: "Asus Service Center" }],
+      ["submitted_to_vendor", { vendor_name: `${ASUS} Service Center` }],
       ["in_vendor_process", {}],
       ["vendor_decided", { decision: "replaced", replacement_sn: "SN-PENGGANTI-1" }],
       ["unit_received", {}],
@@ -1676,5 +1680,98 @@ describe("alur klaim lengkap — dari serah terima sampai case ditutup", () => {
     // documented it correctly. Not a point more, not a failure either.
     expect(paidAtEnd.total_points_completed).toBe(paidAfterHandover.total_points_completed);
     expect(paidAtEnd.failed_count, "bukan failed_count").toBe(paidAfterHandover.failed_count);
+  });
+});
+
+describe("transitionRmaAction — the claim vendor comes from the vendor list", () => {
+  async function verifiedCase() {
+    const ticket = await makeTicket();
+    await handoverToRmaAction(validForm(ticket.id));
+    const { id } = await db.rmaCase.findUniqueOrThrow({ where: { ticket_id: ticket.id }, select: { id: true } });
+    await driveTo(id, [["verified", {}]]);
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    return id;
+  }
+  const vendorRow = (name: string) =>
+    db.vendor.findMany({ where: { name }, select: { id: true, name: true, handles_claims: true, supplies_parts: true } });
+
+  it("picked from the list: the case points at the vendor and keeps its name", async () => {
+    const vendor = await db.vendor.create({ data: { name: `${RUN} Synnex`, handles_claims: true } });
+    const caseId = await verifiedCase();
+    // The name sent beside the id is ignored: the list's spelling wins.
+    const r = await transitionRmaAction(
+      transitionForm(caseId, "submitted_to_vendor", { vendor_id: vendor.id, vendor_name: "whatever" })
+    );
+    expect(r).toMatchObject({ success: true });
+    expect(await db.rmaCase.findUniqueOrThrow({ where: { id: caseId }, select: { vendor_id: true, vendor_name: true } })).toEqual({
+      vendor_id: vendor.id,
+      vendor_name: `${RUN} Synnex`,
+    });
+  });
+
+  it("a typed new name joins the list as a claim vendor", async () => {
+    const caseId = await verifiedCase();
+    const name = `${RUN} Datascrip`;
+    expect(await transitionRmaAction(transitionForm(caseId, "submitted_to_vendor", { vendor_name: `  ${name}  ` }))).toMatchObject({
+      success: true,
+    });
+    const rows = await vendorRow(name);
+    expect(rows).toEqual([expect.objectContaining({ name, handles_claims: true, supplies_parts: false })]);
+    expect((await db.rmaCase.findUniqueOrThrow({ where: { id: caseId } })).vendor_id).toBe(rows[0].id);
+  });
+
+  it("a typed name in another case lands on the vendor already listed, which learns it takes claims", async () => {
+    const supplier = await db.vendor.create({ data: { name: `${RUN} Metrodata`, supplies_parts: true } });
+    const caseId = await verifiedCase();
+    const typed = `${RUN} METRODATA`.toUpperCase();
+    expect(await transitionRmaAction(transitionForm(caseId, "submitted_to_vendor", { vendor_name: typed }))).toMatchObject({
+      success: true,
+    });
+    expect(await db.vendor.count({ where: { name: { startsWith: `${RUN} Metrodata` } } })).toBe(1);
+    expect(await db.vendor.findUniqueOrThrow({ where: { id: supplier.id } })).toMatchObject({
+      handles_claims: true,
+      supplies_parts: true,
+    });
+    expect(await db.rmaCase.findUniqueOrThrow({ where: { id: caseId }, select: { vendor_id: true, vendor_name: true } })).toEqual({
+      vendor_id: supplier.id,
+      vendor_name: `${RUN} Metrodata`,
+    });
+  });
+
+  it("refuses a deactivated vendor, typed or picked, and one that does not take claims", async () => {
+    const closed = await db.vendor.create({ data: { name: `${RUN} Tutup`, handles_claims: true, is_active: false } });
+    const partsOnly = await db.vendor.create({ data: { name: `${RUN} Hanya Part`, supplies_parts: true } });
+    const caseId = await verifiedCase();
+    for (const extra of [{ vendor_id: closed.id }, { vendor_name: `${RUN} tutup` }] as Record<string, string>[]) {
+      expect(await transitionRmaAction(transitionForm(caseId, "submitted_to_vendor", extra))).toMatchObject({
+        error: expect.stringContaining("nonaktif"),
+      });
+    }
+    expect(await transitionRmaAction(transitionForm(caseId, "submitted_to_vendor", { vendor_id: partsOnly.id }))).toMatchObject({
+      error: expect.stringContaining("klaim garansi"),
+    });
+    expect((await db.rmaCase.findUniqueOrThrow({ where: { id: caseId } })).status).toBe("verified");
+  });
+
+  it("adds nothing to the list when the move itself is refused", async () => {
+    const ticket = await makeTicket();
+    await handoverToRmaAction(validForm(ticket.id));
+    const { id } = await db.rmaCase.findUniqueOrThrow({ where: { ticket_id: ticket.id }, select: { id: true } });
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    // Straight from pending verification to the vendor is not a legal move.
+    const name = `${RUN} Tidak Jadi`;
+    expect(await transitionRmaAction(transitionForm(id, "submitted_to_vendor", { vendor_name: name }))).toMatchObject({
+      error: expect.any(String),
+    });
+    expect(await vendorRow(name)).toEqual([]);
+  });
+
+  it("still requires a vendor", async () => {
+    const caseId = await verifiedCase();
+    expect(await transitionRmaAction(transitionForm(caseId, "submitted_to_vendor", {}))).toMatchObject({
+      error: expect.stringContaining("Nama vendor"),
+    });
   });
 });

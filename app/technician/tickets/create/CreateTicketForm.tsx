@@ -9,6 +9,8 @@ import FileUpload from "@/components/ui/FileUpload";
 import TagInput from "@/components/ui/TagInput";
 import DraftBanner from "@/components/ui/DraftBanner";
 import { useDraft } from "@/lib/draft";
+import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
+import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
 
 type Props = {
   storeLocations: { id: string; name: string; code: string }[];
@@ -16,6 +18,8 @@ type Props = {
   sales: { id: string; name: string }[];
   upgrades: { id: string; name: string }[];
   defaultStoreLocationId?: string;
+  /** Whether the Accurate catalogue is reachable; without it the unit is typed. */
+  catalogEnabled?: boolean;
 };
 
 const STEPS = ["Intake & Assign", "Choose Device", "Service Details", "Confirm"];
@@ -28,7 +32,7 @@ const DEVICES = [
   { id: "Build PC", icon: Cpu, label: "Build PC" },
 ];
 
-export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades, defaultStoreLocationId }: Props) {
+export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades, defaultStoreLocationId, catalogEnabled = false }: Props) {
   const [step, setStep] = useState(1);
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -58,6 +62,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [ticketType, setTicketType] = useState("");
   const [deviceType, setDeviceType] = useState(""); // actual Prisma enum: Laptop_Office, PC_Office, etc.
   const [deviceName, setDeviceName] = useState(""); // "Device Type (Optional)" in user terms
+  // The unit as picked from the Accurate catalogue; null when typed.
+  const [deviceCatalog, setDeviceCatalog] = useState<PickedUnit | null>(null);
   const [deviceSn, setDeviceSn] = useState("");
   const [purchaseDate, setPurchaseDate] = useState("");
   const [conditions, setConditions] = useState<string[]>([]); // Garansi Aktif, Garansi Habis, Segel Utuh, Fisik Mulus
@@ -71,6 +77,10 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   // This avoids keeping File objects in state across step navigation (causes hydration issues)
   const [uploadedFileUrls, setUploadedFileUrls] = useState<string[]>([]);
   const [isUploadingFiles, setIsUploadingFiles] = useState(false);
+  // Warranty claim: photos of the unit as it arrived, kept apart from the invoice.
+  const [unitPhotos, setUnitPhotos] = useState<File[]>([]);
+  const [unitPhotoUrls, setUnitPhotoUrls] = useState<string[]>([]);
+  const [isUploadingUnitPhotos, setIsUploadingUnitPhotos] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
   const [pcComponents, setPcComponents] = useState<string[]>([]);
   
@@ -90,9 +100,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const draftData = {
     step, storeLocationId, technicianId, salesId, unitOwnership, stockOrigin,
     customerName, customerEmail, phone, gridDevice, ticketType, deviceType,
-    deviceName, deviceSn, purchaseDate, conditions, selectedAccessories,
+    deviceName, deviceCatalog, deviceSn, purchaseDate, conditions, selectedAccessories,
     customAccessory, notes, checkDiagnosisFee, cleaningPackage, selectedUpgrades,
-    uploadedFileUrls, pcComponents, pickupMethod, isOvernight,
+    uploadedFileUrls, unitPhotoUrls, pcComponents, pickupMethod, isOvernight,
   };
   const draft = useDraft("create-ticket", draftData);
 
@@ -103,11 +113,13 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     setSalesId(d.salesId); setUnitOwnership(d.unitOwnership); setStockOrigin(d.stockOrigin);
     setCustomerName(d.customerName); setCustomerEmail(d.customerEmail); setPhone(d.phone);
     setGridDevice(d.gridDevice); setTicketType(d.ticketType); setDeviceType(d.deviceType);
-    setDeviceName(d.deviceName); setDeviceSn(d.deviceSn); setPurchaseDate(d.purchaseDate);
+    setDeviceName(d.deviceName); setDeviceCatalog(d.deviceCatalog ?? null);
+    setDeviceSn(d.deviceSn); setPurchaseDate(d.purchaseDate);
     setConditions(d.conditions); setSelectedAccessories(d.selectedAccessories);
     setCustomAccessory(d.customAccessory); setNotes(d.notes);
     setCheckDiagnosisFee(d.checkDiagnosisFee); setCleaningPackage(d.cleaningPackage);
     setSelectedUpgrades(d.selectedUpgrades); setUploadedFileUrls(d.uploadedFileUrls);
+    setUnitPhotoUrls(d.unitPhotoUrls ?? []);
     setPcComponents(d.pcComponents); setPickupMethod(d.pickupMethod); setIsOvernight(d.isOvernight);
   };
 
@@ -181,6 +193,28 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const next = () => { if (validateStep()) setStep(s => s + 1); };
   const back = () => setStep(s => s - 1);
 
+  /** Same pre-upload as the invoice box, into its own list. */
+  const handleUnitPhotoUpload = async (picked: File[]) => {
+    setUnitPhotos(picked);
+    if (picked.length === 0) {
+      setUnitPhotoUrls([]);
+      return;
+    }
+    setIsUploadingUnitPhotos(true);
+    try {
+      const fd = new FormData();
+      picked.forEach((f) => fd.append("files", f));
+      const res = await fetch("/api/upload-temp", { method: "POST", body: fd });
+      const json = (await res.json()) as { uploaded?: { url: string }[]; error?: string };
+      if (json.error) toast.error(`Upload foto gagal: ${json.error}`);
+      else setUnitPhotoUrls((json.uploaded ?? []).map((u) => u.url));
+    } catch {
+      toast.error("Upload foto gagal. Coba lagi.");
+    } finally {
+      setIsUploadingUnitPhotos(false);
+    }
+  };
+
   const handleFileUpload = async (files: File[]) => {
     setFiles(files);
     if (files.length === 0) {
@@ -238,6 +272,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       
       fd.append("pickup_method", pickupMethod);
       if (deviceName) fd.append("device_name", deviceName);
+      if (deviceCatalog) fd.append("device_catalog_item_id", String(deviceCatalog.id));
       if (deviceSn) fd.append("device_sn", deviceSn);
       if (ticketType === "warranty_claim" && purchaseDate) fd.append("purchase_date", purchaseDate);
       if (pcComponents.length > 0) {
@@ -262,6 +297,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       }
       
       uploadedFileUrls.forEach(url => fd.append("preuploaded_urls", url));
+      if (ticketType === "warranty_claim") {
+        unitPhotoUrls.forEach((url) => fd.append("unit_photo_urls", url));
+      }
       fd.append("is_for_self", "0");
 
       try {
@@ -589,18 +627,14 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             {ticketType === "warranty_claim" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
-                  <div className="form-group">
-                    <label className="form-label">
-                      Nama Perangkat{" "}
-                      <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
-                    </label>
-                    <input
-                      className="form-input"
-                      value={deviceName}
-                      onChange={e => setDeviceName(e.target.value)}
-                      placeholder="Misal: ASUS ROG G15"
-                    />
-                  </div>
+                  <UnitField
+                    catalogEnabled={catalogEnabled}
+                    unit={deviceCatalog}
+                    onUnitChange={setDeviceCatalog}
+                    name={deviceName}
+                    onNameChange={setDeviceName}
+                    label="Nama Perangkat"
+                  />
 
                   <div className="form-group">
                     <label className="form-label">
@@ -666,6 +700,29 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
                   {restoredUploads}
                   {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">
+                    Foto Barang yang Diklaim{" "}
+                    <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional, maks {MAX_UNIT_PHOTOS})</span>
+                  </label>
+                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
+                    Foto kondisi unit saat diterima: tampak depan dan belakang, label serial number, dan
+                    bagian yang dikeluhkan. Menjadi catatan kondisi unit saat masuk, terpisah dari nota.
+                  </p>
+                  <FileUpload
+                    value={unitPhotos}
+                    onChange={handleUnitPhotoUpload}
+                    maxFiles={MAX_UNIT_PHOTOS}
+                    accept="image/*,image/heic,image/heif"
+                  />
+                  {unitPhotos.length === 0 && unitPhotoUrls.length > 0 && (
+                    <p className="form-help" style={{ marginTop: "0.5rem" }}>
+                      {unitPhotoUrls.length} foto dari draft sudah terunggah.
+                    </p>
+                  )}
+                  {isUploadingUnitPhotos && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Mengunggah foto…</p>}
                 </div>
               </div>
             )}
@@ -749,10 +806,14 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     {errors.deviceType && <span className="form-error"><AlertCircle size={12} />{errors.deviceType}</span>}
                   </div>
 
-                  <div className="form-group">
-                    <label className="form-label">Device Type (Nama) <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span></label>
-                    <input className="form-input" value={deviceName} onChange={e => setDeviceName(e.target.value)} placeholder="Misal: ASUS ROG G15" />
-                  </div>
+                  <UnitField
+                    catalogEnabled={catalogEnabled}
+                    unit={deviceCatalog}
+                    onUnitChange={setDeviceCatalog}
+                    name={deviceName}
+                    onNameChange={setDeviceName}
+                    label="Nama Unit"
+                  />
 
                   <div className="form-group">
                     <label className="form-label">SN <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span></label>
@@ -870,6 +931,12 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 ? <p><strong>Unit:</strong> Stok Toko — {stockOrigin}</p>
                 : <p><strong>Customer:</strong> {customerName} - +62{phone}</p>}
               <p><strong>Device:</strong> {gridDevice} ({deviceType || "N/A"})</p>
+              {deviceName && (
+                <p>
+                  <strong>Unit:</strong> {deviceName}
+                  {deviceCatalog && ` (SKU ${deviceCatalog.sku}, katalog Accurate)`}
+                </p>
+              )}
               <p><strong>Case:</strong> <span style={{ textTransform: "capitalize" }}>{ticketType.replace(/_/g, " ")}</span></p>
               {ticketType === "cleaning" && <p><strong>Package:</strong> {cleaningPackage.replace(/_/g, " ")}</p>}
               {ticketType === "service" && <p><strong>Problem:</strong> {notes}</p>}

@@ -4,6 +4,7 @@ import Link from "next/link";
 import Badge from "@/components/ui/Badge";
 import AvailableTickets from "./AvailableTickets";
 import RefreshButton from "./RefreshButton";
+import TargetCard from "./TargetCard";
 import { Ticket, CheckCircle, Trophy, PlusCircle } from "lucide-react";
 import { getUserTitles } from "@/lib/performance";
 import { ticketPartyName } from "@/lib/ticket-party";
@@ -154,6 +155,9 @@ export default async function TechnicianDashboard() {
           </div>
         ))}
       </div>
+
+      {/* This month against the target set in Target Teknisi. */}
+      <TargetCard technicianId={session.userId} />
 
       {/* My/Store Active Tickets */}
       <div className="card">

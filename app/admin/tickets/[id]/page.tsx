@@ -19,6 +19,8 @@ import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import DeleteTicketPanel from "./DeleteTicketPanel";
 import { servicePartLabel } from "@/lib/service-parts";
 import { ticketPartyName } from "@/lib/ticket-party";
+import ChargesPanel from "@/components/service/ChargesPanel";
+import { loadChargesPanel } from "@/lib/charges-server";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -127,6 +129,10 @@ export default async function AdminTicketDetailPage({
     notFound();
   }
 
+  // The bill — service tickets only. A cost the viewer may not see is removed
+  // on the server, before anything reaches the browser.
+  const chargesPanel = await loadChargesPanel(session.userId, ticket);
+
   const isPaused = ticket.time_logs.length > 0 && ticket.time_logs[ticket.time_logs.length - 1].event === "PAUSE";
   const workingTimeMs = calculateWorkingTimeMs(ticket.time_logs);
   const isDone = ["done", "completed", "ready_for_pickup", "waiting_pickup", "handed_to_courier", "delivered", "cancelled", "rejected"].includes(ticket.status);
@@ -194,6 +200,9 @@ export default async function AdminTicketDetailPage({
           {ticket.device_name && (
             <p style={{ fontSize: "0.8125rem", color: "var(--text-primary)", marginTop: "0.15rem", fontWeight: 500 }}>
               Device: {ticket.device_name}
+              {ticket.device_sku && (
+                <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> · SKU {ticket.device_sku}</span>
+              )}
             </p>
           )}
           {ticket.device_sn && (
@@ -364,6 +373,12 @@ export default async function AdminTicketDetailPage({
                       {p.item_name && (
                         <span style={{ fontSize: "0.875rem", fontWeight: 600 }}>{p.item_name}</span>
                       )}
+                      {p.quantity > 1 && (
+                        <span style={{ fontSize: "0.8125rem", fontWeight: 700 }}>× {p.quantity}</span>
+                      )}
+                      {p.sku && (
+                        <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>SKU {p.sku}</span>
+                      )}
                     </div>
                     {p.notes && (
                       <p
@@ -411,6 +426,8 @@ export default async function AdminTicketDetailPage({
               </ul>
             </div>
           )}
+
+          {chargesPanel && <ChargesPanel ticketId={ticket.id} {...chargesPanel} />}
 
           {/* Upgrade details */}
           {ticket.upgrade_details.length > 0 && (

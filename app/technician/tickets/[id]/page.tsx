@@ -14,19 +14,14 @@ import CustomerWhatsAppActions from "@/app/admin/tickets/[id]/CustomerWhatsAppAc
 import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
-import ExtraPointsPanel from "./ExtraPointsPanel";
 import ReplacedPartsPanel from "./ReplacedPartsPanel";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import HoldEvidencePanel from "./HoldEvidencePanel";
 import { holdReasonAsksTechnician } from "@/lib/rma/hold-reason";
 import { ticketPartyName } from "@/lib/ticket-party";
-
-function getTicketBasePoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
+import { isCatalogConfigured } from "@/lib/catalog/hns-data";
+import ChargesPanel from "@/components/service/ChargesPanel";
+import { loadChargesPanel } from "@/lib/charges-server";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -49,6 +44,7 @@ export default async function TechnicianTicketDetailPage({
       include: {
         user: { select: { name: true, email: true, phone_number: true, address: true } },
         technician: { select: { name: true } },
+        store_location: { select: { name: true } },
         messages: {
           orderBy: { created_at: "asc" },
           include: { sender: { select: { name: true, role: true } } },
@@ -126,6 +122,10 @@ export default async function TechnicianTicketDetailPage({
   const isAssigned = ticket.technician_id === session.userId;
   const isTeamLeader = currentUser?.is_team_leader || false;
 
+  // The bill — service tickets only. A cost the viewer may not see is removed
+  // on the server, before anything reaches the browser.
+  const chargesPanel = await loadChargesPanel(session.userId, ticket);
+
   const isPaused = ticket.time_logs.length > 0 && ticket.time_logs[ticket.time_logs.length - 1].event === "PAUSE";
   // isDone = no more technician actions possible (fully terminal statuses only)
   // ready_for_pickup and handed_to_courier still need proof upload actions, so NOT included here
@@ -201,6 +201,9 @@ export default async function TechnicianTicketDetailPage({
           {ticket.device_name && (
             <p style={{ fontSize: "0.8125rem", color: "var(--text-primary)", marginTop: "0.15rem", fontWeight: 500 }}>
               Device: {ticket.device_name}
+              {ticket.device_sku && (
+                <span style={{ color: "var(--text-muted)", fontWeight: 400 }}> · SKU {ticket.device_sku}</span>
+              )}
             </p>
           )}
           {ticket.device_sn && (
@@ -237,11 +240,14 @@ export default async function TechnicianTicketDetailPage({
                     }
                   : null
               }
-              attachments={regularAttachments.map((a) => ({
-                id: a.id,
-                file_url: a.file_url,
-                file_type: a.file_type,
-              }))}
+              // The handover's invoice picker: never offer a photo of the unit.
+              attachments={regularAttachments
+                .filter((a) => a.kind !== "unit_photo")
+                .map((a) => ({
+                  id: a.id,
+                  file_url: a.file_url,
+                  file_type: a.file_type,
+                }))}
             />
           )}
           {ticket.public_share_token && (
@@ -519,10 +525,14 @@ export default async function TechnicianTicketDetailPage({
             <ReplacedPartsPanel
               ticketId={ticket.id}
               canEdit={isAssigned}
+              catalogEnabled={isCatalogConfigured()}
+              storeName={ticket.store_location?.name ?? null}
               parts={ticket.replaced_parts.map((p) => ({
                 id: p.id,
                 part: p.part,
                 item_name: p.item_name,
+                sku: p.sku,
+                quantity: p.quantity,
                 notes: p.notes,
                 recorded_by_name: p.recorded_by.name,
                 created_at: formatDateTime(p.created_at),
@@ -531,14 +541,11 @@ export default async function TechnicianTicketDetailPage({
             />
           )}
 
-          {/* Extra Services / Bonus Points Panel (only for assigned technician) */}
-          {isAssigned && !isDone && (
-            <ExtraPointsPanel
-              ticketId={ticket.id}
-              initialServices={(ticket.extra_services || []) as string[]}
-              basePoints={getTicketBasePoints(ticket.ticket_type, ticket.device_type)}
-            />
-          )}
+          {chargesPanel && <ChargesPanel ticketId={ticket.id} {...chargesPanel} />}
+
+          {/* The "Extra Services" ticks were retired for the Daftar Jasa: labour is
+              now a job on the bill, counted per technician (W4-J). Old tickets
+              keep their ticks in extra_services; nothing writes new ones. */}
 
           {/* Assignment panel (Admin & Store Coordinator only) */}
           {isTeamLeader && (

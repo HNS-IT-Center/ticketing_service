@@ -19,6 +19,7 @@ interface User {
   shift: string | null;
   work_days: unknown;
   is_team_leader: boolean;
+  is_head_technician: boolean;
 }
 
 interface ActiveTicket {
@@ -45,6 +46,7 @@ export default function EditUserForm({ user }: { user: User }) {
   const [selectedTechId, setSelectedTechId] = useState<string>("");
   const [role, setRole] = useState(user.role);
   const [isTeamLeader, setIsTeamLeader] = useState(user.is_team_leader);
+  const [isHeadTechnician, setIsHeadTechnician] = useState(user.is_head_technician);
   const [workDays, setWorkDays] = useState<string[]>(
     Array.isArray(user.work_days) ? (user.work_days as string[]) : []
   );
@@ -58,6 +60,7 @@ export default function EditUserForm({ user }: { user: User }) {
   const save = (formData: FormData) => {
     formData.append("work_days", JSON.stringify(workDays));
     formData.append("is_team_leader", isTeamLeader ? "1" : "0");
+    formData.append("is_head_technician", isHeadTechnician ? "1" : "0");
     startTransition(async () => {
       const result = await updateUserAction(user.id, formData);
       if ((result as any)?.error) toast.error((result as any).error);
@@ -144,7 +147,7 @@ export default function EditUserForm({ user }: { user: User }) {
           <div className="form-group">
             <label className="form-label">Role</label>
             <select name="role" className="form-input" value={role} onChange={(e) => setRole(e.target.value)}>
-              {["Administrator", "Technician", "Sales", "RMA", "Customer"].map((r) => (
+              {["Pending", "Administrator", "Technician", "Sales", "RMA", "Customer"].map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
             </select>
@@ -205,6 +208,23 @@ export default function EditUserForm({ user }: { user: User }) {
                 <label htmlFor="is_team_leader" style={{ fontWeight: 600, cursor: "pointer", fontSize: "0.875rem" }}>Team Leader</label>
                 <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>
                   Team leaders are excluded from the leaderboard ranking but can still work on tickets.
+                </p>
+              </div>
+            </div>
+
+            {/* Head technician flag — what it unlocks is set in Pengaturan Akses */}
+            <div style={{ marginTop: "0.75rem", padding: "0.75rem 1rem", background: "var(--white)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
+              <input
+                type="checkbox"
+                id="is_head_technician"
+                checked={isHeadTechnician}
+                onChange={(e) => setIsHeadTechnician(e.target.checked)}
+                style={{ width: "1rem", height: "1rem", cursor: "pointer" }}
+              />
+              <div>
+                <label htmlFor="is_head_technician" style={{ fontWeight: 600, cursor: "pointer", fontSize: "0.875rem" }}>Head Teknisi</label>
+                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>
+                  Bersama koordinator toko, bisa melihat harga modal dan margin sesuai Pengaturan Akses.
                 </p>
               </div>
             </div>

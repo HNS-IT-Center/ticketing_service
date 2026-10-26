@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { getTicketPoints } from "@/lib/points";
-import { canonicalVendorName, cleanVendorName } from "@/lib/rma/vendor";
+import { cleanVendorName } from "@/lib/rma/vendor";
 import { RMA_HOLD_REASONS, holdReasonAsksTechnician, isRmaHoldReason } from "@/lib/rma/hold-reason";
 import {
   canActOnRma,
@@ -13,7 +13,7 @@ import {
   validateRmaTransition,
   type RmaTransitionInput,
 } from "@/lib/rma/state-machine";
-import type { RmaStatus, RmaDecision, UnitOwnership, RmaHoldReason } from "@prisma/client";
+import { Prisma, type RmaStatus, type RmaDecision, type UnitOwnership, type RmaHoldReason } from "@prisma/client";
 
 // ─── RMA code generator ────────────────────────────────────────────────────
 // RMA-{STORECODE}-{YYMM}-{0001}, sequence restarting each month per store.
@@ -436,6 +436,74 @@ export async function handoverToRmaAction(formData: FormData) {
   }
 }
 
+// ─── The vendor a claim goes to ────────────────────────────────────────────
+type ClaimVendor = { id: string; name: string; markClaims: boolean } | { id: null; name: string };
+
+/**
+ * Picked from the vendor list (`vendor_id`), or typed (`vendor_name`) when it
+ * is not there yet. A typed name is matched to a vendor already on the list
+ * the way the unique index compares names — case-insensitively, after
+ * collapsing whitespace — so "ASUS SERVICE CENTER" lands on "Asus Service
+ * Center" instead of becoming a second vendor. Nothing is written here: a new
+ * vendor is created only once the transition has passed its checks.
+ */
+async function resolveClaimVendor(formData: FormData): Promise<{ error: string } | ClaimVendor | null> {
+  const id = ((formData.get("vendor_id") as string | null) || "").trim();
+  if (id) {
+    const vendor = await db.vendor.findUnique({
+      where: { id },
+      select: { id: true, name: true, is_active: true, handles_claims: true },
+    });
+    if (!vendor || !vendor.is_active) return { error: "Vendor tidak ditemukan atau sudah nonaktif." };
+    if (!vendor.handles_claims) {
+      return {
+        error: `${vendor.name} tidak ditandai menerima klaim garansi. Centang perannya di Daftar Vendor bila keliru.`,
+      };
+    }
+    return { id: vendor.id, name: vendor.name, markClaims: false };
+  }
+
+  const typed = cleanVendorName((formData.get("vendor_name") as string | null) || "");
+  if (!typed) return null;
+  if (typed.length > 191) return { error: "Nama vendor terlalu panjang." };
+  const existing = await db.vendor.findUnique({
+    where: { name: typed },
+    select: { id: true, name: true, is_active: true, handles_claims: true },
+  });
+  if (!existing) return { id: null, name: typed };
+  if (!existing.is_active) {
+    return {
+      error: `Vendor "${existing.name}" sudah dinonaktifkan di Daftar Vendor. Aktifkan lagi di sana bila masih dipakai.`,
+    };
+  }
+  // The desk is saying this vendor takes claims; the list learns it.
+  return { id: existing.id, name: existing.name, markClaims: !existing.handles_claims };
+}
+
+/** Writes what resolveClaimVendor decided, and returns the vendor's id. */
+async function claimVendorId(vendor: ClaimVendor): Promise<string> {
+  if (vendor.id !== null) {
+    if (vendor.markClaims) {
+      await db.vendor.update({ where: { id: vendor.id }, data: { handles_claims: true } });
+    }
+    return vendor.id;
+  }
+  try {
+    const created = await db.vendor.create({
+      data: { name: vendor.name, handles_claims: true },
+      select: { id: true },
+    });
+    return created.id;
+  } catch (err) {
+    // Someone added the same name a moment ago: use theirs.
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+      const again = await db.vendor.findUnique({ where: { name: vendor.name }, select: { id: true } });
+      if (again) return again.id;
+    }
+    throw err;
+  }
+}
+
 // ─── Transition an existing RMA case ───────────────────────────────────────
 /**
  * The single entry point for every RMA state change. Rules live in
@@ -456,22 +524,10 @@ export async function transitionRmaAction(formData: FormData) {
     }
     if (!rmaCaseId || !toStatus) return { error: "RMA case not found" };
 
-    // Fold a newly typed vendor onto one already in use when they differ only
-    // by case or spacing, so per-vendor figures do not split. See lib/rma/vendor.ts.
-    const typedVendor = (formData.get("vendor_name") as string | null) || "";
-    let vendorName: string | null = null;
-    if (cleanVendorName(typedVendor)) {
-      const known = await db.rmaCase.findMany({
-        where: { vendor_name: { not: null } },
-        distinct: ["vendor_name"],
-        select: { vendor_name: true },
-      });
-      vendorName =
-        canonicalVendorName(
-          typedVendor,
-          known.map((k) => k.vendor_name!).filter(Boolean)
-        ) || null;
-    }
+    // Only the move to the vendor records one, so only that move reads it.
+    const claimVendor = toStatus === "submitted_to_vendor" ? await resolveClaimVendor(formData) : null;
+    if (claimVendor && "error" in claimVendor) return { error: claimVendor.error };
+    const vendorName = claimVendor?.name ?? null;
 
     const rawHoldCode = ((formData.get("hold_reason_code") as string | null) || "").trim();
     if (rawHoldCode && !isRmaHoldReason(rawHoldCode)) {
@@ -580,6 +636,8 @@ export async function transitionRmaAction(formData: FormData) {
     }
 
     if (toStatus === "submitted_to_vendor") {
+      // validateRmaTransition has required the vendor by now.
+      if (claimVendor) data.vendor_id = await claimVendorId(claimVendor);
       data.vendor_name = input.vendor_name;
       data.vendor_rma_number = input.vendor_rma_number;
       data.customer_ticket_number = input.customer_ticket_number;

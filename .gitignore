@@ -45,3 +45,7 @@ next-env.d.ts
 
 # locally-stored uploads (STORAGE_DRIVER=local)
 /public/uploads
+
+# SSO account exports hold password hashes — never commit them
+sso-users-export-*.csv
+*sso*export*.csv

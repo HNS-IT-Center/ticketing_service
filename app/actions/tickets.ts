@@ -12,8 +12,13 @@ import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { sendTicketStatusEmail } from "@/lib/email";
 import { ticketsListHrefForRoleName } from "@/lib/routes";
+import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
+import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
+import type { CatalogItem } from "@/lib/catalog/items";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
+
+const IMAGE_URL = /\.(jpe?g|png|gif|webp|heic|heif)(\?.*)?$/i;
 
 
 // ─── Ticket Point Calculator ───────────────────────────────────────────────
@@ -100,6 +105,45 @@ export async function createTicketAction(formData: FormData) {
     if (purchaseDateRaw && Number.isNaN(new Date(purchaseDateRaw).getTime())) {
       return { error: "Tanggal pembelian tidak valid." };
     }
+  }
+
+  // Photos of the claimed unit as it arrived, taken at the counter. Kept apart
+  // from the invoice (AttachmentKind) so the RMA desk sees which is which and
+  // the handover's invoice picker never offers a photo of the laptop.
+  const unitPhotoUrls = (formData.getAll("unit_photo_urls") as string[]).filter(Boolean);
+  if (unitPhotoUrls.length > 0) {
+    if (ticket_type !== "warranty_claim") {
+      return { error: "Foto barang klaim hanya untuk tiket klaim garansi." };
+    }
+    if (unitPhotoUrls.length > MAX_UNIT_PHOTOS) {
+      return { error: `Maksimal ${MAX_UNIT_PHOTOS} foto barang klaim.` };
+    }
+    if (unitPhotoUrls.some((u) => !IMAGE_URL.test(u))) {
+      return { error: "Foto barang klaim harus berupa gambar." };
+    }
+  }
+
+  // The unit picked from the catalogue at intake: re-read there by id, so the
+  // name and SKU on record are the catalogue's and not whatever the browser
+  // sent — the rule addReplacedPartAction follows for parts. Read only: this
+  // app never writes to Accurate.
+  const deviceCatalogRaw = ((formData.get("device_catalog_item_id") as string | null) || "").trim();
+  let deviceCatalog: CatalogItem | null = null;
+  if (deviceCatalogRaw) {
+    const catalogId = Number(deviceCatalogRaw);
+    if (!Number.isInteger(catalogId) || catalogId <= 0) {
+      return { error: "Unit dari katalog tidak valid." };
+    }
+    try {
+      deviceCatalog = await getCatalogItem(catalogId);
+    } catch (err) {
+      if (!(err instanceof CatalogUnavailableError)) throw err;
+      console.error("[CATALOG LOOKUP]", err.message);
+      return {
+        error: "Katalog barang sedang tidak dapat dihubungi. Hapus pilihan katalog dan ketik nama unit secara manual.",
+      };
+    }
+    if (!deviceCatalog) return { error: "Unit tidak ditemukan di katalog." };
   }
 
   // Generate ticket code
@@ -193,7 +237,10 @@ export async function createTicketAction(formData: FormData) {
       service_category: service_category as any,
       accessories,
       device_condition,
-      device_name,
+      device_name: deviceCatalog?.name ?? device_name,
+      device_catalog_item_id: deviceCatalog?.id ?? null,
+      device_sku: deviceCatalog?.sku ?? null,
+      device_catalog_category: deviceCatalog?.category ?? null,
       device_sn,
       warranty_status,
       is_overnight,
@@ -228,17 +275,24 @@ export async function createTicketAction(formData: FormData) {
 
   const followUps: Promise<unknown>[] = [];
 
-  // Write attachment records
-  if (uploadedFiles.length > 0) {
-    followUps.push(
-      db.ticketAttachment.createMany({
-        data: uploadedFiles.map(f => ({
-          ticket_id: ticket.id,
-          file_url: f.publicUrl,
-          file_type: f.fileType,
-        }))
-      })
-    );
+  // Write attachment records. On a claim, the intake upload box is the
+  // purchase invoice, and is marked as such.
+  const attachmentRows = [
+    ...uploadedFiles.map((f) => ({
+      ticket_id: ticket.id,
+      file_url: f.publicUrl,
+      file_type: f.fileType,
+      kind: ticket_type === "warranty_claim" ? ("invoice" as const) : null,
+    })),
+    ...unitPhotoUrls.map((url) => ({
+      ticket_id: ticket.id,
+      file_url: url,
+      file_type: "image" as const,
+      kind: "unit_photo" as const,
+    })),
+  ];
+  if (attachmentRows.length > 0) {
+    followUps.push(db.ticketAttachment.createMany({ data: attachmentRows }));
   }
 
   followUps.push(
@@ -488,39 +542,4 @@ export async function updatePickupMethodAction(ticketId: string, pickupMethod: "
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath(`/technician/tickets/${ticketId}`);
   return { success: true };
-}
-
-// ─── Toggle Extra Service (Bonus Points) ──────────────────────────────────
-// Only the assigned technician can toggle extra services.
-// Each extra service adds +3 points to the ticket's effective point value.
-export async function toggleExtraServiceAction(ticketId: string, serviceName: string, isAdding: boolean) {
-  const session = await requireSession();
-  if (session.role !== "Technician" && session.role !== "Administrator") {
-    return { error: "Unauthorized" };
-  }
-
-  const ticket = await db.ticket.findUnique({
-    where: { id: ticketId },
-    select: { technician_id: true, extra_services: true },
-  });
-
-  if (!ticket) return { error: "Ticket not found" };
-  // Only assigned technician or admin can modify
-  if (session.role === "Technician" && ticket.technician_id !== session.userId) {
-    return { error: "You are not assigned to this ticket" };
-  }
-
-  const current = ticket.extra_services as string[];
-  const updated = isAdding
-    ? [...new Set([...current, serviceName])]
-    : current.filter((s) => s !== serviceName);
-
-  await db.ticket.update({
-    where: { id: ticketId },
-    data: { extra_services: updated },
-  });
-
-  revalidatePath(`/technician/tickets/${ticketId}`);
-  revalidatePath(`/admin/tickets/${ticketId}`);
-  return { success: true, extra_services: updated };
 }

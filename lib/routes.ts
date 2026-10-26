@@ -46,6 +46,13 @@ export function destinationForRole(role: Role): RoleDestination {
         allowed: false,
         reason: "Customer login is disabled. Please use your ticket link.",
       };
+    case "Pending":
+      // Signed in through SSO, not yet given a role here. /unauthorized tells
+      // them so and lets them sign out.
+      return {
+        allowed: false,
+        reason: "Akun Anda sudah terdaftar dan sedang menunggu penetapan role oleh admin.",
+      };
     default: {
       const _exhaustive: never = role;
       return { allowed: false, reason: `Unknown role: ${String(_exhaustive)}` };
@@ -53,7 +60,7 @@ export function destinationForRole(role: Role): RoleDestination {
   }
 }
 
-const ROLE_NAMES = ["Administrator", "Technician", "Sales", "RMA", "Customer"] as const;
+const ROLE_NAMES = ["Administrator", "Technician", "Sales", "RMA", "Customer", "Pending"] as const;
 
 export function isRole(value: string): value is Role {
   return (ROLE_NAMES as readonly string[]).includes(value);

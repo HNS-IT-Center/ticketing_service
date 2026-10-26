@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { decrypt } from "@/lib/session";
+import { decrypt } from "@/lib/session-token";
 import { canEnter, dashboardPathForRoleName, isPublicTicketPath } from "@/lib/routes";
 
 function getBaseUrl(request: NextRequest) {
@@ -24,6 +24,13 @@ export async function proxy(request: NextRequest) {
   // `PUBLIC_ROUTES` constant that was meant to drive this was declared and
   // never read.
   if (isPublicTicketPath(pathname) || pathname.startsWith("/unauthorized")) {
+    return NextResponse.next();
+  }
+
+  // HNS SSO: sign-in, callback, the error page, and the back-channel logout
+  // SSO's server calls with no cookie at all — its JWT is what authenticates
+  // it. Plus the route that clears a session which no longer holds.
+  if (pathname.startsWith("/auth/sso/") || pathname === "/auth/session-ended") {
     return NextResponse.next();
   }
 

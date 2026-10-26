@@ -552,13 +552,46 @@ tbody td {
   .sidebar.collapsed .sidebar-link span { display: none; }
 }
 
-.sidebar-section-label {
-  font-size: 0.6875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: rgba(255,255,255,0.4);
-  padding: 0.5rem 0.875rem 0.25rem;
-  font-weight: 600;
+/* Sidebar groups — a heading that folds its entries open and closed. */
+.sidebar-plain-group,
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+.sidebar-group-btn {
+  width: 100%;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+}
+.sidebar-group-btn > span { flex: 1; }
+.sidebar-group-btn.has-active { color: var(--white); background: rgba(255,255,255,0.08); }
+.sidebar-group-btn .sidebar-group-chevron {
+  width: 0.9rem;
+  height: 0.9rem;
+  opacity: 0.7;
+  transition: transform 0.2s ease;
+}
+.sidebar-group-items {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  margin: 0 0 0.375rem 1.35rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid rgba(255,255,255,0.15);
+}
+.sidebar-link.sidebar-sublink {
+  font-size: 0.875rem;
+  padding: 0.5rem 0.75rem;
+}
+.sidebar-link.sidebar-sublink svg { width: 1rem; height: 1rem; }
+.sidebar-divider {
+  height: 1px;
+  background: rgba(255,255,255,0.12);
+  margin: 0.375rem 0.5rem;
 }
 
 .sidebar-collapse-btn {

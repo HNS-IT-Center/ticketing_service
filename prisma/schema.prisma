@@ -19,6 +19,10 @@ enum Role {
   Sales
   Customer
   RMA          // Handles warranty claims sent to vendors
+  // Signed in through HNS SSO but not yet given a role here. SSO decides who
+  // may enter the app at all; what they may do inside it is this app's call,
+  // and every other role opens customer data, so none is a safe default.
+  Pending
 }
 
 enum Shift {
@@ -205,11 +209,19 @@ model User {
   // Team leader flag — excluded from leaderboard display but can still work on tickets
   is_team_leader Boolean @default(false)
 
+  // Head technician: a senior technician who, with store coordinators, may see
+  // purchase costs and margins. What each group may do lives in AccessRule.
+  is_head_technician Boolean @default(false)
+
   // Achievement title inventory — stores which title_key is currently equipped
   active_title String?
 
   // Soft-delete flag — false = deactivated (cannot log in, hidden from UI)
   is_active    Boolean  @default(true)
+
+  // HNS SSO subject (`sub` claim): the stable identity this row is tied to.
+  // Matched on every SSO login; email is used only to make the first link.
+  sso_sub      String?  @unique
 
   created_at DateTime @default(now())
   updated_at DateTime @updatedAt
@@ -234,6 +246,9 @@ model User {
   rma_cases_handled  RmaCase[]             @relation("RmaHandler")
   tickets_deleted    DeletedTicketLog[]    @relation("TicketDeletedBy")
   parts_recorded     TicketReplacedPart[]  @relation("PartRecordedBy")
+  charges_created    TicketCharge[]        @relation("ChargeCreatedBy")
+  charges_updated    TicketCharge[]        @relation("ChargeUpdatedBy")
+  sso_sessions       SsoSession[]
   rma_events         RmaEvent[]
 
   @@index([email])
@@ -279,8 +294,16 @@ model Ticket {
   // CS intake fields
   accessories      String? @db.Text // accessories included with device
   device_condition String? @db.Text // customer-described physical condition
-  device_name      String?        // Optional device name
+  device_name      String? @db.Text // Typed, or the catalogue name; long either way
   device_sn        String?        // Optional device serial number
+
+  // The unit as it stands in the company catalogue (Accurate, through
+  // data.hnsitcenter.id) when it was picked there at intake rather than typed.
+  // A snapshot, like a replaced part's: device_name then holds the catalogue's
+  // name, and a report can count units by SKU instead of by spelling.
+  device_catalog_item_id  Int?
+  device_sku              String?
+  device_catalog_category String?
   warranty_status  String?        // 'active' or 'inactive'
   is_overnight     Boolean  @default(false)  // true = multi-day service
   is_overnight_check Boolean @default(false)
@@ -315,6 +338,7 @@ model Ticket {
   notifications    Notification[]
   service_detail   TicketServiceDetail?
   replaced_parts   TicketReplacedPart[]
+  charges          TicketCharge[]
   warranty_detail  TicketWarrantyDetail?
   cleaning_detail  TicketCleaningDetail?
   upgrade_details  TicketUpgradeDetail[]
@@ -327,6 +351,7 @@ model Ticket {
   @@index([technician_id])
   @@index([store_location_id])
   @@index([public_share_token])
+  @@index([device_sku])
 }
 
 model TicketAssignmentRequest {
@@ -418,12 +443,22 @@ model TicketPcBuildComponent {
 // ATTACHMENTS & MESSAGES
 // ─────────────────────────────────────────────
 
+// What an attachment is, where the app needs to tell: the invoice the RMA desk
+// verifies, and the photos of a claimed unit taken when it was received. Null
+// for everything else (work proof, handover photos, PC build layouts), which
+// is told apart by its file name as before.
+enum AttachmentKind {
+  invoice
+  unit_photo
+}
+
 model TicketAttachment {
   id         String   @id @default(cuid())
   ticket_id  String
   ticket     Ticket   @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   file_url   String @db.Text
   file_type  FileType
+  kind       AttachmentKind?
   created_at DateTime @default(now())
 }
 
@@ -639,6 +674,11 @@ model RmaCase {
 
   // ── Vendor ──
   vendor_name       String?
+  // The vendor picked from the list. `vendor_name` keeps the name as it was
+  // when the claim went out, so history and the dashboard read the same
+  // after a vendor is renamed; this is what ties cases of one vendor together.
+  vendor_id         String?
+  vendor            Vendor?   @relation(fields: [vendor_id], references: [id], onDelete: SetNull)
   // The claim number raised with the supplier. Only a store-stock unit has one:
   // the shop claims against its own supplier. Labelled "Nomor Klaim Pemasok".
   vendor_rma_number String?   // internal only — never shown on the public page
@@ -664,6 +704,7 @@ model RmaCase {
 
   @@index([status])
   @@index([handler_id])
+  @@index([vendor_id])
 }
 
 // Append-only audit trail of every RMA state change.
@@ -770,6 +811,19 @@ model TicketReplacedPart {
   /** Free note: why it was replaced, what the old one did. */
   notes String? @db.Text
 
+  /**
+   * The item as it stands in the company catalogue (Accurate, read through
+   * data.hnsitcenter.id), when the technician picked it from the search rather
+   * than typing it. Copied at the time of recording — a snapshot, not a live
+   * link — so a report still reads the same after the catalogue changes. This
+   * app never writes back to Accurate: purchasing and stock live there; this is
+   * the technicians' own record of what they fitted.
+   */
+  catalog_item_id  Int?
+  sku              String?
+  catalog_category String?
+  quantity         Int     @default(1)
+
   recorded_by_id String
   recorded_by    User   @relation("PartRecordedBy", fields: [recorded_by_id], references: [id])
 
@@ -781,9 +835,14 @@ model TicketReplacedPart {
    */
   photos TicketReplacedPartPhoto[]
 
+  /** The line that prices this part in the ticket's Rincian Biaya. */
+  charge TicketCharge?
+
   created_at DateTime @default(now())
 
   @@index([ticket_id])
+  @@index([sku])
+  @@index([created_at])
 }
 
 /** One photo of a replaced component. Dies with the part it documents. */
@@ -797,4 +856,208 @@ model TicketReplacedPartPhoto {
   created_at DateTime @default(now())
 
   @@index([part_id])
+}
+
+// One row per local sign-in through HNS SSO.
+//
+// The app's own session is a signed cookie with nothing behind it, so on its own
+// it cannot be ended from outside. SSO back-channel logout names an SSO session
+// (`sid`), and this row is how that name reaches the cookies it issued: the
+// cookie carries this row's id, and every request checks the row has not been
+// revoked. Tokens stay here, on the server, never in the browser.
+model SsoSession {
+  id      String  @id @default(cuid())
+  sid     String? // SSO session id from the id_token; changes on every SSO login
+  sub     String
+  user_id String
+  user    User    @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  id_token          String    @db.Text
+  access_token      String    @db.Text
+  refresh_token     String?   @db.Text
+  access_expires_at DateTime
+
+  // Refresh tokens rotate and a reused one revokes the whole chain, so only one
+  // request may refresh at a time. Taken with a conditional update.
+  refresh_locked_until DateTime?
+
+  revoked_at     DateTime?
+  revoked_reason String?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([sid])
+  @@index([user_id])
+}
+
+// Who may see and change what, beyond the defaults in lib/access.ts.
+// One row per (capability, audience) the owner has changed from its default;
+// no row means the default applies. Capabilities and audiences are the string
+// keys listed in lib/access.ts, so adding one needs no migration.
+model AccessRule {
+  id            String   @id @default(cuid())
+  capability    String
+  audience      String
+  allowed       Boolean
+  updated_by_id String?
+  updated_at    DateTime @updatedAt
+
+  @@unique([capability, audience])
+}
+
+// Suppliers and outside repairers. Picked from a list rather than typed, so
+// one vendor is one row — the free-text vendor_name on RmaCase splintered into
+// several spellings of the same company.
+model Vendor {
+  id   String @id @default(cuid())
+  name String @unique // the collation is case-insensitive: "ACME" == "Acme"
+
+  // What the shop uses this vendor for. Flags rather than one choice, because
+  // one company is often several: a distributor that sells parts also takes the
+  // warranty claims for its brand. At least one is set; the action refuses none.
+  supplies_parts Boolean @default(false) // sells the parts fitted during a service
+  repairs        Boolean @default(false) // repairs what the shop does not, e.g. board / IC work
+  handles_claims Boolean @default(false) // takes warranty claims from the RMA desk
+
+  contact    String?  @db.Text
+  notes      String?  @db.Text
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  charges   TicketCharge[]
+  rma_cases RmaCase[]
+}
+
+/// What a line of a service bill is for.
+enum ChargeKind {
+  part             // a component fitted; created together with the TicketReplacedPart it prices
+  external_service // work sent out to a vendor, e.g. IC or board repair
+  service_fee      // the shop's own labour
+  other
+}
+
+/// How external work came back from the vendor.
+enum ExternalResult {
+  repaired
+  not_repaired
+}
+
+// One line of a service ticket's bill — "Rincian Biaya".
+//
+// The shop holds no stock of most parts: an LCD, a battery or a keyboard is
+// bought from a supplier for the job, and board work goes to another vendor.
+// So every line can carry two prices: what the shop paid (`unit_cost`, "harga
+// modal") and what the customer is charged (`unit_price`, "harga jual"). Who
+// may see or set each is the owner's call, in Admin -> Pengaturan Akses
+// (`lib/access.ts`); the page never sends a cost to a browser that may not see
+// it, and the action never writes one the caller may not set.
+//
+// Rupiah, whole numbers. Null means "not filled in yet", which is different
+// from 0 — a warranty swap can be charged at 0 on purpose, and the bill says
+// so rather than looking unfinished.
+//
+// A part line is created with the TicketReplacedPart it prices and dies with
+// it, so a part cannot be removed while its price lingers on the bill.
+model TicketCharge {
+  id        String @id @default(cuid())
+  ticket_id String
+  ticket    Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+
+  kind        ChargeKind
+  description String     @db.Text
+  quantity    Int        @default(1)
+
+  replaced_part_id String?             @unique
+  replaced_part    TicketReplacedPart? @relation(fields: [replaced_part_id], references: [id], onDelete: Cascade)
+
+  // Picked from the vendor list, never typed: free-text vendor names are what
+  // split one supplier into three in the RMA dashboard.
+  vendor_id String?
+  vendor    Vendor? @relation(fields: [vendor_id], references: [id], onDelete: SetNull)
+
+  // The job a "Jasa service" line is for, picked from the Daftar Jasa. What a
+  // technician's month is counted by; `description` keeps the name it had.
+  service_job_id String?
+  service_job    ServiceJob? @relation(fields: [service_job_id], references: [id], onDelete: SetNull)
+  // The job's points when it was put on the bill. Kept on the line, like the
+  // price, so re-weighting a job in the Daftar Jasa does not rewrite a month
+  // of targets people have already seen.
+  job_points     Int?
+
+  unit_cost  Int?
+  unit_price Int?
+
+  // External work only: the trip to the vendor and back. `sent_at` set and
+  // `returned_at` empty means the work is at the vendor now.
+  sent_at         DateTime?
+  returned_at     DateTime?
+  external_result ExternalResult?
+  external_note   String?         @db.Text
+
+  created_by_id String
+  created_by    User    @relation("ChargeCreatedBy", fields: [created_by_id], references: [id])
+  updated_by_id String?
+  updated_by    User?   @relation("ChargeUpdatedBy", fields: [updated_by_id], references: [id], onDelete: SetNull)
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  @@index([ticket_id])
+  @@index([vendor_id])
+  @@index([service_job_id])
+  @@index([created_at])
+}
+
+// A job the shop does — "Daftar Jasa". Picked from this list on a service bill
+// instead of typed, so a technician's month can be counted per job, its takings
+// added up and its points weighed against a target.
+//
+// The points are the target's own measure. They are not credited to the
+// leaderboard or TechnicianPerformance, whose rules live in lib/kpi.ts and
+// lib/points.ts and already disagree among themselves (BL3).
+model ServiceJob {
+  id            String   @id @default(cuid())
+  name          String   @unique // case-insensitive collation: one job, one row
+  default_price Int?     // Rupiah, put on the bill; whoever may set prices can change it there
+  points        Int      @default(0)
+  is_active     Boolean  @default(true)
+
+  // The Accurate service item the cashier enters for this job, e.g. 100688
+  // "JASA SERVICE". Printed on the invoice beside the line, so the cashier
+  // types a code instead of searching Accurate. A snapshot of the catalogue,
+  // like a replaced part's; nothing is ever written to Accurate.
+  accurate_item_id Int?
+  accurate_sku     String?
+  accurate_name    String? @db.Text
+
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  charges TicketCharge[]
+}
+
+// A monthly target for the Target Teknisi report. `scope` is "default" — every
+// technician — or one technician's user id, which overrides the default.
+//
+// A row holds from its month until a later row of the same scope, so a target
+// changed in November leaves October judged against October's target: a month
+// already shown is never rewritten. A technician's row can also send them back
+// to the default (`use_default`). A null measure means "no target on this one".
+// No foreign key: "default" is not a user, and an old target row for someone
+// since removed harms nothing.
+model TechnicianTarget {
+  id              String   @id @default(cuid())
+  scope           String
+  effective_month String // "YYYY-MM", WIB
+  jobs            Int?
+  revenue         Int? // Rupiah of job takings
+  points          Int?
+  use_default     Boolean  @default(false)
+  updated_by_id   String?
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+
+  @@unique([scope, effective_month])
 }

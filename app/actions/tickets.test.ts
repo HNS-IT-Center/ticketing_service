@@ -31,6 +31,21 @@ vi.mock("@/lib/email", () => ({
   EMAIL_MILESTONES: [],
 }));
 
+// The catalogue API (data.hnsitcenter.id) is replaced; everything else is real.
+const catalog = vi.hoisted(() => ({ items: new Map<number, unknown>(), down: false }));
+vi.mock("@/lib/catalog/hns-data", () => {
+  class CatalogUnavailableError extends Error {}
+  return {
+    CatalogUnavailableError,
+    isCatalogConfigured: () => true,
+    searchCatalog: async () => [],
+    getCatalogItem: async (id: number) => {
+      if (catalog.down) throw new CatalogUnavailableError("catalog answered 502");
+      return catalog.items.get(id) ?? null;
+    },
+  };
+});
+
 const session = { userId: "", role: "Technician", name: "Test Technician" };
 vi.mock("@/lib/session", () => ({
   requireSession: async () => session,
@@ -242,6 +257,65 @@ describe("createTicketAction — unit ownership at intake", () => {
   });
 });
 
+describe("createTicketAction — photos of the claimed unit", () => {
+  const R2 = "https://r2.test/temp/u1";
+  function withFiles(form: FormData, field: string, urls: string[]) {
+    for (const u of urls) form.append(field, u);
+    return form;
+  }
+
+  it("stores the intake upload as the invoice and the unit photos apart", async () => {
+    const form = claimForm({ device_sn: "SN-PHOTOS-1" });
+    withFiles(form, "preuploaded_urls", [`${R2}/nota.jpg`]);
+    withFiles(form, "unit_photo_urls", [`${R2}/depan.jpg`, `${R2}/label-sn.png`]);
+    expect(await createTicketAction(form)).toMatchObject({ success: true });
+
+    const ticket = await db.ticket.findFirst({
+      where: { store_location_id: storeId, device_sn: "SN-PHOTOS-1" },
+      select: { attachments: { select: { file_url: true, file_type: true, kind: true }, orderBy: { file_url: "asc" } } },
+    });
+    expect(ticket?.attachments).toEqual([
+      { file_url: `${R2}/depan.jpg`, file_type: "image", kind: "unit_photo" },
+      { file_url: `${R2}/label-sn.png`, file_type: "image", kind: "unit_photo" },
+      { file_url: `${R2}/nota.jpg`, file_type: "image", kind: "invoice" },
+    ]);
+  });
+
+  it("refuses a unit photo that is not an image", async () => {
+    const form = withFiles(claimForm({ device_sn: "SN-PHOTOS-2" }), "unit_photo_urls", [`${R2}/video.mp4`]);
+    expect(await createTicketAction(form)).toMatchObject({ error: expect.stringContaining("gambar") });
+  });
+
+  it("refuses more than five unit photos", async () => {
+    const urls = Array.from({ length: 6 }, (_, i) => `${R2}/f${i}.jpg`);
+    const form = withFiles(claimForm({ device_sn: "SN-PHOTOS-3" }), "unit_photo_urls", urls);
+    expect(await createTicketAction(form)).toMatchObject({ error: expect.stringContaining("Maksimal 5") });
+  });
+
+  it("refuses unit photos on a ticket that is not a claim", async () => {
+    const form = withFiles(
+      claimForm({ ticket_type: "service", device_sn: null, purchase_date: null }),
+      "unit_photo_urls",
+      [`${R2}/x.jpg`]
+    );
+    expect(await createTicketAction(form)).toMatchObject({ error: expect.stringContaining("klaim garansi") });
+  });
+
+  it("leaves the uploads of other ticket types unmarked", async () => {
+    const form = withFiles(
+      claimForm({ ticket_type: "service", device_sn: "SN-SERVICE-UPLOAD", purchase_date: null }),
+      "preuploaded_urls",
+      [`${R2}/kondisi.jpg`]
+    );
+    expect(await createTicketAction(form)).toMatchObject({ success: true });
+    const ticket = await db.ticket.findFirst({
+      where: { store_location_id: storeId, device_sn: "SN-SERVICE-UPLOAD" },
+      select: { attachments: { select: { kind: true } } },
+    });
+    expect(ticket?.attachments).toEqual([{ kind: null }]);
+  });
+});
+
 describe("createTicketAction — ticket codes", () => {
   it("numbers tickets sequentially within a store", async () => {
     const seen: string[] = [];
@@ -294,5 +368,88 @@ describe("createTicketAction — ticket codes", () => {
       select: { ticket_code: true },
     });
     expect(new Set(all.map((t) => t.ticket_code)).size).toBe(all.length);
+  });
+});
+
+describe("createTicketAction — the unit picked from the Accurate catalogue", () => {
+  const vivobook = {
+    id: 9101,
+    sku: "LPT-ASUS-A416",
+    name: "ASUS VIVOBOOK 14 A416 I3",
+    category: "LAPTOP ASUS",
+    brand: null,
+    type: "INVENTORY",
+    unit: "PCS",
+    serialized: true,
+    stockTotal: 0,
+    warehouses: [],
+  };
+  const unitOf = (sn: string) =>
+    db.ticket.findFirstOrThrow({
+      where: { store_location_id: storeId, device_sn: sn },
+      select: { device_name: true, device_sku: true, device_catalog_item_id: true, device_catalog_category: true },
+    });
+
+  it("records the catalogue's name, SKU and category, not what the browser sent", async () => {
+    catalog.items.set(vivobook.id, vivobook);
+    const fd = claimForm({
+      ticket_type: "service",
+      device_sn: "SN-CATALOG-1",
+      purchase_date: null,
+      device_name: "laptop asus biru",
+      device_catalog_item_id: String(vivobook.id),
+    });
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    expect(await unitOf("SN-CATALOG-1")).toEqual({
+      device_name: "ASUS VIVOBOOK 14 A416 I3",
+      device_sku: "LPT-ASUS-A416",
+      device_catalog_item_id: 9101,
+      device_catalog_category: "LAPTOP ASUS",
+    });
+  });
+
+  it("works for a warranty claim too", async () => {
+    catalog.items.set(vivobook.id, vivobook);
+    const fd = claimForm({ device_sn: "SN-CATALOG-2", device_catalog_item_id: String(vivobook.id) });
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    expect((await unitOf("SN-CATALOG-2")).device_sku).toBe("LPT-ASUS-A416");
+  });
+
+  it("keeps a typed unit as typed, with no catalogue fields", async () => {
+    const fd = claimForm({ ticket_type: "service", device_sn: "SN-TYPED-1", purchase_date: null, device_name: "Laptop rakitan lama" });
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    expect(await unitOf("SN-TYPED-1")).toEqual({
+      device_name: "Laptop rakitan lama",
+      device_sku: null,
+      device_catalog_item_id: null,
+      device_catalog_category: null,
+    });
+  });
+
+  it("refuses an id the catalogue does not know, or that is not an id", async () => {
+    for (const id of ["424242", "abc", "-3"]) {
+      const fd = claimForm({ ticket_type: "service", device_sn: `SN-BAD-${id}`, purchase_date: null, device_catalog_item_id: id });
+      expect(await createTicketAction(fd), id).toMatchObject({ error: expect.stringMatching(/katalog/i) });
+    }
+    expect(await db.ticket.count({ where: { store_location_id: storeId, device_sn: { startsWith: "SN-BAD-" } } })).toBe(0);
+  });
+
+  it("says so when the catalogue is down, and creates nothing", async () => {
+    catalog.down = true;
+    try {
+      const fd = claimForm({ ticket_type: "service", device_sn: "SN-DOWN-1", purchase_date: null, device_catalog_item_id: "9101" });
+      expect(await createTicketAction(fd)).toMatchObject({ error: expect.stringContaining("ketik nama unit secara manual") });
+      expect(await db.ticket.count({ where: { device_sn: "SN-DOWN-1" } })).toBe(0);
+    } finally {
+      catalog.down = false;
+    }
+  });
+
+  it("stores a catalogue name longer than the old 191-character column", async () => {
+    const long = { ...vivobook, id: 9102, sku: "LONG-1", name: "X".repeat(240) };
+    catalog.items.set(long.id, long);
+    const fd = claimForm({ ticket_type: "service", device_sn: "SN-LONG-1", purchase_date: null, device_catalog_item_id: "9102" });
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    expect((await unitOf("SN-LONG-1")).device_name).toHaveLength(240);
   });
 });

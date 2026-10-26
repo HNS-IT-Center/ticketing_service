@@ -999,6 +999,19 @@ until the cutover. `deploy` was fast-forwarded to `chore/docker` (`15c9b38`) —
 Docker/health files — so the VPS runs the same code as hPanel. If hPanel also watches `deploy`, that
 push redeploys it with the same app plus a Dockerfile it ignores.
 
+**The VPS runs as staging first (owner's call, 2026-10-26):** `staging-ticketing.hnsitcenter.id`,
+database `ticketing-db` (Internal Host `ticketing-teknisi-ticketingdb-dvy2im`) holding a copy of
+production taken 2026-10-24 (672 tickets / 18 users / 3084 status logs / 41 RMA cases, 7 migrations
+= exactly the `deploy` branch's), app service `ticketing-teknisi-ticketing-teknisi-bsqonr` built
+from `deploy` and healthy. DNS for `hnsitcenter.id` is Hostinger's (`ns1/ns2.dns-parking.com`).
+
+⛔ **Staging must not share production's R2 bucket.** Deleting a ticket or a replaced part deletes
+its files: `deleteFromStorage` removes any URL that starts with this deployment's own
+`NEXT_PUBLIC_R2_PUBLIC_URL`. Staging holds production's data, so on the same bucket a test delete
+destroys a live ticket's photos. With its own bucket and public URL, old photos still display
+(they are stored as absolute URLs) and staging cannot delete them. Same reasoning gives staging
+its own `SESSION_SECRET` and no `RESEND_API_KEY`.
+
 After the cutover the deploy rule changes target, not shape: **hPanel's auto-deploy must be
 switched off**, and `prisma migrate deploy` runs against the VPS database before any push that
 needs it.

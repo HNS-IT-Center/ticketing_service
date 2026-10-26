@@ -994,6 +994,11 @@ never touch, restart or reuse those.
 | V2 | Database facts found the hard way | 📝 | **Dokploy MariaDB "User" must not be `root`.** The image creates `root` from Root Password; a User named `root` creates it twice — `ERROR 1396 Operation CREATE USER failed for 'root'@'%'`, the container exits during setup, Dokploy shows *Start* and "Error reloading Mariadb". Reproduced with `mariadb:11.8`. **Port `33306` on the VPS is `data-accurate`'s database**, not ticketing's. Import goes through `docker exec` on the VPS, so the ticketing DB never needs a public port |
 | V3 | Local Docker Desktop is fragile | 📝 | Its VM restarted three times out of three during an image build (`rpc error … EOF` in `npm ci`). After such a restart the published port `127.0.0.1:3310` accepts connections and drops them at once (`ER_SOCKET_UNEXPECTED_CLOSE`, Prisma "pool timeout") while `docker exec` still works — `docker restart hns-ticketing-mariadb` restores it |
 
+**Branches (owner's call, 2026-10-26): Dokploy builds from `deploy`; `main` stays hPanel's**
+until the cutover. `deploy` was fast-forwarded to `chore/docker` (`15c9b38`) — `main` plus the four
+Docker/health files — so the VPS runs the same code as hPanel. If hPanel also watches `deploy`, that
+push redeploys it with the same app plus a Dockerfile it ignores.
+
 After the cutover the deploy rule changes target, not shape: **hPanel's auto-deploy must be
 switched off**, and `prisma migrate deploy` runs against the VPS database before any push that
 needs it.

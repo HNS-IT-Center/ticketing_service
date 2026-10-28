@@ -112,7 +112,7 @@ export default function AvailableTickets({
     // Desktop tables drop Device below xl so the action column stays in view
     // beside the sidebar; the phone cards still list it.
     { key: "device", header: "Device", cell: (t) => t.device_type.replace(/_/g, " "), className: "hidden text-muted-foreground xl:table-cell" },
-    { key: "date", header: "Date", cell: (t) => new Date(t.created_at).toLocaleDateString("id-ID"), className: "text-muted-foreground" },
+    { key: "date", header: "Date", cell: (t) => new Date(t.created_at).toLocaleDateString("id-ID"), className: "whitespace-nowrap text-muted-foreground" },
     { key: "points", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type)} />, mobile: "badge" },
     { key: "action", header: "", cell: actionCell, mobile: "footer" },
   ];

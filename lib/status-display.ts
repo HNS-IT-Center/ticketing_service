@@ -33,11 +33,23 @@ export type StatusTone =
 
 export type StatusDisplay = { label: string; tone: StatusTone };
 
-export function ticketStatusDisplay(status: TicketStatus): StatusDisplay {
+/**
+ * What else the legacy badge looked at besides the status. Pass them where the
+ * page knows them, and the label matches what staff saw before:
+ * `hasTechnician` splits "waiting" into "Waiting for Work" (someone holds the
+ * ticket and has not started) and "Waiting for Technician" (nobody does);
+ * `paused` turns a running ticket into "Paused". Left out, "waiting" is plain
+ * "Waiting".
+ */
+export type TicketStatusContext = { hasTechnician?: boolean; paused?: boolean };
+
+export function ticketStatusDisplay(status: TicketStatus, context: TicketStatusContext = {}): StatusDisplay {
   switch (status) {
     case "waiting":
-      return { label: "Waiting", tone: "amber" };
+      if (context.hasTechnician === undefined) return { label: "Waiting", tone: "amber" };
+      return { label: context.hasTechnician ? "Waiting for Work" : "Waiting for Technician", tone: "amber" };
     case "on_progress":
+      if (context.paused) return { label: "Paused", tone: "amber" };
       return { label: "On Progress", tone: "blue" };
     case "rma_process":
       return { label: "RMA Process", tone: "violet" };

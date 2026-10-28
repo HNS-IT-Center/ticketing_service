@@ -11,6 +11,19 @@ describe("ticketStatusDisplay", () => {
     expect(TONE_CLASSES[tone]).toBeDefined();
   });
 
+  // The legacy Badge's special cases, so a migrated page reads the same.
+  it("says who a waiting ticket is waiting for, when told", () => {
+    expect(ticketStatusDisplay("waiting").label).toBe("Waiting");
+    expect(ticketStatusDisplay("waiting", { hasTechnician: true }).label).toBe("Waiting for Work");
+    expect(ticketStatusDisplay("waiting", { hasTechnician: false }).label).toBe("Waiting for Technician");
+  });
+
+  it("shows a paused ticket as Paused, and only a running one", () => {
+    expect(ticketStatusDisplay("on_progress", { paused: true })).toEqual({ label: "Paused", tone: "amber" });
+    expect(ticketStatusDisplay("on_progress").label).toBe("On Progress");
+    expect(ticketStatusDisplay("done", { paused: true }).label).toBe("Done");
+  });
+
   it("labels every ticket status differently", () => {
     const labels = Object.values(TicketStatus).map((s) => ticketStatusDisplay(s).label);
     expect(new Set(labels).size).toBe(labels.length);

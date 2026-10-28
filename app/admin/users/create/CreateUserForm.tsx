@@ -4,7 +4,14 @@ import { useState, useTransition } from "react";
 import { createUserAction } from "@/app/actions/admin";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { Eye, EyeOff } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import { FormField } from "@/components/app/FormField";
+import { PasswordInput } from "@/components/app/PasswordInput";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -12,7 +19,7 @@ export default function CreateUserForm() {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [role, setRole] = useState("Technician");
-  const [showPw, setShowPw] = useState(false);
+
   const [workDays, setWorkDays] = useState<string[]>([]);
 
   const toggleDay = (day: string) =>
@@ -33,105 +40,98 @@ export default function CreateUserForm() {
   };
 
   return (
-    <form action={submit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-        <div className="form-group">
-          <label className="form-label">Full Name *</label>
-          <input name="name" className="form-input" required placeholder="John Doe" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Email *</label>
-          <input name="email" type="email" className="form-input" required placeholder="user@example.com" />
-        </div>
-      </div>
+    <form action={submit} data-slot="create-user-form" className="flex flex-col gap-4">
+      <Card>
+        <CardContent className="flex flex-col gap-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Full Name" htmlFor="cu-name" required>
+              <Input id="cu-name" name="name" required placeholder="John Doe" />
+            </FormField>
+            <FormField label="Email" htmlFor="cu-email" required>
+              <Input id="cu-email" name="email" type="email" required placeholder="user@example.com" />
+            </FormField>
+          </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-        <div className="form-group">
-          <label className="form-label">Phone</label>
-          <input name="phone_number" className="form-input" placeholder="+6281234567890" />
-        </div>
-        <div className="form-group">
-          <label className="form-label">Role</label>
-          <select name="role" className="form-input" value={role} onChange={(e) => setRole(e.target.value)}>
-            {["Administrator", "Technician", "Sales", "RMA", "Customer"].map((r) => (
-              <option key={r} value={r}>{r}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField label="Phone" htmlFor="cu-phone">
+              <Input id="cu-phone" name="phone_number" inputMode="tel" placeholder="+6281234567890" />
+            </FormField>
+            <FormField label="Role" htmlFor="cu-role">
+              <NativeSelect id="cu-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
+                {["Administrator", "Technician", "Sales", "RMA", "Customer"].map((r) => (
+                  <option key={r} value={r}>{r}</option>
+                ))}
+              </NativeSelect>
+            </FormField>
+          </div>
 
-      <div className="form-group">
-        <label className="form-label">Address</label>
-        <textarea name="address" className="form-input" rows={2} placeholder="Full address" />
-      </div>
+          <FormField label="Address" htmlFor="cu-address">
+            <Textarea id="cu-address" name="address" rows={2} placeholder="Full address" />
+          </FormField>
 
-      <div className="form-group">
-        <label className="form-label">Password <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span></label>
-        <p className="form-help" style={{ marginBottom: "0.5rem" }}>
-          Kosongkan untuk staf yang masuk lewat SSO HNS: akun ini tertaut otomatis berdasarkan email
-          saat ia login pertama kali, dengan role yang dipilih di atas.
-        </p>
-        <div style={{ position: "relative" }}>
-          <input
-            name="password"
-            type={showPw ? "text" : "password"}
-            className="form-input"
-            minLength={8}
-            placeholder="Min 8 characters"
-            style={{ paddingRight: "2.75rem" }}
-          />
-          <button type="button" onClick={() => setShowPw(!showPw)}
-            style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: "var(--text-muted)", display: "flex" }}>
-            {showPw ? <EyeOff size={16} /> : <Eye size={16} />}
-          </button>
-        </div>
-      </div>
+          <FormField
+            label="Password"
+            htmlFor="cu-password"
+            hint=" (opsional)"
+            help="Kosongkan untuk staf yang masuk lewat SSO HNS: akun ini tertaut otomatis berdasarkan email saat ia login pertama kali, dengan role yang dipilih di atas."
+          >
+            <PasswordInput id="cu-password" name="password" minLength={8} placeholder="Min 8 characters" />
+          </FormField>
+        </CardContent>
+      </Card>
 
       {/* Technician-specific */}
       {role === "Technician" && (
-        <div className="card" style={{ background: "var(--cream)" }}>
-          <h4 style={{ marginBottom: "1rem" }}>Technician Configuration</h4>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-            <div className="form-group">
-              <label className="form-label">Shift</label>
-              <select name="shift" className="form-input">
-                <option value="">No shift</option>
-                <option value="morning">Morning (09:00–18:00)</option>
-                <option value="noon">Noon (12:00–22:00)</option>
-              </select>
+        <Card className="bg-muted/50">
+          <CardHeader>
+            <CardTitle className="font-semibold">Technician Configuration</CardTitle>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Shift" htmlFor="cu-shift">
+                <NativeSelect id="cu-shift" name="shift">
+                  <option value="">No shift</option>
+                  <option value="morning">Morning (09:00–18:00)</option>
+                  <option value="noon">Noon (12:00–22:00)</option>
+                </NativeSelect>
+              </FormField>
+              <FormField label="Max Points" htmlFor="cu-max-points">
+                <Input id="cu-max-points" name="max_points" type="number" defaultValue={7} min={1} max={20} />
+              </FormField>
             </div>
-            <div className="form-group">
-              <label className="form-label">Max Points</label>
-              <input name="max_points" type="number" className="form-input" defaultValue={7} min={1} max={20} />
-            </div>
-          </div>
-          <div className="form-group" style={{ marginTop: "0.75rem" }}>
-            <label className="form-label">Work Days</label>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.25rem" }}>
-              {DAYS.map((day) => (
-                <button key={day} type="button" onClick={() => toggleDay(day)}
-                  className="btn btn-sm"
-                  style={{
-                    background: workDays.includes(day) ? "var(--primary)" : "var(--white)",
-                    color: workDays.includes(day) ? "#fff" : "var(--text-secondary)",
-                    border: "1.5px solid",
-                    borderColor: workDays.includes(day) ? "var(--primary)" : "var(--border)",
-                  }}>
-                  {day}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+            <fieldset className="flex flex-col gap-1.5">
+              <legend className="mb-1.5 text-sm font-medium text-foreground">Work Days</legend>
+              <div className="flex flex-wrap gap-2">
+                {DAYS.map((day) => {
+                  const on = workDays.includes(day);
+                  return (
+                    <Button
+                      key={day}
+                      type="button"
+                      size="sm"
+                      variant={on ? "default" : "outline"}
+                      aria-pressed={on}
+                      onClick={() => toggleDay(day)}
+                      className={on ? undefined : "bg-card"}
+                    >
+                      {day}
+                    </Button>
+                  );
+                })}
+              </div>
+            </fieldset>
+          </CardContent>
+        </Card>
       )}
 
-      <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-        <button type="submit" className="btn btn-primary" disabled={isPending}>
-          {isPending ? <><span className="spinner spinner-sm" />Creating...</> : "Create User"}
-        </button>
-        <button type="button" onClick={() => router.back()} className="btn btn-ghost">
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <Button type="submit" disabled={isPending}>
+          {isPending && <Loader2 aria-hidden="true" className="animate-spin" />}
+          {isPending ? "Creating..." : "Create User"}
+        </Button>
+        <Button type="button" variant="ghost" onClick={() => router.back()}>
           Cancel
-        </button>
+        </Button>
       </div>
     </form>
   );

@@ -83,10 +83,10 @@ export default async function TechnicianProfilePage() {
   const levelPercent = Math.min((levelInfo.progress / levelInfo.required) * 100, 100);
 
   return (
-    // No data-slot on this root: ProfileForm and ChangePasswordForm are still
-    // legacy components (shared with the admin profile) and need the legacy
-    // reset. Every new section carries its own data-slot instead.
-    <div className="flex w-full max-w-2xl flex-col gap-6">
+    // Built from components/app and shadcn only (ProfileForm and
+    // ChangePasswordForm moved over in UI-4a), so the page opts into Tailwind
+    // spacing with a data-slot (the UI-1 reset rule).
+    <div data-slot="technician-profile" className="flex w-full max-w-2xl flex-col gap-6">
       <PageHeader
         title={
           <span className="flex items-center gap-2">
@@ -255,7 +255,7 @@ export default async function TechnicianProfilePage() {
         </CardContent>
       </Card>
 
-      {/* Editable form — legacy component, outside any data-slot */}
+      {/* Editable form */}
       <ProfileForm
         userId={user.id}
         initialName={user.name}
@@ -264,7 +264,7 @@ export default async function TechnicianProfilePage() {
         updateAction={updateTechnicianProfileAction}
       />
 
-      {/* Change password — legacy component, outside any data-slot */}
+      {/* Change password */}
       <ChangePasswordForm hasPassword={!!user.password} />
     </div>
   );

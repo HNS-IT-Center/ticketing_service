@@ -683,22 +683,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   box-shadow: var(--shadow-sm);
 }
 
-/* ─── Workload Bar ────────────────────────────────────────────────────────── */
-
-.workload-bar {
-  height: 8px;
-  background: var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.workload-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
-  transition: width 0.4s ease;
-}
-.workload-fill.danger { background: linear-gradient(90deg, var(--accent-dark) 0%, var(--accent) 100%); }
-
 /* ─── Auth Pages ──────────────────────────────────────────────────────────── */
 .auth-container {
   min-height: 100vh;
@@ -1008,33 +992,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   .admin-stats-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.75rem;
-  }
-}
-
-/* ─── Technician stats grid ────────────────────────────────────────────────── */
-.tech-stats-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 1rem;
-}
-.tech-workload-card {
-  grid-column: span 2;
-}
-@media (max-width: 768px) {
-  .tech-stats-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-  }
-  .tech-workload-card {
-    grid-column: span 2; /* still spans both cols on mobile */
-  }
-}
-@media (max-width: 480px) {
-  .tech-stats-grid {
-    grid-template-columns: 1fr;
-  }
-  .tech-workload-card {
-    grid-column: span 1;
   }
 }
 

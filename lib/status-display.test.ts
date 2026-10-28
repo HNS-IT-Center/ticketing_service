@@ -1,7 +1,7 @@
-import { RmaStatus, TicketStatus } from "@prisma/client";
+import { RmaStatus, Role, TicketStatus } from "@prisma/client";
 import { describe, expect, it } from "vitest";
 import { RMA_STATUS_META } from "@/components/rma/RmaStatusCard";
-import { rmaStatusDisplay, ticketStatusDisplay, TONE_CLASSES } from "./status-display";
+import { rmaStatusDisplay, roleDisplay, ticketStatusDisplay, TONE_CLASSES } from "./status-display";
 
 describe("ticketStatusDisplay", () => {
   it.each(Object.values(TicketStatus))("%s has a label and a known tone", (status) => {
@@ -54,5 +54,19 @@ describe("TONE_CLASSES", () => {
         [`bg-tone-${tone}-bg`, `border-tone-${tone}-border`, `text-tone-${tone}-fg`].sort(),
       );
     }
+  });
+});
+
+describe("roleDisplay", () => {
+  it.each(Object.values(Role))("%s has a label and a known tone", (role) => {
+    const { label, tone } = roleDisplay(role);
+    expect(label.trim()).not.toBe("");
+    expect(TONE_CLASSES[tone]).toBeDefined();
+  });
+
+  it("keeps the words staff already read", () => {
+    expect(roleDisplay("Administrator").label).toBe("Admin");
+    expect(roleDisplay("Sales").label).toBe("CS");
+    expect(roleDisplay("Pending").label).toBe("Menunggu role");
   });
 });

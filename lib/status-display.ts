@@ -1,4 +1,4 @@
-import type { RmaStatus, TicketStatus } from "@prisma/client";
+import type { RmaStatus, Role, TicketStatus } from "@prisma/client";
 
 /**
  * How a status looks to staff: one label and one colour tone per value, for
@@ -121,3 +121,29 @@ export const TONE_CLASSES: Record<StatusTone, string> = {
   red: "bg-tone-red-bg text-tone-red-fg border-tone-red-border",
   gray: "bg-tone-gray-bg text-tone-gray-fg border-tone-gray-border",
 };
+
+/**
+ * A user's role as the user list shows it — the legacy Badge's words:
+ * Sales has always read "CS" to staff, and an SSO account still waiting for a
+ * role reads "Menunggu role".
+ */
+export function roleDisplay(role: Role): StatusDisplay {
+  switch (role) {
+    case "Administrator":
+      return { label: "Admin", tone: "violet" };
+    case "Technician":
+      return { label: "Technician", tone: "blue" };
+    case "Sales":
+      return { label: "CS", tone: "green" };
+    case "Customer":
+      return { label: "Customer", tone: "gray" };
+    case "RMA":
+      return { label: "RMA", tone: "green" };
+    case "Pending":
+      return { label: "Menunggu role", tone: "amber" };
+    default: {
+      const _exhaustive: never = role;
+      return _exhaustive;
+    }
+  }
+}

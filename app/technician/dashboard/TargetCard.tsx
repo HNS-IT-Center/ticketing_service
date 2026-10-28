@@ -7,6 +7,7 @@ import { monthLabel } from "@/lib/reports/parts";
 import { progress, targetFor } from "@/lib/reports/targets";
 import { loadTargetRows } from "@/lib/reports/targets-data";
 import ProgressBar from "@/components/targets/ProgressBar";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 /**
  * This technician's month so far, against their target — the same figures the
@@ -29,32 +30,32 @@ export default async function TargetCard({ technicianId }: { technicianId: strin
   ];
 
   return (
-    <div className="card flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <h3 className="flex items-center gap-2" style={{ margin: 0 }}>
-          <Target size={18} style={{ color: "var(--primary-brand)" }} /> Target {monthLabel(month)}
-        </h3>
-        <p className="text-xs" style={{ color: "var(--text-muted)", margin: 0 }}>
+    <Card className="md:[--card-spacing:--spacing(5)]">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 font-bold">
+          <Target aria-hidden="true" className="size-[18px] text-primary" /> Target {monthLabel(month)}
+        </CardTitle>
+        <CardDescription className="text-xs">
           Dari tiket service yang kamu selesaikan bulan ini dan jasa yang dicatat di Rincian Biaya.
           {target.source === "none" && " Belum ada target yang diatur untuk bulan ini."}
-        </p>
-      </div>
-      <div className="grid gap-4 sm:grid-cols-3">
-        {measures.map((m) => (
-          <div key={m.label} className="flex flex-col gap-1.5">
-            <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-              {m.label}
-            </span>
-            <span style={{ fontSize: "1.375rem", fontWeight: 800 }}>{m.value}</span>
-            <ProgressBar progress={m.p} format={m.format} />
-          </div>
-        ))}
-      </div>
-      {(mine?.unpriced ?? 0) > 0 && (
-        <p className="text-xs" style={{ color: "#92400e", margin: 0 }}>
-          {mine!.unpriced} jasa belum ada harga jual — omzetnya belum terhitung.
-        </p>
-      )}
-    </div>
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-4 sm:grid-cols-3">
+          {measures.map((m) => (
+            <div key={m.label} className="flex flex-col gap-1.5">
+              <span className="text-xs font-semibold text-muted-foreground">{m.label}</span>
+              <span className="text-[1.375rem] leading-tight font-extrabold tabular-nums">{m.value}</span>
+              <ProgressBar progress={m.p} format={m.format} />
+            </div>
+          ))}
+        </div>
+        {(mine?.unpriced ?? 0) > 0 && (
+          <p className="text-xs text-tone-amber-fg">
+            {mine!.unpriced} jasa belum ada harga jual — omzetnya belum terhitung.
+          </p>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -1,11 +1,17 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
-import Badge from "@/components/ui/Badge";
+import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
+import { EmptyState } from "@/components/app/EmptyState";
+import { PageHeader } from "@/components/app/PageHeader";
+import { PointsBadge } from "@/components/app/PointsBadge";
+import { StatCard } from "@/components/app/StatCard";
+import { StatusBadge } from "@/components/app/StatusBadge";
+import { buttonVariants } from "@/components/ui/button";
 import AvailableTickets from "./AvailableTickets";
 import RefreshButton from "./RefreshButton";
 import TargetCard from "./TargetCard";
-import { Ticket, CheckCircle, Trophy, PlusCircle } from "lucide-react";
+import { Ticket, CheckCircle, Trophy, PlusCircle, ChevronDown } from "lucide-react";
 import { getUserTitles } from "@/lib/performance";
 import { ticketPartyName } from "@/lib/ticket-party";
 
@@ -109,130 +115,90 @@ export default async function TechnicianDashboard() {
       .map((r) => r.ticket_id)
   );
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-      <div>
-        <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap", justifyContent: "space-between", width: "100%" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: "1rem", flexWrap: "wrap" }}>
-            <h1>{isCoordinator ? "Store Coordinator Dashboard" : "Technician Dashboard"}</h1>
 
+  type ActiveTicket = (typeof activeTickets)[number];
+  const activeColumns: DataTableColumn<ActiveTicket>[] = [
+    { key: "code", header: "Ticket Code", cell: (t) => <span className="font-mono">{t.ticket_code}</span>, mobile: "title" },
+    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
+    { key: "customer", header: "Customer", cell: (t) => ticketPartyName(t) || "Guest" },
+    ...(isCoordinator
+      ? [
+          {
+            key: "technician",
+            header: "Technician",
+            cell: (t: ActiveTicket) => t.technician?.name || <span className="text-muted-foreground">Unassigned</span>,
+            className: "text-muted-foreground",
+          },
+        ]
+      : []),
+    { key: "points", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type)} /> },
+    {
+      key: "status",
+      header: "Status",
+      cell: (t) => <StatusBadge kind="ticket" status={t.status} hasTechnician={Boolean(t.technician_id)} size="sm" />,
+      mobile: "badge",
+    },
+    {
+      key: "manage",
+      header: "",
+      cell: () => <span className="text-sm font-medium text-primary">Manage →</span>,
+      className: "text-right",
+      mobile: "footer",
+    },
+  ];
+
+  return (
+    // Every section here is built from components/app and shadcn, so the page
+    // opts into Tailwind spacing with a data-slot (see the UI-1 reset rule).
+    <div data-slot="technician-dashboard" className="flex flex-col gap-6">
+      <PageHeader
+        title={
+          <span className="flex flex-wrap items-center gap-3">
+            {isCoordinator ? "Store Coordinator Dashboard" : "Technician Dashboard"}
             {/* Equipped title badge — only show if user has one equipped */}
             {activeTitle && (
-              <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", background: "rgba(22,70,157,0.1)", color: "var(--primary)", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 700, border: "1px solid rgba(22,70,157,0.25)" }}>
+              <span className="inline-flex items-center gap-1 rounded-full border border-primary/25 bg-secondary px-3 py-1 text-xs font-bold text-primary">
                 {activeTitle.emoji} {activeTitle.title_label}
               </span>
             )}
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <Link href="/technician/tickets/create" className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <PlusCircle size={16} /> Create Ticket
-            </Link>
-            <RefreshButton />
-          </div>
-        </div>
-        <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>
-          {isCoordinator ? "Manage your store and assigned tickets" : "Manage your assigned tickets and workload"}
-        </p>
-      </div>
-
-      {/* Stats row */}
-      <div className="tech-stats-grid">
-
-
-        {/* Stat mini cards */}
-        {[
-          { label: "Handled", value: performance?.tickets_handled ?? 0, icon: <Ticket size={20} />, color: "var(--primary)" },
-          { label: "Success", value: performance?.success_count ?? 0, icon: <CheckCircle size={20} />, color: "#16a34a" },
-        ].map((s) => (
-          <div key={s.label} className="stat-card">
-            <div style={{ width: "2.25rem", height: "2.25rem", borderRadius: "0.75rem", background: `${s.color}18`, display: "flex", alignItems: "center", justifyContent: "center", color: s.color }}>
-              {s.icon}
-            </div>
-            <div>
-              <div style={{ fontSize: "1.75rem", fontWeight: 800, color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{s.label}</div>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* This month against the target set in Target Teknisi. */}
-      <TargetCard technicianId={session.userId} />
-
-      {/* My/Store Active Tickets */}
-      <div className="card">
-        <h3 style={{ marginBottom: "1rem" }}>
-          {isCoordinator ? "Store Active Tickets" : "My Active Tickets"}
-        </h3>
-        {activeTickets.length === 0 ? (
-          <div className="empty-state" style={{ padding: "2rem" }}>
-            <Ticket size={32} style={{ opacity: 0.3 }} />
-            <p>{isCoordinator ? "No active tickets in your store" : "No active tickets assigned to you"}</p>
-          </div>
-        ) : (
+          </span>
+        }
+        description={isCoordinator ? "Manage your store and assigned tickets" : "Manage your assigned tickets and workload"}
+        actions={
           <>
-            {/* Desktop table */}
-            <div className="admin-ticket-table">
-              <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
-                <table>
-                  <thead><tr>
-                    <th>Ticket Code</th><th>Type</th><th>Customer</th>
-                    {isCoordinator && <th>Technician</th>}
-                    <th>Points</th><th>Status</th><th></th>
-                  </tr></thead>
-                  <tbody>
-                    {activeTickets.map((t) => (
-                      <tr key={t.id}>
-                        <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
-                        <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                        <td>{(ticketPartyName(t) || "Guest")}</td>
-                        {isCoordinator && <td style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{(t as any).technician?.name || <span style={{ opacity: 0.4 }}>Unassigned</span>}</td>}
-                        <td><span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type)} pts</span></td>
-                        <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
-                        <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-
-            {/* Mobile cards */}
-            <div className="admin-ticket-cards">
-              {activeTickets.map((t) => (
-                <Link key={t.id} href={`/technician/tickets/${t.id}`} style={{ textDecoration: "none" }}>
-                  <div className="mobile-ticket-card">
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>{t.ticket_code}</span>
-                      <Badge variant={t.status} technicianId={t.technician_id} />
-                    </div>
-                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                      <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                      <span>{(ticketPartyName(t) || "Guest")}</span>
-                    </div>
-                    {isCoordinator && (t as any).technician?.name && (
-                      <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "0.15rem" }}>
-                        👨‍🔧 {(t as any).technician.name}
-                      </div>
-                    )}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <span className="badge badge-technician">{getTicketPoints(t.ticket_type, t.device_type)} pts</span>
-                      <span style={{ fontSize: "0.8125rem", color: "var(--primary)", fontWeight: 500 }}>Manage →</span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
+            <RefreshButton />
+            <Link href="/technician/tickets/create" className={buttonVariants()}>
+              <PlusCircle aria-hidden="true" /> Create Ticket
+            </Link>
           </>
-        )}
-      </div>
+        }
+      />
 
+      {/* What to work on now: the tickets already in hand come first. */}
+      <section aria-labelledby="active-tickets" className="flex flex-col gap-3">
+        <h2 id="active-tickets" className="text-lg font-bold text-foreground">
+          {isCoordinator ? "Store Active Tickets" : "My Active Tickets"}
+        </h2>
+        <DataTable
+          caption={isCoordinator ? "Store Active Tickets" : "My Active Tickets"}
+          columns={activeColumns}
+          rows={activeTickets}
+          getRowKey={(t) => t.id}
+          rowHref={(t) => `/technician/tickets/${t.id}`}
+          empty={
+            <EmptyState
+              icon={Ticket}
+              title={isCoordinator ? "No active tickets in your store" : "No active tickets assigned to you"}
+            />
+          }
+        />
+      </section>
 
-      {/* Unassigned Tickets */}
-      <div className="card">
-        <h3 style={{ marginBottom: "1rem" }}>
-          Available Tickets <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 400 }}>({unassigned.length})</span>
-        </h3>
+      {/* Then the ones that can be picked up. */}
+      <section aria-labelledby="available-tickets" className="flex flex-col gap-3">
+        <h2 id="available-tickets" className="text-lg font-bold text-foreground">
+          Available Tickets <span className="text-sm font-normal text-muted-foreground">({unassigned.length})</span>
+        </h2>
         <AvailableTickets
           tickets={unassigned.map(t => ({
             id: t.id,
@@ -245,7 +211,25 @@ export default async function TechnicianDashboard() {
           myRequestedIds={Array.from(myRequestedIds)}
           otherRequestedIds={Array.from(otherRequestedIds)}
         />
-      </div>
+      </section>
+
+      {/* Personal numbers last, folded: worth a look, not what the day starts with. */}
+      <details className="group rounded-xl border border-border bg-card">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-foreground outline-none select-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+          <span className="flex items-center gap-2">
+            <Trophy aria-hidden="true" className="size-4 text-primary" /> Statistik &amp; Target
+          </span>
+          <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="flex flex-col gap-4 border-t border-border p-4">
+          <div className="grid grid-cols-2 gap-3">
+            <StatCard label="Handled" value={performance?.tickets_handled ?? 0} icon={Ticket} />
+            <StatCard label="Success" value={performance?.success_count ?? 0} icon={CheckCircle} tone="success" />
+          </div>
+          {/* This month against the target set in Target Teknisi. */}
+          <TargetCard technicianId={session.userId} />
+        </div>
+      </details>
     </div>
   );
 }

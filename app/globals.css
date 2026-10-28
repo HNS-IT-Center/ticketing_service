@@ -49,15 +49,14 @@
   --input: #8a8279;
   --ring: #16469d;
   --radius: 0.625rem;
-  --sidebar-width: 260px;
-  --sidebar: #ffffff;
-  --sidebar-foreground: #1a1a2e;
-  --sidebar-primary: #16469d;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #e8eef8;
-  --sidebar-accent-foreground: #16469d;
-  --sidebar-border: #ede7de;
-  --sidebar-ring: #16469d;
+  --sidebar: #153f8a;            /* gradient to #0d2a5e, as the legacy sidebar */
+  --sidebar-foreground: #ffffff;  /* 9.9:1 at the light end */
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #153f8a;
+  --sidebar-accent: #2d5196;      /* hover and active fill; white on it 7.7:1 */
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2d5196;
+  --sidebar-ring: #ffffff;        /* focus ring must show on blue */
 
   /* Status tones — StatusBadge and lib/status-display.ts. Text on its own
      background is 6:1 or better for every tone. */
@@ -501,184 +500,7 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   vertical-align: middle;
 }
 
-/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-.sidebar {
-  width: var(--sidebar-width);
-  min-height: 100vh;
-  background: linear-gradient(170deg, var(--primary-dark) 0%, #0d2a5e 100%);
-  color: var(--white);
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 40;
-  transition: transform 0.3s ease, width 0.3s ease;
-  overflow: visible;
-}
-
-.sidebar-logo {
-  padding: 1.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.sidebar-nav {
-  padding: 1rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
-  border-radius: var(--radius-md);
-  color: rgba(255,255,255,0.75);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.sidebar-link:hover {
-  background: rgba(255,255,255,0.12);
-  color: var(--white);
-}
-.sidebar-link.active {
-  background: rgba(255,255,255,0.18);
-  color: var(--white);
-  font-weight: 600;
-}
-.sidebar-link svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
-.sidebar-link.collapsed { justify-content: center; padding: 0.625rem 0; gap: 0; }
-.sidebar-link.collapsed span { display: none; }
-
-/* Collapsed sidebar (Desktop only) */
-@media (min-width: 769px) {
-  .sidebar.collapsed {
-    width: 64px;
-    --sidebar-width: 64px;
-  }
-  .sidebar.collapsed .sidebar-logo {
-    padding: 1rem 0;
-    justify-content: center;
-  }
-  .sidebar.collapsed .sidebar-nav {
-    padding: 0.75rem 0.5rem;
-  }
-  .sidebar.collapsed .sidebar-link {
-    justify-content: center;
-    padding: 0.625rem 0;
-  }
-  .sidebar.collapsed .sidebar-link span { display: none; }
-}
-
-/* Sidebar groups — a heading that folds its entries open and closed. */
-.sidebar-plain-group,
-.sidebar-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.sidebar-group-btn {
-  width: 100%;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-}
-.sidebar-group-btn > span { flex: 1; }
-.sidebar-group-btn.has-active { color: var(--white); background: rgba(255,255,255,0.08); }
-.sidebar-group-btn .sidebar-group-chevron {
-  width: 0.9rem;
-  height: 0.9rem;
-  opacity: 0.7;
-  transition: transform 0.2s ease;
-}
-.sidebar-group-items {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  margin: 0 0 0.375rem 1.35rem;
-  padding-left: 0.5rem;
-  border-left: 1px solid rgba(255,255,255,0.15);
-}
-.sidebar-link.sidebar-sublink {
-  font-size: 0.875rem;
-  padding: 0.5rem 0.75rem;
-}
-.sidebar-link.sidebar-sublink svg { width: 1rem; height: 1rem; }
-.sidebar-divider {
-  height: 1px;
-  background: rgba(255,255,255,0.12);
-  margin: 0.375rem 0.5rem;
-}
-
-.sidebar-collapse-btn {
-  position: absolute;
-  top: 1.5rem;
-  right: -0.75rem;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 50%;
-  background: var(--white);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  z-index: 50;
-  transition: all 0.2s;
-}
-.sidebar-collapse-btn:hover {
-  background: var(--cream);
-  transform: scale(1.05);
-}
-
 /* ─── Dashboard Layout ───────────────────────────────────────────────────── */
-.dashboard-layout {
-  display: flex;
-  min-height: 100vh;
-}
-
-.dashboard-main {
-  flex: 1;
-  margin-left: var(--sidebar-width);
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  transition: margin-left 0.3s ease;
-}
-.dashboard-main.sidebar-collapsed {
-  margin-left: 64px;
-}
-
-.dashboard-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  background: rgba(247, 242, 236, 0.9);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  padding: 0 1.5rem;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
 .dashboard-content {
   padding: 2rem 1.5rem;
   flex: 1;
@@ -688,35 +510,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
 
 .dashboard-content > * {
   width: 100%;
-}
-
-/* ─── Notification Bell ───────────────────────────────────────────────────── */
-.notif-bell {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--radius-md);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: background 0.2s ease;
-}
-.notif-bell:hover { background: var(--cream-dark); }
-
-.notif-dot {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 8px;
-  height: 8px;
-  background: var(--accent-brand);
-  border-radius: 50%;
-  border: 2px solid var(--cream);
-  animation: pulse-dot 2s ease infinite;
 }
 
 /* ─── Modals ──────────────────────────────────────────────────────────────── */
@@ -1143,33 +936,7 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   color: var(--text-muted);
 }
 
-/* ─── Mobile Sidebar Overlay ──────────────────────────────────────────────── */
-.sidebar-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 39;
-}
-
 @media (max-width: 768px) {
-  :root { --sidebar-width: 0px; }
-
-  .sidebar {
-    transform: translateX(-100%);
-  }
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  .sidebar-collapse-btn { display: none; } /* hide collapse btn on mobile */
-  .sidebar-overlay.open {
-    display: block;
-  }
-
-  .dashboard-main {
-    margin-left: 0 !important;
-  }
-
   .dashboard-content {
     padding: 1.25rem 1rem;
   }
@@ -1185,35 +952,8 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
 }
 
 @media (max-width: 480px) {
-  .dashboard-topbar { padding: 0 1rem; }
   table { font-size: 0.875rem; }
   thead th, tbody td { padding: 0.625rem 0.75rem; }
-}
-
-/* ─── Mobile menu button ─────────────────────────────────────────────────── */
-.mobile-menu-btn {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: none;
-  background: none;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-}
-@media (max-width: 768px) {
-  .mobile-menu-btn { display: flex !important; }
-}
-
-/* ─── Profile dropdown hover ────────────────────────────────────────────── */
-.dropdown-item:hover {
-  background: var(--cream) !important;
-  color: var(--text-primary) !important;
-}
-.dropdown-item-danger:hover {
-  background: #fee2e2 !important;
 }
 
 /* ─── Ticket detail — 2-col → 1-col on mobile ──────────────────────────── */
@@ -1226,14 +966,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
 @media (max-width: 768px) {
   .ticket-detail-grid {
     grid-template-columns: 1fr;
-  }
-}
-
-/* ─── Mobile Sidebar: 3/4 width not full-screen ──────────────────────────── */
-@media (max-width: 768px) {
-  .sidebar {
-    width: 75vw !important;    /* 3/4 width — user can see edge to tap-close */
-    max-width: 300px;
   }
 }
 
@@ -1356,34 +1088,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   .customer-stats-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-}
-
-/* ─── Collapse toggle floating outside sidebar ──────────────────────────────── */
-.sidebar-collapse-btn {
-  position: absolute;
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--white);
-  border: 1.5px solid var(--border);
-  color: var(--primary);
-  cursor: pointer;
-  z-index: 45;
-  box-shadow: var(--shadow-sm);
-  transition: background 0.2s, transform 0.2s;
-}
-.sidebar-collapse-btn:hover {
-  background: var(--cream);
-  transform: translateY(-50%) scale(1.1);
-}
-@media (max-width: 768px) {
-  .sidebar-collapse-btn { display: none !important; }
 }
 
 @theme inline {

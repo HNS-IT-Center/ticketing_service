@@ -113,7 +113,7 @@ export function DataTable<T>({
                       className={cn(href && "relative focus-within:bg-muted/50", rowClassName?.(row))}
                     >
                       {columns.map((col) => (
-                        <TableCell key={col.key} className={cn("px-4 py-3 text-foreground", col.className)}>
+                        <TableCell key={col.key} className={cn("px-4 py-3 whitespace-normal text-foreground [overflow-wrap:anywhere]", col.className)}>
                           {href && col.key === linkKey ? (
                             <Link
                               href={href}

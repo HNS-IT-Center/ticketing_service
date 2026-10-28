@@ -153,10 +153,10 @@ export default async function TechnicianTicketsPage({
       key: "code",
       header: renderSortableHeader("Code", "code_asc", "code_desc"),
       mobileLabel: "Code",
-      cell: (t) => <span className="font-mono">{t.ticket_code}</span>,
+      cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>,
       mobile: "title",
     },
-    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
+    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span>, className: "hidden xl:table-cell" },
     {
       key: "customer",
       header: "Customer",
@@ -205,13 +205,13 @@ export default async function TechnicianTicketsPage({
       header: renderSortableHeader("Updated", "updated_asc", "updated_desc"),
       mobileLabel: "Updated",
       cell: (t) => new Date(t.updated_at).toLocaleDateString("id-ID"),
-      className: "text-muted-foreground",
+      className: "whitespace-nowrap text-muted-foreground",
     },
     {
       key: "manage",
       header: "",
       cell: () => <span className="text-sm font-medium text-primary">Manage →</span>,
-      className: "text-right",
+      className: "hidden text-right xl:table-cell",
       mobile: "hidden",
     },
   ];

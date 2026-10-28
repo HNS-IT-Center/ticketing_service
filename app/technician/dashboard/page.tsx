@@ -118,7 +118,7 @@ export default async function TechnicianDashboard() {
 
   type ActiveTicket = (typeof activeTickets)[number];
   const activeColumns: DataTableColumn<ActiveTicket>[] = [
-    { key: "code", header: "Ticket Code", cell: (t) => <span className="font-mono">{t.ticket_code}</span>, mobile: "title" },
+    { key: "code", header: "Ticket Code", cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>, mobile: "title" },
     { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
     { key: "customer", header: "Customer", cell: (t) => ticketPartyName(t) || "Guest" },
     ...(isCoordinator

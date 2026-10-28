@@ -1,11 +1,12 @@
 import type { TicketBadgeChoice } from "@/lib/rma/ticket-status-badge";
-import { rmaStatusDisplay, ticketStatusDisplay, TONE_CLASSES } from "@/lib/status-display";
+import { rmaStatusDisplay, ticketStatusDisplay, TONE_CLASSES, type TicketStatusContext } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
 
-type StatusBadgeProps = TicketBadgeChoice & {
-  size?: "sm" | "md";
-  className?: string;
-};
+type StatusBadgeProps = TicketBadgeChoice &
+  TicketStatusContext & {
+    size?: "sm" | "md";
+    className?: string;
+  };
 
 /**
  * The one badge for a ticket or RMA status, on every portal.
@@ -17,9 +18,9 @@ type StatusBadgeProps = TicketBadgeChoice & {
  * Label and colour come from `lib/status-display.ts` and nowhere else. The
  * colour is never the only signal: the label always says the status in words.
  */
-export function StatusBadge({ kind, status, size = "md", className }: StatusBadgeProps) {
+export function StatusBadge({ kind, status, hasTechnician, paused, size = "md", className }: StatusBadgeProps) {
   const { label, tone } =
-    kind === "rma" ? rmaStatusDisplay(status) : ticketStatusDisplay(status);
+    kind === "rma" ? rmaStatusDisplay(status) : ticketStatusDisplay(status, { hasTechnician, paused });
 
   return (
     <span

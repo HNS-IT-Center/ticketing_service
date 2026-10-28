@@ -5,7 +5,10 @@ import { cn } from "@/lib/utils";
 
 export type DataTableColumn<T> = {
   key: string;
-  header: string;
+  /** A string, or a sort link; phone cards then use `mobileLabel`. */
+  header: React.ReactNode;
+  /** The label in the phone card when `header` is not plain text. */
+  mobileLabel?: string;
   cell: (row: T) => React.ReactNode;
   /** Applied to the column's header and cells on desktop. */
   className?: string;
@@ -14,9 +17,10 @@ export type DataTableColumn<T> = {
    * `title` — bold, top left (usually the ticket code);
    * `badge` — top right (usually the status);
    * `detail` — a "header: value" line underneath (the default);
+   * `footer` — full width at the bottom, unlabelled (an action button);
    * `hidden` — desktop only.
    */
-  mobile?: "title" | "badge" | "detail" | "hidden";
+  mobile?: "title" | "badge" | "detail" | "footer" | "hidden";
 };
 
 type DataTableProps<T> = {
@@ -27,6 +31,8 @@ type DataTableProps<T> = {
   caption: string;
   /** Makes each row and card a link to the record. */
   rowHref?: (row: T) => string;
+  /** Extra classes for one row and its card, e.g. dimming a row someone else holds. */
+  rowClassName?: (row: T) => string | undefined;
   /** Shown instead of the table when `rows` is empty. */
   empty?: React.ReactNode;
   loading?: boolean;
@@ -52,6 +58,7 @@ export function DataTable<T>({
   getRowKey,
   caption,
   rowHref,
+  rowClassName,
   empty,
   loading = false,
   skeletonRows = 5,
@@ -64,6 +71,7 @@ export function DataTable<T>({
   const titleCols = columns.filter((c) => c.mobile === "title");
   const badgeCols = columns.filter((c) => c.mobile === "badge");
   const detailCols = columns.filter((c) => (c.mobile ?? "detail") === "detail");
+  const footerCols = columns.filter((c) => c.mobile === "footer");
   // The first column carries the row link on desktop; the whole row is its
   // hit area through the stretched ::after.
   const linkKey = columns[0]?.key;
@@ -100,7 +108,10 @@ export function DataTable<T>({
               : rows.map((row) => {
                   const href = rowHref?.(row);
                   return (
-                    <TableRow key={getRowKey(row)} className={cn(href && "relative focus-within:bg-muted/50")}>
+                    <TableRow
+                      key={getRowKey(row)}
+                      className={cn(href && "relative focus-within:bg-muted/50", rowClassName?.(row))}
+                    >
                       {columns.map((col) => (
                         <TableCell key={col.key} className={cn("px-4 py-3 text-foreground", col.className)}>
                           {href && col.key === linkKey ? (
@@ -157,15 +168,23 @@ export function DataTable<T>({
                     <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm">
                       {detailCols.map((col) => (
                         <div key={col.key} className="contents">
-                          <dt className="text-muted-foreground">{col.header}</dt>
+                          <dt className="text-muted-foreground">{col.mobileLabel ?? col.header}</dt>
                           <dd className="min-w-0 break-words text-foreground">{col.cell(row)}</dd>
                         </div>
                       ))}
                     </dl>
                   )}
+                  {footerCols.map((col) => (
+                    <div key={col.key} className="flex flex-wrap items-center gap-2 *:flex-1">
+                      {col.cell(row)}
+                    </div>
+                  ))}
                 </>
               );
-              const cardClass = "flex flex-col gap-3 rounded-xl border border-border bg-card p-4 text-card-foreground";
+              const cardClass = cn(
+                "flex flex-col gap-3 rounded-xl border border-border bg-card p-4 text-card-foreground",
+                rowClassName?.(row),
+              );
               return (
                 <li key={getRowKey(row)}>
                   {href ? (

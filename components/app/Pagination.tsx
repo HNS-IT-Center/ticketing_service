@@ -13,7 +13,27 @@ type PaginationProps = {
   /** With both set, "21–40 dari 134" is shown beside the controls. */
   totalItems?: number;
   pageSize?: number;
+  /**
+   * The words, for a page whose list already speaks English to staff
+   * ("Prev", "Next", "Page 2 of 7"). Indonesian by default.
+   */
+  labels?: Partial<PaginationLabels>;
   className?: string;
+};
+
+export type PaginationLabels = {
+  previous: string;
+  next: string;
+  /** The compact "where am I" shown on phones in place of the page numbers. */
+  pageOf: (page: number, pageCount: number) => string;
+  range: (from: number, to: number, total: number) => string;
+};
+
+const DEFAULT_LABELS: PaginationLabels = {
+  previous: "Sebelumnya",
+  next: "Berikutnya",
+  pageOf: (page, pageCount) => `${page} / ${pageCount}`,
+  range: (from, to, total) => `${from}–${to} dari ${total}`,
 };
 
 /**
@@ -21,8 +41,9 @@ type PaginationProps = {
  * the back button behaves. A page past the end still renders the controls,
  * so there is always a way back — the fault BL28 found on `/rma/logs`.
  */
-export function Pagination({ page, pageCount, hrefForPage, totalItems, pageSize, className }: PaginationProps) {
+export function Pagination({ page, pageCount, hrefForPage, totalItems, pageSize, labels, className }: PaginationProps) {
   if (pageCount <= 1 && page <= 1) return null;
+  const words = { ...DEFAULT_LABELS, ...labels };
 
   const prev = previousPage(page, pageCount);
   const next = nextPage(page, pageCount);
@@ -41,7 +62,7 @@ export function Pagination({ page, pageCount, hrefForPage, totalItems, pageSize,
     >
       {showRange ? (
         <p className="text-sm text-muted-foreground tabular-nums">
-          {from}–{to} dari {totalItems}
+          {words.range(from, to, totalItems)}
         </p>
       ) : (
         <span />
@@ -49,19 +70,19 @@ export function Pagination({ page, pageCount, hrefForPage, totalItems, pageSize,
 
       <div className="flex items-center gap-1">
         {prev !== null ? (
-          <Link href={hrefForPage(prev)} className={stepClass} aria-label="Halaman sebelumnya" rel="prev">
+          <Link href={hrefForPage(prev)} className={stepClass} aria-label={words.previous} rel="prev">
             <ChevronLeft aria-hidden="true" />
-            <span className="hidden sm:inline">Sebelumnya</span>
+            <span className="hidden sm:inline">{words.previous}</span>
           </Link>
         ) : (
           <span className={disabledStep} aria-hidden="true">
             <ChevronLeft />
-            <span className="hidden sm:inline">Sebelumnya</span>
+            <span className="hidden sm:inline">{words.previous}</span>
           </span>
         )}
 
         <span className="px-3 text-sm text-muted-foreground tabular-nums sm:hidden">
-          {page} / {pageCount}
+          {words.pageOf(page, pageCount)}
         </span>
 
         <ol className="hidden items-center gap-1 sm:flex">
@@ -89,13 +110,13 @@ export function Pagination({ page, pageCount, hrefForPage, totalItems, pageSize,
         </ol>
 
         {next !== null ? (
-          <Link href={hrefForPage(next)} className={stepClass} aria-label="Halaman berikutnya" rel="next">
-            <span className="hidden sm:inline">Berikutnya</span>
+          <Link href={hrefForPage(next)} className={stepClass} aria-label={words.next} rel="next">
+            <span className="hidden sm:inline">{words.next}</span>
             <ChevronRight aria-hidden="true" />
           </Link>
         ) : (
           <span className={disabledStep} aria-hidden="true">
-            <span className="hidden sm:inline">Berikutnya</span>
+            <span className="hidden sm:inline">{words.next}</span>
             <ChevronRight />
           </span>
         )}

@@ -22,34 +22,54 @@
   --border-light: #ede7de;
   --white: #ffffff;
 
-  /* Shadcn UI & Global Theme Variables (Light Mode) */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: var(--white);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* Shadcn UI & Global Theme Variables (Light Mode) — the HNS brand.
+     These were shadcn's neutral defaults (near-black --primary) from the
+     shadcn init on 2026-05-19 until the UI overhaul, Phase 1. Legacy CSS reads
+     them too: var(--primary) 143×, var(--border) 82× — see docs/ui-audit.md.
+     Every text pair here is WCAG AA: white on --primary 8.8:1, white on
+     --destructive 5.4:1, --muted-foreground on cream 5.2:1. --input is a
+     control boundary, so it needs 3:1 (WCAG 1.4.11): 3.8:1 on white. */
+  --background: #f7f2ec;
+  --foreground: #1a1a2e;
+  --card: #ffffff;
+  --card-foreground: #1a1a2e;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a2e;
+  --primary: #16469d;
+  --primary-foreground: #ffffff;
+  --secondary: #e8eef8;
+  --secondary-foreground: #16469d;
+  --muted: #ede7de;
+  --muted-foreground: #5c6676;
+  --accent: #ede7de;
+  --accent-foreground: #1a1a2e;
+  --destructive: #cd2426;
+  --destructive-foreground: #ffffff;
+  --border: #ddd6cf;
+  --input: #8a8279;
+  --ring: #16469d;
   --radius: 0.625rem;
   --sidebar-width: 260px;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #1a1a2e;
+  --sidebar-primary: #16469d;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #e8eef8;
+  --sidebar-accent-foreground: #16469d;
+  --sidebar-border: #ede7de;
+  --sidebar-ring: #16469d;
+
+  /* Status tones — StatusBadge and lib/status-display.ts. Text on its own
+     background is 6:1 or better for every tone. */
+  --tone-amber-bg: #fef3c7;   --tone-amber-fg: #92400e;   --tone-amber-border: #fde68a;
+  --tone-orange-bg: #ffedd5;  --tone-orange-fg: #9a3412;  --tone-orange-border: #fed7aa;
+  --tone-blue-bg: #dbeafe;    --tone-blue-fg: #1e40af;    --tone-blue-border: #bfdbfe;
+  --tone-violet-bg: #ede9fe;  --tone-violet-fg: #5b21b6;  --tone-violet-border: #ddd6fe;
+  --tone-teal-bg: #ccfbf1;    --tone-teal-fg: #115e59;    --tone-teal-border: #99f6e4;
+  --tone-cyan-bg: #cffafe;    --tone-cyan-fg: #155e75;    --tone-cyan-border: #a5f3fc;
+  --tone-green-bg: #d1fae5;   --tone-green-fg: #065f46;   --tone-green-border: #a7f3d0;
+  --tone-red-bg: #fee2e2;     --tone-red-fg: #991b1b;     --tone-red-border: #fecaca;
+  --tone-gray-bg: #ede7de;    --tone-gray-fg: #4a5568;    --tone-gray-border: #ddd6cf;
 
   --shadow-sm: 0 1px 3px rgba(22, 70, 157, 0.08);
   --shadow-md: 0 4px 16px rgba(22, 70, 157, 0.12);
@@ -59,13 +79,11 @@
   --radius-md: 0.625rem;
   --radius-lg: 1rem;
   --radius-xl: 1.5rem;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --chart-1: #16469d;
+  --chart-2: #cd2426;
+  --chart-3: #0f766e;
+  --chart-4: #b45309;
+  --chart-5: #6d28d9;
 }
 
 .dark {
@@ -125,8 +143,19 @@
 }
 
 /* ─── Base ───────────────────────────────────────────────────────────────── */
+/* The rules below are outside any @layer, and unlayered CSS beats every
+   Tailwind utility — which is why `p-4` and `m-2` do nothing on legacy pages.
+   Shadcn and components/app put `data-slot` on every part, so each element
+   rule here skips `[data-slot]` and everything inside one: those subtrees get
+   Tailwind's own preflight (same reset, but layered) and their utilities work.
+   `:where()` keeps the specificity of every legacy rule exactly as it was, so
+   no existing page changes. Phase 7 of the UI overhaul deletes these rules. */
 *, *::before, *::after {
   box-sizing: border-box;
+}
+:where(:not([data-slot], [data-slot] *)),
+:where(:not([data-slot], [data-slot] *))::before,
+:where(:not([data-slot], [data-slot] *))::after {
   margin: 0;
   padding: 0;
 }
@@ -147,18 +176,18 @@ body {
 }
 
 /* ─── Typography ─────────────────────────────────────────────────────────── */
-h1 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; line-height: 1.2; }
-h2 { font-size: clamp(1.25rem, 2.5vw, 1.5rem); font-weight: 700; line-height: 1.3; }
-h3 { font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 600; line-height: 1.4; }
-h4 { font-size: 1rem; font-weight: 600; }
-p  { font-size: 0.9375rem; line-height: 1.7; }
+h1:where(:not([data-slot], [data-slot] *)) { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; line-height: 1.2; }
+h2:where(:not([data-slot], [data-slot] *)) { font-size: clamp(1.25rem, 2.5vw, 1.5rem); font-weight: 700; line-height: 1.3; }
+h3:where(:not([data-slot], [data-slot] *)) { font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 600; line-height: 1.4; }
+h4:where(:not([data-slot], [data-slot] *)) { font-size: 1rem; font-weight: 600; }
+p:where(:not([data-slot], [data-slot] *))  { font-size: 0.9375rem; line-height: 1.7; }
 
-a {
+a:where(:not([data-slot], [data-slot] *)) {
   color: var(--primary);
   text-decoration: none;
   transition: color 0.2s ease;
 }
-a:hover { color: var(--primary-dark); }
+a:where(:not([data-slot], [data-slot] *)):hover { color: var(--primary-dark); }
 
 /* ─── Layout Utilities ───────────────────────────────────────────────────── */
 .container {
@@ -175,7 +204,7 @@ a:hover { color: var(--primary-dark); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ─── Focus ──────────────────────────────────────────────────────────────── */
-:focus-visible {
+:where(:not([data-slot], [data-slot] *)):focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
@@ -443,12 +472,12 @@ textarea.form-input {
   border: 1px solid var(--border-light);
   background: var(--white);
 }
-table {
+table:where(:not([data-slot], [data-slot] *)) {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9375rem;
 }
-thead th {
+thead th:where(:not([data-slot], [data-slot] *)) {
   background: var(--cream-dark);
   padding: 0.75rem 1rem;
   text-align: left;
@@ -460,13 +489,13 @@ thead th {
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-tbody tr {
+tbody tr:where(:not([data-slot], [data-slot] *)) {
   border-bottom: 1px solid var(--border-light);
   transition: background 0.15s ease;
 }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--cream); }
-tbody td {
+tbody tr:where(:not([data-slot], [data-slot] *)):last-child { border-bottom: none; }
+tbody tr:where(:not([data-slot], [data-slot] *)):hover { background: var(--cream); }
+tbody td:where(:not([data-slot], [data-slot] *)) {
   padding: 0.875rem 1rem;
   color: var(--text-primary);
   vertical-align: middle;
@@ -1358,8 +1387,47 @@ tbody td {
 }
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: var(--font-sans);
+  /* Inter, loaded by the <link> in app/layout.tsx. This was the circular
+     `--font-sans: var(--font-sans)`, which resolved to the Geist variable
+     next/font puts on <html> — a second typeface nothing asked for. */
+  --font-heading: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Elevation, tinted with HNS blue like the legacy --shadow-* tokens. */
+  --shadow-xs: 0 1px 2px rgba(22, 70, 157, 0.06);
+  --shadow-sm: 0 1px 3px rgba(22, 70, 157, 0.08), 0 1px 2px rgba(22, 70, 157, 0.04);
+  --shadow-md: 0 4px 16px rgba(22, 70, 157, 0.12);
+  --shadow-lg: 0 8px 32px rgba(22, 70, 157, 0.16);
+  --shadow-xl: 0 16px 48px rgba(22, 70, 157, 0.2);
+
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-tone-amber-bg: var(--tone-amber-bg);
+  --color-tone-amber-fg: var(--tone-amber-fg);
+  --color-tone-amber-border: var(--tone-amber-border);
+  --color-tone-orange-bg: var(--tone-orange-bg);
+  --color-tone-orange-fg: var(--tone-orange-fg);
+  --color-tone-orange-border: var(--tone-orange-border);
+  --color-tone-blue-bg: var(--tone-blue-bg);
+  --color-tone-blue-fg: var(--tone-blue-fg);
+  --color-tone-blue-border: var(--tone-blue-border);
+  --color-tone-violet-bg: var(--tone-violet-bg);
+  --color-tone-violet-fg: var(--tone-violet-fg);
+  --color-tone-violet-border: var(--tone-violet-border);
+  --color-tone-teal-bg: var(--tone-teal-bg);
+  --color-tone-teal-fg: var(--tone-teal-fg);
+  --color-tone-teal-border: var(--tone-teal-border);
+  --color-tone-cyan-bg: var(--tone-cyan-bg);
+  --color-tone-cyan-fg: var(--tone-cyan-fg);
+  --color-tone-cyan-border: var(--tone-cyan-border);
+  --color-tone-green-bg: var(--tone-green-bg);
+  --color-tone-green-fg: var(--tone-green-fg);
+  --color-tone-green-border: var(--tone-green-border);
+  --color-tone-red-bg: var(--tone-red-bg);
+  --color-tone-red-fg: var(--tone-red-fg);
+  --color-tone-red-border: var(--tone-red-border);
+  --color-tone-gray-bg: var(--tone-gray-bg);
+  --color-tone-gray-fg: var(--tone-gray-fg);
+  --color-tone-gray-border: var(--tone-gray-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

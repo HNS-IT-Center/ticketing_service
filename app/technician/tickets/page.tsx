@@ -1,11 +1,18 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
-import Badge from "@/components/ui/Badge";
-import { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
+import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
+import { EmptyState } from "@/components/app/EmptyState";
+import { FilterBar, FilterBarSearch } from "@/components/app/FilterBar";
+import { FilterChips } from "@/components/app/FilterChips";
+import { PageHeader } from "@/components/app/PageHeader";
+import { Pagination } from "@/components/app/Pagination";
+import { StatusBadge } from "@/components/app/StatusBadge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { TECHNICIAN_TICKET_FILTERS, ticketListWhere } from "@/lib/ticket-list-filter";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
-import { Ticket, ChevronLeft, ChevronRight } from "lucide-react";
+import { Ticket, Plus } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
 
 function getTicketPoints(type: string, deviceType?: string | null, extraServices?: string[]): number {
@@ -130,213 +137,150 @@ export default async function TechnicianTicketsPage({
     const isAsc = sortParam === ascKey;
     const nextSort = isAsc ? descKey : ascKey;
     return (
-      <Link href={buildHref(1, nextSort)} style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+      <Link
+        href={buildHref(1, nextSort)}
+        className="inline-flex items-center gap-1 rounded-sm text-inherit outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
         {label}
-        {isActive ? (isAsc ? " ↑" : " ↓") : <span style={{ opacity: 0.3 }}> ↕</span>}
+        {isActive ? (isAsc ? " ↑" : " ↓") : <span className="opacity-30"> ↕</span>}
       </Link>
     );
   };
 
+  type ListTicket = (typeof tickets)[number];
+  const columns: DataTableColumn<ListTicket>[] = [
+    {
+      key: "code",
+      header: renderSortableHeader("Code", "code_asc", "code_desc"),
+      mobileLabel: "Code",
+      cell: (t) => <span className="font-mono">{t.ticket_code}</span>,
+      mobile: "title",
+    },
+    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
+    {
+      key: "customer",
+      header: "Customer",
+      cell: (t) => (
+        <span className="flex flex-col">
+          <span className="font-medium">{ticketPartyName(t)}</span>
+          {!t.is_for_self && <span className="text-[0.7rem] text-muted-foreground">(For Others)</span>}
+        </span>
+      ),
+    },
+    {
+      key: "points",
+      header: "Points",
+      cell: (t) => {
+        const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
+        const hasExtra = (t.extra_services as string[])?.length > 0;
+        return (
+          <span
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-bold whitespace-nowrap",
+              pts >= 5
+                ? "border-tone-amber-border bg-tone-amber-bg text-tone-amber-fg"
+                : pts >= 4
+                ? "border-tone-violet-border bg-tone-violet-bg text-tone-violet-fg"
+                : "border-tone-blue-border bg-tone-blue-bg text-tone-blue-fg",
+            )}
+          >
+            ⭐ {pts} pts{hasExtra && <span className="text-[0.68rem] font-normal opacity-70"> (+extra)</span>}
+          </span>
+        );
+      },
+    },
+    {
+      key: "status",
+      header: renderSortableHeader("Status", "status_asc", "status_desc"),
+      mobileLabel: "Status",
+      // `rma_process` is one ticket status covering nine RMA ones; the list
+      // shows the informative one. See lib/rma/ticket-status-badge.ts.
+      cell: (t) => (
+        <StatusBadge {...ticketBadgeChoice(t.status, t.rma_case?.status)} hasTechnician={Boolean(t.technician_id)} size="sm" />
+      ),
+      mobile: "badge",
+    },
+    {
+      key: "updated",
+      header: renderSortableHeader("Updated", "updated_asc", "updated_desc"),
+      mobileLabel: "Updated",
+      cell: (t) => new Date(t.updated_at).toLocaleDateString("id-ID"),
+      className: "text-muted-foreground",
+    },
+    {
+      key: "manage",
+      header: "",
+      cell: () => <span className="text-sm font-medium text-primary">Manage →</span>,
+      className: "text-right",
+      mobile: "hidden",
+    },
+  ];
+
+  const chips = TECHNICIAN_TICKET_FILTERS.map(({ key: s, label }) => {
+    const qs = new URLSearchParams();
+    if (s !== "all") qs.set("status", s);
+    if (query) qs.set("q", query);
+    if (sortParam !== "priority") qs.set("sort", sortParam);
+    const str = qs.toString();
+    return { key: s, label, href: `/technician/tickets${str ? `?${str}` : ""}` };
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-        <div>
-          <h1>{isCoordinator ? "Store Tickets" : "My Tickets"}</h1>
-          <div className="flex items-center gap-3 mt-1">
-            <p className="text-gray-500">
-              {isCoordinator ? "All tickets in your assigned stores" : "Manage tickets assigned to you"}
-            </p>
-            <Link href="/technician/tickets/create" className="btn btn-primary btn-sm flex items-center gap-1.5" style={{ padding: "0.25rem 0.75rem" }}>
-              <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span> New Ticket
-            </Link>
-          </div>
-        </div>
-        <form style={{ display: "flex", gap: "0.5rem" }}>
+    // Built from components/app and shadcn only, so the page opts into
+    // Tailwind spacing with a data-slot (the UI-1 reset rule).
+    <div data-slot="technician-tickets" className="flex flex-col gap-5">
+      <PageHeader
+        title={isCoordinator ? "Store Tickets" : "My Tickets"}
+        description={isCoordinator ? "All tickets in your assigned stores" : "Manage tickets assigned to you"}
+        actions={
+          <Link href="/technician/tickets/create" className={buttonVariants()}>
+            <Plus aria-hidden="true" /> New Ticket
+          </Link>
+        }
+      />
+
+      <div className="flex flex-col gap-3">
+        <FilterBar action="/technician/tickets">
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
           {sortParam !== "priority" && <input type="hidden" name="sort" value={sortParam} />}
-          <input
-            name="q"
-            defaultValue={query}
-            className="form-input"
-            placeholder="Search code or customer..."
-            style={{ width: "200px" }}
-          />
-          <button type="submit" className="btn btn-primary btn-sm">Search</button>
-          {query && (
-            <Link href={buildHref(1, sortParam).replace(`q=${encodeURIComponent(query)}`, "").replace("&&", "&").replace("?&", "?")} className="btn btn-ghost btn-sm">
-              Clear
-            </Link>
-          )}
-        </form>
-      </div>
-
-      {/* Filter tabs */}
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        {TECHNICIAN_TICKET_FILTERS.map(({ key: s, label }) => {
-          const qs = new URLSearchParams();
-          if (s !== "all") qs.set("status", s);
-          if (query) qs.set("q", query);
-          if (sortParam !== "priority") qs.set("sort", sortParam);
-          const str = qs.toString();
-          const href = `/technician/tickets${str ? `?${str}` : ""}`;
-          return (
-            <Link
-              key={s}
-              href={href}
-              className="btn btn-sm"
-              style={{
-                background: statusFilter === s ? "var(--primary)" : "var(--white)",
-                color: statusFilter === s ? "var(--white)" : "var(--text-secondary)",
-                border: "1.5px solid",
-                borderColor: statusFilter === s ? "var(--primary)" : "var(--border)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {label}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Desktop table */}
-      <div className="admin-ticket-table">
-        <div className="table-wrapper">
-          {tickets.length === 0 ? (
-            <div className="empty-state">
-              <Ticket size={36} style={{ opacity: 0.3 }} />
-              <p>No tickets found</p>
-            </div>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>{renderSortableHeader("Code", "code_asc", "code_desc")}</th>
-                  <th>Type</th>
-                  <th>Customer</th>
-                  <th>Points</th>
-                  <th>{renderSortableHeader("Status", "status_asc", "status_desc")}</th>
-                  <th>{renderSortableHeader("Updated", "updated_asc", "updated_desc")}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((t) => {
-                  const actualName = ticketPartyName(t);
-                  const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
-                  const hasExtra = (t.extra_services as string[])?.length > 0;
-                  return (
-                    <tr key={t.id}>
-                      <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
-                      <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>{actualName}</div>
-                        {!t.is_for_self && <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>(For Others)</div>}
-                      </td>
-                      <td>
-                        <span style={{
-                          display: "inline-flex", alignItems: "center", gap: "0.25rem",
-                          padding: "0.2rem 0.55rem", borderRadius: "999px",
-                          fontSize: "0.75rem", fontWeight: 700,
-                          background: pts >= 5 ? "rgba(234,179,8,0.12)" : pts >= 4 ? "rgba(124,58,237,0.1)" : "rgba(22,70,157,0.1)",
-                          color: pts >= 5 ? "#92400e" : pts >= 4 ? "#6d28d9" : "var(--primary)",
-                          border: `1px solid ${pts >= 5 ? "rgba(234,179,8,0.3)" : pts >= 4 ? "rgba(124,58,237,0.25)" : "rgba(22,70,157,0.25)"}`,
-                          whiteSpace: "nowrap",
-                        }}>
-                          ⭐ {pts} pts{hasExtra && <span style={{ opacity: 0.65, fontWeight: 400, fontSize: "0.68rem" }}> (+extra)</span>}
-                        </span>
-                      </td>
-                      <td>
-                        {(() => {
-                          const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
-                          return badge.kind === "rma"
-                            ? <RmaStatusBadge status={badge.status} />
-                            : <Badge variant={badge.status} technicianId={t.technician_id} />;
-                        })()}
-                      </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{new Date(t.updated_at).toLocaleDateString("id-ID")}</td>
-                      <td><Link href={`/technician/tickets/${t.id}`} className="btn btn-secondary btn-sm">Manage</Link></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      {/* Mobile card list */}
-      <div className="admin-ticket-cards">
-        {tickets.length === 0 ? (
-          <div className="empty-state">
-            <Ticket size={36} style={{ opacity: 0.3 }} />
-            <p>No tickets found</p>
+          <FilterBarSearch label="Search tickets" placeholder="Search code or customer..." defaultValue={query} />
+          <div className="flex gap-2 *:flex-1 md:*:flex-none">
+            <Button type="submit">Search</Button>
+            {query && (
+              <Link
+                href={buildHref(1, sortParam).replace(`q=${encodeURIComponent(query)}`, "").replace("&&", "&").replace("?&", "?")}
+                className={buttonVariants({ variant: "ghost" })}
+              >
+                Clear
+              </Link>
+            )}
           </div>
-        ) : tickets.map((t) => {
-          const actualName = ticketPartyName(t);
-          const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
-          const hasExtra = (t.extra_services as string[])?.length > 0;
-          return (
-            <Link key={t.id} href={`/technician/tickets/${t.id}`} style={{ textDecoration: "none" }}>
-              <div className="mobile-ticket-card">
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)" }}>
-                    {t.ticket_code}
-                  </span>
-                  {(() => {
-                    const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
-                    return badge.kind === "rma"
-                      ? <RmaStatusBadge status={badge.status} />
-                      : <Badge variant={badge.status} technicianId={t.technician_id} />;
-                  })()}
-                </div>
-                <div style={{ fontWeight: 500, fontSize: "0.875rem", margin: "0.25rem 0", color: "var(--text-primary)" }}>
-                  Customer: {actualName} {!t.is_for_self && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(For Others)</span>}
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                  <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                  <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                    <span style={{
-                      display: "inline-flex", alignItems: "center",
-                      padding: "0.15rem 0.5rem", borderRadius: "999px",
-                      fontSize: "0.7rem", fontWeight: 700,
-                      background: pts >= 4 ? "rgba(124,58,237,0.1)" : pts === 3 ? "rgba(22,70,157,0.1)" : "rgba(22,163,74,0.1)",
-                      color: pts >= 4 ? "#6d28d9" : pts === 3 ? "var(--primary)" : "#15803d",
-                    }}>
-                      ⭐ {pts} pts
-                    </span>
-                    <span>{new Date(t.updated_at).toLocaleDateString("id-ID")}</span>
-                  </div>
-                </div>
-              </div>
-            </Link>
-          );
-        })}
+        </FilterBar>
+        <FilterChips label="Status" chips={chips} active={statusFilter} />
       </div>
 
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", paddingTop: "0.5rem" }}>
-          {page > 1 ? (
-            <Link href={buildHref(page - 1)} className="btn btn-secondary btn-sm">
-              <ChevronLeft size={14} /> Prev
-            </Link>
-          ) : (
-            <button className="btn btn-secondary btn-sm" disabled><ChevronLeft size={14} /> Prev</button>
-          )}
-          <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", padding: "0 0.5rem" }}>
-            Page {page} of {totalPages}
-          </span>
-          {page < totalPages ? (
-            <Link href={buildHref(page + 1)} className="btn btn-secondary btn-sm">
-              Next <ChevronRight size={14} />
-            </Link>
-          ) : (
-            <button className="btn btn-secondary btn-sm" disabled>Next <ChevronRight size={14} /></button>
-          )}
-        </div>
-      )}
-      <div style={{ textAlign: "center", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-        Showing {tickets.length > 0 ? skip + 1 : 0}–{Math.min(skip + tickets.length, totalCount)} of {totalCount} tickets
+      <DataTable
+        caption={isCoordinator ? "Store Tickets" : "My Tickets"}
+        columns={columns}
+        rows={tickets}
+        getRowKey={(t) => t.id}
+        rowHref={(t) => `/technician/tickets/${t.id}`}
+        empty={<EmptyState icon={Ticket} title="No tickets found" />}
+      />
+
+      <div className="flex flex-col gap-2">
+        {totalPages > 1 && (
+          <Pagination
+            page={page}
+            pageCount={totalPages}
+            hrefForPage={(p) => buildHref(p)}
+            labels={{ previous: "Prev", next: "Next", pageOf: (p, n) => `Page ${p} of ${n}` }}
+            className="sm:justify-center"
+          />
+        )}
+        <p className="text-center text-[0.8125rem] text-muted-foreground">
+          Showing {tickets.length > 0 ? skip + 1 : 0}–{Math.min(skip + tickets.length, totalCount)} of {totalCount} tickets
+        </p>
       </div>
     </div>
   );

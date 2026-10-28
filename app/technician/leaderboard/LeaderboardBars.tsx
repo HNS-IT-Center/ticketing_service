@@ -101,28 +101,28 @@ export function Top5Bars({ top5, maxPts }: { top5: RankEntry[]; maxPts: number }
   const COLORS = ["#f59e0b", "#9ca3af", "#b45309", "var(--primary)", "var(--primary)"];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+    <ol className="flex flex-col gap-3">
       {top5.map((t, i) => {
         const pct = Math.round((t.points / maxPts) * 100);
         const barColor = COLORS[i] ?? "var(--primary)";
         return (
-          <div key={t.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-            <span style={{ width: "1.5rem", textAlign: "right", fontWeight: 700, fontSize: "0.875rem", color: barColor, flexShrink: 0 }}>#{i + 1}</span>
-            <span style={{ width: "7rem", fontSize: "0.875rem", fontWeight: 500, flexShrink: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</span>
-            <div style={{ flex: 1, background: "var(--cream-dark)", borderRadius: "999px", height: "10px", overflow: "hidden" }}>
-              <div style={{
-                height: "100%",
-                borderRadius: "999px",
-                background: barColor,
-                width: mounted ? `${pct}%` : "0%",
-                transformOrigin: "left",
-                transition: `width 0.7s ${i * 0.1}s cubic-bezier(0.34,1.56,0.64,1)`,
-              }} />
+          <li key={t.id} className="flex items-center gap-3">
+            <span className="w-6 shrink-0 text-right text-sm font-bold" style={{ color: barColor }}>#{i + 1}</span>
+            <span className="w-20 shrink-0 truncate text-sm font-medium sm:w-28">{t.name}</span>
+            <div className="h-2.5 flex-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full origin-left rounded-full"
+                style={{
+                  background: barColor,
+                  width: mounted ? `${pct}%` : "0%",
+                  transition: `width 0.7s ${i * 0.1}s cubic-bezier(0.34,1.56,0.64,1)`,
+                }}
+              />
             </div>
-            <span style={{ width: "3.5rem", textAlign: "right", fontSize: "0.875rem", fontWeight: 700, color: barColor, flexShrink: 0 }}>{t.points} pts</span>
-          </div>
+            <span className="w-14 shrink-0 text-right text-sm font-bold" style={{ color: barColor }}>{t.points} pts</span>
+          </li>
         );
       })}
-    </div>
+    </ol>
   );
 }

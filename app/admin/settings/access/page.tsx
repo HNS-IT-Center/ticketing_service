@@ -2,6 +2,7 @@ import { ShieldCheck } from "lucide-react";
 import { requireRole } from "@/lib/session";
 import { loadAccessOverrides } from "@/lib/access-server";
 import { AUDIENCES, CAPABILITIES, audienceAllowed, ruleKey } from "@/lib/access";
+import { PageHeader } from "@/components/app/PageHeader";
 import AccessMatrixForm from "./AccessMatrixForm";
 
 export const metadata = { title: "Pengaturan Akses — HNS IT Center" };
@@ -14,16 +15,15 @@ export default async function AccessSettingsPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <h1 className="flex items-center gap-2">
-          <ShieldCheck size={22} /> Pengaturan Akses
-        </h1>
-        <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-          Siapa yang boleh melihat dan mengubah harga service. Head Teknisi ditandai di halaman
-          Users; Koordinator Toko adalah teknisi bertanda Team Leader.
-        </p>
-      </div>
+    <div data-slot="access-settings" className="flex flex-col gap-6">
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <ShieldCheck aria-hidden="true" className="size-6" /> Pengaturan Akses
+          </span>
+        }
+        description="Siapa yang boleh melihat dan mengubah harga service. Head Teknisi ditandai di halaman Users; Koordinator Toko adalah teknisi bertanda Team Leader."
+      />
       <AccessMatrixForm allowed={allowed} />
     </div>
   );

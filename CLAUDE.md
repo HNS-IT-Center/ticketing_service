@@ -1041,11 +1041,29 @@ Branch `feat/ui-foundation` (on top of `feat/catalog-pcbuild-upgrade` `2e7f87e`)
 | UI2.3 | **Bells restyled** | ✅ `032a60b` | `NotificationBell` / `RequestsBell`: only JSX changed — diff shows no fetch, interval or `POLL_MS` line touched. 44px triggers with a count (9+), Esc closes, skeleton while loading, tone tokens. "Mark all read" was white on `var(--accent)` (near-white) — now primary. The 4 pre-existing `set-state-in-effect` lint errors are in the polling code and were left alone on purpose |
 | UI2.4 | **Legacy shell CSS removed** | ✅ `032a60b` | 296 lines: `.sidebar*`, `.dashboard-layout/-main/-topbar`, `.mobile-menu-btn`, `.notif-bell/-dot`, `.dropdown-item*`, `--sidebar-width`. Each grep-proven unused first. `.dashboard-content` kept. `globals.css` 1,606 → 1,310 lines |
 | UI2.5 | **Verification** | ✅ | All four portals logged in with the seed accounts (admin, technician, sales, rma) at 360×800 and 1024–1440: no horizontal scroll, topbar buttons and sheet items 44px at 360, active entry and topbar label right on every page, admin keeps its own sidebar on `/rma/*` with "Klaim & RMA" open. Collapse persists across navigation; swipe open/close verified with synthetic touch events; Sign Out from the dropdown logs out. Every admin and RMA menu page (24, incl. a ticket and a case detail) answers 200 inside the new shell. No console or server errors |
-| UI2.6 | **Coordinator view** | 🔄 | No `is_team_leader` account in the seed, so the RequestsBell in the technician portal was not seen live; its condition is the unchanged `admin \|\| sales \|\| isCoordinator`, and the bell itself was exercised as Sales |
+| UI2.6 | **Coordinator view** | ✅ | Seen live during UI-3a (budi temporarily `is_team_leader` in the local DB, then reverted): the RequestsBell shows in the technician portal. The seed has no coordinator account |
 
 Checks: `tsc` clean; repo lint 147 → 141 problems (the old shell's 3 errors + 3 warnings gone; nothing new); tests 1014 pass; `npm run build` passes.
 
 ⚠️ **Dev-only trap found:** `next.config.ts` sends `Cache-Control: public, max-age=31536000, immutable` for `/_next/static/(.*)` — Next warns about it at startup. In `next dev` chunk URLs do not change across edits, so the browser keeps running the **old** client code: the result is a hydration error that is not in the code (server renders new, browser hydrates old). Work around with a fresh port or a hard refresh; the real fix is to send that header only in production.
+
+### SPRINT UI-3a 2026-10-28 — UI overhaul, Phase 3a: technician pages outside the WIP
+Phase 3 is split by the owner's call (2026-10-28): the four heaviest technician files — ticket detail `page.tsx`, `StatusUpdater`, `ReplacedPartsPanel`, `CreateTicketForm` (and `ChargesPanel`) — are being changed in uncommitted work on `feat/catalog-pcbuild-upgrade`, so they are **3b**, after that work is committed. 3a is everything else in `app/technician`. Presentation only: queries, actions, points and sorting untouched; staff-facing English kept word for word.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| UI3a.1 | **components/app additions** | ✅ `b5f44cb` | StatusBadge takes `hasTechnician` / `paused` → "Waiting for Work" / "Waiting for Technician" / "Paused", the legacy badge's words (tests). DataTable: `footer` card slot, `rowClassName`, node headers + `mobileLabel`. Pagination `labels`. New `FilterChips`, `PointsBadge`. `DialogHeader` reserves room for the close button |
+| UI3a.2 | **Dashboard** | ✅ `8a6ea89` | Owner-approved order: active tickets → available tickets → stats and target folded in "Statistik & Target". Request Ticket = ConfirmDialog with the old text and the old outcome (toast, then close). 68 → 0 inline styles |
+| UI3a.3 | **Ticket list + skeletons + hold panel** | ✅ `c0ffb2d` | FilterBar (GET), FilterChips, DataTable with the three sort links, "Prev / Next / Page x of y", "Showing a–b of n tickets". `HoldEvidencePanel` migrated; its legacy `FileUpload` is wrapped in the legacy p size so it renders unchanged. 77 → 3 |
+| UI3a.4 | **Leaderboard** | ✅ `6f48dc0` | Same podium/Top 5/rankings. Two columns only from `xl` (at 1024px the side list was ~200px and cut names to "R.."). 65 → 29, all per-rank colours/heights/delays |
+| UI3a.5 | **Profile + Schedule** | ✅ `6a15895` | "Cancelled" stat and "Access Denied" were `var(--accent)` (near-white) — now red. `ProfileForm` / `ChangePasswordForm` stay legacy (shared with admin, Phase 4): the profile root deliberately has **no** `data-slot`. Schedule dialog = shadcn Dialog + Tabs. 42 → 3 |
+| UI3a.6 | **Unused CSS** | ✅ `5da4d7b` | `.workload-bar/-fill`, `.tech-stats-grid`, `.tech-workload-card` (−43 lines; `globals.css` 1,267) |
+| UI3a.7 | **Verification** | ✅ | budi at 360×800 and 1024: dashboard, list (search keeps `q`, chips keep it too, Clear link identical), leaderboard both tabs, profile, schedule (denied and coordinator). Request Ticket → "Requested" + Cancel → "Request cancelled." round trip on the local DB. Local fixtures used and **reverted**: budi assigned to a store and made coordinator for the test, both undone; the request was cancelled. No console errors |
+| UI3b | **Ticket detail, StatusUpdater (proof upload), ReplacedPartsPanel, CreateTicketForm, ChargesPanel** | ⬜ | Waits for the WIP on `feat/catalog-pcbuild-upgrade` to be committed. Legacy forms with < 44px buttons: `ProfileForm`, `ChangePasswordForm` (Phase 4) |
+
+Checks: `tsc` clean; repo lint 141 → 129 problems; tests 1016 pass; `npm run build` passes. Inline styles in the 3a files: 256 → 35, every one a runtime value.
+
+**Pattern worth reusing:** a migrated page that still embeds a legacy component keeps its root **without** `data-slot` and lets each new section bring its own (Card, StatCard, PageHeader…); a page built only from new pieces puts `data-slot` on its root.
 
 ## 📋 BACKLOG — what is likely to come next
 

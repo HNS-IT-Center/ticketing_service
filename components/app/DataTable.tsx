@@ -169,7 +169,7 @@ export function DataTable<T>({
                       {detailCols.map((col) => (
                         <div key={col.key} className="contents">
                           <dt className="text-muted-foreground">{col.mobileLabel ?? col.header}</dt>
-                          <dd className="min-w-0 break-words text-foreground">{col.cell(row)}</dd>
+                          <dd className="min-w-0 text-foreground [overflow-wrap:anywhere]">{col.cell(row)}</dd>
                         </div>
                       ))}
                     </dl>

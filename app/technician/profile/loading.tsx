@@ -1,36 +1,30 @@
-// Skeleton for profile pages (technician, admin)
+import { StatCardSkeleton } from "@/components/app/StatCard";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Skeleton for the technician profile: header, stats, then the form card.
 export default function Loading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", maxWidth: "720px", margin: "0 auto", width: "100%" }}>
-      {/* Header */}
-      <div>
-        <div className="skeleton skeleton-title" style={{ width: "180px" }} />
-        <div className="skeleton skeleton-text" style={{ width: "240px", marginTop: "0.5rem" }} />
+    <div data-slot="profile-loading" aria-busy="true" className="flex w-full max-w-2xl flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-8 w-44" />
+        <Skeleton className="h-4 w-60" />
       </div>
 
-      {/* Stats row */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(130px, 1fr))", gap: "1rem" }}>
-        {[1, 2, 3].map((i) => (
-          <div key={i} className="stat-card">
-            <div className="skeleton" style={{ width: "2rem", height: "2rem", borderRadius: "0.5rem" }} />
-            <div>
-              <div className="skeleton skeleton-title" style={{ width: "40px" }} />
-              <div className="skeleton skeleton-text" style={{ width: "70px", marginTop: "0.25rem" }} />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* Form card skeleton */}
-      <div className="card" style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-        <div className="skeleton skeleton-title" style={{ width: "140px" }} />
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-            <div className="skeleton skeleton-text" style={{ width: "80px" }} />
-            <div className="skeleton" style={{ height: "2.5rem", borderRadius: "0.5rem" }} />
+          <StatCardSkeleton key={i} />
+        ))}
+      </div>
+
+      <div className="flex flex-col gap-5 rounded-xl border border-border bg-card p-5">
+        <Skeleton className="h-5 w-36" />
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="flex flex-col gap-1.5">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-11 w-full md:h-10" />
           </div>
         ))}
-        <div className="skeleton" style={{ height: "2.5rem", width: "120px", borderRadius: "0.5rem", alignSelf: "flex-end" }} />
+        <Skeleton className="h-11 w-32 self-end md:h-10" />
       </div>
     </div>
   );

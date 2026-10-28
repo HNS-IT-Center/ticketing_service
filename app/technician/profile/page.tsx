@@ -1,9 +1,15 @@
 import { requireRole } from "@/lib/session";
-import { User, Wrench, CheckCircle, XCircle, Trophy, ShieldCheck, Package } from "lucide-react";
+import { User, Wrench, CheckCircle, XCircle, Trophy, Package } from "lucide-react";
 import ProfileForm from "@/components/ui/ProfileForm";
 import ChangePasswordForm from "@/components/ui/ChangePasswordForm";
 import { updateTechnicianProfileAction, equipTitleAction } from "@/app/actions/profile";
 import { awardMonthlyTitles, getUserTitles, getTechnicianProfile } from "@/lib/performance";
+import { EmptyState } from "@/components/app/EmptyState";
+import { PageHeader } from "@/components/app/PageHeader";
+import { StatCard } from "@/components/app/StatCard";
+import { Button } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "My Profile — HNS IT Center" };
 
@@ -40,7 +46,7 @@ export default async function TechnicianProfilePage() {
   // 1. Fetch cached profile data
   const [user, performance, activeTicketsCount] = await getTechnicianProfile(session.userId);
 
-  if (!user) return <div className="empty-state">User not found.</div>;
+  if (!user) return <EmptyState icon={User} title="User not found." />;
 
   // 2. Lazily award last month's title if earned (no-op if already awarded or not eligible)
   await awardMonthlyTitles(session.userId, user.is_team_leader);
@@ -65,201 +71,191 @@ export default async function TechnicianProfilePage() {
   const levelInfo = getLevelInfo(totalSuccess);
 
   const statCards = [
-    { label: "Tickets Handled", value: totalHandled, icon: <Wrench size={20} />, color: "var(--primary)" },
-    { label: "Completed",       value: totalSuccess, icon: <CheckCircle size={20} />, color: "#16a34a" },
-    { label: "Cancelled",       value: totalFail,    icon: <XCircle size={20} />, color: "var(--accent)" },
-    { label: "Total Points",    value: totalPoints,  icon: <User size={20} />, color: "#7c3aed" },
+    { label: "Tickets Handled", value: totalHandled, icon: Wrench, tone: "default" as const },
+    { label: "Completed",       value: totalSuccess, icon: CheckCircle, tone: "success" as const },
+    // Was var(--accent), which since the shadcn init is a near-white hover
+    // fill — the number was almost invisible. Red, as it was meant to be.
+    { label: "Cancelled",       value: totalFail,    icon: XCircle, tone: "attention" as const },
+    { label: "Total Points",    value: totalPoints,  icon: User, tone: "default" as const },
   ];
 
   const activeTitle = titles.find((t) => t.title_key === user.active_title) ?? null;
+  const levelPercent = Math.min((levelInfo.progress / levelInfo.required) * 100, 100);
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl mx-auto">
-      {/* Header */}
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
-          <User size={24} /> My Profile
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">Manage your account information</p>
-      </div>
+    // No data-slot on this root: ProfileForm and ChangePasswordForm are still
+    // legacy components (shared with the admin profile) and need the legacy
+    // reset. Every new section carries its own data-slot instead.
+    <div className="flex w-full max-w-2xl flex-col gap-6">
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <User aria-hidden="true" className="size-6" /> My Profile
+          </span>
+        }
+        description="Manage your account information"
+      />
 
       {/* ── Achievement Inventory ─────────────────────────────────────────── */}
-      <div className="card" style={{ padding: "1.5rem" }}>
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="flex items-center gap-2 text-lg font-bold" style={{ color: "#c2410c" }}>
-            <Package size={20} /> Achievement Inventory
-          </h2>
+      <Card className="md:[--card-spacing:--spacing(6)]">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg font-bold text-orange-700">
+            <Package aria-hidden="true" className="size-5" /> Achievement Inventory
+          </CardTitle>
           {titles.length > 0 && (
-            <span className="text-xs font-semibold px-2 py-1 rounded-full"
-              style={{ background: "#fef3c7", color: "#78350f" }}>
-              {titles.length} title{titles.length !== 1 ? "s" : ""} earned
-            </span>
+            <CardAction>
+              <span className="rounded-full bg-tone-amber-bg px-2 py-1 text-xs font-semibold text-tone-amber-fg">
+                {titles.length} title{titles.length !== 1 ? "s" : ""} earned
+              </span>
+            </CardAction>
           )}
-        </div>
+        </CardHeader>
+        <CardContent>
+          {titles.length === 0 ? (
+            <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+              <Trophy aria-hidden="true" className="size-10 opacity-20" />
+              <p className="font-medium">No titles yet. Keep going! 💪</p>
+              <p className="text-sm">Be the top technician or coordinator of the month to earn your first title.</p>
+            </div>
+          ) : (
+            <ul className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
+              {titles.map((title) => {
+                const isEquipped  = user.active_title === title.title_key;
+                const isCoord     = title.title_type === "coordinator";
+                const month       = getMonthFromKey(title.title_key);
+                const mc          = MONTH_COLORS[month] ?? MONTH_COLORS[1];
 
-        {titles.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-8 text-center"
-            style={{ color: "var(--text-muted)" }}>
-            <Trophy size={40} style={{ opacity: 0.2 }} />
-            <p className="font-medium">No titles yet. Keep going! 💪</p>
-            <p className="text-sm">Be the top technician or coordinator of the month to earn your first title.</p>
-          </div>
-        ) : (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "1rem" }}>
-            {titles.map((title) => {
-              const isEquipped  = user.active_title === title.title_key;
-              const isCoord     = title.title_type === "coordinator";
-              const month       = getMonthFromKey(title.title_key);
-              const mc          = MONTH_COLORS[month] ?? MONTH_COLORS[1];
-              const glowColor   = isCoord ? "rgba(124,58,237,0.35)" : "rgba(245,158,11,0.35)";
-              const borderColor = isEquipped
-                ? (isCoord ? "#7c3aed" : "#f59e0b")
-                : "var(--border-light)";
+                return (
+                  <li
+                    key={title.title_key}
+                    className={cn(
+                      "relative flex flex-col gap-2 rounded-lg border-2 px-4 py-5 transition-all",
+                      !isEquipped && "border-border bg-card",
+                      isEquipped && isCoord && "border-violet-600 bg-violet-600/[0.06] shadow-[0_0_16px_rgba(124,58,237,0.35)]",
+                      isEquipped && !isCoord && "border-amber-500 bg-amber-500/[0.06] shadow-[0_0_16px_rgba(245,158,11,0.35)]",
+                    )}
+                  >
+                    {isEquipped && (
+                      <div
+                        className={cn(
+                          "absolute -top-px -right-px rounded-tr-lg rounded-bl-lg px-2 py-0.5 text-[0.6rem] font-bold text-white",
+                          isCoord ? "bg-violet-600" : "bg-amber-600",
+                        )}
+                      >
+                        ✓ EQUIPPED
+                      </div>
+                    )}
 
-              return (
-                <div key={title.title_key}
-                  style={{
-                    border: `2px solid ${borderColor}`,
-                    borderRadius: "var(--radius-md)",
-                    padding: "1.25rem 1rem",
-                    background: isEquipped
-                      ? (isCoord ? "rgba(124,58,237,0.06)" : "rgba(245,158,11,0.06)")
-                      : "var(--white)",
-                    boxShadow: isEquipped ? `0 0 16px ${glowColor}` : "none",
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "0.5rem",
-                    transition: "all 0.2s",
-                    position: "relative",
-                  }}>
-                  {isEquipped && (
-                    <div style={{
-                      position: "absolute", top: "-1px", right: "-1px",
-                      background: isCoord ? "#7c3aed" : "#f59e0b",
-                      color: "white", fontSize: "0.6rem", fontWeight: 700,
-                      padding: "0.2rem 0.5rem", borderRadius: "0 var(--radius-md) 0 var(--radius-md)",
+                    <div className="text-[2rem] leading-none">{title.emoji}</div>
+
+                    <div>
+                      <div className="text-[0.9rem] leading-snug font-bold text-foreground">{title.title_label}</div>
+                      <div className="mt-1 text-[0.7rem] text-muted-foreground">
+                        Awarded {new Date(title.awarded_at).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
+                      </div>
+                    </div>
+
+                    {/* Month color badge */}
+                    <div
+                      className="inline-block w-fit rounded-full px-2.5 py-0.5 text-[0.65rem] font-bold tracking-wide"
+                      style={{ background: mc.bg, color: mc.text }}
+                    >
+                      {isCoord ? "🛡️" : "🏆"} #1 {MONTHS[month - 1].slice(0, 3)} {title.title_key.split("_")[1]}
+                    </div>
+
+                    {/* Equip / Unequip button */}
+                    <form action={async () => {
+                      "use server";
+                      await equipTitleAction(isEquipped ? null : title.title_key);
                     }}>
-                      ✓ EQUIPPED
-                    </div>
-                  )}
-
-                  <div style={{ fontSize: "2rem", lineHeight: 1 }}>{title.emoji}</div>
-
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: "0.9rem", color: "var(--text-primary)", lineHeight: 1.3 }}>
-                      {title.title_label}
-                    </div>
-                    <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                      Awarded {new Date(title.awarded_at).toLocaleDateString("en-GB", { month: "long", year: "numeric" })}
-                    </div>
-                  </div>
-
-                  {/* Month color badge */}
-                  <div style={{
-                    display: "inline-block", width: "fit-content",
-                    padding: "0.2rem 0.6rem", borderRadius: "999px",
-                    background: mc.bg, color: mc.text,
-                    fontSize: "0.65rem", fontWeight: 700, letterSpacing: "0.03em",
-                  }}>
-                    {isCoord ? "🛡️" : "🏆"} #1 {MONTHS[month - 1].slice(0, 3)} {title.title_key.split("_")[1]}
-                  </div>
-
-                  {/* Equip / Unequip button */}
-                  <form action={async () => {
-                    "use server";
-                    await equipTitleAction(isEquipped ? null : title.title_key);
-                  }}>
-                    <button type="submit"
-                      className={`btn btn-sm w-full mt-1 ${isEquipped ? "btn-outline" : (isCoord ? "" : "btn-primary")}`}
-                      style={isCoord && !isEquipped ? {
-                        background: "#7c3aed", color: "white", border: "none"
-                      } : undefined}>
-                      {isEquipped ? "Unequip" : "Equip →"}
-                    </button>
-                  </form>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                      <Button
+                        type="submit"
+                        size="sm"
+                        variant={isEquipped ? "outline" : "default"}
+                        className={cn("mt-1 w-full", isCoord && !isEquipped && "bg-violet-600 text-white hover:bg-violet-600/90")}
+                      >
+                        {isEquipped ? "Unequip" : "Equip →"}
+                      </Button>
+                    </form>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Stats row */}
-      <div className="customer-stats-grid">
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {statCards.map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-card-icon" style={{ background: `${s.color}18`, color: s.color }}>
-              {s.icon}
-            </div>
-            <div className="stat-card-body">
-              <div className="stat-card-value" style={{ color: s.color }}>{s.value}</div>
-              <div className="stat-card-label">{s.label}</div>
-            </div>
-          </div>
+          <StatCard key={s.label} label={s.label} value={s.value} icon={s.icon} tone={s.tone} />
         ))}
       </div>
 
       {/* Active tickets */}
-      <div className="card flex items-center justify-between">
-        <span style={{ fontWeight: 600, fontSize: "0.9rem" }}>Active Tickets</span>
-        <span style={{ fontSize: "1.1rem", fontWeight: 700, color: "var(--primary)" }}>{activeTicketsCount}</span>
-      </div>
+      <Card>
+        <CardContent className="flex items-center justify-between">
+          <span className="text-[0.9rem] font-semibold">Active Tickets</span>
+          <span className="text-[1.1rem] font-bold text-primary">{activeTicketsCount}</span>
+        </CardContent>
+      </Card>
 
       {/* Leveling bar */}
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "0.5rem", alignItems: "center" }}>
-          <span style={{ fontWeight: 700, fontSize: "1.1rem", color: "var(--primary)", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <Trophy size={18} /> Level {levelInfo.level}
-          </span>
-          <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", fontWeight: 500 }}>
-            {levelInfo.progress} / {levelInfo.required} Tickets to next level
-          </span>
-        </div>
-        <div className="workload-bar" style={{ height: "12px", background: "var(--cream-dark)" }}>
-          <div className="workload-fill"
-            style={{ width: `${Math.min((levelInfo.progress / levelInfo.required) * 100, 100)}%`, background: "var(--primary)" }}
-          />
-        </div>
-      </div>
+      <Card>
+        <CardContent className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <span className="flex items-center gap-2 text-[1.1rem] font-bold text-primary">
+              <Trophy aria-hidden="true" className="size-[18px]" /> Level {levelInfo.level}
+            </span>
+            <span className="text-sm font-medium text-muted-foreground">
+              {levelInfo.progress} / {levelInfo.required} Tickets to next level
+            </span>
+          </div>
+          <div
+            role="progressbar"
+            aria-label={`Level ${levelInfo.level} progress`}
+            aria-valuenow={levelInfo.progress}
+            aria-valuemax={levelInfo.required}
+            className="h-3 overflow-hidden rounded-full bg-muted"
+          >
+            <div className="h-full rounded-full bg-primary transition-[width] duration-500" style={{ width: `${levelPercent}%` }} />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Avatar + info card */}
-      <div className="card flex items-center gap-4">
-        <div style={{
-          width: "4rem", height: "4rem", borderRadius: "50%",
-          background: "var(--primary)", color: "white",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: "1.5rem", fontWeight: 700, flexShrink: 0,
-        }}>
-          {user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-        </div>
-        <div>
-          <div className="text-lg font-bold text-gray-800">{user.name}</div>
-          <div className="text-sm text-gray-500">
-            {user.is_team_leader ? "Store Coordinator" : "Technician"}
-            {user.shift ? ` · ${user.shift.charAt(0).toUpperCase() + user.shift.slice(1)} Shift` : ""}
+      <Card>
+        <CardContent className="flex items-center gap-4">
+          <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
+            {user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
           </div>
-          {/* Active title badge */}
-          {activeTitle && (() => {
-            const month = getMonthFromKey(activeTitle.title_key);
-            const mc = MONTH_COLORS[month] ?? MONTH_COLORS[1];
-            return (
-              <div style={{
-                display: "inline-flex", alignItems: "center", gap: "0.3rem",
-                marginTop: "0.375rem", padding: "0.2rem 0.6rem",
-                borderRadius: "999px", background: mc.bg, color: mc.text,
-                fontSize: "0.7rem", fontWeight: 700,
-              }}>
-                {activeTitle.emoji} {activeTitle.title_label}
-              </div>
-            );
-          })()}
-          <div className="text-xs text-gray-400 mt-1">
-            Member since {new Date(user.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+          <div className="flex min-w-0 flex-col gap-1">
+            <div className="text-lg font-bold text-foreground">{user.name}</div>
+            <div className="text-sm text-muted-foreground">
+              {user.is_team_leader ? "Store Coordinator" : "Technician"}
+              {user.shift ? ` · ${user.shift.charAt(0).toUpperCase() + user.shift.slice(1)} Shift` : ""}
+            </div>
+            {/* Active title badge */}
+            {activeTitle && (() => {
+              const month = getMonthFromKey(activeTitle.title_key);
+              const mc = MONTH_COLORS[month] ?? MONTH_COLORS[1];
+              return (
+                <div
+                  className="inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.7rem] font-bold"
+                  style={{ background: mc.bg, color: mc.text }}
+                >
+                  {activeTitle.emoji} {activeTitle.title_label}
+                </div>
+              );
+            })()}
+            <div className="text-xs text-muted-foreground">
+              Member since {new Date(user.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+            </div>
           </div>
-        </div>
-      </div>
+        </CardContent>
+      </Card>
 
-      {/* Editable form */}
+      {/* Editable form — legacy component, outside any data-slot */}
       <ProfileForm
         userId={user.id}
         initialName={user.name}
@@ -268,7 +264,7 @@ export default async function TechnicianProfilePage() {
         updateAction={updateTechnicianProfileAction}
       />
 
-      {/* Change password */}
+      {/* Change password — legacy component, outside any data-slot */}
       <ChangePasswordForm hasPassword={!!user.password} />
     </div>
   );

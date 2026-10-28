@@ -1,6 +1,9 @@
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import ScheduleManager from "./ScheduleManager";
+import { ShieldAlert } from "lucide-react";
+import { PageHeader } from "@/components/app/PageHeader";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 export const metadata = { title: "Schedule Manager — HNS IT Center" };
 
@@ -14,9 +17,12 @@ export default async function SchedulePage() {
 
   if (!me?.is_team_leader) {
     return (
-      <div className="container" style={{ padding: "2rem 0", textAlign: "center", marginTop: "10vh" }}>
-        <h2 style={{ fontSize: "1.5rem", color: "var(--accent)", marginBottom: "1rem" }}>Access Denied</h2>
-        <p style={{ color: "var(--text-muted)" }}>This page is restricted to Store Coordinators.</p>
+      <div data-slot="schedule-denied" className="mx-auto flex w-full max-w-md flex-col pt-[10vh]">
+        <Alert variant="destructive">
+          <ShieldAlert aria-hidden="true" />
+          <AlertTitle className="text-base">Access Denied</AlertTitle>
+          <AlertDescription>This page is restricted to Store Coordinators.</AlertDescription>
+        </Alert>
       </div>
     );
   }
@@ -41,12 +47,11 @@ export default async function SchedulePage() {
   });
 
   return (
-    <div className="container" style={{ padding: "2rem 0" }}>
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 className="page-title">Team Schedule Manager</h1>
-        <p className="page-description">Manage shifts, override schedules, and assign leaves for your team.</p>
-      </div>
-      
+    <div data-slot="schedule-page" className="flex flex-col gap-6">
+      <PageHeader
+        title="Team Schedule Manager"
+        description="Manage shifts, override schedules, and assign leaves for your team."
+      />
       <ScheduleManager technicians={technicians} />
     </div>
   );

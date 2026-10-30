@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Send } from "lucide-react";
+import { Loader2, MessageSquare, Send } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { errorOf } from "@/lib/action-result";
+import { cn } from "@/lib/utils";
 import { sendPublicMessageAction } from "@/app/actions/tickets";
 import toast from "react-hot-toast";
 
@@ -32,8 +36,9 @@ export default function PublicChat({
     if (!text.trim()) return;
     startTransition(async () => {
       const result = await sendPublicMessageAction(ticketId, shareToken, text.trim(), senderName.trim() || "Customer");
-      if ((result as any)?.error) {
-        toast.error((result as any).error);
+      const error = errorOf(result);
+      if (error) {
+        toast.error(error);
       } else {
         setMessages((prev) => [...prev, {
           id: Date.now().toString(),
@@ -50,58 +55,66 @@ export default function PublicChat({
   };
 
   return (
-    <div style={{ background: "#fff", borderRadius: "16px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", overflow: "hidden" }}>
-      <div style={{ padding: "1rem 1.5rem", borderBottom: "1px solid #f3f4f6", fontWeight: 600, fontSize: "0.9375rem", color: "#111827" }}>
-        💬 Chat
-      </div>
-      <div style={{ padding: "1rem 1.5rem", maxHeight: "300px", overflowY: "auto", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+    <section data-slot="public-chat" className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
+      <h2 className="flex items-center gap-2 border-b border-border px-5 py-4 text-[0.9375rem] font-semibold text-foreground md:px-6">
+        <MessageSquare aria-hidden="true" className="size-4 text-primary" />
+        Chat
+      </h2>
+      <div className="flex max-h-[300px] flex-col gap-3 overflow-y-auto px-5 py-4 md:px-6" aria-live="polite">
         {messages.length === 0 && (
-          <p style={{ color: "#9ca3af", fontSize: "0.875rem", textAlign: "center" }}>Belum ada pesan</p>
+          <p className="text-center text-sm text-muted-foreground">Belum ada pesan</p>
         )}
         {messages.map((m) => {
           const isStaff = m.senderRole !== "Customer";
           return (
-            <div key={m.id} style={{ display: "flex", flexDirection: "column", alignItems: isStaff ? "flex-start" : "flex-end" }}>
-              <div style={{
-                maxWidth: "80%", padding: "0.625rem 0.875rem",
-                borderRadius: isStaff ? "0 12px 12px 12px" : "12px 12px 0 12px",
-                background: isStaff ? "#f0f4ff" : "#6366f1",
-                color: isStaff ? "#374151" : "#fff",
-                fontSize: "0.875rem",
-              }}>
+            <div key={m.id} className={cn("flex flex-col", isStaff ? "items-start" : "items-end")}>
+              <div
+                className={cn(
+                  "max-w-[80%] px-3.5 py-2.5 text-sm [overflow-wrap:anywhere]",
+                  isStaff
+                    ? "rounded-[0_12px_12px_12px] bg-secondary text-foreground"
+                    : "rounded-[12px_12px_0_12px] bg-primary text-primary-foreground",
+                )}
+              >
                 {m.message}
               </div>
-              <div style={{ fontSize: "0.7rem", color: "#9ca3af", marginTop: "2px" }}>
+              <div className="mt-0.5 text-[0.7rem] text-muted-foreground">
                 {m.senderName} · {new Date(m.created_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
               </div>
             </div>
           );
         })}
       </div>
-      <div style={{ padding: "1rem 1.5rem", borderTop: "1px solid #f3f4f6" }}>
-        <input
+      <div className="flex flex-col gap-2 border-t border-border px-5 py-4 md:px-6">
+        <label htmlFor="public-chat-name" className="sr-only">Nama Anda (opsional)</label>
+        <Input
+          id="public-chat-name"
           placeholder="Nama Anda (opsional)"
           value={senderName}
           onChange={(e) => setSenderName(e.target.value)}
-          style={{ width: "100%", padding: "0.5rem 0.75rem", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "0.875rem", marginBottom: "0.5rem", boxSizing: "border-box", fontFamily: "inherit" }}
+          className="bg-card"
         />
-        <div style={{ display: "flex", gap: "0.5rem" }}>
-          <input
+        <div className="flex gap-2">
+          <label htmlFor="public-chat-text" className="sr-only">Pesan</label>
+          <Input
+            id="public-chat-text"
             value={text}
             onChange={(e) => setText(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && (e.preventDefault(), send())}
             placeholder="Tulis pesan..."
-            style={{ flex: 1, padding: "0.5rem 0.75rem", border: "1px solid #e5e7eb", borderRadius: "8px", fontSize: "0.875rem", fontFamily: "inherit" }}
+            className="flex-1 bg-card"
           />
-          <button
+          <Button
+            type="button"
+            size="icon"
             onClick={send}
             disabled={!text.trim() || isPending}
-            style={{ background: "#6366f1", color: "#fff", border: "none", borderRadius: "8px", padding: "0.5rem 0.875rem", cursor: "pointer", display: "flex", alignItems: "center", gap: "0.375rem", fontSize: "0.875rem" }}
+            aria-label="Kirim pesan"
           >
-            <Send size={15} />
-          </button>
+            {isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Send aria-hidden="true" />}
+          </Button>
         </div>
       </div>
-    </div>
+    </section>
   );
 }

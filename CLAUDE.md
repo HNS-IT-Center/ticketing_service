@@ -1059,11 +1059,33 @@ Phase 3 is split by the owner's call (2026-10-28): the four heaviest technician 
 | UI3a.5 | **Profile + Schedule** | ✅ `6a15895` | "Cancelled" stat and "Access Denied" were `var(--accent)` (near-white) — now red. `ProfileForm` / `ChangePasswordForm` stay legacy (shared with admin, Phase 4): the profile root deliberately has **no** `data-slot`. Schedule dialog = shadcn Dialog + Tabs. 42 → 3 |
 | UI3a.6 | **Unused CSS** | ✅ `5da4d7b` | `.workload-bar/-fill`, `.tech-stats-grid`, `.tech-workload-card` (−43 lines; `globals.css` 1,267) |
 | UI3a.7 | **Verification** | ✅ | budi at 360×800 and 1024: dashboard, list (search keeps `q`, chips keep it too, Clear link identical), leaderboard both tabs, profile, schedule (denied and coordinator). Request Ticket → "Requested" + Cancel → "Request cancelled." round trip on the local DB. Local fixtures used and **reverted**: budi assigned to a store and made coordinator for the test, both undone; the request was cancelled. No console errors |
-| UI3b | **Ticket detail, StatusUpdater (proof upload), ReplacedPartsPanel, CreateTicketForm, ChargesPanel** | ⬜ | Waits for the WIP on `feat/catalog-pcbuild-upgrade` to be committed. Legacy forms with < 44px buttons: `ProfileForm`, `ChangePasswordForm` (Phase 4) |
+| UI3b | **Ticket detail, StatusUpdater (proof upload), ReplacedPartsPanel, CreateTicketForm, ChargesPanel** | ⬜ | Waits for the WIP on `feat/catalog-pcbuild-upgrade` to be committed. (`ProfileForm` / `ChangePasswordForm` were migrated in UI-4a) |
 
 Checks: `tsc` clean; repo lint 141 → 129 problems; tests 1016 pass; `npm run build` passes. Inline styles in the 3a files: 256 → 35, every one a runtime value.
 
 **Pattern worth reusing:** a migrated page that still embeds a legacy component keeps its root **without** `data-slot` and lets each new section bring its own (Card, StatCard, PageHeader…); a page built only from new pieces puts `data-slot` on its root.
+
+### SPRINT UI-4a 2026-10-30 — UI overhaul, Phase 4a: admin pages outside the WIP
+Same split as 3a, owner's call (2026-10-28): `app/admin/tickets/[id]/page.tsx` is in the uncommitted work on `feat/catalog-pcbuild-upgrade`, so it is **4b**; its panels are not, and keep their props, so the WIP merges over them. Presentation only: queries, actions, points, figures and staff wording untouched.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| UI4a.1 | **Skeletons + 1024px tables** | ✅ `b43cccb` | `PageSkeleton` (dashboard / list / form / report) replaces seven hand-styled admin `loading.tsx`. DataTable cells wrap; Type and View columns only from `xl`; long codes truncate with a tooltip |
+| UI4a.2 | **Dashboard + All Tickets** | ✅ `d63c5ba` | Unassigned first among the stat cards; org stats + Top Technicians folded on a phone. Ticket list = FilterBar + FilterChips + DataTable + Pagination ("Prev / Next"). `orderBy` typed |
+| UI4a.3 | **Form primitives** | ✅ `8f8f196` | `FormField`, `PasswordInput` (44px eye, `aria-pressed`), `NativeSelect`, `RoleBadge` + `roleDisplay()` (tests), `errorOf()` in `lib/action-result.ts` (tests) |
+| UI4a.4 | **Users, stores, profile, access** | ✅ `6bde9fb` `4fbd82b` `4dcf637` `aa36dff` | Deactivate flow = one Dialog through its three steps. Store delete = ConfirmDialog. `ProfileForm` / `ChangePasswordForm` (shared with technicians) on Card + FormField, same strength thresholds. Pengaturan Akses: one card per capability with labelled checkboxes instead of a table that scrolled sideways at 360px — same field names and defaults |
+| UI4a.5 | **Performance** | ✅ `7883527` | One DataTable instead of the table + cards pair; Shift / Active from `xl`. Share Winner and Export PDF are shadcn Dialogs; the print template is untouched. The share canvas draws through a callback ref, because the dialog portal mounts it a render late |
+| UI4a.6 | **Leaderboard** | ✅ `a6d80b6` | Reuses `PodiumBars` / `Top5Bars` from the technician leaderboard instead of a copy. Removed `.leaderboard-layout/-chart/-list` and `@keyframes growBar` |
+| UI4a.7 | **Logs + Target Teknisi** | ✅ `e5acee0` `72342a5` | Logs: StatusBadge for old → new, whole row links to the ticket, shared Pagination, `where` typed. Target editor opens a Dialog instead of unfolding inside the table cell; `ProgressBar` on Tailwind classes, same colours. `RupiahInput` left legacy (also in ChargesPanel, ServiceJobForms) |
+| UI4a.8 | **Ticket detail panels** | ✅ `7d5f276` `d4e3e90` | **Fix:** Reject / Cancel were `var(--accent)` — cream under white text since UI-1 — now solid destructive. Proof-upload modals and the delete dialog are shadcn Dialogs. `PcBuildHandover` (also on the sales and technician pages) 52 → 0 inline styles. Public Chat is a real `role="switch"`. `[id]/loading.tsx` re-exports the technician skeleton |
+| UI4a.9 | **Verification** | ✅ | admin at 360×800 and 1024: every page above, both leaderboard tabs, all dialogs opened and closed (delete dialog opened for its counts only — nothing deleted, no target saved). Waiting / on_progress / done / PC Build tickets checked. No horizontal scroll, no console errors |
+| UI4b | **Admin ticket detail page, reports/parts, vendors, `components/tickets/*`, `RupiahInput`** | ⬜ | Waits for the WIP to be committed |
+
+Checks: `tsc` clean; repo lint 129 → 88 problems; tests 1025 pass; `npm run build` passes. Inline styles in the 49 files 4a touched: 579 → 10, every one a runtime value.
+
+**Found, not fixed:** the dashboard's Unassigned card links `/admin/tickets?assigned=false`, but the list ignores `assigned` and shows every ticket. Pre-existing; fixing it is a query change, so it needs the owner's word.
+
+**Gotcha:** the built-in browser pane only paints while visible, so a screenshot right after opening a dialog can show it mid-animation or not at all. Check `[data-slot=dialog-content]` with JS before calling it a bug.
 
 ## 📋 BACKLOG — what is likely to come next
 

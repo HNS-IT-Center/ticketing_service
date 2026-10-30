@@ -1087,6 +1087,21 @@ Checks: `tsc` clean; repo lint 129 → 88 problems; tests 1025 pass; `npm run bu
 
 **Gotcha:** the built-in browser pane only paints while visible, so a screenshot right after opening a dialog can show it mid-animation or not at all. Check `[data-slot=dialog-content]` with JS before calling it a bug.
 
+### SPRINT UI-5a 2026-10-30 — UI overhaul, Phase 5a: RMA desk and Sales outside the WIP
+Same split again: the RMA case page (`cases/[id]/page.tsx`, `RmaActionPanel`, the new `ClaimStock`), the Sales ticket detail and `VendorDirectory` are in the uncommitted work on `feat/catalog-pcbuild-upgrade`, so they are **5b**. Owner's call on the RMA dashboard (2026-10-30): **restyle only** — same sections, order and numbers; the BL28c rebuild stays its own item, and so does the `NEEDS_ACTION` fix in `lib/rma/queue.ts`. Presentation only: no query, action, SLA or wording changed.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| UI5a.1 | **Sales dashboard + My Tickets** | ✅ `8c69b34` | StatCards, 44px buttons. The list follows the technician list from UI-3a (FilterBar, FilterChips, DataTable, Pagination). `status as any` typed |
+| UI5a.2 | **Klaim Garansi (`/rma/tickets`)** | ✅ `ab76443` | Same list pattern. A claim "belum diserahkan" stays unlinked (no page for it): `DataTable.rowHref` may now return `undefined`. StatusBadge via `ticketBadgeChoice`. Points from `xl` so 1024px fits |
+| UI5a.3 | **RMA dashboard** | ✅ `6fa6404` | Shared StatCard (new amber `warning` tone). On a phone the four daily numbers stay on top and the other three plus Klaim per Merek / Tipe, Hasil Klaim, Case per Vendor fold into "Statistik jangka panjang"; from md the page reads as before (cards 4 + 3). AttentionCard on tones with 44px rows. Dashboard and case skeletons |
+| UI5a.4 | **Log Aktivitas (`/rma/logs`)** | ✅ `d1a929a` | Per Case keeps `<details>` (no client JS). Kronologis was a table with `min-width: 860px` that scrolled sideways on a phone — now a DataTable per day, a card per event on a phone. `.rma-log-*` CSS removed. 79 → 0 inline styles |
+| UI5a.5 | **RmaStatusCard + create pages** | ✅ `6511602` | Card with a `<dl>` grid; every export unchanged (WIP files read `rmaStatusMeta(...).colors`). RMA / Sales "Create New Ticket" get a PageHeader over the legacy form |
+| UI5a.6 | **Verification** | ✅ | Sales (sales@ seed: no tickets, so the list was seen empty — its table is the 3a one) and RMA (rma@ seed) at 360×800 and 1024: dashboards, Klaim Garansi (7 linked / 3 unlinked rows), dashboard fold, both log views, a case page's RmaStatusCard, the create page. No horizontal scroll. Nothing created or changed |
+| UI5b | **RMA case page + RmaActionPanel + ClaimStock, Sales ticket detail, RMA vendors** | ⬜ | Waits for the WIP to be committed |
+
+Checks: `tsc` clean; repo lint 88 → 86 problems; tests 1025 pass; `npm run build` passes. Inline styles in the 13 files 5a touched: 289 → 1 (a bar width).
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.

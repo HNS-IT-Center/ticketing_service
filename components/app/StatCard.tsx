@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 
-type StatCardTone = "default" | "attention" | "success";
+type StatCardTone = "default" | "attention" | "warning" | "success";
 
 type StatCardProps = {
   label: string;
@@ -14,7 +14,8 @@ type StatCardProps = {
   /**
    * `attention` is for a count that asks someone to act ("Perlu Perhatian");
    * it turns the value red only when it is not zero, so an empty queue reads
-   * as calm.
+   * as calm. `warning` only tints the icon amber: something to watch, not
+   * yet late.
    */
   tone?: StatCardTone;
   /** Makes the whole card a link to the list behind the number. */
@@ -25,6 +26,7 @@ type StatCardProps = {
 const ICON_TONE: Record<StatCardTone, string> = {
   default: "bg-secondary text-primary",
   attention: "bg-tone-red-bg text-tone-red-fg",
+  warning: "bg-tone-amber-bg text-tone-amber-fg",
   success: "bg-tone-green-bg text-tone-green-fg",
 };
 

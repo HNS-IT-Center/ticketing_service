@@ -4,6 +4,8 @@ import { useState, useTransition } from "react";
 import { togglePublicChatAction } from "@/app/actions/admin";
 import toast from "react-hot-toast";
 import { MessageSquare } from "lucide-react";
+import { errorOf } from "@/lib/action-result";
+import { cn } from "@/lib/utils";
 
 export default function PublicChatToggle({
   ticketId,
@@ -19,8 +21,9 @@ export default function PublicChatToggle({
     const next = !enabled;
     startTransition(async () => {
       const result = await togglePublicChatAction(ticketId, next);
-      if ((result as any)?.error) {
-        toast.error((result as any).error);
+      const error = errorOf(result);
+      if (error) {
+        toast.error(error);
       } else {
         setEnabled(next);
         toast.success(next ? "Public chat enabled" : "Public chat disabled");
@@ -28,41 +31,36 @@ export default function PublicChatToggle({
     });
   };
 
+  // A real switch for assistive tech: role="switch" with aria-checked, and the
+  // visible "Public Chat" text as its name. The 44px hit area on a phone is the
+  // label around it; the track itself stays small.
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: "0.625rem" }}>
-      <MessageSquare size={15} style={{ color: enabled ? "var(--primary)" : "var(--text-muted)" }} />
-      <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>Public Chat</span>
+    <label data-slot="public-chat-toggle" className="flex min-h-11 cursor-pointer items-center gap-2.5 md:min-h-0">
+      <MessageSquare aria-hidden="true" className={cn("size-[15px]", enabled ? "text-primary" : "text-muted-foreground")} />
+      <span className="text-[0.8125rem] text-muted-foreground">Public Chat</span>
       <button
+        type="button"
+        role="switch"
+        aria-checked={enabled}
         onClick={toggle}
         disabled={isPending}
-        style={{
-          position: "relative",
-          width: "40px",
-          height: "22px",
-          borderRadius: "999px",
-          border: "none",
-          background: enabled ? "var(--primary)" : "#d1d5db",
-          cursor: isPending ? "not-allowed" : "pointer",
-          transition: "background 0.2s",
-          flexShrink: 0,
-        }}
         title={enabled ? "Disable public chat" : "Enable public chat"}
+        className={cn(
+          "relative h-[22px] w-10 shrink-0 rounded-full transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 disabled:cursor-not-allowed disabled:opacity-60",
+          enabled ? "bg-primary" : "bg-gray-300",
+        )}
       >
-        <span style={{
-          position: "absolute",
-          top: "3px",
-          left: enabled ? "21px" : "3px",
-          width: "16px",
-          height: "16px",
-          borderRadius: "50%",
-          background: "#fff",
-          transition: "left 0.2s",
-          boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
-        }} />
+        <span
+          aria-hidden="true"
+          className={cn(
+            "absolute top-[3px] size-4 rounded-full bg-white shadow-sm transition-[left]",
+            enabled ? "left-[21px]" : "left-[3px]",
+          )}
+        />
       </button>
-      <span style={{ fontSize: "0.75rem", fontWeight: 600, color: enabled ? "var(--primary)" : "var(--text-muted)" }}>
+      <span aria-hidden="true" className={cn("text-xs font-semibold", enabled ? "text-primary" : "text-muted-foreground")}>
         {enabled ? "ON" : "OFF"}
       </span>
-    </div>
+    </label>
   );
 }

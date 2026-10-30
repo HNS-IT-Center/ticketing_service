@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { Timer } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   calcWorkingMs,
   formatMs,
@@ -45,29 +46,22 @@ export default function WorkingTimeDisplay({ timeLogs, isDone, serverNow }: Prop
 
   const isPaused = isTimerPaused(timeLogs, isDone);
 
-  const color = isDone ? "#16a34a" : isPaused ? "#d97706" : "#4f46e5";
-  const bg = isDone ? "#f0fdf4" : isPaused ? "#fffbeb" : "#eef2ff";
-  const border = isDone ? "#bbf7d0" : isPaused ? "#fde68a" : "#c7d2fe";
+  // Done green, paused amber, running indigo — as before, through the tones.
+  const tone = isDone
+    ? "border-tone-green-border bg-tone-green-bg text-tone-green-fg"
+    : isPaused
+      ? "border-tone-amber-border bg-tone-amber-bg text-tone-amber-fg"
+      : "border-indigo-200 bg-indigo-50 text-indigo-600";
   const label = isDone ? "Total Working Time" : isPaused ? "Paused — Time so far" : "Working Time";
 
   return (
-    <div style={{
-      display: "flex",
-      alignItems: "center",
-      gap: "0.75rem",
-      background: bg,
-      border: `1px solid ${border}`,
-      borderRadius: "0.625rem",
-      padding: "0.625rem 1rem",
-    }}>
-      <Timer size={18} style={{ color, flexShrink: 0 }} />
+    <div data-slot="working-time" className={cn("flex items-center gap-3 rounded-[0.625rem] border px-4 py-2.5", tone)}>
+      <Timer aria-hidden="true" className="size-[18px] shrink-0" />
       <div>
-        <div style={{ fontSize: "0.7rem", fontWeight: 600, color, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          {label}
-        </div>
-        <div style={{ fontSize: "1.125rem", fontWeight: 700, color, fontVariantNumeric: "tabular-nums", letterSpacing: "-0.01em" }}>
+        <div className="text-[0.7rem] font-semibold tracking-wide uppercase">{label}</div>
+        <div className="text-lg font-bold tracking-tight tabular-nums">
           {formatMs(ms)}
-          {isActive && <span style={{ fontSize: "0.6rem", marginLeft: "0.25rem", opacity: 0.6, animation: "pulse 1.5s infinite" }}>●</span>}
+          {isActive && <span aria-hidden="true" className="ml-1 animate-pulse text-[0.6rem] opacity-60">●</span>}
         </div>
       </div>
     </div>

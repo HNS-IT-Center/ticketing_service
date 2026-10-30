@@ -1,6 +1,8 @@
 import React from "react";
 import Link from "next/link";
-import { LogOut } from "lucide-react";
+import { Clock, LogOut, ShieldX } from "lucide-react";
+import { AuthShell } from "@/components/app/AuthShell";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { logoutAction } from "@/app/actions/auth";
 import { getSession } from "@/lib/session";
 import { ssoEnv } from "@/lib/sso/config";
@@ -25,46 +27,46 @@ export default async function UnauthorizedPage() {
   const portalUrl = ssoEnv()?.issuer ?? "https://auth.hnsitcenter.id";
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[#0a0a0a] text-white p-4">
-      <div className="card max-w-md w-full p-8 text-center bg-[#111111] border border-white/10 rounded-2xl shadow-xl">
-        {pending ? (
-          <>
-            <h1 className="text-2xl font-bold mb-4 text-amber-400">Menunggu Penetapan Role</h1>
-            <p className="text-gray-400 mb-8">
+    // Cream rather than the old near-black screen, which matched nothing
+    // else in the app. Same words, same two ways out.
+    <AuthShell tone="plain" className="items-center text-center">
+      {pending ? (
+        <>
+          <Clock aria-hidden="true" className="size-10 text-tone-amber-fg" />
+          <div className="flex flex-col gap-3">
+            <h1 className="text-2xl font-bold text-tone-amber-fg">Menunggu Penetapan Role</h1>
+            <p className="text-muted-foreground">
               Halo {session?.name}, akun Anda sudah terdaftar melalui SSO HNS, tetapi belum
               diberi role di aplikasi ini. Minta admin HNS Ticketing Service menetapkan role
               Anda, lalu masuk lagi.
             </p>
-          </>
-        ) : (
-          <>
-            <h1 className="text-3xl font-bold mb-4 text-red-500">Access Denied</h1>
-            <p className="text-gray-400 mb-8">
+          </div>
+        </>
+      ) : (
+        <>
+          <ShieldX aria-hidden="true" className="size-10 text-destructive" />
+          <div className="flex flex-col gap-3">
+            <h1 className="text-3xl font-bold text-destructive">Access Denied</h1>
+            <p className="text-muted-foreground">
               For now you don&apos;t have any rights to this page. If you believe this is a
               mistake, please contact the administrator.
             </p>
-          </>
-        )}
+          </div>
+        </>
+      )}
 
-        <div className="flex flex-col gap-3">
-          <form action={logoutAction}>
-            <button
-              type="submit"
-              className="btn btn-primary w-full py-3 rounded-lg flex items-center justify-center gap-2 font-medium bg-white text-black hover:bg-gray-200 transition-colors"
-            >
-              <LogOut size={16} />
-              Sign Out
-            </button>
-          </form>
+      <div className="flex w-full flex-col gap-3">
+        <form action={logoutAction}>
+          <Button type="submit" size="lg" className="w-full">
+            <LogOut aria-hidden="true" />
+            Sign Out
+          </Button>
+        </form>
 
-          <Link
-            href={portalUrl}
-            className="w-full py-3 rounded-lg flex items-center justify-center font-medium text-gray-300 border border-white/10 hover:bg-white/5 transition-colors"
-          >
-            Back to Portal
-          </Link>
-        </div>
+        <Link href={portalUrl} className={buttonVariants({ variant: "outline", size: "lg", className: "w-full bg-card" })}>
+          Back to Portal
+        </Link>
       </div>
-    </div>
+    </AuthShell>
   );
 }

@@ -2,6 +2,7 @@
 
 import { useEffect } from "react";
 import { AlertTriangle, RotateCw } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 /**
  * The app's own error boundary.
@@ -22,23 +23,19 @@ export default function AppError({
   }, [error]);
 
   return (
-    <div className="flex min-h-[50vh] items-center justify-center p-4">
-      <div className="card flex w-full max-w-md flex-col items-center gap-4 p-6 text-center">
-        <AlertTriangle size={36} style={{ color: "var(--accent-brand, #b45309)" }} />
+    <div data-slot="app-error" className="flex min-h-[50vh] items-center justify-center p-4">
+      <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+        <AlertTriangle aria-hidden="true" className="size-9 text-destructive" />
         <div className="flex flex-col gap-2">
-          <h2 className="text-lg font-semibold">Terjadi kesalahan</h2>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+          <h2 className="text-lg font-semibold text-foreground">Terjadi kesalahan</h2>
+          <p className="text-sm text-muted-foreground">
             Halaman ini gagal dimuat. Coba lagi; bila tetap gagal, hubungi administrator
             {error.digest ? ` dengan kode ${error.digest}` : ""}.
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => unstable_retry()}
-          className="btn btn-primary flex items-center gap-2"
-        >
-          <RotateCw size={16} /> Coba lagi
-        </button>
+        <Button type="button" onClick={() => unstable_retry()} className="w-full sm:w-auto">
+          <RotateCw aria-hidden="true" /> Coba lagi
+        </Button>
       </div>
     </div>
   );

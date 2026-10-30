@@ -29,8 +29,8 @@ type DataTableProps<T> = {
   getRowKey: (row: T) => string;
   /** Read by screen readers only; says what the table lists. */
   caption: string;
-  /** Makes each row and card a link to the record. */
-  rowHref?: (row: T) => string;
+  /** Makes each row and card a link to the record; `undefined` leaves that one row unlinked. */
+  rowHref?: (row: T) => string | undefined;
   /** Extra classes for one row and its card, e.g. dimming a row someone else holds. */
   rowClassName?: (row: T) => string | undefined;
   /** Shown instead of the table when `rows` is empty. */

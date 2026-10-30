@@ -1102,6 +1102,22 @@ Same split again: the RMA case page (`cases/[id]/page.tsx`, `RmaActionPanel`, th
 
 Checks: `tsc` clean; repo lint 88 → 86 problems; tests 1025 pass; `npm run build` passes. Inline styles in the 13 files 5a touched: 289 → 1 (a bar width).
 
+### SPRINT UI-6a 2026-10-30 — UI overhaul, Phase 6a: public page, login, error pages
+`app/faktur/[id]` is in the uncommitted work on `feat/catalog-pcbuild-upgrade`, so it is **6b**. Presentation only, with **one wording change approved by the owner (2026-10-30)**: the public page's header badge.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| UI6a.1 | **Customer status page + PublicChat** | ✅ `e6bd496` | **Owner's call:** the header badge shows `publicStatusLabel()` — the customer wording the timeline already used — instead of the staff badge ("⏳ Waiting for Work"). Query and field-by-field selects untouched (no internal RMA field can reach it). Outcome banner on tones with icons instead of emoji. Chat: labelled inputs, 44px send button with a name, brand blue instead of indigo, `as any` → `errorOf()`. 51 → 0 |
+| UI6a.2 | **Login + SSO error** | ✅ `e974f62` | New `components/app/AuthShell` replaces `.auth-container` / `.auth-card` (removed). FormField + PasswordInput (the eye had no label), Alerts, 44px Remember me. **Fix:** the "atau masuk dengan password" divider label sat on `var(--background)` — cream since UI-1 — a strip on the white card |
+| UI6a.3 | **Outline links had no border** | ✅ `b032472` | cva only concatenates: a Link styled with `buttonVariants({ variant: "outline" })` carried both `border-transparent` (base) and `border-border`, and transparent won. `buttonVariants()` now returns the `cn()`-merged string; its 18 callers are unchanged and every outline link since UI-1 gets its border back |
+| UI6a.4 | **Error boundary + /unauthorized** | ✅ `8b9a3a1` | `/unauthorized` was a near-black screen; now the cream AuthShell card. Same words |
+| UI6a.5 | **Verification** | ✅ | Public page at 360 and 1024 on two local tickets (a claim in progress, a claim with "Unit diganti oleh vendor"); no ticket has public chat on, so only the "Chat dinonaktifkan" state was seen. Login (password-only locally; a wrong local test login shows the Alert), SSO error, /unauthorized. Share links were read with a temporary read-only script, deleted after |
+| UI6b | **Faktur page** | ⬜ | Waits for the WIP to be committed |
+
+Checks: `tsc` clean; repo lint 86 → 84 problems; tests 1025 pass; `npm run build` passes. Inline styles in the 8 files 6a touched: 79 → 0.
+
+**Not done, needs the owner:** the app has no `not-found.tsx`, so a mistyped share link shows Next's default 404 — a page of its own means new customer-facing words. The public page reads `Date.now()` during render (server component, so no hydration fault) and keeps an unused `shareUrl`; both pre-existing and left alone.
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.

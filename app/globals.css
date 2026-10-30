@@ -683,26 +683,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   box-shadow: var(--shadow-sm);
 }
 
-/* ─── Auth Pages ──────────────────────────────────────────────────────────── */
-.auth-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, #2557bb 100%);
-  padding: 1.5rem;
-}
-
-.auth-card {
-  background: var(--white);
-  border-radius: var(--radius-xl);
-  padding: 2.5rem;
-  width: 100%;
-  max-width: 460px;
-  box-shadow: var(--shadow-xl);
-  animation: slideUp 0.4s ease;
-}
-
 /* ─── Rich Text Editor ───────────────────────────────────────────────────── */
 .tiptap-editor {
   border: 1.5px solid var(--border);
@@ -922,9 +902,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
     padding: 1.25rem 1rem;
   }
 
-  .auth-card {
-    padding: 1.75rem 1.25rem;
-  }
 
   .modal {
     padding: 1.5rem;

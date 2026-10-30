@@ -880,9 +880,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes growBar {
-  from { width: 0; }
-}
 @keyframes countUp {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1003,35 +1000,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   /* Only allow scroll on tables that are not inside card-toggle wrappers */
   .admin-ticket-table .table-wrapper {
     overflow-x: auto;
-  }
-}
-
-/* ─── Leaderboard responsive layout ────────────────────────────────────────── */
-.leaderboard-layout {
-  display: flex;
-  gap: 1.5rem;
-  align-items: flex-start;
-}
-.leaderboard-chart {
-  flex: 7;
-  min-width: 0;
-}
-.leaderboard-list {
-  flex: 3;
-  min-width: 0;
-  max-height: 520px;
-  overflow-y: auto;
-}
-@media (max-width: 768px) {
-  .leaderboard-layout {
-    flex-direction: column;
-  }
-  .leaderboard-chart, .leaderboard-list {
-    flex: none;
-    width: 100%;
-  }
-  .leaderboard-list {
-    max-height: 400px;
   }
 }
 

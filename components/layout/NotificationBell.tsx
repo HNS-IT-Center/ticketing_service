@@ -3,7 +3,10 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Bell } from "lucide-react";
 import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ticketHrefForPortal, type Portal } from "@/lib/routes";
+import { cn } from "@/lib/utils";
 
 /**
  * How often the unread count is refetched, in milliseconds.
@@ -101,8 +104,15 @@ export default function NotificationBell({ role }: { role: string }) {
         setOpen(false);
       }
     };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, []);
 
   const markAllRead = async () => {
@@ -134,77 +144,55 @@ export default function NotificationBell({ role }: { role: string }) {
   };
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
-      <button
-        className="notif-bell"
+    <div ref={ref} data-slot="notification-bell" className="relative">
+      <Button
+        variant="ghost"
+        size="icon"
+        className="relative text-muted-foreground"
         onClick={handleBellClick}
-        aria-label="Notifications"
+        aria-label={unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"}
+        aria-expanded={open}
+        aria-haspopup="true"
       >
-        <Bell size={18} />
-        {unreadCount > 0 && <span className="notif-dot" />}
-      </button>
+        <Bell />
+        {unreadCount > 0 && (
+          <span
+            aria-hidden="true"
+            className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-destructive px-1 text-[0.625rem] leading-none font-bold text-destructive-foreground tabular-nums"
+          >
+            {unreadCount > 9 ? "9+" : unreadCount}
+          </span>
+        )}
+      </Button>
 
       {open && (
         <div
-          style={{
-            position: "fixed",
-            right: "0.5rem",
-            top: "calc(var(--topbar-height, 56px) + 0.5rem)",
-            width: "min(320px, calc(100vw - 1rem))",
-            background: "var(--white)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-lg)",
-            boxShadow: "var(--shadow-lg)",
-            zIndex: 200,
-            overflow: "hidden",
-            animation: "fadeIn 0.2s ease",
-          }}
+          role="dialog"
+          aria-label="Notifications"
+          className="fixed top-[calc(var(--topbar-height,56px)+0.5rem)] right-2 z-[200] w-[min(320px,calc(100vw-1rem))] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
         >
-          <div
-            style={{
-              padding: "0.875rem 1rem",
-              borderBottom: "1px solid var(--border-light)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-            }}
-          >
-            <span style={{ fontWeight: 600, fontSize: "0.9375rem" }}>
-              Notifications
-            </span>
+          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
+            <span className="text-[0.9375rem] font-semibold">Notifications</span>
             {unreadCount > 0 && (
               <button
                 onClick={markAllRead}
-                style={{
-                  fontSize: "0.75rem",
-                  background: "var(--accent)",
-                  color: "#fff",
-                  padding: "0.125rem 0.5rem",
-                  borderRadius: "999px",
-                  fontWeight: 600,
-                  border: "none",
-                  cursor: "pointer",
-                }}
+                className="rounded-full bg-primary px-2.5 py-1 text-xs font-semibold text-primary-foreground outline-none hover:bg-primary/90 focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 {unreadCount} new · Mark all read
               </button>
             )}
           </div>
 
-          <div style={{ maxHeight: "320px", overflowY: "auto" }}>
+          <div className="max-h-80 overflow-y-auto">
             {!listLoaded ? (
-              <div style={{ padding: "1.5rem 1rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                Loading...
+              <div className="flex flex-col gap-2 px-4 py-4" aria-label="Loading...">
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-3 w-1/2" />
+                <Skeleton className="h-4 w-2/3" />
               </div>
             ) : notifications.length === 0 ? (
-              <div
-                style={{
-                  padding: "2rem 1rem",
-                  textAlign: "center",
-                  color: "var(--text-muted)",
-                  fontSize: "0.875rem",
-                }}
-              >
+              <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-sm text-muted-foreground">
+                <Bell aria-hidden="true" className="size-7 opacity-30" />
                 No notifications
               </div>
             ) : (
@@ -224,27 +212,15 @@ export default function NotificationBell({ role }: { role: string }) {
                   <Link
                     key={n.id}
                     href={ticketLink}
-                    style={{
-                      display: "block",
-                      padding: "0.75rem 1rem",
-                      borderBottom: "1px solid var(--border-light)",
-                      background: n.is_read ? "transparent" : "rgba(22,70,157,0.04)",
-                      textDecoration: "none",
-                      color: "var(--text-primary)",
-                      transition: "background 0.15s",
-                      fontSize: "0.875rem",
-                    }}
+                    className={cn(
+                      "block border-b border-border px-4 py-3 text-sm text-foreground outline-none last:border-b-0 hover:bg-muted focus-visible:bg-muted",
+                      !n.is_read && "bg-secondary/60",
+                    )}
                     onClick={() => handleNotificationClick(n)}
                   >
-                    <div style={{ fontWeight: n.is_read ? 400 : 600 }}>
-                      {notifLabel}
-                    </div>
-                    {n.message && (
-                      <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>
-                        {n.message}
-                      </div>
-                    )}
-                    <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.2rem" }}>
+                    <div className={n.is_read ? "font-normal" : "font-semibold"}>{notifLabel}</div>
+                    {n.message && <div className="mt-0.5 text-[0.8125rem] text-muted-foreground">{n.message}</div>}
+                    <div className="mt-1 text-[0.8125rem] text-muted-foreground">
                       {new Date(n.created_at).toLocaleString()}
                     </div>
                   </Link>

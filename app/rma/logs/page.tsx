@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireRole } from "@/lib/session";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
 import { rmaStatusMeta } from "@/components/rma/RmaStatusCard";
 import { formatTimeOfDay } from "@/lib/rma/log-grouping";
 import {
@@ -16,56 +16,34 @@ import {
 } from "@/lib/rma/logs";
 import { History, Search, ArrowRight, ChevronDown, Clock } from "lucide-react";
 import type { Role } from "@prisma/client";
+import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
+import { EmptyState } from "@/components/app/EmptyState";
+import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
+import { FilterChips } from "@/components/app/FilterChips";
+import { PageHeader } from "@/components/app/PageHeader";
+import { StatusBadge } from "@/components/app/StatusBadge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { rmaStatusDisplay, TONE_CLASSES } from "@/lib/status-display";
 
 export const metadata = { title: "Log Aktivitas RMA — HNS IT Center" };
 
 /** Who did it, coloured by role so the desk and the workshop read apart. */
-const ROLE_TONES: Partial<Record<Role, { bg: string; fg: string; border: string }>> = {
-  Technician: { bg: "#dbeafe", fg: "#1e40af", border: "#bfdbfe" },
-  RMA: { bg: "#ede9fe", fg: "#5b21b6", border: "#ddd6fe" },
+const ROLE_TONES: Partial<Record<Role, string>> = {
+  Technician: TONE_CLASSES.blue,
+  RMA: TONE_CLASSES.violet,
 };
-const ROLE_FALLBACK = { bg: "var(--cream)", fg: "var(--text-secondary)", border: "var(--border)" };
 
 function RoleChip({ role }: { role: Role }) {
-  const tone = ROLE_TONES[role] ?? ROLE_FALLBACK;
   return (
     <span
-      style={{
-        background: tone.bg,
-        color: tone.fg,
-        border: `1px solid ${tone.border}`,
-        borderRadius: "5px",
-        padding: "1px 6px",
-        fontSize: "0.6875rem",
-        fontWeight: 700,
-        whiteSpace: "nowrap",
-      }}
+      className={cn(
+        "rounded-[5px] border px-1.5 py-px text-[0.6875rem] font-bold whitespace-nowrap",
+        ROLE_TONES[role] ?? "border-border bg-muted text-muted-foreground",
+      )}
     >
       {role}
-    </span>
-  );
-}
-
-function StatusPill({ status, small }: { status: Parameters<typeof rmaStatusMeta>[0]; small?: boolean }) {
-  const { label, colors, Icon } = rmaStatusMeta(status);
-  return (
-    <span
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: "0.3rem",
-        background: colors.bg,
-        color: colors.fg,
-        border: `1px solid ${colors.border}`,
-        borderRadius: "999px",
-        padding: small ? "0.1rem 0.5rem" : "0.2rem 0.7rem",
-        fontSize: small ? "0.6875rem" : "0.75rem",
-        fontWeight: 700,
-        whiteSpace: "nowrap",
-      }}
-    >
-      <Icon size={small ? 11 : 13} />
-      {label}
     </span>
   );
 }
@@ -76,7 +54,7 @@ function StatusPill({ status, small }: { status: Parameters<typeof rmaStatusMeta
  * without this a stale `?page=` left the reader on a dead end that read
  * "Belum ada aktivitas RMA" although the log was full.
  */
-function EmptyState({
+function LogEmpty({
   page,
   lastPage,
   href,
@@ -89,20 +67,21 @@ function EmptyState({
 }) {
   const pastTheEnd = page > lastPage;
   return (
-    <div className="card">
-      <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", margin: 0 }}>
-        {pastTheEnd
-          ? `Halaman ${page} kosong — isinya berakhir di halaman ${lastPage}.`
-          : message}
-      </p>
-      {pastTheEnd && (
-        <Link href={href} className="btn btn-outline" style={{ marginTop: "0.75rem" }}>
-          Kembali ke halaman 1
-        </Link>
-      )}
-    </div>
+    <EmptyState
+      icon={History}
+      title={pastTheEnd ? `Halaman ${page} kosong — isinya berakhir di halaman ${lastPage}.` : message}
+      action={
+        pastTheEnd ? (
+          <Link href={href} className={buttonVariants({ variant: "outline", className: "bg-card" })}>
+            Kembali ke halaman 1
+          </Link>
+        ) : undefined
+      }
+    />
   );
 }
+
+type LogEvent = NonNullable<Awaited<ReturnType<typeof getRmaLogEvents>>>["days"][number]["items"][number];
 
 export default async function RmaLogsPage({
   searchParams,
@@ -155,140 +134,141 @@ export default async function RmaLogsPage({
     return qs ? `/rma/logs?${qs}` : "/rma/logs";
   };
 
-  const tabStyle = (active: boolean) => ({
-    minHeight: "38px",
-    display: "inline-flex",
-    alignItems: "center",
-    padding: "0 1rem",
-    borderRadius: "8px",
-    border: `1px solid ${active ? "var(--border-brand)" : "transparent"}`,
-    background: active ? "var(--white)" : "transparent",
-    color: active ? "var(--primary-brand)" : "var(--text-secondary)",
-    fontSize: "0.84375rem",
-    fontWeight: 700,
-    textDecoration: "none",
-    boxShadow: active ? "0 1px 2px rgba(22,70,157,0.12)" : "none",
-  });
+  const viewChips = [
+    { key: "case", label: "Per Case", href: hrefWith({ view: "case" }) },
+    { key: "time", label: "Kronologis", href: hrefWith({ view: "time" }) },
+  ];
+
+  // The chronological view, one table per day: Jam, Case, Perpindahan, Oleh,
+  // Catatan on desktop. On a phone each event is a card — the time on top,
+  // the new stage at the right, the rest as lines.
+  const fromLabel = (e: LogEvent) => (e.from_status ? rmaStatusMeta(e.from_status).label : "Serah terima");
+  const eventColumns: DataTableColumn<LogEvent>[] = [
+    {
+      key: "time",
+      header: "Jam",
+      mobile: "title",
+      className: "w-[72px] whitespace-nowrap",
+      cell: (e) => (
+        <span className="font-mono text-muted-foreground">{formatTimeOfDay(e.created_at)}</span>
+      ),
+    },
+    {
+      key: "case",
+      header: "Case",
+      className: "w-[190px]",
+      cell: (e) => (
+        <span className="flex flex-col">
+          <span className="font-mono text-[0.78125rem] font-bold whitespace-nowrap text-primary">{e.rma_case.rma_code}</span>
+          <span className="text-xs text-muted-foreground">
+            #{e.rma_case.ticket.ticket_code}
+            {e.rma_case.ticket.customer_name ? ` · ${e.rma_case.ticket.customer_name}` : ""}
+          </span>
+        </span>
+      ),
+    },
+    {
+      key: "move",
+      header: "Perpindahan",
+      mobile: "hidden",
+      className: "w-[300px]",
+      cell: (e) => (
+        <span className="inline-flex flex-wrap items-center gap-1.5">
+          <span className="text-[0.78125rem] text-muted-foreground">{fromLabel(e)}</span>
+          <span aria-label="ke" className="text-muted-foreground">→</span>
+          <StatusBadge kind="rma" status={e.to_status} size="sm" />
+        </span>
+      ),
+    },
+    // Phone-only: the new stage top right, and where it came from as a line.
+    { key: "to", header: "Ke", mobile: "badge", className: "hidden", cell: (e) => <StatusBadge kind="rma" status={e.to_status} size="sm" /> },
+    { key: "from", header: "Dari", className: "hidden", cell: (e) => fromLabel(e) },
+    {
+      key: "actor",
+      header: "Oleh",
+      className: "w-[160px]",
+      cell: (e) => (
+        <span className="flex flex-col items-start gap-0.5">
+          <span className="text-[0.78125rem]">{e.actor.name}</span>
+          <RoleChip role={e.actor.role} />
+        </span>
+      ),
+    },
+    {
+      key: "note",
+      header: "Catatan",
+      cell: (e) => <span className="whitespace-pre-line text-muted-foreground [overflow-wrap:anywhere]">{e.note || "—"}</span>,
+    },
+  ];
 
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div>
-        <h1 style={{ fontSize: "1.25rem" }}>Log Aktivitas RMA</h1>
-        <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>
-          Riwayat perpindahan status setiap case klaim. Dikelompokkan per case, jadi satu case
-          bisa dibaca utuh dalam satu blok.
-        </p>
-      </div>
+    // Built from components/app and shadcn only (the UI-1 reset rule).
+    <div data-slot="rma-logs" className="flex flex-col gap-5">
+      <PageHeader
+        title="Log Aktivitas RMA"
+        description="Riwayat perpindahan status setiap case klaim. Dikelompokkan per case, jadi satu case bisa dibaca utuh dalam satu blok."
+      />
 
       {/* ── Filter ──────────────────────────────────────────────────────── */}
-      <form
-        className="card"
-        method="get"
-        style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-      >
-        {/* The view survives a filter submit; without it every search would
-            bounce the reader back to the grouped view. */}
-        <input type="hidden" name="view" value={view} />
-
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
-            gap: "0.75rem",
-            alignItems: "end",
-          }}
-        >
-          <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>Cari</span>
-            <input
+      <div className="flex flex-col gap-3">
+        <FilterBar action="/rma/logs" className="md:items-end">
+          {/* The view survives a filter submit; without it every search would
+              bounce the reader back to the grouped view. */}
+          <input type="hidden" name="view" value={view} />
+          <FilterBarField label="Cari" htmlFor="log-q" className="md:w-auto md:min-w-64 md:flex-1">
+            <Input
+              id="log-q"
               type="search"
               name="q"
               defaultValue={filters.q}
               placeholder="Kode RMA, tiket, nama, atau isi catatan"
-              className="form-input"
+              className="bg-card"
             />
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>Tahapan tujuan</span>
-            <select name="status" defaultValue={filters.status} className="form-input">
+          </FilterBarField>
+          <FilterBarField label="Tahapan tujuan" htmlFor="log-status">
+            <NativeSelect id="log-status" name="status" defaultValue={filters.status}>
               <option value="">Semua tahapan</option>
               {LOG_FILTER_STATUSES.map((s) => (
                 <option key={s} value={s}>
                   {rmaStatusMeta(s).label}
                 </option>
               ))}
-            </select>
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>Dari tanggal</span>
-            <input type="date" name="from" defaultValue={filters.from} className="form-input" />
-          </label>
-
-          <label style={{ display: "flex", flexDirection: "column", gap: "0.35rem" }}>
-            <span style={{ fontSize: "0.8125rem", fontWeight: 600 }}>Sampai tanggal</span>
-            <input type="date" name="to" defaultValue={filters.to} className="form-input" />
-          </label>
-
-          <div style={{ display: "flex", gap: "0.5rem" }}>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              style={{ display: "flex", alignItems: "center", gap: "0.4rem" }}
-            >
-              <Search size={15} /> Terapkan
-            </button>
+            </NativeSelect>
+          </FilterBarField>
+          <div className="grid grid-cols-2 gap-2 md:contents">
+            <FilterBarField label="Dari tanggal" htmlFor="log-from" className="md:w-40">
+              <Input id="log-from" type="date" name="from" defaultValue={filters.from} className="bg-card" />
+            </FilterBarField>
+            <FilterBarField label="Sampai tanggal" htmlFor="log-to" className="md:w-40">
+              <Input id="log-to" type="date" name="to" defaultValue={filters.to} className="bg-card" />
+            </FilterBarField>
+          </div>
+          <div className="flex gap-2 *:flex-1 md:*:flex-none">
+            <Button type="submit">
+              <Search aria-hidden="true" /> Terapkan
+            </Button>
             {filtered && (
-              <Link href={hrefWith({ page: 1 })} className="btn btn-outline">
+              <Link href={hrefWith({ page: 1 })} className={buttonVariants({ variant: "outline", className: "bg-card" })}>
                 Reset
               </Link>
             )}
           </div>
-        </div>
+        </FilterBar>
 
-        <div
-          style={{
-            display: "flex",
-            flexWrap: "wrap",
-            gap: "0.75rem",
-            alignItems: "center",
-            justifyContent: "space-between",
-            borderTop: "1px dashed var(--border-light)",
-            paddingTop: "0.9rem",
-          }}
-        >
-          <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <span className="text-[0.8125rem] text-muted-foreground">
             {view === "case"
               ? `${total} case cocok${filtered ? " dengan filter" : ""}`
               : `${total} kejadian${filtered ? " cocok dengan filter" : ""}`}
           </span>
-
-          <div
-            role="group"
-            aria-label="Cara menampilkan log"
-            style={{
-              display: "inline-flex",
-              background: "var(--cream)",
-              border: "1px solid var(--border-brand)",
-              borderRadius: "10px",
-              padding: "3px",
-            }}
-          >
-            <Link href={hrefWith({ view: "case" })} style={tabStyle(view === "case")}>
-              Per Case
-            </Link>
-            <Link href={hrefWith({ view: "time" })} style={tabStyle(view === "time")}>
-              Kronologis
-            </Link>
-          </div>
+          <FilterChips label="Cara menampilkan log" chips={viewChips} active={view} />
         </div>
-      </form>
+      </div>
 
       {/* ══ Per case ═══════════════════════════════════════════════════ */}
       {grouped &&
         (grouped.cases.length === 0 ? (
-          <EmptyState
+          <LogEmpty
             page={page}
             lastPage={grouped.lastPage}
             href={hrefWith({ page: 1 })}
@@ -297,120 +277,42 @@ export default async function RmaLogsPage({
             }
           />
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+          <div className="flex flex-col gap-3.5">
             {grouped.cases.map((c, index) => (
               <details
                 key={c.id}
                 /* The newest few open, so the page says something before any
                    clicking; the rest stay shut so it can still be scanned. */
                 open={index < 3}
-                className="card rma-log-case"
-                style={{ padding: 0, overflow: "hidden" }}
+                className="group overflow-hidden rounded-xl border border-border bg-card shadow-xs"
               >
-                <summary
-                  className="rma-log-summary"
-                  style={{
-                    listStyle: "none",
-                    cursor: "pointer",
-                    padding: "1rem 1.125rem",
-                    display: "block",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "0.75rem",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.6rem",
-                        flexWrap: "wrap",
-                        minWidth: 0,
-                      }}
-                    >
-                      <StatusPill status={c.status} />
-                      <span
-                        style={{
-                          fontFamily: "ui-monospace, monospace",
-                          fontSize: "0.90625rem",
-                          fontWeight: 700,
-                        }}
-                      >
-                        {c.rma_code}
-                      </span>
-                      <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                        #{c.ticket.ticket_code}
-                      </span>
+                <summary className="block cursor-pointer list-none p-4 outline-none hover:bg-muted/40 focus-visible:ring-3 focus-visible:ring-ring/50 md:px-5 [&::-webkit-details-marker]:hidden">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-2.5">
+                      <StatusBadge kind="rma" status={c.status} />
+                      <span className="font-mono text-[0.90625rem] font-bold">{c.rma_code}</span>
+                      <span className="text-[0.8125rem] text-muted-foreground">#{c.ticket.ticket_code}</span>
                       {c.ticket.store_location && (
-                        <span
-                          style={{
-                            background: "var(--cream)",
-                            border: "1px solid var(--border-brand)",
-                            borderRadius: "6px",
-                            padding: "0.1rem 0.4rem",
-                            fontSize: "0.6875rem",
-                            fontWeight: 700,
-                            color: "var(--text-secondary)",
-                          }}
-                        >
+                        <span className="rounded-md border border-border bg-muted px-1.5 py-px text-[0.6875rem] font-bold text-muted-foreground">
                           {c.ticket.store_location.code}
                         </span>
                       )}
                     </div>
 
-                    <div
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "0.6rem",
-                        flexShrink: 0,
-                      }}
-                    >
-                      <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                        {c.totalEvents} kejadian
-                      </span>
-                      <span
-                        style={{
-                          display: "inline-flex",
-                          alignItems: "center",
-                          gap: "0.3rem",
-                          background: "var(--cream)",
-                          border: "1px solid var(--border-brand)",
-                          borderRadius: "999px",
-                          padding: "0.1rem 0.6rem",
-                          fontSize: "0.71875rem",
-                          fontWeight: 600,
-                          color: "var(--text-secondary)",
-                          whiteSpace: "nowrap",
-                        }}
-                      >
-                        <Clock size={11} />
+                    <div className="flex shrink-0 items-center gap-2.5">
+                      <span className="text-[0.8125rem] text-muted-foreground">{c.totalEvents} kejadian</span>
+                      <span className="inline-flex items-center gap-1 rounded-full border border-border bg-muted px-2.5 py-0.5 text-[0.71875rem] font-semibold whitespace-nowrap text-muted-foreground">
+                        <Clock aria-hidden="true" className="size-[11px]" />
                         {c.stageAge}
                       </span>
                       <ChevronDown
-                        size={18}
-                        className="rma-log-chevron"
-                        style={{ color: "var(--text-muted)", flexShrink: 0 }}
+                        aria-hidden="true"
+                        className="size-[18px] shrink-0 text-muted-foreground transition-transform group-open:rotate-180"
                       />
                     </div>
                   </div>
 
-                  <div
-                    style={{
-                      marginTop: "0.45rem",
-                      fontSize: "0.8125rem",
-                      color: "var(--text-muted)",
-                      display: "flex",
-                      flexWrap: "wrap",
-                      gap: "0.2rem 0.9rem",
-                    }}
-                  >
+                  <div className="mt-2 flex flex-wrap gap-x-3.5 gap-y-1 text-[0.8125rem] text-muted-foreground">
                     {c.ticket.customer_name && <span>{c.ticket.customer_name}</span>}
                     {c.ticket.device_name && <span>{c.ticket.device_name}</span>}
                     {c.ticket.device_sn && <span>SN {c.ticket.device_sn}</span>}
@@ -421,190 +323,73 @@ export default async function RmaLogsPage({
                   {/* Only worth saying when the filter picked out part of the
                       case: the rest of the timeline below it did not match. */}
                   {filtered && c.matchedEvents < c.totalEvents && (
-                    <div
-                      style={{
-                        marginTop: "0.45rem",
-                        fontSize: "0.75rem",
-                        color: "var(--text-muted)",
-                        fontStyle: "italic",
-                      }}
-                    >
+                    <div className="mt-2 text-xs text-muted-foreground italic">
                       Filter cocok pada {c.matchedEvents} dari {c.totalEvents} kejadian — riwayat
                       lengkapnya tetap ditampilkan.
                     </div>
                   )}
                 </summary>
 
-                <div style={{ borderTop: "1px solid var(--border-light)", padding: "1rem 1.125rem 1.125rem" }}>
-                  <Link
-                    href={`/rma/cases/${c.id}`}
-                    className="btn btn-primary"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.4rem",
-                      marginBottom: "1rem",
-                    }}
-                  >
+                <div className="border-t border-border p-4 md:px-5">
+                  <Link href={`/rma/cases/${c.id}`} className={buttonVariants({ className: "mb-4 w-full sm:w-auto" })}>
                     Buka halaman case
-                    <ArrowRight size={15} />
+                    <ArrowRight aria-hidden="true" />
                   </Link>
 
-                  <ol style={{ listStyle: "none", margin: 0, padding: 0 }}>
+                  <ol>
                     {c.events.map((e) => {
                       const to = rmaStatusMeta(e.to_status);
                       const from = e.from_status ? rmaStatusMeta(e.from_status) : null;
                       const Icon = to.Icon;
 
                       return (
-                        <li key={e.id} style={{ display: "flex", gap: "0.875rem", position: "relative" }}>
-                          <div
-                            style={{
-                              position: "relative",
-                              width: "30px",
-                              flexShrink: 0,
-                              display: "flex",
-                              justifyContent: "center",
-                            }}
-                          >
+                        <li key={e.id} className="relative flex gap-3.5">
+                          <div className="relative flex w-[30px] shrink-0 justify-center">
                             {!e.isLast && (
-                              <span
-                                style={{
-                                  position: "absolute",
-                                  top: "30px",
-                                  bottom: 0,
-                                  left: "14px",
-                                  width: "2px",
-                                  background: "var(--border-light)",
-                                }}
-                              />
+                              <span aria-hidden="true" className="absolute top-[30px] bottom-0 left-[14px] w-0.5 bg-border" />
                             )}
                             <span
-                              style={{
-                                width: "30px",
-                                height: "30px",
-                                borderRadius: "50%",
-                                background: to.colors.bg,
-                                color: to.colors.fg,
-                                border: `1px solid ${to.colors.border}`,
-                                display: "flex",
-                                alignItems: "center",
-                                justifyContent: "center",
-                                flexShrink: 0,
-                              }}
+                              className={cn(
+                                "flex size-[30px] shrink-0 items-center justify-center rounded-full border",
+                                TONE_CLASSES[rmaStatusDisplay(e.to_status).tone],
+                              )}
                             >
-                              <Icon size={14} />
+                              <Icon aria-hidden="true" className="size-3.5" />
                             </span>
                           </div>
 
-                          <div
-                            style={{
-                              minWidth: 0,
-                              flex: 1,
-                              paddingBottom: e.isLast ? 0 : "1.125rem",
-                              paddingTop: "0.2rem",
-                            }}
-                          >
-                            <div
-                              style={{
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: "0.35rem 0.65rem",
-                                alignItems: "baseline",
-                                justifyContent: "space-between",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  display: "flex",
-                                  flexWrap: "wrap",
-                                  gap: "0.4rem",
-                                  alignItems: "center",
-                                  minWidth: 0,
-                                }}
-                              >
+                          <div className={cn("min-w-0 flex-1 pt-1", !e.isLast && "pb-[1.125rem]")}>
+                            <div className="flex flex-wrap items-baseline justify-between gap-x-2.5 gap-y-1">
+                              <span className="flex min-w-0 flex-wrap items-center gap-1.5">
                                 {from && (
                                   <>
-                                    <span style={{ fontSize: "0.84375rem", color: "var(--text-muted)" }}>
-                                      {from.label}
-                                    </span>
-                                    <ArrowRight
-                                      size={13}
-                                      style={{ color: "var(--text-muted)", flexShrink: 0 }}
-                                    />
+                                    <span className="text-[0.84375rem] text-muted-foreground">{from.label}</span>
+                                    <ArrowRight aria-label="ke" className="size-[13px] shrink-0 text-muted-foreground" />
                                   </>
                                 )}
-                                <strong style={{ fontSize: "0.90625rem" }}>{to.label}</strong>
+                                <strong className="text-[0.90625rem]">{to.label}</strong>
                               </span>
-                              <span
-                                style={{
-                                  fontSize: "0.78125rem",
-                                  color: "var(--text-muted)",
-                                  fontFamily: "ui-monospace, monospace",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
+                              <span className="font-mono text-[0.78125rem] whitespace-nowrap text-muted-foreground">
                                 {formatDateTime(e.created_at)}
                               </span>
                             </div>
 
-                            <div
-                              style={{
-                                marginTop: "0.25rem",
-                                display: "flex",
-                                flexWrap: "wrap",
-                                gap: "0.4rem",
-                                alignItems: "center",
-                              }}
-                            >
-                              <span style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-                                {e.actor.name}
-                              </span>
+                            <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                              <span className="text-[0.8125rem] text-muted-foreground">{e.actor.name}</span>
                               <RoleChip role={e.actor.role} />
                               {e.gap && (
-                                <span
-                                  style={{
-                                    fontSize: "0.71875rem",
-                                    color: "var(--text-muted)",
-                                    background: "var(--cream)",
-                                    border: "1px solid var(--border-light)",
-                                    borderRadius: "999px",
-                                    padding: "0.1rem 0.5rem",
-                                    fontFamily: "ui-monospace, monospace",
-                                  }}
-                                >
+                                <span className="rounded-full border border-border bg-muted px-2 py-px font-mono text-[0.71875rem] text-muted-foreground">
                                   +{e.gap} dari langkah sebelumnya
                                 </span>
                               )}
                             </div>
 
                             {e.note ? (
-                              <p
-                                style={{
-                                  margin: "0.55rem 0 0",
-                                  padding: "0.55rem 0.75rem",
-                                  borderLeft: "3px solid var(--primary-brand)",
-                                  background: "var(--cream)",
-                                  borderRadius: "0 8px 8px 0",
-                                  fontSize: "0.84375rem",
-                                  color: "var(--text-primary)",
-                                  wordBreak: "break-word",
-                                  whiteSpace: "pre-line",
-                                }}
-                              >
+                              <p className="mt-2 rounded-r-lg border-l-[3px] border-primary bg-muted px-3 py-2 text-[0.84375rem] whitespace-pre-line text-foreground [overflow-wrap:anywhere]">
                                 {e.note}
                               </p>
                             ) : (
-                              <p
-                                style={{
-                                  margin: "0.4rem 0 0",
-                                  fontSize: "0.78125rem",
-                                  color: "var(--text-muted)",
-                                  fontStyle: "italic",
-                                }}
-                              >
-                                Tanpa catatan
-                              </p>
+                              <p className="mt-1.5 text-[0.78125rem] text-muted-foreground italic">Tanpa catatan</p>
                             )}
                           </div>
                         </li>
@@ -620,7 +405,7 @@ export default async function RmaLogsPage({
       {/* ══ Kronologis ═════════════════════════════════════════════════ */}
       {chronological &&
         (chronological.days.length === 0 ? (
-          <EmptyState
+          <LogEmpty
             page={page}
             lastPage={chronological.lastPage}
             href={hrefWith({ page: 1 })}
@@ -631,189 +416,56 @@ export default async function RmaLogsPage({
             }
           />
         ) : (
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.875rem" }}>
+          <div className="flex flex-col gap-5">
             {chronological.days.map((day) => (
-              <div key={day.key} className="card" style={{ padding: 0, overflow: "hidden" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "0.75rem",
-                    padding: "0.75rem 1.125rem",
-                    background: "var(--cream)",
-                    borderBottom: "1px solid var(--border-brand)",
-                  }}
-                >
-                  <h2 style={{ margin: 0, fontSize: "0.875rem", fontWeight: 800 }}>{day.label}</h2>
-                  <span style={{ fontSize: "0.78125rem", color: "var(--text-muted)" }}>
+              <section key={day.key} className="flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-3">
+                  <h2 className="text-sm font-extrabold text-foreground">{day.label}</h2>
+                  <span className="text-[0.78125rem] text-muted-foreground">
                     {day.items.length} kejadian · {day.caseCount} case
                   </span>
                 </div>
-
-                <div style={{ overflowX: "auto" }}>
-                  <table
-                    style={{
-                      width: "100%",
-                      borderCollapse: "collapse",
-                      fontSize: "0.8125rem",
-                      minWidth: "860px",
-                    }}
-                  >
-                    <thead>
-                      <tr style={{ textAlign: "left", color: "var(--text-secondary)" }}>
-                        {[
-                          ["Jam", "72px"],
-                          ["Case", "190px"],
-                          ["Perpindahan", "300px"],
-                          ["Oleh", "160px"],
-                          ["Catatan", "auto"],
-                        ].map(([label, width]) => (
-                          <th
-                            key={label}
-                            style={{
-                              padding: "0.55rem 0.75rem",
-                              fontWeight: 700,
-                              fontSize: "0.6875rem",
-                              letterSpacing: "0.04em",
-                              textTransform: "uppercase",
-                              borderBottom: "1px solid var(--border-light)",
-                              width,
-                            }}
-                          >
-                            {label}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {day.items.map((e, i) => (
-                        <tr
-                          key={e.id}
-                          style={{
-                            borderTop: "1px solid var(--border-light)",
-                            background: i % 2 ? "var(--cream)" : "transparent",
-                          }}
-                        >
-                          <td
-                            style={{
-                              padding: "0.7rem 0.75rem",
-                              verticalAlign: "top",
-                              fontFamily: "ui-monospace, monospace",
-                              color: "var(--text-secondary)",
-                              whiteSpace: "nowrap",
-                            }}
-                          >
-                            {formatTimeOfDay(e.created_at)}
-                          </td>
-                          <td style={{ padding: "0.7rem 0.75rem", verticalAlign: "top" }}>
-                            <Link
-                              href={`/rma/cases/${e.rma_case.id}`}
-                              style={{
-                                display: "block",
-                                fontFamily: "ui-monospace, monospace",
-                                fontWeight: 700,
-                                fontSize: "0.78125rem",
-                              }}
-                            >
-                              {e.rma_case.rma_code}
-                            </Link>
-                            <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                              #{e.rma_case.ticket.ticket_code}
-                              {e.rma_case.ticket.customer_name
-                                ? ` · ${e.rma_case.ticket.customer_name}`
-                                : ""}
-                            </span>
-                          </td>
-                          <td style={{ padding: "0.7rem 0.75rem", verticalAlign: "top" }}>
-                            <span
-                              style={{
-                                display: "inline-flex",
-                                alignItems: "center",
-                                gap: "0.35rem",
-                                flexWrap: "wrap",
-                              }}
-                            >
-                              <span style={{ color: "var(--text-muted)", fontSize: "0.78125rem" }}>
-                                {e.from_status
-                                  ? rmaStatusMeta(e.from_status).label
-                                  : "Serah terima"}
-                              </span>
-                              <span style={{ color: "var(--text-muted)" }}>→</span>
-                              <StatusPill status={e.to_status} small />
-                            </span>
-                          </td>
-                          <td style={{ padding: "0.7rem 0.75rem", verticalAlign: "top" }}>
-                            <span style={{ display: "block", fontSize: "0.78125rem" }}>
-                              {e.actor.name}
-                            </span>
-                            <RoleChip role={e.actor.role} />
-                          </td>
-                          <td
-                            style={{
-                              padding: "0.7rem 0.75rem",
-                              verticalAlign: "top",
-                              color: "var(--text-secondary)",
-                              wordBreak: "break-word",
-                              whiteSpace: "pre-line",
-                            }}
-                          >
-                            {e.note || "—"}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
+                <DataTable
+                  caption={`Aktivitas RMA ${day.label}`}
+                  columns={eventColumns}
+                  rows={day.items}
+                  getRowKey={(e) => e.id}
+                  rowHref={(e) => `/rma/cases/${e.rma_case.id}`}
+                />
+              </section>
             ))}
           </div>
         ))}
 
       {/* ── Halaman ─────────────────────────────────────────────────────── */}
       {lastPage > 1 && (
-        <div
-          className="card"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: "0.75rem",
-            flexWrap: "wrap",
-          }}
+        <nav
+          aria-label="Halaman"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card p-3 md:p-4"
         >
           {page > 1 ? (
-            <Link href={hrefWith({ page: page - 1 })} className="btn btn-outline">
+            <Link href={hrefWith({ page: page - 1 })} className={buttonVariants({ variant: "outline", className: "bg-card" })}>
               ← Sebelumnya
             </Link>
           ) : (
             <span />
           )}
-          <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+          <span className="order-first w-full text-center text-[0.8125rem] text-muted-foreground sm:order-none sm:w-auto">
             Halaman {page} dari {lastPage} ·{" "}
             {view === "case" ? `${CASES_PER_PAGE} case` : `${EVENTS_PER_PAGE} kejadian`} per halaman
           </span>
           {page < lastPage ? (
-            <Link href={hrefWith({ page: page + 1 })} className="btn btn-outline">
+            <Link href={hrefWith({ page: page + 1 })} className={buttonVariants({ variant: "outline", className: "bg-card" })}>
               Berikutnya →
             </Link>
           ) : (
             <span />
           )}
-        </div>
+        </nav>
       )}
 
-      <p
-        style={{
-          display: "flex",
-          alignItems: "center",
-          gap: "0.45rem",
-          fontSize: "0.78125rem",
-          color: "var(--text-muted)",
-          margin: 0,
-        }}
-      >
-        <History size={14} />
+      <p className="flex items-center gap-2 text-[0.78125rem] text-muted-foreground">
+        <History aria-hidden="true" className="size-3.5 shrink-0" />
         Setiap baris adalah satu perpindahan status yang dicatat sistem. Tidak bisa diubah atau
         dihapus dari aplikasi.
       </p>

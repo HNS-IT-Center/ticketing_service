@@ -3,7 +3,11 @@ import { requireRole } from "@/lib/session";
 import { getRmaQueue, RMA_STAGE_SLA, VENDOR_OVERDUE_DAYS } from "@/lib/rma/queue";
 import AttentionCard from "./AttentionCard";
 import { RMA_DECISION_LABELS } from "@/components/rma/RmaStatusCard";
-import { AlertTriangle, Clock, Factory, CheckCircle2, ListChecks, History, CheckCircle, UserX, Timer } from "lucide-react";
+import { AlertTriangle, Clock, Factory, CheckCircle2, ListChecks, History, CheckCircle, UserX, Timer, ChevronDown } from "lucide-react";
+import { EmptyState } from "@/components/app/EmptyState";
+import { PageHeader } from "@/components/app/PageHeader";
+import { StatCard } from "@/components/app/StatCard";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard RMA — HNS IT Center" };
 
@@ -22,51 +26,6 @@ const QUEUE_SECTIONS = [
   { key: "unit_received", title: "Unit Diterima", hint: "Tutup case agar tiket lanjut ke serah terima." },
 ] as const;
 
-function StatCard({
-  icon,
-  value,
-  label,
-  hint,
-  tone,
-}: {
-  icon: React.ReactNode;
-  value: number;
-  label: string;
-  hint?: string;
-  tone?: { bg: string; fg: string };
-}) {
-  return (
-    <div className="card" style={{ padding: "1.25rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-        <div
-          style={{
-            width: "2.5rem",
-            height: "2.5rem",
-            borderRadius: "10px",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            background: tone?.bg ?? "var(--cream)",
-            color: tone?.fg ?? "var(--primary)",
-          }}
-        >
-          {icon}
-        </div>
-        <div style={{ minWidth: 0 }}>
-          <div style={{ fontSize: "1.5rem", fontWeight: 700, lineHeight: 1.1 }}>{value}</div>
-          <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", fontWeight: 600 }}>
-            {label}
-          </div>
-        </div>
-      </div>
-      {hint && (
-        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: "0.65rem 0 0" }}>{hint}</p>
-      )}
-    </div>
-  );
-}
-
 /** A labelled count with a proportion bar. Used for the claim breakdowns. */
 function BreakdownCard({
   title,
@@ -84,46 +43,31 @@ function BreakdownCard({
   const max = rows.reduce((m, r) => Math.max(m, r.count), 0) || 1;
 
   return (
-    <div className="card">
-      <h3 style={{ margin: "0 0 0.25rem" }}>{title}</h3>
-      <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.85rem" }}>
-        {hint}
-      </p>
-      <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+    <section className={CARD}>
+      <h3 className={CARD_TITLE}>{title}</h3>
+      <p className={CARD_HINT}>{hint}</p>
+      <ul className="mt-3 flex flex-col gap-2.5">
         {rows.map((row) => (
-          <li key={row.label}>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: "0.75rem",
-                fontSize: "0.875rem",
-                marginBottom: "0.25rem",
-              }}
-            >
-              <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                {row.label}
-              </span>
-              <span style={{ flexShrink: 0, color: "var(--text-muted)", fontFamily: "ui-monospace, monospace" }}>
+          <li key={row.label} className="flex flex-col gap-1">
+            <div className="flex justify-between gap-3 text-sm">
+              <span className="min-w-0 truncate">{row.label}</span>
+              <span className="shrink-0 font-mono text-muted-foreground">
                 {row.count} ({Math.round((row.count / total) * 100)}%)
               </span>
             </div>
-            <div style={{ height: "6px", borderRadius: "999px", background: "var(--cream-dark, #eee)", overflow: "hidden" }}>
-              <div
-                style={{
-                  width: `${(row.count / max) * 100}%`,
-                  height: "100%",
-                  borderRadius: "999px",
-                  background: "var(--primary)",
-                }}
-              />
+            <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+              <div className="h-full rounded-full bg-primary" style={{ width: `${(row.count / max) * 100}%` }} />
             </div>
           </li>
         ))}
       </ul>
-    </div>
+    </section>
   );
 }
+
+const CARD = "flex flex-col rounded-xl border border-border bg-card p-4 shadow-xs md:p-5";
+const CARD_TITLE = "text-base font-semibold text-foreground";
+const CARD_HINT = "mt-0.5 text-[0.8125rem] text-muted-foreground";
 
 export default async function RmaDashboardPage() {
   await requireRole("RMA", "Administrator");
@@ -148,328 +92,98 @@ export default async function RmaDashboardPage() {
 
   const decisionEntries = Object.entries(stats.decisions).filter(([, n]) => n > 0);
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div>
-        <h1 style={{ fontSize: "1.25rem" }}>Dashboard RMA</h1>
-        <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>
-          Pantau case klaim yang sedang berjalan dan aktivitas terakhirnya.
-        </p>
-      </div>
+  // The seven summary numbers, in their original order. The first four are
+  // the desk's daily ones; on a phone the last three fold away with the
+  // long-term statistics at the bottom of the page.
+  const statCards = [
+    <StatCard
+      key="active"
+      icon={ListChecks}
+      value={stats.active}
+      label="Case Aktif"
+      hint={stats.oldestOpenDays > 0 ? `Terlama ${stats.oldestOpenDays} hari` : undefined}
+    />,
+    <StatCard
+      key="needsAction"
+      icon={AlertTriangle}
+      value={stats.needsAction}
+      label="Butuh Tindakan"
+      hint="Menunggu verifikasi atau ditahan"
+      tone={stats.needsAction > 0 ? "warning" : "default"}
+    />,
+    <StatCard
+      key="atVendor"
+      icon={Factory}
+      value={stats.atVendor}
+      label="Di Vendor"
+      hint={
+        stats.overdue > 0
+          ? `${stats.overdue} lewat ${VENDOR_OVERDUE_DAYS} hari, perlu dikejar`
+          : "Diajukan atau sedang diproses"
+      }
+    />,
+    // Counts the same thing as the "melewati tenggat" pill below. Before,
+    // this card counted only vendor days over 14 while the pill counted
+    // every stage past its own target, so the two disagreed on screen.
+    <StatCard
+      key="pastDue"
+      icon={Clock}
+      value={stats.pastDue}
+      label="Lewat Tenggat"
+      hint="Melewati target tahapannya"
+      tone={stats.pastDue > 0 ? "attention" : "default"}
+    />,
+    <StatCard
+      key="unassigned"
+      icon={UserX}
+      value={stats.unassigned}
+      label="Tanpa PIC"
+      hint={stats.unassigned > 0 ? "Belum ada yang memegang" : "Semua case ada pemiliknya"}
+      tone={stats.unassigned > 0 ? "warning" : "default"}
+    />,
+    <StatCard
+      key="resolution"
+      icon={Timer}
+      value={stats.resolution.thisMonth ?? stats.resolution.overall ?? 0}
+      label="Rata-rata Selesai (hari)"
+      hint={
+        stats.resolution.sample === 0
+          ? "Belum ada case yang ditutup"
+          : stats.resolution.thisMonth !== null && stats.resolution.previous !== null
+            ? stats.resolution.thisMonth < stats.resolution.previous
+              ? `Lebih cepat dari ${stats.resolution.previous} hari sebelumnya`
+              : stats.resolution.thisMonth > stats.resolution.previous
+                ? `Lebih lambat dari ${stats.resolution.previous} hari sebelumnya`
+                : "Sama dengan bulan sebelumnya"
+            : `Dari ${stats.resolution.sample} case tertutup`
+      }
+    />,
+    <StatCard
+      key="closedThisMonth"
+      icon={CheckCircle2}
+      value={stats.closedThisMonth}
+      label="Selesai Bulan Ini"
+      hint={
+        // The single number that says whether the desk is keeping up.
+        `${stats.openedThisMonth} masuk bulan ini` +
+        (stats.netThisMonth > 0
+          ? ` • tumpukan +${stats.netThisMonth}`
+          : stats.netThisMonth < 0
+            ? ` • tumpukan ${stats.netThisMonth}`
+            : " • seimbang")
+      }
+      tone={stats.netThisMonth > 0 ? "warning" : "success"}
+    />,
+  ];
+  const dailyStats = statCards.slice(0, 4);
+  const laterStats = statCards.slice(4);
 
-      {/* ── Ringkasan ───────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: "1rem" }}>
-        <StatCard
-          icon={<ListChecks size={20} />}
-          value={stats.active}
-          label="Case Aktif"
-          hint={stats.oldestOpenDays > 0 ? `Terlama ${stats.oldestOpenDays} hari` : undefined}
-        />
-        <StatCard
-          icon={<AlertTriangle size={20} />}
-          value={stats.needsAction}
-          label="Butuh Tindakan"
-          hint="Menunggu verifikasi atau ditahan"
-          tone={stats.needsAction > 0 ? { bg: "#fef3c7", fg: "#92400e" } : undefined}
-        />
-        <StatCard
-          icon={<Factory size={20} />}
-          value={stats.atVendor}
-          label="Di Vendor"
-          hint={
-            stats.overdue > 0
-              ? `${stats.overdue} lewat ${VENDOR_OVERDUE_DAYS} hari, perlu dikejar`
-              : "Diajukan atau sedang diproses"
-          }
-        />
-        {/* Counts the same thing as the "melewati tenggat" pill above. Before,
-            this card counted only vendor days over 14 while the pill counted
-            every stage past its own target, so the two disagreed on screen. */}
-        <StatCard
-          icon={<Clock size={20} />}
-          value={stats.pastDue}
-          label="Lewat Tenggat"
-          hint="Melewati target tahapannya"
-          tone={stats.pastDue > 0 ? { bg: "#fee2e2", fg: "#991b1b" } : undefined}
-        />
-        <StatCard
-          icon={<UserX size={20} />}
-          value={stats.unassigned}
-          label="Tanpa PIC"
-          hint={stats.unassigned > 0 ? "Belum ada yang memegang" : "Semua case ada pemiliknya"}
-          tone={stats.unassigned > 0 ? { bg: "#fef3c7", fg: "#92400e" } : undefined}
-        />
-        <StatCard
-          icon={<Timer size={20} />}
-          value={stats.resolution.thisMonth ?? stats.resolution.overall ?? 0}
-          label="Rata-rata Selesai (hari)"
-          hint={
-            stats.resolution.sample === 0
-              ? "Belum ada case yang ditutup"
-              : stats.resolution.thisMonth !== null && stats.resolution.previous !== null
-                ? stats.resolution.thisMonth < stats.resolution.previous
-                  ? `Lebih cepat dari ${stats.resolution.previous} hari sebelumnya`
-                  : stats.resolution.thisMonth > stats.resolution.previous
-                    ? `Lebih lambat dari ${stats.resolution.previous} hari sebelumnya`
-                    : "Sama dengan bulan sebelumnya"
-                : `Dari ${stats.resolution.sample} case tertutup`
-          }
-        />
-        <StatCard
-          icon={<CheckCircle2 size={20} />}
-          value={stats.closedThisMonth}
-          label="Selesai Bulan Ini"
-          hint={
-            // The single number that says whether the desk is keeping up.
-            `${stats.openedThisMonth} masuk bulan ini` +
-            (stats.netThisMonth > 0
-              ? ` • tumpukan +${stats.netThisMonth}`
-              : stats.netThisMonth < 0
-                ? ` • tumpukan ${stats.netThisMonth}`
-                : " • seimbang")
-          }
-          tone={
-            stats.netThisMonth > 0
-              ? { bg: "#fef3c7", fg: "#92400e" }
-              : { bg: "#d1fae5", fg: "#065f46" }
-          }
-        />
-      </div>
-
-      {/* ── Menunggu pemeriksaan teknisi (read-only) ─────────────────────── */}
-      {awaitingCheck.length > 0 && (
-        <div className="card">
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "0.75rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ minWidth: 0 }}>
-              <h3 style={{ margin: 0, fontSize: "1rem" }}>Menunggu Pemeriksaan Teknisi</h3>
-              <p style={{ margin: "0.2rem 0 0", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                Klaim yang sudah masuk tapi unitnya masih dipegang teknisi. Belum bisa
-                ditindak dari sini — case RMA baru terbentuk setelah unit diserahkan.
-              </p>
-            </div>
-            <span
-              style={{
-                background: "var(--cream)",
-                border: "1px solid var(--border)",
-                borderRadius: "999px",
-                padding: "0.15rem 0.6rem",
-                fontSize: "0.75rem",
-                fontWeight: 600,
-                whiteSpace: "nowrap",
-              }}
-            >
-              {awaitingCheck.length} tiket
-            </span>
-          </div>
-
-          <ul style={{ listStyle: "none", margin: "0.85rem 0 0", padding: 0 }}>
-            {awaitingCheck.map((t) => (
-              <li
-                key={t.id}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: "0.75rem",
-                  padding: "0.55rem 0",
-                  borderTop: "1px solid var(--border)",
-                }}
-              >
-                <span style={{ minWidth: 0 }}>
-                  <span
-                    style={{
-                      display: "block",
-                      fontFamily: "ui-monospace, monospace",
-                      fontSize: "0.875rem",
-                      fontWeight: 600,
-                    }}
-                  >
-                    #{t.ticket_code}
-                    {t.store_location ? ` · ${t.store_location.code}` : ""}
-                  </span>
-                  <span
-                    style={{
-                      display: "block",
-                      fontSize: "0.8125rem",
-                      color: "var(--text-muted)",
-                      overflow: "hidden",
-                      textOverflow: "ellipsis",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {[t.customer_name, t.device_name, t.technician?.name && `PIC ${t.technician.name}`]
-                      .filter(Boolean)
-                      .join(" · ") || "—"}
-                  </span>
-                </span>
-
-                <span style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
-                  <span
-                    style={{
-                      fontSize: "0.7rem",
-                      fontWeight: 600,
-                      borderRadius: "999px",
-                      padding: "0.1rem 0.5rem",
-                      background: t.status === "on_progress" ? "#dbeafe" : "#fef3c7",
-                      color: t.status === "on_progress" ? "#1e40af" : "#92400e",
-                    }}
-                  >
-                    {t.status === "on_progress" ? "Diperiksa" : "Belum diambil"}
-                  </span>
-                  <span
-                    style={{
-                      fontFamily: "ui-monospace, monospace",
-                      fontSize: "0.75rem",
-                      color: "var(--text-muted)",
-                      whiteSpace: "nowrap",
-                    }}
-                  >
-                    {t.daysWaiting} hari
-                  </span>
-                </span>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      {/* ── Antrean per tahapan ─────────────────────────────────────────── */}
-      {rows.length === 0 ? (
-        <div className="card" style={{ textAlign: "center", padding: "3rem 1.5rem" }}>
-          <CheckCircle2
-            size={40}
-            style={{ margin: "0 auto 0.75rem", color: "#059669", opacity: 0.8 }}
-          />
-          <p style={{ fontWeight: 600, marginBottom: "0.25rem" }}>Tidak ada case RMA aktif.</p>
-          <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
-            Case muncul di sini setelah teknisi menyerahkan unit klaim ke RMA.
-          </p>
-        </div>
-      ) : (
-        <>
-          {/* Band ringkas: satu angka yang jadi alasan membuka halaman ini. */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: "0.75rem",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <AlertTriangle size={18} style={{ color: stats.pastDue > 0 ? "#dc2626" : "#b45309" }} />
-              <h2 style={{ margin: 0, fontSize: "1.0625rem" }}>Perlu Perhatian</h2>
-              <span style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-                {stats.active} case aktif
-              </span>
-            </div>
-            {stats.pastDue > 0 && (
-              <span
-                style={{
-                  background: "#fef2f2",
-                  color: "#991b1b",
-                  border: "1px solid #fecaca",
-                  borderRadius: "999px",
-                  padding: "0.2rem 0.7rem",
-                  fontSize: "0.8125rem",
-                  fontWeight: 600,
-                  fontFamily: "ui-monospace, monospace",
-                }}
-              >
-                {stats.pastDue} melewati tenggat
-              </span>
-            )}
-          </div>
-
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
-              gap: "1rem",
-              alignItems: "start",
-            }}
-          >
-            {activeSections.map((section) => (
-              <AttentionCard
-                key={section.key}
-                title={section.title}
-                hint={section.hint}
-                rows={bySection.get(section.key) ?? []}
-              />
-            ))}
-          </div>
-
-          {/* Tahapan yang kosong: ditampilkan supaya jelas "memang tidak ada",
-              bukan "belum dimuat". */}
-          {clearSections.length > 0 && (
-            <div className="card" style={{ borderColor: "#a7f3d0", background: "#f0fdf4" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                <CheckCircle size={18} style={{ color: "#059669" }} />
-                <h3 style={{ margin: 0, fontSize: "1rem" }}>Tidak ada tunggakan</h3>
-              </div>
-              <p style={{ fontSize: "0.8125rem", color: "#047857", margin: "0.25rem 0 1rem" }}>
-                Tidak ada case yang menunggu di tahapan berikut.
-              </p>
-              <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
-                {clearSections.map((section) => (
-                  <li
-                    key={section.key}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "0.75rem",
-                      padding: "0.45rem 0",
-                    }}
-                  >
-                    <span
-                      style={{
-                        display: "inline-flex",
-                        alignItems: "center",
-                        gap: "0.5rem",
-                        fontSize: "0.875rem",
-                      }}
-                    >
-                      <CheckCircle size={15} style={{ color: "#059669", flexShrink: 0 }} />
-                      {section.title}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "0.75rem",
-                        color: "#047857",
-                        fontFamily: "ui-monospace, monospace",
-                        whiteSpace: "nowrap",
-                      }}
-                    >
-                      Tenggat {RMA_STAGE_SLA[section.key].overdue} hari
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── Sebaran klaim ───────────────────────────────────────────────── */}
+  // Claim breakdowns and outcomes: history, not today's work. Drawn once here,
+  // placed twice — in the page flow from md up, folded on a phone.
+  const longTerm = (
+    <>
       {stats.totalClaims > 0 && (
-        <div
-          style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-            gap: "1rem",
-            alignItems: "start",
-          }}
-        >
+        <div className="grid items-start gap-4 lg:grid-cols-2">
           <BreakdownCard
             title="Klaim per Merek"
             hint={`Dari ${stats.totalClaims} klaim yang pernah masuk. Diambil dari kata pertama nama perangkat.`}
@@ -485,93 +199,58 @@ export default async function RmaDashboardPage() {
         </div>
       )}
 
-      {/* ── Hasil klaim & vendor ────────────────────────────────────────── */}
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: "1rem",
-          alignItems: "start",
-        }}
-      >
+      <div className="grid items-start gap-4 lg:grid-cols-2">
         {stats.outcome.decided > 0 && (
-          <div className="card">
-            <h3 style={{ margin: "0 0 0.25rem" }}>Hasil Klaim</h3>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.85rem" }}>
+          <section className={CARD}>
+            <h3 className={CARD_TITLE}>Hasil Klaim</h3>
+            <p className={CARD_HINT}>
               Dari {stats.outcome.decided} klaim yang sudah diputus vendor. Klaim yang masih
               berjalan belum dihitung.
             </p>
 
-            <div style={{ display: "flex", alignItems: "baseline", gap: "0.5rem", marginBottom: "0.85rem" }}>
-              <span style={{ fontSize: "2rem", fontWeight: 700, lineHeight: 1 }}>
-                {stats.outcome.successRate}%
-              </span>
-              <span style={{ fontSize: "0.875rem", color: "var(--text-secondary)" }}>
+            <div className="mt-3 flex items-baseline gap-2">
+              <span className="text-3xl leading-none font-bold tabular-nums">{stats.outcome.successRate}%</span>
+              <span className="text-sm text-muted-foreground">
                 disetujui ({stats.outcome.approved} dari {stats.outcome.decided})
               </span>
             </div>
 
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+            <div className="mt-3 flex flex-wrap gap-2">
               {decisionEntries.map(([decision, count]) => (
                 <span
                   key={decision}
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    gap: "0.4rem",
-                    background: decision === "rejected" ? "#fef2f2" : "var(--cream)",
-                    border: `1px solid ${decision === "rejected" ? "#fecaca" : "var(--border)"}`,
-                    color: decision === "rejected" ? "#991b1b" : undefined,
-                    borderRadius: "999px",
-                    padding: "0.3rem 0.75rem",
-                    fontSize: "0.8125rem",
-                  }}
+                  className={cn(
+                    "inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-[0.8125rem]",
+                    decision === "rejected"
+                      ? "border-tone-red-border bg-tone-red-bg text-tone-red-fg"
+                      : "border-border bg-muted",
+                  )}
                 >
                   {RMA_DECISION_LABELS[decision] ?? decision}
                   <strong>{count}</strong>
                 </span>
               ))}
             </div>
-          </div>
+          </section>
         )}
 
         {stats.vendors.length > 0 && (
-          <div className="card">
-            <h3 style={{ margin: "0 0 0.25rem" }}>Case per Vendor</h3>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.5rem" }}>
-              Yang masih berjalan, menunggu terlama di atas.
-            </p>
-            <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          <section className={CARD}>
+            <h3 className={CARD_TITLE}>Case per Vendor</h3>
+            <p className={CARD_HINT}>Yang masih berjalan, menunggu terlama di atas.</p>
+            <ul className="mt-2">
               {stats.vendors.map((v) => (
-                <li
-                  key={v.name}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    gap: "0.75rem",
-                    padding: "0.55rem 0",
-                    borderTop: "1px solid var(--border)",
-                  }}
-                >
-                  <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                    {v.name}
-                  </span>
-                  <span style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexShrink: 0 }}>
-                    <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                      {v.open} case
-                    </span>
+                <li key={v.name} className="flex items-center justify-between gap-3 border-t border-border py-2.5">
+                  <span className="min-w-0 truncate">{v.name}</span>
+                  <span className="flex shrink-0 items-center gap-1.5">
+                    <span className="text-[0.8125rem] text-muted-foreground">{v.open} case</span>
                     <span
-                      style={{
-                        fontFamily: "ui-monospace, monospace",
-                        fontSize: "0.75rem",
-                        fontWeight: 600,
-                        borderRadius: "999px",
-                        padding: "0.15rem 0.55rem",
-                        background: v.oldestDays >= VENDOR_OVERDUE_DAYS ? "#fef2f2" : "var(--cream)",
-                        color: v.oldestDays >= VENDOR_OVERDUE_DAYS ? "#991b1b" : "var(--text-secondary)",
-                        border: `1px solid ${v.oldestDays >= VENDOR_OVERDUE_DAYS ? "#fecaca" : "var(--border)"}`,
-                      }}
+                      className={cn(
+                        "rounded-full border px-2 py-0.5 font-mono text-xs font-semibold",
+                        v.oldestDays >= VENDOR_OVERDUE_DAYS
+                          ? "border-tone-red-border bg-tone-red-bg text-tone-red-fg"
+                          : "border-border bg-muted text-muted-foreground",
+                      )}
                     >
                       {v.oldestDays} hari
                     </span>
@@ -579,36 +258,171 @@ export default async function RmaDashboardPage() {
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         )}
       </div>
+    </>
+  );
+
+  const statGrid = "grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4";
+
+  return (
+    // Built from components/app and shadcn only (the UI-1 reset rule).
+    <div data-slot="rma-dashboard" className="flex flex-col gap-6">
+      <PageHeader
+        title="Dashboard RMA"
+        description="Pantau case klaim yang sedang berjalan dan aktivitas terakhirnya."
+      />
+
+      {/* ── Ringkasan ───────────────────────────────────────────────────── */}
+      <div className={statGrid}>
+        {dailyStats}
+        <div className="hidden md:contents">{laterStats}</div>
+      </div>
+
+      {/* ── Menunggu pemeriksaan teknisi (read-only) ─────────────────────── */}
+      {awaitingCheck.length > 0 && (
+        <section className={CARD}>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h3 className={CARD_TITLE}>Menunggu Pemeriksaan Teknisi</h3>
+              <p className={CARD_HINT}>
+                Klaim yang sudah masuk tapi unitnya masih dipegang teknisi. Belum bisa
+                ditindak dari sini — case RMA baru terbentuk setelah unit diserahkan.
+              </p>
+            </div>
+            <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap">
+              {awaitingCheck.length} tiket
+            </span>
+          </div>
+
+          <ul className="mt-3">
+            {awaitingCheck.map((t) => (
+              <li key={t.id} className="flex items-center justify-between gap-3 border-t border-border py-2.5">
+                <span className="min-w-0">
+                  <span className="block font-mono text-sm font-semibold">
+                    #{t.ticket_code}
+                    {t.store_location ? ` · ${t.store_location.code}` : ""}
+                  </span>
+                  <span className="block truncate text-[0.8125rem] text-muted-foreground">
+                    {[t.customer_name, t.device_name, t.technician?.name && `PIC ${t.technician.name}`]
+                      .filter(Boolean)
+                      .join(" · ") || "—"}
+                  </span>
+                </span>
+
+                <span className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-1.5">
+                  <span
+                    className={cn(
+                      "rounded-full px-2 py-0.5 text-[0.7rem] font-semibold whitespace-nowrap",
+                      t.status === "on_progress" ? "bg-tone-blue-bg text-tone-blue-fg" : "bg-tone-amber-bg text-tone-amber-fg",
+                    )}
+                  >
+                    {t.status === "on_progress" ? "Diperiksa" : "Belum diambil"}
+                  </span>
+                  <span className="font-mono text-xs whitespace-nowrap text-muted-foreground">{t.daysWaiting} hari</span>
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {/* ── Antrean per tahapan ─────────────────────────────────────────── */}
+      {rows.length === 0 ? (
+        <EmptyState
+          icon={CheckCircle2}
+          title="Tidak ada case RMA aktif."
+          description="Case muncul di sini setelah teknisi menyerahkan unit klaim ke RMA."
+        />
+      ) : (
+        <>
+          {/* Band ringkas: satu angka yang jadi alasan membuka halaman ini. */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <AlertTriangle
+                aria-hidden="true"
+                className={cn("size-[18px]", stats.pastDue > 0 ? "text-destructive" : "text-amber-700")}
+              />
+              <h2 className="text-[1.0625rem] font-semibold text-foreground">Perlu Perhatian</h2>
+              <span className="text-sm text-muted-foreground">{stats.active} case aktif</span>
+            </div>
+            {stats.pastDue > 0 && (
+              <span className="rounded-full border border-tone-red-border bg-tone-red-bg px-3 py-0.5 font-mono text-[0.8125rem] font-semibold text-tone-red-fg">
+                {stats.pastDue} melewati tenggat
+              </span>
+            )}
+          </div>
+
+          <div className="grid items-start gap-4 lg:grid-cols-2">
+            {activeSections.map((section) => (
+              <AttentionCard
+                key={section.key}
+                title={section.title}
+                hint={section.hint}
+                rows={bySection.get(section.key) ?? []}
+              />
+            ))}
+          </div>
+
+          {/* Tahapan yang kosong: ditampilkan supaya jelas "memang tidak ada",
+              bukan "belum dimuat". */}
+          {clearSections.length > 0 && (
+            <section className="flex flex-col rounded-xl border border-tone-green-border bg-tone-green-bg p-4 md:p-5">
+              <div className="flex items-center gap-2 text-tone-green-fg">
+                <CheckCircle aria-hidden="true" className="size-[18px]" />
+                <h3 className="text-base font-semibold">Tidak ada tunggakan</h3>
+              </div>
+              <p className="mt-1 mb-3 text-[0.8125rem] text-tone-green-fg">
+                Tidak ada case yang menunggu di tahapan berikut.
+              </p>
+              <ul>
+                {clearSections.map((section) => (
+                  <li key={section.key} className="flex items-center justify-between gap-3 py-1.5">
+                    <span className="inline-flex items-center gap-2 text-sm text-foreground">
+                      <CheckCircle aria-hidden="true" className="size-[15px] shrink-0 text-tone-green-fg" />
+                      {section.title}
+                    </span>
+                    <span className="font-mono text-xs whitespace-nowrap text-tone-green-fg">
+                      Tenggat {RMA_STAGE_SLA[section.key].overdue} hari
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
+      )}
+
+      {/* ── Sebaran klaim, hasil klaim & vendor ─────────────────────────── */}
+      <div className="hidden md:contents">{longTerm}</div>
+      <details className="group rounded-xl border border-border bg-card md:hidden">
+        <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 px-4 text-sm font-semibold [&::-webkit-details-marker]:hidden">
+          Statistik jangka panjang
+          <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="flex flex-col gap-4 border-t border-border p-3">
+          <div className="grid grid-cols-2 gap-3">{laterStats}</div>
+          {longTerm}
+        </div>
+      </details>
 
       {/* Aktivitas pindah ke halaman sendiri: dashboard ini untuk bertindak,
           bukan untuk membaca riwayat. */}
       <Link
         href="/rma/logs"
-        className="card"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "0.75rem",
-          textDecoration: "none",
-          color: "inherit",
-        }}
+        className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 text-inherit shadow-xs outline-none hover:border-primary/40 focus-visible:ring-3 focus-visible:ring-ring/50 md:p-5"
       >
-        <span style={{ display: "flex", alignItems: "center", gap: "0.65rem", minWidth: 0 }}>
-          <History size={18} style={{ color: "var(--text-muted)", flexShrink: 0 }} />
-          <span style={{ minWidth: 0 }}>
-            <span style={{ display: "block", fontWeight: 600 }}>Log Aktivitas</span>
-            <span style={{ display: "block", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+        <span className="flex min-w-0 items-center gap-2.5">
+          <History aria-hidden="true" className="size-[18px] shrink-0 text-muted-foreground" />
+          <span className="min-w-0">
+            <span className="block font-semibold">Log Aktivitas</span>
+            <span className="block text-[0.8125rem] text-muted-foreground">
               Riwayat perpindahan status semua case, bisa difilter.
             </span>
           </span>
         </span>
-        <span style={{ color: "var(--primary)", fontWeight: 600, whiteSpace: "nowrap" }}>
-          Buka →
-        </span>
+        <span className="font-semibold whitespace-nowrap text-primary">Buka →</span>
       </Link>
     </div>
   );

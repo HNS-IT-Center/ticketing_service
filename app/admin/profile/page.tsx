@@ -1,8 +1,12 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
-import { User, Ticket, Users, Shield } from "lucide-react";
+import { Ticket, Users, Shield } from "lucide-react";
+import { EmptyState } from "@/components/app/EmptyState";
+import { PageHeader } from "@/components/app/PageHeader";
+import { StatCard } from "@/components/app/StatCard";
 import ProfileForm from "@/components/ui/ProfileForm";
 import ChangePasswordForm from "@/components/ui/ChangePasswordForm";
+import { Card, CardContent } from "@/components/ui/card";
 import { updateAdminProfileAction } from "@/app/actions/profile";
 
 export const metadata = { title: "My Profile — HNS IT Center" };
@@ -27,57 +31,41 @@ export default async function AdminProfilePage() {
     db.user.count({ where: { role: { not: "Administrator" } } }),
   ]);
 
-  if (!user) return <div className="empty-state">User not found.</div>;
-
-  const statCards = [
-    { label: "Total Tickets", value: totalTickets, icon: <Ticket size={20} />, color: "var(--primary)" },
-    { label: "Total Users", value: totalUsers, icon: <Users size={20} />, color: "#7c3aed" },
-  ];
+  if (!user) return <EmptyState icon={Users} title="User not found." />;
 
   return (
-    <div className="flex flex-col gap-6 max-w-2xl mx-auto">
-      {/* Header */}
-      <div>
-        <h1 className="flex items-center gap-2 text-2xl font-bold text-gray-800">
-          <Shield size={24} />
-          Admin Profile
-        </h1>
-        <p className="text-sm text-gray-500 mt-1">Manage your administrator account</p>
-      </div>
+    // Built from components/app and shadcn only, so the page opts into
+    // Tailwind spacing with a data-slot (the UI-1 reset rule).
+    <div data-slot="admin-profile" className="flex w-full max-w-2xl flex-col gap-6">
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <Shield aria-hidden="true" className="size-6" /> Admin Profile
+          </span>
+        }
+        description="Manage your administrator account"
+      />
 
-      {/* Stats */}
-      <div className="customer-stats-grid" style={{ gridTemplateColumns: "repeat(2, minmax(0, 1fr))" }}>
-        {statCards.map((s) => (
-          <div key={s.label} className="stat-card">
-            <div className="stat-card-icon" style={{ background: `${s.color}18`, color: s.color }}>
-              {s.icon}
-            </div>
-            <div className="stat-card-body">
-              <div className="stat-card-value" style={{ color: s.color }}>{s.value}</div>
-              <div className="stat-card-label">{s.label}</div>
-            </div>
-          </div>
-        ))}
+      <div className="grid grid-cols-2 gap-3">
+        <StatCard label="Total Tickets" value={totalTickets} icon={Ticket} />
+        <StatCard label="Total Users" value={totalUsers} icon={Users} />
       </div>
 
       {/* Avatar + info */}
-      <div className="card flex items-center gap-4">
-        <div style={{
-          width: "4rem", height: "4rem", borderRadius: "50%",
-          background: "var(--primary)", color: "white",
-          display: "flex", alignItems: "center", justifyContent: "center",
-          fontSize: "1.5rem", fontWeight: 700, flexShrink: 0,
-        }}>
-          {user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
-        </div>
-        <div>
-          <div className="text-lg font-bold text-gray-800">{user.name}</div>
-          <div className="text-sm text-gray-500">Administrator</div>
-          <div className="text-xs text-gray-400 mt-1">
-            Member since {new Date(user.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+      <Card>
+        <CardContent className="flex items-center gap-4">
+          <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-primary text-2xl font-bold text-primary-foreground">
+            {user.name.split(" ").map((n) => n[0]).join("").slice(0, 2).toUpperCase()}
           </div>
-        </div>
-      </div>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <div className="text-lg font-bold text-foreground">{user.name}</div>
+            <div className="text-sm text-muted-foreground">Administrator</div>
+            <div className="mt-1 text-xs text-muted-foreground">
+              Member since {new Date(user.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Editable form */}
       <ProfileForm

@@ -1,6 +1,5 @@
 "use client";
 
-import { MessageCircle } from "lucide-react";
 
 const WhatsAppIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -17,7 +16,7 @@ interface Props {
   publicLink: string | null;
 }
 
-export default function CustomerWhatsAppActions({ customerPhone, customerName, ticketCode, status, publicLink }: Props) {
+export default function CustomerWhatsAppActions({ customerPhone, customerName, ticketCode, publicLink }: Props) {
   if (!customerPhone) return null;
 
   const phoneStr = customerPhone.replace(/\D/g, "");
@@ -49,32 +48,16 @@ export default function CustomerWhatsAppActions({ customerPhone, customerName, t
   ];
 
   return (
-    <div className="flex flex-col gap-3 mt-8">
-      <div className="text-xs font-bold text-gray-500 uppercase flex items-center gap-1.5" style={{ color: "#25D366" }}>
+    <div data-slot="customer-whatsapp" className="mt-8 flex flex-col gap-3">
+      <div className="flex items-center gap-1.5 text-xs font-bold text-[#25D366] uppercase">
         <WhatsAppIcon size={16} /> WhatsApp Quick Actions
       </div>
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
         {templates.map((t, idx) => (
-          <button 
-            key={idx} 
+          <button
+            key={idx}
             type="button"
-            className="btn font-medium transition-colors" 
-            style={{ 
-              fontSize: "0.75rem", 
-              padding: "0.35rem 0.75rem",
-              background: "#e8fcf0",
-              color: "#1da851",
-              border: "1px solid #bbf2d1",
-              borderRadius: "0.5rem"
-            }}
-            onMouseOver={(e) => {
-              e.currentTarget.style.background = "#d1fae5";
-              e.currentTarget.style.borderColor = "#86efac";
-            }}
-            onMouseOut={(e) => {
-              e.currentTarget.style.background = "#e8fcf0";
-              e.currentTarget.style.borderColor = "#bbf2d1";
-            }}
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#bbf2d1] bg-[#e8fcf0] px-3 py-1.5 text-xs font-medium text-[#1da851] transition-colors outline-none hover:border-green-300 hover:bg-emerald-100 focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-8"
             onClick={() => sendWa(t.text)}
           >
             {t.label}

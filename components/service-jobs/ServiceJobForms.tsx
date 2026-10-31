@@ -3,6 +3,7 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { Loader2, Plus } from "lucide-react";
 import {
   applyAccurateItemToUnmappedAction,
   createServiceJobAction,
@@ -10,8 +11,20 @@ import {
   updateServiceJobAction,
 } from "@/app/actions/service-jobs";
 import CatalogItemPicker from "@/components/catalog/CatalogItemPicker";
-import { formatRupiah } from "@/lib/charges";
+import { FormField } from "@/components/app/FormField";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 import { MAX_JOB_POINTS } from "@/lib/service-jobs";
+import { cn } from "@/lib/utils";
 import RupiahInput from "@/components/service/RupiahInput";
 
 export type ServiceJobRowData = {
@@ -59,7 +72,7 @@ const PICK_PLACEHOLDER = "Cari item jasa Accurate, mis. jasa service";
  * The Accurate code printed beside this job on the invoice, so the cashier
  * types it instead of searching Accurate.
  */
-function AccurateItemCell({ job, canManage }: { job: ServiceJobRowData; canManage: boolean }) {
+export function AccurateItemCell({ job, canManage }: { job: ServiceJobRowData; canManage: boolean }) {
   const [open, setOpen] = useState(false);
   const { pending, send } = useAccuratePick();
   const save = (itemId: number | null) =>
@@ -71,17 +84,17 @@ function AccurateItemCell({ job, canManage }: { job: ServiceJobRowData; canManag
     );
   if (open) {
     return (
-      <div className="flex flex-col gap-2" style={{ minWidth: "18rem" }}>
+      <div className="flex w-full min-w-0 flex-col gap-2 md:min-w-72">
         <CatalogItemPicker showStock={false} placeholder={PICK_PLACEHOLDER} onPick={(item) => save(item.id)} />
         <div className="flex gap-2">
           {job.accurate_sku && (
-            <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => save(null)}>
+            <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => save(null)}>
               Lepas
-            </button>
+            </Button>
           )}
-          <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => setOpen(false)}>
+          <Button type="button" variant="ghost" size="sm" disabled={pending} onClick={() => setOpen(false)}>
             Batal
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -90,21 +103,16 @@ function AccurateItemCell({ job, canManage }: { job: ServiceJobRowData; canManag
     <div className="flex flex-col items-start gap-1">
       {job.accurate_sku ? (
         <span>
-          <strong style={{ fontFamily: "ui-monospace, Menlo, Consolas, monospace" }}>{job.accurate_sku}</strong>
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
-            {" "}
-            {job.accurate_name}
-          </span>
+          <strong className="font-mono">{job.accurate_sku}</strong>
+          <span className="text-xs text-muted-foreground"> {job.accurate_name}</span>
         </span>
       ) : (
-        <span className="text-xs" style={{ color: "#92400e" }}>
-          belum dipetakan
-        </span>
+        <span className="text-xs text-tone-amber-fg">belum dipetakan</span>
       )}
       {canManage && (
-        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setOpen(true)}>
+        <Button type="button" variant="ghost" size="sm" className="-ml-2.5" onClick={() => setOpen(true)}>
           {job.accurate_sku ? "Ganti" : "Pilih"}
-        </button>
+        </Button>
       )}
     </div>
   );
@@ -115,12 +123,15 @@ export function ApplyAccurateItemForm({ unmapped }: { unmapped: number }) {
   const { pending, send } = useAccuratePick();
   if (unmapped === 0) return null;
   return (
-    <div className="card flex flex-col gap-2">
-      <p className="text-sm" style={{ margin: 0 }}>
+    <section
+      data-slot="apply-accurate-item"
+      className="flex flex-col gap-3 rounded-xl border border-tone-amber-border bg-tone-amber-bg p-4 text-tone-amber-fg md:p-5"
+    >
+      <p className="text-sm">
         <strong>{unmapped} jasa</strong> belum punya kode Accurate. Kalau semuanya masuk Accurate sebagai item yang
         sama (mis. <em>JASA SERVICE</em>), pilih item itu sekali di sini; jasa yang sudah dipetakan tidak diubah.
       </p>
-      <div style={{ maxWidth: "28rem", opacity: pending ? 0.6 : 1 }}>
+      <div className={cn("max-w-md text-foreground", pending && "opacity-60")}>
         <CatalogItemPicker
           showStock={false}
           placeholder={PICK_PLACEHOLDER}
@@ -129,7 +140,7 @@ export function ApplyAccurateItemForm({ unmapped }: { unmapped: number }) {
           }
         />
       </div>
-    </div>
+    </section>
   );
 }
 
@@ -161,19 +172,18 @@ function useJobSubmit() {
   return { pending, submit };
 }
 
-function PointsInput({ defaultValue }: { defaultValue?: number }) {
+function PointsInput({ id, defaultValue }: { id: string; defaultValue?: number }) {
   return (
-    <label className="flex flex-col gap-1">
-      <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-        Poin
-      </span>
-      <input
+    <label htmlFor={id} className="flex flex-col gap-1">
+      <span className="text-xs font-semibold text-muted-foreground">Poin</span>
+      <Input
+        id={id}
         name="points"
         type="number"
         min={0}
         max={MAX_JOB_POINTS}
         defaultValue={defaultValue ?? 0}
-        className="form-input"
+        className="bg-card"
         onWheel={(e) => e.currentTarget.blur()}
       />
     </label>
@@ -187,89 +197,75 @@ export function NewServiceJobForm() {
   return (
     <form
       key={round}
+      data-slot="new-service-job"
       onSubmit={(e) =>
         submit(e, createServiceJobAction, "Jasa ditambahkan.", () => setRound((r) => r + 1))
       }
-      className="card grid gap-3 md:grid-cols-[2fr_1.4fr_0.7fr_auto] md:items-end"
+      className="grid gap-3 rounded-xl border border-border bg-card p-4 shadow-xs md:grid-cols-[2fr_1.4fr_0.7fr_auto] md:items-end md:p-5"
     >
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-          Nama jasa
-        </span>
-        <input name="name" required minLength={2} className="form-input" placeholder="mis. Ganti LCD" />
+      <label htmlFor="new-job-name" className="flex flex-col gap-1">
+        <span className="text-xs font-semibold text-muted-foreground">Nama jasa</span>
+        <Input id="new-job-name" name="name" required minLength={2} placeholder="mis. Ganti LCD" className="bg-card" />
       </label>
       <RupiahInput name="default_price" label="Harga default (opsional)" />
-      <PointsInput />
-      <button type="submit" className="btn btn-primary" disabled={pending}>
+      <PointsInput id="new-job-points" />
+      <Button type="submit" disabled={pending}>
+        {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
         {pending ? "Menyimpan…" : "Tambah"}
-      </button>
+      </Button>
     </form>
   );
 }
 
-export function ServiceJobRow({ job, canManage }: { job: ServiceJobRowData; canManage: boolean }) {
-  const [editing, setEditing] = useState(false);
+/**
+ * "Ubah": the edit form in a dialog. It used to replace the whole table row,
+ * which on a phone card had nowhere to go.
+ */
+export function ServiceJobEditDialog({ job }: { job: ServiceJobRowData }) {
+  const [open, setOpen] = useState(false);
   const { pending, submit } = useJobSubmit();
 
-  if (!editing) {
-    return (
-      <tr style={{ opacity: job.is_active ? 1 : 0.55 }}>
-        <td style={{ fontWeight: 600 }}>{job.name}</td>
-        <td>{job.default_price === null ? <span style={{ color: "var(--text-muted)" }}>—</span> : formatRupiah(job.default_price)}</td>
-        <td>{job.points}</td>
-        <td>
-          <AccurateItemCell job={job} canManage={canManage} />
-        </td>
-        <td style={{ color: "var(--text-muted)" }}>{job.used}×</td>
-        <td>{job.is_active ? "Aktif" : "Nonaktif"}</td>
-        <td>
-          {canManage && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
-              Ubah
-            </button>
-          )}
-        </td>
-      </tr>
-    );
-  }
-
   return (
-    <tr>
-      <td colSpan={7}>
+    <Dialog open={open} onOpenChange={(next) => !pending && setOpen(next)}>
+      <DialogTrigger render={<Button variant="outline" size="sm" className="bg-card" />}>Ubah</DialogTrigger>
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-lg">
         <form
           onSubmit={(e) =>
-            submit(e, (fd) => updateServiceJobAction(job.id, fd), "Jasa diperbarui.", () => setEditing(false))
+            submit(e, (fd) => updateServiceJobAction(job.id, fd), "Jasa diperbarui.", () => setOpen(false))
           }
-          className="flex flex-col gap-3"
-          style={{ padding: "0.5rem 0" }}
+          className="flex flex-col gap-4"
         >
-          <div className="grid gap-3 md:grid-cols-[2fr_1.4fr_0.7fr]">
-            <label className="flex flex-col gap-1">
-              <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-                Nama jasa
-              </span>
-              <input name="name" defaultValue={job.name} required minLength={2} className="form-input" />
-            </label>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Ubah jasa</DialogTitle>
+            <DialogDescription>
+              Harga dan poin baru berlaku untuk jasa yang dicatat sesudah ini. Yang sudah tercatat tetap
+              memakai nilai lamanya, jadi target bulan lalu tidak berubah.
+            </DialogDescription>
+          </DialogHeader>
+
+          <FormField label="Nama jasa" htmlFor={`job-name-${job.id}`} required>
+            <Input id={`job-name-${job.id}`} name="name" defaultValue={job.name} required minLength={2} className="bg-card" />
+          </FormField>
+          <div className="grid gap-3 sm:grid-cols-[1.4fr_0.7fr]">
             <RupiahInput name="default_price" label="Harga default" defaultValue={job.default_price} />
-            <PointsInput defaultValue={job.points} />
+            <PointsInput id={`job-points-${job.id}`} defaultValue={job.points} />
           </div>
-          <p className="text-xs" style={{ color: "var(--text-muted)", margin: 0 }}>
-            Harga dan poin baru berlaku untuk jasa yang dicatat sesudah ini. Yang sudah tercatat tetap
-            memakai nilai lamanya, jadi target bulan lalu tidak berubah.
-          </p>
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="is_active" value="1" defaultChecked={job.is_active} /> Aktif
+          <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm md:min-h-9">
+            <input type="checkbox" name="is_active" value="1" defaultChecked={job.is_active} className="size-5 accent-primary md:size-4" />
+            Aktif
           </label>
-          <div className="flex gap-2">
-            <button type="submit" className="btn btn-primary btn-sm" disabled={pending}>
-              Simpan
-            </button>
-            <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => setEditing(false)}>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>
               Batal
-            </button>
-          </div>
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Loader2 aria-hidden="true" className="animate-spin" />}
+              Simpan
+            </Button>
+          </DialogFooter>
         </form>
-      </td>
-    </tr>
+      </DialogContent>
+    </Dialog>
   );
 }

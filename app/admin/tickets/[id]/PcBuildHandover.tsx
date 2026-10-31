@@ -2,10 +2,13 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { UploadCloud, CheckCircle2, Clock, Lock, Camera, Eye, RefreshCcw } from "lucide-react";
+import { UploadCloud, CheckCircle2, Lock, Camera, Eye, Loader2 } from "lucide-react";
 import { uploadRevisionBuildAction, uploadFirstBuildAction } from "@/app/actions/sales";
 import toast from "react-hot-toast";
 import { compressFile, normalizeFileType } from "@/lib/compress";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 interface PcBuildHandoverProps {
   ticketId: string;
@@ -21,7 +24,6 @@ export default function PcBuildHandover({
   ticketId,
   firstBuildUrl,
   revisionBuildUrl,
-  status,
   userRole,
   isAssignedSales,
   isAssignedTechnician,
@@ -42,7 +44,6 @@ export default function PcBuildHandover({
   const [fbIsReplacing, setFbIsReplacing] = useState(false);
   const [fbIsPending, startFbTransition] = useTransition();
 
-  const isCompletedState = !["waiting", "on_progress"].includes(status);
   const canUpload = userRole === "Administrator" || (userRole === "Sales" && isAssignedSales) || (userRole === "Technician" && isAssignedTechnician);
 
   const isPdfUrl = (url: string | null) => url ? url.toLowerCase().includes(".pdf") : false;
@@ -113,9 +114,10 @@ export default function PcBuildHandover({
           setIsReplacing(false);
           router.refresh();
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Action error:", err);
-        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
+        const message = err instanceof Error ? err.message : "";
+        if (message.includes("Unexpected end of form") || message.includes("Body exceeded")) {
           toast.error("Upload failed: File size is too large. Please limit to 10MB.");
         } else {
           toast.error("An unexpected error occurred. Please try again.");
@@ -165,9 +167,10 @@ export default function PcBuildHandover({
           setFbIsReplacing(false);
           router.refresh();
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Action error:", err);
-        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
+        const message = err instanceof Error ? err.message : "";
+        if (message.includes("Unexpected end of form") || message.includes("Body exceeded")) {
           toast.error("Upload failed: File size is too large. Please limit to 10MB.");
         } else {
           toast.error("An unexpected error occurred. Please try again.");
@@ -176,209 +179,191 @@ export default function PcBuildHandover({
     });
   };
 
-  return (
-    <div className="card" style={{ background: "linear-gradient(135deg, var(--white) 0%, #f9fafb 100%)", border: "1.5px solid var(--border-light)" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1.25rem", flexWrap: "wrap", gap: "0.5rem" }}>
-        <div>
-          <h3 style={{ margin: 0, display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            🖥️ PC Build Handover & Verification
-          </h3>
-          <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-            Track and verify physical hardware layouts before customer pickup.
-          </p>
-        </div>
-      </div>
+  // The two columns go through the same four states — uploaded, previewing a
+  // pick, empty and droppable, or locked — so each state is drawn once here.
+  const frame = "relative flex h-[220px] flex-col overflow-hidden rounded-xl border";
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "1.5rem" }}>
-        
-        {/* First Build Layout */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <h4 style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.375rem", color: "var(--text-secondary)" }}>
-            <Camera size={16} /> First Build (Technician)
-          </h4>
-
-          {firstBuildUrl && !fbIsReplacing ? (
-            <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--border)", height: "220px", background: "#111" }}>
-              {isPdfUrl(firstBuildUrl) ? (
-                <iframe src={firstBuildUrl} style={{ width: "100%", height: "100%", border: "none", backgroundColor: "#fff" }} title="First Build PDF" />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={firstBuildUrl} alt="First Build Layout" style={{ width: "100%", height: "100%", objectFit: "contain" }} />
-              )}
-              <div style={{ position: "absolute", top: "0.75rem", right: "0.75rem", background: "rgba(22, 163, 74, 0.9)", color: "white", padding: "0.25rem 0.625rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", backdropFilter: "blur(4px)" }}>
-                <CheckCircle2 size={12} /> Uploaded
-              </div>
-              <div style={{ position: "absolute", bottom: "0.75rem", right: "0.75rem", display: "flex", gap: "0.5rem" }}>
-                <a href={firstBuildUrl} target="_blank" rel="noopener noreferrer" style={{ background: "rgba(0,0,0,0.6)", color: "white", width: "2rem", height: "2rem", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", backdropFilter: "blur(4px)" }} title="View Full Size">
-                  <Eye size={14} />
-                </a>
-              </div>
-            </div>
-          ) : fbPreviewUrl ? (
-            <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--primary)", height: "220px", background: "#f3f4f6", display: "flex", flexDirection: "column" }}>
-              {fbFileType === "pdf" ? (
-                <iframe src={fbPreviewUrl} style={{ width: "100%", height: "170px", border: "none", backgroundColor: "#fff" }} title="First Build Preview PDF" />
-              ) : (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={fbPreviewUrl} alt="First Build Preview" style={{ width: "100%", height: "170px", objectFit: "contain" }} />
-              )}
-              <div style={{ height: "50px", display: "flex", background: "var(--white)", borderTop: "1px solid var(--border-light)" }}>
-                <button onClick={() => { setFbFile(null); setFbPreviewUrl(null); setFbIsReplacing(false); }} className="btn btn-ghost btn-sm" style={{ flex: 1, borderRadius: 0, height: "100%", borderRight: "1px solid var(--border-light)" }} disabled={fbIsPending}>
-                  Cancel
-                </button>
-                <button onClick={handleFbUpload} className="btn btn-primary btn-sm" style={{ flex: 1, borderRadius: 0, height: "100%" }} disabled={fbIsPending}>
-                  {fbIsPending ? "Uploading..." : "Confirm Upload"}
-                </button>
-              </div>
-            </div>
-          ) : canUpload ? (
-            <div
-              onDragEnter={(e) => { e.preventDefault(); e.stopPropagation(); setFbDragActive(true); }}
-              onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setFbDragActive(true); }}
-              onDragLeave={(e) => { e.preventDefault(); e.stopPropagation(); setFbDragActive(false); }}
-              onDrop={handleFbDrop}
-              style={{ borderRadius: "12px", border: fbDragActive ? "2px dashed var(--primary)" : "1.5px dashed var(--border)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "220px", background: fbDragActive ? "rgba(22,70,157,0.04)" : "var(--white)", color: "var(--text-muted)", gap: "0.5rem", cursor: "pointer", position: "relative", transition: "all 0.2s" }}
-            >
-              <input type="file" accept="image/*,video/*,application/pdf,image/heic,image/heif" onChange={(e) => e.target.files?.[0] && handleFbFileSelect(e.target.files[0])} style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }} />
-              <Camera size={32} style={{ color: "var(--primary)" }} />
-              <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>Upload first build layout</span>
-              <span style={{ fontSize: "0.75rem" }}>Drag & drop or click to browse</span>
-            </div>
-          ) : (
-            <div style={{ borderRadius: "12px", border: "1.5px dashed var(--border-light)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "220px", background: "#f9fafb", color: "var(--text-muted)", gap: "0.5rem", padding: "1rem", textAlign: "center" }}>
-              <Lock size={28} style={{ opacity: 0.4 }} />
-              <span style={{ fontSize: "0.8125rem", fontWeight: 500 }}>Awaiting first build upload</span>
-              <span style={{ fontSize: "0.75rem", opacity: 0.8 }}>Technician or admin can upload the layout here</span>
-            </div>
-          )}
-        </div>
-
-        {/* Revision Build Layout */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          <h4 style={{ margin: 0, fontSize: "0.875rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.375rem", color: "var(--text-secondary)" }}>
-            <UploadCloud size={16} /> Revision Build
-          </h4>
-
-          {revisionBuildUrl && !isReplacing ? (
-            <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--border)", height: "220px", background: "#111" }}>
-              {isPdfUrl(revisionBuildUrl) ? (
-                <iframe 
-                  src={revisionBuildUrl} 
-                  style={{ width: "100%", height: "100%", border: "none", backgroundColor: "#fff" }}
-                  title="Revision Build PDF"
-                />
-              ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img 
-                  src={revisionBuildUrl} 
-                  alt="Revision Build Layout" 
-                  style={{ width: "100%", height: "100%", objectFit: "contain" }}
-                />
-              )}
-              <div style={{ position: "absolute", top: "0.75rem", right: "0.75rem", background: "rgba(79, 70, 229, 0.9)", color: "white", padding: "0.25rem 0.625rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600, display: "flex", alignItems: "center", gap: "0.25rem", backdropFilter: "blur(4px)" }}>
-                <CheckCircle2 size={12} /> Revised
-              </div>
-              <div style={{ position: "absolute", bottom: "0.75rem", right: "0.75rem", display: "flex", gap: "0.5rem" }}>
-                {canUpload && (
-                  <button 
-                    onClick={() => setIsReplacing(true)}
-                    style={{ background: "rgba(255, 255, 255, 0.9)", color: "#111", padding: "0.25rem 0.75rem", borderRadius: "999px", fontSize: "0.75rem", fontWeight: 600, display: "flex", alignItems: "center", border: "none", cursor: "pointer", backdropFilter: "blur(4px)" }}
-                  >
-                    Replace
-                  </button>
-                )}
-                <a 
-                  href={revisionBuildUrl} 
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  style={{ background: "rgba(0, 0, 0, 0.6)", color: "white", width: "2rem", height: "2rem", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", textDecoration: "none", backdropFilter: "blur(4px)" }}
-                  title="View Full Size"
-                >
-                  <Eye size={14} />
-                </a>
-              </div>
-            </div>
-          ) : previewUrl ? (
-            <div style={{ position: "relative", borderRadius: "12px", overflow: "hidden", border: "1px solid var(--primary)", height: "220px", background: "#f3f4f6", display: "flex", flexDirection: "column" }}>
-              {fileType === "pdf" ? (
-                <iframe 
-                  src={previewUrl} 
-                  style={{ width: "100%", height: "170px", border: "none", backgroundColor: "#fff" }}
-                  title="Revision Preview PDF"
-                />
-              ) : (
-                /* eslint-disable-next-line @next/next/no-img-element */
-                <img 
-                  src={previewUrl} 
-                  alt="Revision Preview" 
-                  style={{ width: "100%", height: "170px", objectFit: "contain" }}
-                />
-              )}
-              <div style={{ height: "50px", display: "flex", background: "var(--white)", borderTop: "1px solid var(--border-light)" }}>
-                <button 
-                  onClick={() => { setFile(null); setPreviewUrl(null); setIsReplacing(false); }}
-                  className="btn btn-ghost btn-sm"
-                  style={{ flex: 1, borderRadius: 0, height: "100%", borderRight: "1px solid var(--border-light)" }}
-                  disabled={isPending}
-                >
-                  Cancel
-                </button>
-                <button 
-                  onClick={handleUpload}
-                  className="btn btn-primary btn-sm"
-                  style={{ flex: 1, borderRadius: 0, height: "100%" }}
-                  disabled={isPending}
-                >
-                  {isPending ? "Uploading..." : "Confirm Upload"}
-                </button>
-              </div>
-            </div>
-          ) : canUpload ? (
-            <div
-              onDragEnter={handleDrag}
-              onDragOver={handleDrag}
-              onDragLeave={handleDrag}
-              onDrop={handleDrop}
-              style={{
-                borderRadius: "12px",
-                border: dragActive ? "2px dashed var(--primary)" : "1.5px dashed var(--border)",
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                justifyContent: "center",
-                height: "220px",
-                background: dragActive ? "rgba(79, 70, 229, 0.04)" : "var(--white)",
-                color: "var(--text-muted)",
-                gap: "0.5rem",
-                cursor: "pointer",
-                position: "relative",
-                transition: "all 0.2s"
-              }}
-            >
-              <input
-                type="file"
-                accept="image/*,video/*,application/pdf,image/heic,image/heif"
-                onChange={handleFileChange}
-                style={{ position: "absolute", inset: 0, opacity: 0, cursor: "pointer" }}
-              />
-              <UploadCloud size={32} style={{ color: "var(--primary)" }} />
-              <span style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--text-primary)" }}>Upload revision layout</span>
-              <span style={{ fontSize: "0.75rem" }}>Drag & drop or click to browse</span>
-            </div>
-          ) : (
-            <div style={{ borderRadius: "12px", border: "1.5px dashed var(--border-light)", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "220px", background: "#f9fafb", color: "var(--text-muted)", gap: "0.5rem", padding: "1rem", textAlign: "center" }}>
-              <Lock size={28} style={{ opacity: 0.4 }} />
-              <span style={{ fontSize: "0.8125rem", fontWeight: 500 }}>
-                Access Restricted
-              </span>
-              <span style={{ fontSize: "0.75rem", opacity: 0.8 }}>
-                Only Administrators, assigned Sales, or Technician can upload
-              </span>
-            </div>
-          )}
-        </div>
-
+  const uploadedView = (url: string, title: string, badge: React.ReactNode, onReplace?: () => void) => (
+    <div className={cn(frame, "border-border bg-[#111]")}>
+      {isPdfUrl(url) ? (
+        <iframe src={url} className="size-full border-0 bg-white" title={`${title} PDF`} />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={`${title} Layout`} className="size-full object-contain" />
+      )}
+      {badge}
+      <div className="absolute right-3 bottom-3 flex gap-2">
+        {onReplace && (
+          <button
+            type="button"
+            onClick={onReplace}
+            className="flex min-h-11 items-center rounded-full bg-white/90 px-3 text-xs font-semibold text-[#111] backdrop-blur-sm md:min-h-8"
+          >
+            Replace
+          </button>
+        )}
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title="View Full Size"
+          aria-label={`View ${title} full size`}
+          className="flex size-11 items-center justify-center rounded-full bg-black/60 text-white backdrop-blur-sm md:size-8"
+        >
+          <Eye aria-hidden="true" className="size-3.5" />
+        </a>
       </div>
     </div>
+  );
+
+  const badge = (label: string, tone: string) => (
+    <div className={cn("absolute top-3 right-3 flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold text-white backdrop-blur-sm", tone)}>
+      <CheckCircle2 aria-hidden="true" className="size-3" /> {label}
+    </div>
+  );
+
+  const previewView = (
+    url: string,
+    type: "image" | "pdf" | null,
+    title: string,
+    onCancel: () => void,
+    onConfirm: () => void,
+    pending: boolean,
+  ) => (
+    <div className={cn(frame, "border-primary bg-gray-100")}>
+      {type === "pdf" ? (
+        <iframe src={url} className="h-[170px] w-full border-0 bg-white" title={`${title} PDF`} />
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img src={url} alt={title} className="h-[170px] w-full object-contain" />
+      )}
+      <div className="grid h-[50px] grid-cols-2 border-t border-border bg-card">
+        <Button type="button" variant="ghost" onClick={onCancel} disabled={pending} className="h-full rounded-none border-r border-border">
+          Cancel
+        </Button>
+        <Button type="button" onClick={onConfirm} disabled={pending} className="h-full rounded-none">
+          {pending && <Loader2 aria-hidden="true" className="animate-spin" />}
+          {pending ? "Uploading..." : "Confirm Upload"}
+        </Button>
+      </div>
+    </div>
+  );
+
+  const dropzone = (
+    active: boolean,
+    handlers: Pick<React.HTMLAttributes<HTMLDivElement>, "onDragEnter" | "onDragOver" | "onDragLeave" | "onDrop">,
+    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void,
+    Icon: typeof Camera,
+    label: string,
+  ) => (
+    <div
+      {...handlers}
+      className={cn(
+        "relative flex h-[220px] cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-dashed bg-card text-muted-foreground transition-all focus-within:ring-3 focus-within:ring-ring/50",
+        active ? "border-2 border-primary bg-primary/5" : "border-[1.5px] border-input",
+      )}
+    >
+      <input
+        type="file"
+        accept="image/*,video/*,application/pdf,image/heic,image/heif"
+        onChange={onChange}
+        aria-label={label}
+        className="absolute inset-0 cursor-pointer opacity-0"
+      />
+      <Icon aria-hidden="true" className="size-8 text-primary" />
+      <span className="text-sm font-semibold text-foreground">{label}</span>
+      <span className="text-xs">Drag &amp; drop or click to browse</span>
+    </div>
+  );
+
+  const lockedView = (title: string, detail: string) => (
+    <div className="flex h-[220px] flex-col items-center justify-center gap-2 rounded-xl border-[1.5px] border-dashed border-border bg-muted/50 p-4 text-center text-muted-foreground">
+      <Lock aria-hidden="true" className="size-7 opacity-40" />
+      <span className="text-[0.8125rem] font-medium">{title}</span>
+      <span className="text-xs opacity-80">{detail}</span>
+    </div>
+  );
+
+  const columnTitle = "flex items-center gap-1.5 text-sm font-semibold text-muted-foreground";
+
+  return (
+    <Card className="border-[1.5px] border-border bg-[linear-gradient(135deg,var(--card)_0%,#f9fafb_100%)] ring-0">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <span aria-hidden="true">🖥️</span> PC Build Handover &amp; Verification
+        </CardTitle>
+        <CardDescription className="text-[0.8125rem]">
+          Track and verify physical hardware layouts before customer pickup.
+        </CardDescription>
+      </CardHeader>
+
+      <CardContent className="grid grid-cols-[repeat(auto-fit,minmax(min(100%,280px),1fr))] gap-6">
+        {/* First Build Layout */}
+        <section className="flex flex-col gap-3">
+          <h4 className={columnTitle}>
+            <Camera aria-hidden="true" className="size-4" /> First Build (Technician)
+          </h4>
+
+          {firstBuildUrl && !fbIsReplacing
+            ? uploadedView(firstBuildUrl, "First Build", badge("Uploaded", "bg-green-600/90"))
+            : fbPreviewUrl
+              ? previewView(
+                  fbPreviewUrl,
+                  fbFileType,
+                  "First Build Preview",
+                  () => { setFbFile(null); setFbPreviewUrl(null); setFbIsReplacing(false); },
+                  handleFbUpload,
+                  fbIsPending,
+                )
+              : canUpload
+                ? dropzone(
+                    fbDragActive,
+                    {
+                      onDragEnter: (e) => { e.preventDefault(); e.stopPropagation(); setFbDragActive(true); },
+                      onDragOver: (e) => { e.preventDefault(); e.stopPropagation(); setFbDragActive(true); },
+                      onDragLeave: (e) => { e.preventDefault(); e.stopPropagation(); setFbDragActive(false); },
+                      onDrop: handleFbDrop,
+                    },
+                    (e) => { if (e.target.files?.[0]) handleFbFileSelect(e.target.files[0]); },
+                    Camera,
+                    "Upload first build layout",
+                  )
+                : lockedView("Awaiting first build upload", "Technician or admin can upload the layout here")}
+        </section>
+
+        {/* Revision Build Layout */}
+        <section className="flex flex-col gap-3">
+          <h4 className={columnTitle}>
+            <UploadCloud aria-hidden="true" className="size-4" /> Revision Build
+          </h4>
+
+          {revisionBuildUrl && !isReplacing
+            ? uploadedView(
+                revisionBuildUrl,
+                "Revision Build",
+                badge("Revised", "bg-indigo-600/90"),
+                canUpload ? () => setIsReplacing(true) : undefined,
+              )
+            : previewUrl
+              ? previewView(
+                  previewUrl,
+                  fileType,
+                  "Revision Preview",
+                  () => { setFile(null); setPreviewUrl(null); setIsReplacing(false); },
+                  handleUpload,
+                  isPending,
+                )
+              : canUpload
+                ? dropzone(
+                    dragActive,
+                    { onDragEnter: handleDrag, onDragOver: handleDrag, onDragLeave: handleDrag, onDrop: handleDrop },
+                    handleFileChange,
+                    UploadCloud,
+                    "Upload revision layout",
+                  )
+                : lockedView("Access Restricted", "Only Administrators, assigned Sales, or Technician can upload")}
+        </section>
+      </CardContent>
+    </Card>
   );
 }

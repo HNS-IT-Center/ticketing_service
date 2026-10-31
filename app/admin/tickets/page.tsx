@@ -1,11 +1,18 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 import Link from "next/link";
-import Badge from "@/components/ui/Badge";
-import { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
+import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
+import { EmptyState } from "@/components/app/EmptyState";
+import { FilterBar, FilterBarSearch } from "@/components/app/FilterBar";
+import { FilterChips } from "@/components/app/FilterChips";
+import { PageHeader } from "@/components/app/PageHeader";
+import { Pagination } from "@/components/app/Pagination";
+import { StatusBadge } from "@/components/app/StatusBadge";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ADMIN_TICKET_FILTERS, ticketListWhere } from "@/lib/ticket-list-filter";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { Plus, Ticket } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
 
 export const metadata = { title: "All Tickets — HNS IT Center" };
@@ -40,7 +47,7 @@ export default async function AdminTicketsPage({
       : {}),
   };
 
-  let orderBy: any = { created_at: "desc" };
+  let orderBy: Prisma.TicketOrderByWithRelationInput = { created_at: "desc" };
   if (sortParam === "created_asc") orderBy = { created_at: "asc" };
   else if (sortParam === "status_asc") orderBy = { status: "asc" };
   else if (sortParam === "status_desc") orderBy = { status: "desc" };
@@ -81,178 +88,135 @@ export default async function AdminTicketsPage({
     const isAsc = sortParam === ascKey;
     const nextSort = isAsc ? descKey : ascKey;
     return (
-      <Link href={buildHref(1, nextSort)} style={{ color: "inherit", textDecoration: "none", display: "inline-flex", alignItems: "center", gap: "0.25rem" }}>
+      <Link
+        href={buildHref(1, nextSort)}
+        className="inline-flex items-center gap-1 rounded-sm text-inherit outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
         {label}
-        {isActive ? (isAsc ? " ↑" : " ↓") : <span style={{ opacity: 0.3 }}> ↕</span>}
+        {isActive ? (isAsc ? " ↑" : " ↓") : <span className="opacity-30"> ↕</span>}
       </Link>
     );
   };
 
+  type ListTicket = (typeof tickets)[number];
+  const columns: DataTableColumn<ListTicket>[] = [
+    {
+      key: "code",
+      header: renderSortableHeader("Code", "code_asc", "code_desc"),
+      mobileLabel: "Code",
+      cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>,
+      mobile: "title",
+    },
+    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span>, className: "hidden xl:table-cell" },
+    {
+      key: "customer",
+      header: "Customer",
+      cell: (t) => (
+        <span className="flex flex-col">
+          <span className="font-medium">{ticketPartyName(t)}</span>
+          {!t.is_for_self && <span className="text-[0.7rem] text-muted-foreground">(For Others)</span>}
+        </span>
+      ),
+    },
+    {
+      key: "technician",
+      header: "Technician",
+      // "Unassigned" was var(--accent) — near-white since the shadcn init.
+      cell: (t) => t.technician?.name ?? <span className="text-sm font-medium text-destructive">Unassigned</span>,
+      className: "text-muted-foreground",
+    },
+    {
+      key: "status",
+      header: renderSortableHeader("Status", "status_asc", "status_desc"),
+      mobileLabel: "Status",
+      // `rma_process` is one ticket status covering nine RMA ones; the list
+      // shows the informative one. See lib/rma/ticket-status-badge.ts.
+      cell: (t) => (
+        <StatusBadge {...ticketBadgeChoice(t.status, t.rma_case?.status)} hasTechnician={Boolean(t.technician_id)} size="sm" />
+      ),
+      mobile: "badge",
+    },
+    {
+      key: "date",
+      header: renderSortableHeader("Date", "created_asc", "created_desc"),
+      mobileLabel: "Date",
+      cell: (t) => new Date(t.created_at).toLocaleDateString("id-ID"),
+      className: "whitespace-nowrap text-muted-foreground",
+    },
+    {
+      key: "view",
+      header: "",
+      cell: () => <span className="text-sm font-medium text-primary">View →</span>,
+      className: "hidden text-right xl:table-cell",
+      mobile: "hidden",
+    },
+  ];
+
+  const chips = ADMIN_TICKET_FILTERS.map(({ key: s, label }) => {
+    const qs = new URLSearchParams();
+    if (s !== "all") qs.set("status", s);
+    if (query) qs.set("q", query);
+    if (sortParam !== "created_desc") qs.set("sort", sortParam);
+    const str = qs.toString();
+    return { key: s, label, href: `/admin/tickets${str ? `?${str}` : ""}` };
+  });
+
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-        <div>
-          <h1>All Tickets</h1>
-          <div className="flex items-center gap-3 mt-1">
-            <p className="text-gray-500">
-              {totalCount} ticket{totalCount !== 1 ? "s" : ""}
-            </p>
-            <Link href="/admin/tickets/create" className="btn btn-primary btn-sm flex items-center gap-1.5" style={{ padding: "0.25rem 0.75rem" }}>
-              <span style={{ fontSize: "1rem", lineHeight: 1 }}>+</span> New Ticket
-            </Link>
-          </div>
-        </div>
-        <form style={{ display: "flex", gap: "0.5rem" }}>
+    // Built from components/app and shadcn only, so the page opts into
+    // Tailwind spacing with a data-slot (the UI-1 reset rule).
+    <div data-slot="admin-tickets" className="flex flex-col gap-5">
+      <PageHeader
+        title="All Tickets"
+        description={`${totalCount} ticket${totalCount !== 1 ? "s" : ""}`}
+        actions={
+          <Link href="/admin/tickets/create" className={buttonVariants()}>
+            <Plus aria-hidden="true" /> New Ticket
+          </Link>
+        }
+      />
+
+      <div className="flex flex-col gap-3">
+        <FilterBar action="/admin/tickets">
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
           {sortParam !== "created_desc" && <input type="hidden" name="sort" value={sortParam} />}
-          <input
-            name="q"
-            defaultValue={query}
-            className="form-input"
-            placeholder="Search by code or customer..."
-            style={{ width: "220px" }}
+          <FilterBarSearch label="Search tickets" placeholder="Search by code or customer..." defaultValue={query} />
+          <div className="flex gap-2 *:flex-1 md:*:flex-none">
+            <Button type="submit">Search</Button>
+            {query && (
+              <Link
+                href={buildHref(1, sortParam).replace(`q=${encodeURIComponent(query)}`, "").replace("&&", "&").replace("?&", "?")}
+                className={buttonVariants({ variant: "ghost" })}
+              >
+                Clear
+              </Link>
+            )}
+          </div>
+        </FilterBar>
+        <FilterChips label="Status" chips={chips} active={statusFilter} />
+      </div>
+
+      <DataTable
+        caption="All Tickets"
+        columns={columns}
+        rows={tickets}
+        getRowKey={(t) => t.id}
+        rowHref={(t) => `/admin/tickets/${t.id}`}
+        empty={<EmptyState icon={Ticket} title="No tickets found" />}
+      />
+
+      <div className="flex flex-col gap-2">
+        {totalPages > 1 && (
+          <Pagination
+            page={page}
+            pageCount={totalPages}
+            hrefForPage={(p) => buildHref(p)}
+            labels={{ previous: "Prev", next: "Next", pageOf: (p, n) => `Page ${p} of ${n}` }}
+            className="sm:justify-center"
           />
-          <button type="submit" className="btn btn-primary btn-sm">Search</button>
-          {query && (
-            <Link href={buildHref(1, sortParam).replace(`q=${encodeURIComponent(query)}`, "").replace("&&", "&").replace("?&", "?")} className="btn btn-ghost btn-sm">
-              Clear
-            </Link>
-          )}
-        </form>
-      </div>
-
-      {/* Status tabs */}
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        {ADMIN_TICKET_FILTERS.map(({ key: s, label }) => {
-          const qs = new URLSearchParams();
-          if (s !== "all") qs.set("status", s);
-          if (query) qs.set("q", query);
-          if (sortParam !== "created_desc") qs.set("sort", sortParam);
-          const str = qs.toString();
-          const href = `/admin/tickets${str ? `?${str}` : ""}`;
-          return (
-            <Link
-              key={s}
-              href={href}
-              className="btn btn-sm"
-              style={{
-                background: statusFilter === s ? "var(--primary)" : "var(--white)",
-                color: statusFilter === s ? "#fff" : "var(--text-secondary)",
-                border: "1.5px solid",
-                borderColor: statusFilter === s ? "var(--primary)" : "var(--border)",
-                whiteSpace: "nowrap",
-              }}
-            >
-              {label}
-            </Link>
-          );
-        })}
-      </div>
-
-      {/* Desktop table */}
-      <div className="admin-ticket-table">
-        <div className="table-wrapper">
-          {tickets.length === 0 ? (
-            <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>No tickets found</p>
-          ) : (
-            <table>
-              <thead>
-                <tr>
-                  <th>{renderSortableHeader("Code", "code_asc", "code_desc")}</th>
-                  <th>Type</th>
-                  <th>Customer</th>
-                  <th>Technician</th>
-                  <th>{renderSortableHeader("Status", "status_asc", "status_desc")}</th>
-                  <th>{renderSortableHeader("Date", "created_asc", "created_desc")}</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {tickets.map((t) => {
-                  const actualName = ticketPartyName(t);
-                  const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
-                  return (
-                    <tr key={t.id}>
-                      <td style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</td>
-                      <td style={{ textTransform: "capitalize", fontSize: "0.875rem" }}>{t.ticket_type.replace("_", " ")}</td>
-                      <td>
-                        <div style={{ fontWeight: 500 }}>{actualName}</div>
-                        {!t.is_for_self && <div style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginTop: "0.1rem" }}>(For Others)</div>}
-                      </td>
-                      <td style={{ color: "var(--text-muted)" }}>{t.technician?.name ?? <span style={{ color: "var(--accent)", fontSize: "0.875rem" }}>Unassigned</span>}</td>
-                      <td>
-                        {badge.kind === "rma"
-                          ? <RmaStatusBadge status={badge.status} />
-                          : <Badge variant={badge.status} technicianId={t.technician_id} />}
-                      </td>
-                      <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{new Date(t.created_at).toLocaleDateString("id-ID")}</td>
-                      <td><Link href={`/admin/tickets/${t.id}`} className="btn btn-secondary btn-sm">View</Link></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
-
-      {/* Mobile card list */}
-      <div className="admin-ticket-cards">
-        {tickets.length === 0 ? (
-          <p style={{ textAlign: "center", color: "var(--text-muted)", padding: "2rem" }}>No tickets found</p>
-        ) : tickets.map((t) => {
-          const badge = ticketBadgeChoice(t.status, t.rma_case?.status);
-          return (
-          <Link key={t.id} href={`/admin/tickets/${t.id}`} style={{ textDecoration: "none" }}>
-            <div className="mobile-ticket-card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", fontSize: "0.9375rem" }}>
-                  {t.ticket_code}
-                </span>
-                {badge.kind === "rma"
-                  ? <RmaStatusBadge status={badge.status} />
-                  : <Badge variant={badge.status} technicianId={t.technician_id} />}
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                <span>{new Date(t.created_at).toLocaleDateString("id-ID")}</span>
-              </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
-                <span style={{ color: "var(--text-secondary)" }}>👤 {t.user?.name || "Guest"}</span>
-                <span style={{ color: t.technician ? "var(--text-secondary)" : "var(--accent)" }}>
-                  {t.technician ? `🔧 ${t.technician.name}` : "Unassigned"}
-                </span>
-              </div>
-            </div>
-          </Link>
-          );
-        })}
-      </div>
-
-      {/* Pagination */}
-      {totalPages > 1 && (
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: "0.5rem", paddingTop: "0.5rem" }}>
-          {page > 1 ? (
-            <Link href={buildHref(page - 1)} className="btn btn-secondary btn-sm">
-              <ChevronLeft size={14} /> Prev
-            </Link>
-          ) : (
-            <button className="btn btn-secondary btn-sm" disabled><ChevronLeft size={14} /> Prev</button>
-          )}
-          <span style={{ fontSize: "0.875rem", color: "var(--text-muted)", padding: "0 0.5rem" }}>
-            Page {page} of {totalPages}
-          </span>
-          {page < totalPages ? (
-            <Link href={buildHref(page + 1)} className="btn btn-secondary btn-sm">
-              Next <ChevronRight size={14} />
-            </Link>
-          ) : (
-            <button className="btn btn-secondary btn-sm" disabled>Next <ChevronRight size={14} /></button>
-          )}
-        </div>
-      )}
-      <div style={{ textAlign: "center", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-        Showing {tickets.length > 0 ? skip + 1 : 0}–{Math.min(skip + tickets.length, totalCount)} of {totalCount} tickets
+        )}
+        <p className="text-center text-[0.8125rem] text-muted-foreground">
+          Showing {tickets.length > 0 ? skip + 1 : 0}–{Math.min(skip + tickets.length, totalCount)} of {totalCount} tickets
+        </p>
       </div>
     </div>
   );

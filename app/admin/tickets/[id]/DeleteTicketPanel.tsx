@@ -3,10 +3,25 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { AlertTriangle, Trash2, X } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2 } from "lucide-react";
 import { checkTicketDeletionAction, deleteTicketAction } from "@/app/actions/admin";
+import { FormField } from "@/components/app/FormField";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 
 type Inventory = Awaited<ReturnType<typeof checkTicketDeletionAction>>;
+
+const DANGER = "bg-destructive text-white hover:bg-destructive/90";
 
 /**
  * Permanent ticket deletion, for administrators.
@@ -76,98 +91,46 @@ export default function DeleteTicketPanel({
 
   return (
     <>
-      <div className="card" style={{ borderColor: "#fecaca" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.35rem" }}>
-          <AlertTriangle size={16} style={{ color: "#991b1b" }} />
-          <h3 style={{ margin: 0, fontSize: "1rem", color: "#991b1b" }}>Zona Berbahaya</h3>
-        </div>
-        <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 1rem" }}>
-          Menghapus tiket bersifat <strong>permanen</strong> dan ikut membawa seluruh riwayat
-          status, pesan, lampiran, dan case RMA-nya. Tidak bisa dibatalkan.
-        </p>
-        <button
-          type="button"
-          onClick={openDialog}
-          className="btn"
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.45rem",
-            background: "#991b1b",
-            borderColor: "#991b1b",
-            color: "#ffffff",
-          }}
-        >
-          <Trash2 size={15} />
-          Hapus tiket ini
-        </button>
-      </div>
+      <Card className="border border-destructive/30 ring-0">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base font-semibold text-destructive">
+            <AlertTriangle aria-hidden="true" className="size-4" />
+            Zona Berbahaya
+          </CardTitle>
+          <CardDescription className="text-[0.8125rem]">
+            Menghapus tiket bersifat <strong className="text-foreground">permanen</strong> dan ikut membawa seluruh riwayat
+            status, pesan, lampiran, dan case RMA-nya. Tidak bisa dibatalkan.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button type="button" onClick={openDialog} className={`w-full sm:w-auto ${DANGER}`}>
+            <Trash2 aria-hidden="true" />
+            Hapus tiket ini
+          </Button>
+        </CardContent>
+      </Card>
 
-      {open && (
-        <div
-          className="modal-overlay"
-          role="dialog"
-          aria-modal="true"
-          aria-label={`Hapus tiket ${ticketCode}`}
-        >
-          <div className="modal" style={{ maxWidth: "540px" }}>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: "0.75rem",
-                marginBottom: "1rem",
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: "1.0625rem", color: "#991b1b" }}>
-                Hapus {ticketCode} permanen
-              </h3>
-              <button
-                type="button"
-                onClick={close}
-                aria-label="Tutup"
-                style={{
-                  background: "transparent",
-                  border: 0,
-                  cursor: "pointer",
-                  color: "var(--text-muted)",
-                  display: "flex",
-                }}
-              >
-                <X size={18} />
-              </button>
-            </div>
+      <Dialog open={open} onOpenChange={(next) => !next && !isPending && close()}>
+        <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-[540px]">
+          <DialogHeader>
+            <DialogTitle className="text-[1.0625rem] font-semibold text-destructive">
+              Hapus {ticketCode} permanen
+            </DialogTitle>
+          </DialogHeader>
 
-            {loading && (
-              <p style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>
-                Menghitung yang akan ikut terhapus…
-              </p>
-            )}
+          {loading && (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 aria-hidden="true" className="size-4 animate-spin" />
+              Menghitung yang akan ikut terhapus…
+            </p>
+          )}
 
-            {destroys && (
-              <>
-                <div
-                  style={{
-                    background: "#fef2f2",
-                    border: "1px solid #fecaca",
-                    borderRadius: "10px",
-                    padding: "0.85rem 1rem",
-                    marginBottom: "1rem",
-                  }}
-                >
-                  <p style={{ margin: "0 0 0.6rem", fontSize: "0.8125rem", fontWeight: 700, color: "#7f1d1d" }}>
-                    Yang ikut terhapus dan tidak bisa dikembalikan:
-                  </p>
-                  <ul
-                    style={{
-                      margin: 0,
-                      paddingLeft: "1.1rem",
-                      fontSize: "0.8125rem",
-                      color: "#7f1d1d",
-                      lineHeight: 1.7,
-                    }}
-                  >
+          {destroys && (
+            <>
+              <Alert variant="destructive">
+                <AlertDescription className="flex flex-col gap-2 text-[0.8125rem]">
+                  <p className="font-bold">Yang ikut terhapus dan tidak bisa dikembalikan:</p>
+                  <ul className="list-disc pl-4 leading-relaxed">
                     <li>{destroys.statusLogs} baris riwayat status</li>
                     <li>{destroys.messages} pesan</li>
                     <li>{destroys.attachments} lampiran (berkasnya ikut dihapus dari storage)</li>
@@ -179,90 +142,73 @@ export default function DeleteTicketPanel({
                       </li>
                     )}
                   </ul>
-                </div>
+                </AlertDescription>
+              </Alert>
 
-                {credits && credits.earningLogs + credits.failureLogs > 0 && (
-                  <div
-                    style={{
-                      background: "#fef3c7",
-                      border: "1px solid #fde68a",
-                      borderRadius: "10px",
-                      padding: "0.85rem 1rem",
-                      marginBottom: "1rem",
-                      fontSize: "0.8125rem",
-                      color: "#7c2d12",
-                    }}
-                  >
-                    Poin teknisi akan dikembalikan: <strong>−{credits.points} poin</strong>,{" "}
-                    {credits.earningLogs} tiket sukses dan {credits.failureLogs} gagal dikurangi
-                    dari catatan performanya, supaya leaderboard dan profil tetap sama angkanya.
-                  </div>
-                )}
+              {credits && credits.earningLogs + credits.failureLogs > 0 && (
+                <Alert variant="warning">
+                  <AlertDescription className="text-[0.8125rem]">
+                    <p>
+                      Poin teknisi akan dikembalikan: <strong>−{credits.points} poin</strong>,{" "}
+                      {credits.earningLogs} tiket sukses dan {credits.failureLogs} gagal dikurangi
+                      dari catatan performanya, supaya leaderboard dan profil tetap sama angkanya.
+                    </p>
+                  </AlertDescription>
+                </Alert>
+              )}
 
-                <label style={{ display: "block", marginBottom: "1rem" }}>
-                  <span style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.35rem" }}>
-                    Alasan penghapusan <span style={{ color: "#991b1b" }}>*</span>
-                  </span>
-                  <textarea
-                    value={reason}
-                    onChange={(e) => setReason(e.target.value)}
-                    rows={2}
-                    className="form-input"
-                    placeholder="Contoh: salah input saat intake, tiket ganda"
-                    style={{ width: "100%", resize: "vertical" }}
-                  />
-                  <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                    Disimpan beserta nama kamu di catatan penghapusan.
-                  </span>
-                </label>
+              <FormField
+                label="Alasan penghapusan"
+                htmlFor="delete-reason"
+                required
+                help="Disimpan beserta nama kamu di catatan penghapusan."
+              >
+                <Textarea
+                  id="delete-reason"
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  rows={2}
+                  placeholder="Contoh: salah input saat intake, tiket ganda"
+                  className="resize-y bg-card"
+                />
+              </FormField>
 
-                <label style={{ display: "block", marginBottom: "1.25rem" }}>
-                  <span style={{ display: "block", fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.35rem" }}>
-                    Ketik <code style={{ fontFamily: "ui-monospace, monospace" }}>{ticketCode}</code>{" "}
-                    untuk mengonfirmasi <span style={{ color: "#991b1b" }}>*</span>
-                  </span>
-                  <input
-                    type="text"
-                    value={confirmation}
-                    onChange={(e) => setConfirmation(e.target.value)}
-                    className="form-input"
-                    autoComplete="off"
-                    style={{ width: "100%", fontFamily: "ui-monospace, monospace" }}
-                  />
-                </label>
+              <FormField
+                label={
+                  <>
+                    Ketik <code className="font-mono">{ticketCode}</code> untuk mengonfirmasi
+                  </>
+                }
+                htmlFor="delete-confirmation"
+                required
+              >
+                <Input
+                  id="delete-confirmation"
+                  type="text"
+                  value={confirmation}
+                  onChange={(e) => setConfirmation(e.target.value)}
+                  autoComplete="off"
+                  className="bg-card font-mono"
+                />
+              </FormField>
 
-                <div style={{ display: "flex", gap: "0.6rem", justifyContent: "flex-end", flexWrap: "wrap" }}>
-                  <button type="button" onClick={close} className="btn btn-outline" disabled={isPending}>
-                    Batal
-                  </button>
-                  <button
-                    type="button"
-                    onClick={submit}
-                    disabled={!canDelete || isPending}
-                    className="btn"
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "0.45rem",
-                      background: canDelete ? "#991b1b" : "#d1d5db",
-                      borderColor: canDelete ? "#991b1b" : "#d1d5db",
-                      color: "#ffffff",
-                      cursor: canDelete && !isPending ? "pointer" : "not-allowed",
-                    }}
-                  >
-                    <Trash2 size={15} />
-                    {isPending ? "Menghapus…" : "Hapus permanen"}
-                  </button>
-                </div>
-              </>
-            )}
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={close} disabled={isPending}>
+                  Batal
+                </Button>
+                <Button type="button" onClick={submit} disabled={!canDelete || isPending} className={DANGER}>
+                  {isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Trash2 aria-hidden="true" />}
+                  {isPending ? "Menghapus…" : "Hapus permanen"}
+                </Button>
+              </DialogFooter>
+            </>
+          )}
 
-            {inventory && "error" in inventory && inventory.error && (
-              <p style={{ fontSize: "0.875rem", color: "#991b1b", margin: 0 }}>{inventory.error}</p>
-            )}
-          </div>
-        </div>
-      )}
+          {inventory && "error" in inventory && inventory.error && (
+            <p className="text-sm text-destructive">{inventory.error}</p>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

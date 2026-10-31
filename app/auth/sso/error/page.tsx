@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { AlertTriangle, LogOut, RotateCw } from "lucide-react";
 import { ssoLogoutUrlWithoutHint } from "@/lib/sso/urls";
+import { AuthShell } from "@/components/app/AuthShell";
+import { buttonVariants } from "@/components/ui/button";
 
 export const metadata = { title: "Masuk dengan SSO — HNS IT Center" };
 
@@ -63,33 +65,29 @@ export default async function SsoErrorPage({
   const ssoLogout = ssoLogoutUrlWithoutHint();
 
   return (
-    <div className="auth-container">
-      <div className="auth-card flex flex-col gap-6 p-6">
-        <div className="flex flex-col items-center gap-3 text-center">
-          <AlertTriangle size={36} style={{ color: "var(--accent-brand, #b45309)" }} />
-          <h1 className="text-xl font-semibold">{message.title}</h1>
-          <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-            {message.body}
-          </p>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {/* A route handler that redirects off-site: it needs a full page
-              navigation, which <Link> would turn into a client-side fetch. */}
-          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-          <a href="/auth/sso/login" className="btn btn-primary flex items-center justify-center gap-2">
-            <RotateCw size={16} /> Coba lagi
-          </a>
-          {ssoLogout && (
-            <a href={ssoLogout} className="btn btn-outline flex items-center justify-center gap-2">
-              <LogOut size={16} /> Keluar dari SSO HNS
-            </a>
-          )}
-          <Link href="/login" className="btn btn-ghost">
-            Kembali ke halaman masuk
-          </Link>
-        </div>
+    <AuthShell>
+      <div className="flex flex-col items-center gap-3 text-center">
+        <AlertTriangle aria-hidden="true" className="size-9 text-destructive" />
+        <h1 className="text-xl font-semibold text-foreground">{message.title}</h1>
+        <p className="text-sm text-muted-foreground">{message.body}</p>
       </div>
-    </div>
+
+      <div className="flex flex-col gap-2">
+        {/* A route handler that redirects off-site: it needs a full page
+            navigation, which <Link> would turn into a client-side fetch. */}
+        {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+        <a href="/auth/sso/login" className={buttonVariants({ className: "w-full" })}>
+          <RotateCw aria-hidden="true" /> Coba lagi
+        </a>
+        {ssoLogout && (
+          <a href={ssoLogout} className={buttonVariants({ variant: "outline", className: "w-full bg-card" })}>
+            <LogOut aria-hidden="true" /> Keluar dari SSO HNS
+          </a>
+        )}
+        <Link href="/login" className={buttonVariants({ variant: "ghost", className: "w-full" })}>
+          Kembali ke halaman masuk
+        </Link>
+      </div>
+    </AuthShell>
   );
 }

@@ -1,8 +1,14 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
-import Badge from "@/components/ui/Badge";
-import { Users, Ticket, CheckCircle, Clock, AlertCircle, ArrowRight, Store } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
+import { EmptyState } from "@/components/app/EmptyState";
+import { PageHeader } from "@/components/app/PageHeader";
+import { StatCard } from "@/components/app/StatCard";
+import { StatusBadge } from "@/components/app/StatusBadge";
+import { buttonVariants } from "@/components/ui/button";
+import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Users, Ticket, CheckCircle, Clock, AlertCircle, ArrowRight, Store, Plus, ChevronDown } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
 
 export const metadata = { title: "Dashboard — HNS IT Center" };
@@ -45,138 +51,128 @@ export default async function AdminDashboard() {
     (totalUsersRaw as { role: string; _count: { role: number } }[]).map((u) => [u.role, u._count.role])
   );
 
-  const statCards = [
-    ...(!isSales ? [
-      { label: "Technicians", value: countByRole.Technician ?? 0, icon: <Users size={20} />, color: "var(--primary)", href: "/admin/users?role=Technician" },
-      { label: "Stores", value: totalStores ?? 0, icon: <Store size={20} />, color: "#7c3aed", href: "/admin/stores" },
-      { label: "Sales", value: countByRole.Sales ?? 0, icon: <Users size={20} />, color: "#0891b2", href: "/admin/users?role=Sales" },
-    ] : []),
-    { label: "Total Tickets", value: totalTickets, icon: <Ticket size={20} />, color: "#ca8a04", href: "/admin/tickets" },
-    { label: "Assigned", value: assignedTickets, icon: <CheckCircle size={20} />, color: "#16a34a", href: "/admin/tickets?assigned=true" },
-    { label: "Unassigned", value: totalTickets - assignedTickets, icon: <Clock size={20} />, color: "#dc2626", href: "/admin/tickets?assigned=false" },
-    { label: "Closed", value: closedTickets, icon: <AlertCircle size={20} />, color: "var(--text-muted)", href: "/admin/tickets?status=done" },
+  // What needs a hand first: the ticket numbers, Unassigned leading.
+  const ticketStats = [
+    { label: "Unassigned", value: totalTickets - assignedTickets, icon: Clock, tone: "attention" as const, href: "/admin/tickets?assigned=false" },
+    { label: "Assigned", value: assignedTickets, icon: CheckCircle, tone: "success" as const, href: "/admin/tickets?assigned=true" },
+    { label: "Total Tickets", value: totalTickets, icon: Ticket, tone: "default" as const, href: "/admin/tickets" },
+    { label: "Closed", value: closedTickets, icon: AlertCircle, tone: "default" as const, href: "/admin/tickets?status=done" },
+  ];
+  // Who and where: worth knowing, rarely what the day starts with.
+  const orgStats = [
+    { label: "Technicians", value: countByRole.Technician ?? 0, icon: Users, href: "/admin/users?role=Technician" },
+    { label: "Stores", value: totalStores ?? 0, icon: Store, href: "/admin/stores" },
+    { label: "Sales", value: countByRole.Sales ?? 0, icon: Users, href: "/admin/users?role=Sales" },
   ];
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.75rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div>
-          <h1>Admin Dashboard</h1>
-          <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>System overview and management</p>
-        </div>
-        <Link href="/admin/tickets/create" className="btn btn-primary btn-sm flex items-center gap-1.5" style={{ padding: "0.5rem 1rem" }}>
-          <span style={{ fontSize: "1.2rem", lineHeight: 1 }}>+</span> Create Ticket
-        </Link>
-      </div>
+  type RecentTicket = (typeof recentTickets)[number];
+  const recentColumns: DataTableColumn<RecentTicket>[] = [
+    { key: "code", header: "Code", cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>, mobile: "title" },
+    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
+    { key: "customer", header: "Customer", cell: (t) => ticketPartyName(t) || "Guest" },
+    {
+      key: "status",
+      header: "Status",
+      cell: (t) => <StatusBadge kind="ticket" status={t.status} hasTechnician={Boolean(t.technician_id)} size="sm" />,
+      mobile: "badge",
+    },
+    {
+      key: "technician",
+      header: "Technician",
+      cell: (t) => t.technician?.name ?? "—",
+      className: "text-muted-foreground",
+    },
+  ];
 
-      {/* Stats grid — auto-fill, collapses to 2-col on mobile */}
-      <div className="admin-stats-grid">
-        {statCards.map((s) => (
-          <Link key={s.label} href={s.href} className="stat-card" style={{ textDecoration: "none" }}>
-            <div style={{ width: "2.25rem", height: "2.25rem", borderRadius: "0.75rem", background: `${s.color}18`, display: "flex", alignItems: "center", justifyContent: "center", color: s.color }}>
-              {s.icon}
-            </div>
-            <div>
-              <div style={{ fontSize: "1.75rem", fontWeight: 800, color: s.color }}>{s.value}</div>
-              <div style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{s.label}</div>
-            </div>
+  const orgAndTop = (
+    <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
+      <div className="grid grid-cols-3 content-start gap-3">
+        {orgStats.map((s) => (
+          <StatCard key={s.label} label={s.label} value={s.value} icon={s.icon} href={s.href} />
+        ))}
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-bold">Top Technicians</CardTitle>
+          <CardAction>
+            <Link href="/admin/performance" className="text-sm font-medium text-primary hover:underline">All →</Link>
+          </CardAction>
+        </CardHeader>
+        <CardContent>
+          {topTechnicians.length === 0 ? (
+            <p className="py-4 text-center text-muted-foreground">No data yet</p>
+          ) : (
+            <ol className="flex flex-col gap-3">
+              {topTechnicians.map((t, i) => (
+                <li key={t.id} className="flex items-center gap-3">
+                  <span className={i === 0 ? "w-6 font-extrabold text-amber-600" : "w-6 font-extrabold text-muted-foreground"}>
+                    {i === 0 ? "🥇" : `#${i + 1}`}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-[0.9rem] font-semibold">{t.technician?.name ?? "Unknown"}</p>
+                    <p className="text-xs text-muted-foreground">{t.tickets_handled} tickets</p>
+                  </div>
+                  <span className="font-bold text-primary tabular-nums">{t.total_points_completed} pts</span>
+                </li>
+              ))}
+            </ol>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+
+  return (
+    // Built from components/app and shadcn only, so the page opts into
+    // Tailwind spacing with a data-slot (the UI-1 reset rule).
+    <div data-slot="admin-dashboard" className="flex flex-col gap-6">
+      <PageHeader
+        title="Admin Dashboard"
+        description="System overview and management"
+        actions={
+          <Link href="/admin/tickets/create" className={buttonVariants()}>
+            <Plus aria-hidden="true" /> Create Ticket
           </Link>
+        }
+      />
+
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {ticketStats.map((s) => (
+          <StatCard key={s.label} label={s.label} value={s.value} icon={s.icon} tone={s.tone} href={s.href} />
         ))}
       </div>
 
-      {/* Recent Tickets */}
-      <div className="card">
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-          <h3>Recent Tickets</h3>
-          <Link href="/admin/tickets" style={{ fontSize: "0.875rem", color: "var(--primary)", fontWeight: 500, display: "flex", alignItems: "center", gap: "0.25rem" }}>
-            View all <ArrowRight size={14} />
+      <section aria-labelledby="recent-tickets" className="flex flex-col gap-3">
+        <div className="flex items-center justify-between gap-2">
+          <h2 id="recent-tickets" className="text-lg font-bold text-foreground">Recent Tickets</h2>
+          <Link href="/admin/tickets" className="flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:underline md:min-h-0">
+            View all <ArrowRight aria-hidden="true" className="size-3.5" />
           </Link>
         </div>
+        <DataTable
+          caption="Recent Tickets"
+          columns={recentColumns}
+          rows={recentTickets}
+          getRowKey={(t) => t.id}
+          rowHref={(t) => `/admin/tickets/${t.id}`}
+          empty={<EmptyState icon={Ticket} title="No tickets yet" />}
+        />
+      </section>
 
-        {/* Desktop table */}
-        <div className="admin-ticket-table">
-          <div className="table-wrapper" style={{ border: "none", boxShadow: "none" }}>
-            <table>
-              <thead><tr><th>Code</th><th>Type</th><th>Customer</th><th>Status</th><th>Technician</th></tr></thead>
-              <tbody>
-                {recentTickets.map((t) => (
-                  <tr key={t.id}>
-                    <td><Link href={`/admin/tickets/${t.id}`} style={{ fontFamily: "monospace", fontWeight: 600, color: "var(--primary)" }}>{t.ticket_code}</Link></td>
-                    <td style={{ textTransform: "capitalize", fontSize: "0.875rem" }}>{t.ticket_type.replace("_", " ")}</td>
-                    <td style={{ fontSize: "0.875rem" }}>{(ticketPartyName(t) || "Guest")}</td>
-                    <td><Badge variant={t.status} technicianId={t.technician_id} /></td>
-                    <td style={{ fontSize: "0.875rem", color: "var(--text-muted)" }}>{t.technician?.name ?? "—"}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-
-        {/* Mobile card list */}
-        <div className="admin-ticket-cards">
-          {recentTickets.map((t) => (
-            <Link
-              key={t.id}
-              href={`/admin/tickets/${t.id}`}
-              style={{ textDecoration: "none" }}
-            >
-              <div style={{
-                padding: "0.875rem",
-                border: "1px solid var(--border-light)",
-                borderRadius: "var(--radius-md)",
-                display: "flex",
-                flexDirection: "column",
-                gap: "0.5rem",
-                marginBottom: "0.5rem",
-                background: "var(--white)",
-                transition: "box-shadow 0.15s",
-              }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span style={{ fontFamily: "monospace", fontWeight: 700, color: "var(--primary)", fontSize: "0.9375rem" }}>
-                    {t.ticket_code}
-                  </span>
-                  <Badge variant={t.status} technicianId={t.technician_id} />
-                </div>
-                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                  <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                  <span>{(ticketPartyName(t) || "Guest")}</span>
-                </div>
-                {t.technician && (
-                  <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)" }}>
-                    🔧 {t.technician.name}
-                  </div>
-                )}
-              </div>
-            </Link>
-          ))}
-        </div>
-      </div>
-
-      {/* Top Technicians */}
       {!isSales && (
-        <div className="card">
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "1rem" }}>
-            <h3>Top Technicians</h3>
-            <Link href="/admin/performance" style={{ fontSize: "0.875rem", color: "var(--primary)", fontWeight: 500 }}>All →</Link>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {topTechnicians.length === 0 ? (
-              <p style={{ color: "var(--text-muted)", textAlign: "center", padding: "1rem" }}>No data yet</p>
-            ) : topTechnicians.map((t, i) => (
-              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                <span style={{ fontWeight: 800, color: i === 0 ? "#ca8a04" : "var(--text-muted)", fontSize: "1rem", width: "1.5rem" }}>
-                  {i === 0 ? "🥇" : `#${i + 1}`}
-                </span>
-                <div style={{ flex: 1 }}>
-                  <p style={{ fontWeight: 600, fontSize: "0.9rem" }}>{t.technician?.name ?? "Unknown"}</p>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>{t.tickets_handled} tickets</p>
-                </div>
-                <span style={{ fontWeight: 700, color: "var(--primary)" }}>{t.total_points_completed} pts</span>
-              </div>
-            ))}
-          </div>
-        </div>
+        <>
+          {/* On a phone this folds away; on a wider screen there is room for it. */}
+          <details className="group rounded-xl border border-border bg-card md:hidden">
+            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-foreground outline-none select-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+              Organisasi &amp; Top Technicians
+              <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="border-t border-border p-4">{orgAndTop}</div>
+          </details>
+          <section aria-label="Organisasi & Top Technicians" className="hidden md:block">
+            {orgAndTop}
+          </section>
+        </>
       )}
     </div>
   );

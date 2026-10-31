@@ -1,8 +1,8 @@
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { headers } from "next/headers";
-import Badge from "@/components/ui/Badge";
-import { formatDateTime } from "@/lib/utils";
+import { AlertTriangle, CheckCircle2, Info, MapPin, MessageSquareOff, Play, Wrench } from "lucide-react";
+import { cn, formatDateTime } from "@/lib/utils";
 import {
   getPublicClaimOutcome,
   publicStatusLabel,
@@ -79,10 +79,10 @@ export default async function PublicTicketPage({
   });
 
   const OUTCOME_STYLES = {
-    progress: { bg: "#eff6ff", border: "#bfdbfe", text: "#1e40af", icon: "🔧" },
-    success: { bg: "#ecfdf5", border: "#a7f3d0", text: "#065f46", icon: "✅" },
-    warning: { bg: "#fffbeb", border: "#fde68a", text: "#92400e", icon: "⚠️" },
-    neutral: { bg: "#f9fafb", border: "#e5e7eb", text: "#374151", icon: "ℹ️" },
+    progress: { classes: "border-tone-blue-border bg-tone-blue-bg text-tone-blue-fg", Icon: Wrench },
+    success: { classes: "border-tone-green-border bg-tone-green-bg text-tone-green-fg", Icon: CheckCircle2 },
+    warning: { classes: "border-tone-amber-border bg-tone-amber-bg text-tone-amber-fg", Icon: AlertTriangle },
+    neutral: { classes: "border-tone-gray-border bg-tone-gray-bg text-tone-gray-fg", Icon: Info },
   } as const;
 
   const headersList = await headers();
@@ -131,214 +131,141 @@ export default async function PublicTicketPage({
   }
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      background: "var(--bg)",
-      display: "flex",
-      flexDirection: "column",
-      alignItems: "center",
-      padding: "2rem 1rem",
-      fontFamily: "'Inter', 'Segoe UI', sans-serif",
-    }}>
-      <div style={{ width: "100%", maxWidth: "600px", display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    // Outside the staff shell and built from tokens only, so the page opts
+    // into Tailwind spacing with a data-slot (the UI-1 reset rule).
+    <div data-slot="public-ticket" className="flex min-h-screen flex-col items-center bg-background px-4 py-8">
+      <div className="flex w-full max-w-[600px] flex-col gap-6">
         {/* Header */}
-        <div style={{ display: "flex", justifyContent: "center", alignItems: "center", gap: "0.875rem", marginBottom: "0.25rem" }}>
+        <div className="flex items-center justify-center gap-3.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo-hns.jpg" alt="HNS IT Center" style={{ width: "48px", height: "48px", borderRadius: "10px", objectFit: "cover" }} />
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
-            <div style={{ fontWeight: 800, fontSize: "1.25rem", color: "#1f2937", letterSpacing: "-0.01em", lineHeight: "1.1" }}>HNS IT Center</div>
-            <div style={{ fontSize: "0.875rem", color: "#6b7280", fontWeight: 500, marginTop: "0.15rem" }}>Ticket Status Tracker</div>
+          <img src="/logo-hns.jpg" alt="HNS IT Center" className="size-12 rounded-[10px] object-cover" />
+          <div className="flex flex-col items-start">
+            <div className="text-xl leading-tight font-extrabold tracking-tight text-foreground">HNS IT Center</div>
+            <div className="mt-0.5 text-sm font-medium text-muted-foreground">Ticket Status Tracker</div>
           </div>
         </div>
 
         {/* Ticket card */}
-        <div style={{ background: "#ffffff", borderRadius: "16px", boxShadow: "0 4px 24px rgba(0,0,0,0.08)", overflow: "hidden" }}>
+        <div className="overflow-hidden rounded-2xl border border-border bg-card shadow-sm">
           {/* Ticket header */}
-          <div style={{ background: "linear-gradient(135deg, var(--primary), var(--accent-brand))", padding: "1.5rem 1.75rem" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "0.75rem" }}>
+          <div className="bg-[linear-gradient(135deg,var(--primary),var(--accent-brand))] px-5 py-6 md:px-7">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
-                <div style={{ color: "#e0e7ff", fontSize: "0.75rem", marginBottom: "0.25rem" }}>Nomor Tiket</div>
-                <div style={{ color: "#ffffff", fontWeight: 800, fontSize: "1.375rem", fontFamily: "monospace" }}>
-                  {ticket.ticket_code}
-                </div>
+                <div className="mb-1 text-xs text-white/80">Nomor Tiket</div>
+                <div className="font-mono text-[1.375rem] font-extrabold text-white">{ticket.ticket_code}</div>
               </div>
-              <Badge variant={ticket.status} technicianId={ticket.technician_id} />
+              {/* The customer's word for the status — the same one the timeline
+                  below uses — not the staff badge. */}
+              <span className="inline-flex items-center rounded-full bg-white px-3 py-1 text-[0.8125rem] font-semibold whitespace-nowrap text-primary shadow-xs">
+                {publicStatusLabel(ticket.status)}
+              </span>
             </div>
             {ticket.store_location && (
-              <div style={{ marginTop: "0.75rem", color: "#fecaca", fontSize: "0.8125rem" }}>
-                📍 {ticket.store_location.name}
+              <div className="mt-3 flex items-center gap-1.5 text-[0.8125rem] text-white/85">
+                <MapPin aria-hidden="true" className="size-3.5" />
+                {ticket.store_location.name}
               </div>
             )}
           </div>
 
           {/* Claim outcome — warranty claims only */}
-          {claimOutcome && (
-            <div
-              style={{
-                margin: "1.25rem 1.75rem 0",
-                padding: "1rem 1.125rem",
-                borderRadius: "12px",
-                background: OUTCOME_STYLES[claimOutcome.tone].bg,
-                border: `1px solid ${OUTCOME_STYLES[claimOutcome.tone].border}`,
-                display: "flex",
-                gap: "0.75rem",
-                alignItems: "flex-start",
-              }}
-            >
-              <span style={{ fontSize: "1.125rem", lineHeight: 1.35, flexShrink: 0 }}>
-                {OUTCOME_STYLES[claimOutcome.tone].icon}
-              </span>
-              <div style={{ minWidth: 0 }}>
-                <div
-                  style={{
-                    fontWeight: 600,
-                    fontSize: "0.9375rem",
-                    color: OUTCOME_STYLES[claimOutcome.tone].text,
-                    lineHeight: 1.35,
-                  }}
-                >
-                  {claimOutcome.headline}
+          {claimOutcome && (() => {
+            const tone = OUTCOME_STYLES[claimOutcome.tone];
+            const Icon = tone.Icon;
+            return (
+              <div className={cn("mx-5 mt-5 flex items-start gap-3 rounded-xl border px-4 py-3.5 md:mx-7", tone.classes)}>
+                <Icon aria-hidden="true" className="mt-0.5 size-[18px] shrink-0" />
+                <div className="min-w-0">
+                  <div className="text-[0.9375rem] leading-snug font-semibold">{claimOutcome.headline}</div>
+                  {claimOutcome.detail && (
+                    <div className="mt-1.5 text-[0.8125rem] leading-normal opacity-85 [overflow-wrap:anywhere]">
+                      {claimOutcome.detail}
+                    </div>
+                  )}
                 </div>
-                {claimOutcome.detail && (
-                  <div
-                    style={{
-                      marginTop: "0.375rem",
-                      fontSize: "0.8125rem",
-                      color: OUTCOME_STYLES[claimOutcome.tone].text,
-                      opacity: 0.85,
-                      lineHeight: 1.5,
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {claimOutcome.detail}
-                  </div>
-                )}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Ticket infos */}
-          <div style={{ padding: "1.5rem 1.75rem", borderBottom: "1px solid #f3f4f6" }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-              {[
-                ["Tipe Layanan", ticket.ticket_type.replace(/_/g, " ")],
-                ["Perangkat", ticket.device_type.replace(/_/g, " ")],
-                ...(ticket.device_name ? [["Nama Perangkat", ticket.device_name]] : []),
-                ...(ticket.device_sn ? [["Nomor Seri (SN)", ticket.device_sn]] : []),
-                ...(ticket.accessories ? [["Kelengkapan", ticket.accessories]] : []),
-                ...(ticket.warranty_status ? [["Kondisi", ticket.warranty_status]] : []),
-                ["Dibuat", formatDateTime(ticket.created_at)],
-                ["Pengiriman", ticket.pickup_method === "courier" ? "Kurir" : ticket.pickup_method === "self_pickup" ? "Ambil Sendiri" : "—"],
-                ["Waktu Kerja Aktif", formatDuration(totalTimeMs)],
-                ...(ticket.is_overnight_check ? [["Cek & Diagnosa", "Overnight (Fee Rp. 50,000)"]] : []),
-              ].map(([label, value]) => (
-                <div key={label as string}>
-                  <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginBottom: "0.2rem" }}>{label}</div>
-                  <div style={{ fontWeight: 500, color: "#374151", textTransform: "capitalize", fontSize: "0.9rem" }}>{value}</div>
-                </div>
-              ))}
-            </div>
-          </div>
+          <dl className="grid grid-cols-2 gap-4 border-b border-border px-5 py-6 md:px-7">
+            {[
+              ["Tipe Layanan", ticket.ticket_type.replace(/_/g, " ")],
+              ["Perangkat", ticket.device_type.replace(/_/g, " ")],
+              ...(ticket.device_name ? [["Nama Perangkat", ticket.device_name]] : []),
+              ...(ticket.device_sn ? [["Nomor Seri (SN)", ticket.device_sn]] : []),
+              ...(ticket.accessories ? [["Kelengkapan", ticket.accessories]] : []),
+              ...(ticket.warranty_status ? [["Kondisi", ticket.warranty_status]] : []),
+              ["Dibuat", formatDateTime(ticket.created_at)],
+              ["Pengiriman", ticket.pickup_method === "courier" ? "Kurir" : ticket.pickup_method === "self_pickup" ? "Ambil Sendiri" : "—"],
+              ["Waktu Kerja Aktif", formatDuration(totalTimeMs)],
+              ...(ticket.is_overnight_check ? [["Cek & Diagnosa", "Overnight (Fee Rp. 50,000)"]] : []),
+            ].map(([label, value]) => (
+              <div key={label as string} className="min-w-0">
+                <dt className="mb-0.5 text-xs text-muted-foreground">{label}</dt>
+                <dd className="text-[0.9rem] font-medium text-foreground capitalize [overflow-wrap:anywhere]">{value}</dd>
+              </div>
+            ))}
+          </dl>
 
           {/* Status timeline */}
-          <div style={{ padding: "1.5rem 1.75rem", borderBottom: "1px solid #f3f4f6" }}>
-            <div style={{ fontWeight: 600, fontSize: "0.9375rem", color: "#111827", marginBottom: "1rem" }}>
-              Riwayat Status
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+          <div className="px-5 py-6 md:px-7">
+            <h2 className="mb-4 text-[0.9375rem] font-semibold text-foreground">Riwayat Status</h2>
+            <ol className="flex flex-col">
               {ticket.status_logs.map((log, i) => {
                 const isLatest = i === ticket.status_logs.length - 1;
                 const showProof = PROOF_STATUSES.has(log.new_status);
                 const proofMedia = showProof ? getProofMedia(log.created_at) : [];
 
                 return (
-                  <div key={log.id} style={{ display: "flex", gap: "0", alignItems: "stretch" }}>
+                  <li key={log.id} className="flex items-stretch">
                     {/* Timeline spine */}
-                    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", width: "28px", flexShrink: 0 }}>
-                      <div style={{
-                        width: "28px", height: "28px", borderRadius: "50%",
-                        background: isLatest ? "var(--primary, #16469d)" : "#f3f4f6",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        flexShrink: 0,
-                        color: isLatest ? "white" : "#9ca3af",
-                        fontSize: "0.7rem", fontWeight: 700,
-                        zIndex: 1,
-                        border: isLatest ? "none" : "1px solid #e5e7eb",
-                        transition: "background 0.2s",
-                      }}>
+                    <div className="flex w-7 shrink-0 flex-col items-center">
+                      <div
+                        aria-hidden="true"
+                        className={cn(
+                          "z-[1] flex size-7 shrink-0 items-center justify-center rounded-full text-[0.7rem] font-bold",
+                          isLatest ? "bg-primary text-primary-foreground" : "border border-border bg-muted text-muted-foreground",
+                        )}
+                      >
                         {i + 1}
                       </div>
                       {/* Connector line to next item */}
                       {i < ticket.status_logs.length - 1 && (
-                        <div style={{
-                          width: "2px",
-                          flex: 1,
-                          minHeight: "1.25rem",
-                          background: "#e5e7eb",
-                          marginTop: "2px",
-                          marginBottom: "2px",
-                        }} />
+                        <div aria-hidden="true" className="my-0.5 min-h-5 w-0.5 flex-1 bg-border" />
                       )}
                     </div>
 
                     {/* Content */}
-                    <div style={{ paddingLeft: "0.875rem", paddingBottom: i < ticket.status_logs.length - 1 ? "1rem" : "0", flex: 1, minWidth: 0 }}>
-                      <div style={{ fontWeight: 600, color: isLatest ? "#111827" : "#374151", fontSize: "0.875rem" }}>
+                    <div className={cn("min-w-0 flex-1 pl-3.5", i < ticket.status_logs.length - 1 && "pb-4")}>
+                      <div className={cn("text-sm font-semibold", isLatest ? "text-foreground" : "text-foreground/80")}>
                         {publicStatusLabel(log.new_status)}
                       </div>
-                      <div style={{ fontSize: "0.75rem", color: "#9ca3af", marginTop: "2px" }}>
-                        {formatDateTime(log.created_at)}
-                      </div>
+                      <div className="mt-0.5 text-xs text-muted-foreground">{formatDateTime(log.created_at)}</div>
 
                       {/* Proof media — images & videos attached to this status step */}
                       {proofMedia.length > 0 && (
-                        <div style={{ marginTop: "0.625rem", display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
+                        <div className="mt-2.5 flex flex-wrap gap-2">
                           {proofMedia.map((media) => (
                             <a
                               key={media.id}
                               href={media.file_url}
                               target="_blank"
                               rel="noopener noreferrer"
-                              style={{
-                                display: "block",
-                                borderRadius: "8px",
-                                overflow: "hidden",
-                                border: "1px solid #e5e7eb",
-                                width: "80px",
-                                height: "80px",
-                                flexShrink: 0,
-                                background: "#111",
-                                position: "relative",
-                              }}
                               title="Lihat bukti"
+                              className="relative block size-20 shrink-0 overflow-hidden rounded-lg border border-border bg-[#111] outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
                             >
                               {media.file_type === "image" ? (
                                 // eslint-disable-next-line @next/next/no-img-element
-                                <img
-                                  src={media.file_url}
-                                  alt="Bukti"
-                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                />
+                                <img src={media.file_url} alt="Bukti" className="size-full object-cover" />
                               ) : (
                                 /* video thumbnail — browser renders first frame */
-                                <video
-                                  src={media.file_url}
-                                  style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                                  muted
-                                  playsInline
-                                  preload="metadata"
-                                />
+                                <video src={media.file_url} className="size-full object-cover" muted playsInline preload="metadata" />
                               )}
                               {/* play icon overlay for video */}
                               {media.file_type === "video" && (
-                                <div style={{
-                                  position: "absolute", inset: 0,
-                                  display: "flex", alignItems: "center", justifyContent: "center",
-                                  background: "rgba(0,0,0,0.35)",
-                                }}>
-                                  <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                                    <path d="M8 5v14l11-7z" />
-                                  </svg>
+                                <div className="absolute inset-0 flex items-center justify-center bg-black/35">
+                                  <Play aria-hidden="true" className="size-6 fill-white text-white" />
                                 </div>
                               )}
                             </a>
@@ -346,13 +273,11 @@ export default async function PublicTicketPage({
                         </div>
                       )}
                     </div>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ol>
           </div>
-
-
         </div>
 
         {/* Public chat section */}
@@ -370,13 +295,14 @@ export default async function PublicTicketPage({
             }))}
           />
         ) : (
-          <div style={{ background: "#fff", borderRadius: "12px", padding: "1.25rem 1.5rem", textAlign: "center", color: "#9ca3af", fontSize: "0.875rem", boxShadow: "0 2px 8px rgba(0,0,0,0.06)" }}>
-            💬 Chat dinonaktifkan untuk tiket ini
+          <div className="flex items-center justify-center gap-2 rounded-xl border border-border bg-card px-6 py-5 text-center text-sm text-muted-foreground">
+            <MessageSquareOff aria-hidden="true" className="size-4" />
+            Chat dinonaktifkan untuk tiket ini
           </div>
         )}
 
         {/* Footer */}
-        <div style={{ textAlign: "center", color: "#9ca3af", fontSize: "0.75rem" }}>
+        <div className="text-center text-xs text-muted-foreground">
           HNS IT Center · Halaman ini hanya-baca dan terisolasi
         </div>
       </div>

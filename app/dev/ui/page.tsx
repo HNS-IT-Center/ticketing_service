@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import type { TicketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { OverlayDemos } from "./OverlayDemos";
+import { SharedDemos } from "./SharedDemos";
 
 /**
  * /dev/ui — every design-system piece on one page, for visual review.
@@ -310,6 +311,10 @@ export default function DevUiPage() {
 
       <Section id="overlays" title="Overlay dan interaksi" description="Dialog, ConfirmDialog, DropdownMenu, Sheet, Tooltip, Select, Tabs, toast. Semua bisa dipakai pakai keyboard.">
         <OverlayDemos />
+      </Section>
+
+      <Section id="shared" title="Komponen bersama" description="FileUpload dan FilePreview: dipakai di dalam alur (langkah wizard, ganti status), jadi dicek di sini.">
+        <SharedDemos />
       </Section>
     </main>
   );

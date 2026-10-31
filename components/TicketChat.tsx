@@ -2,7 +2,9 @@
 
 import { useState, useRef, useEffect, useTransition } from "react";
 import { Send, Check, CheckCheck, Loader2 } from "lucide-react";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { sendMessageAction } from "@/app/actions/tickets";
 import toast from "react-hot-toast";
 
@@ -41,71 +43,70 @@ export default function TicketChat({ ticketId, messages, currentUserId, customer
       try {
         await sendMessageAction(ticketId, newMessage);
         setNewMessage("");
-      } catch (err: any) {
-        toast.error(err.message || "Failed to send message");
+      } catch (err) {
+        toast.error((err instanceof Error && err.message) || "Failed to send message");
       }
     });
   };
 
   return (
-    <div className="card" style={{ display: "flex", flexDirection: "column", height: "500px", padding: 0 }}>
-      <div style={{ padding: "1rem", borderBottom: "1px solid var(--border-light)", background: "var(--cream-dark)" }}>
-        <h3 style={{ margin: 0, fontSize: "1rem" }}>Discussion</h3>
+    // Staff chat on the ticket detail pages; a self-contained card (it brings
+    // its own data-slot), so it sits inside the legacy pages too.
+    <section data-slot="ticket-chat" className="flex h-[500px] flex-col overflow-hidden rounded-xl border border-border bg-card shadow-xs">
+      <div className="border-b border-border bg-muted px-4 py-3">
+        <h3 className="text-base font-semibold text-foreground">Discussion</h3>
       </div>
-      
-      <div ref={chatContainerRef} style={{ flex: 1, overflowY: "auto", padding: "1rem", display: "flex", flexDirection: "column", gap: "1rem" }}>
+
+      <div ref={chatContainerRef} aria-live="polite" className="flex flex-1 flex-col gap-4 overflow-y-auto p-4">
         {messages.length === 0 ? (
-          <div style={{ margin: "auto", color: "var(--text-muted)", fontSize: "0.875rem" }}>
+          <div className="m-auto text-center text-sm text-muted-foreground">
             No messages yet. Send a message to start the discussion.
           </div>
         ) : (
           messages.map((msg) => (
-            <div key={msg.id} style={{ display: "flex", flexDirection: "column", alignItems: msg.isOwn ? "flex-end" : "flex-start" }}>
-              <span style={{ fontSize: "0.7rem", color: "var(--text-muted)", marginBottom: "0.25rem", marginLeft: "0.25rem", marginRight: "0.25rem" }}>
+            <div key={msg.id} className={cn("flex flex-col", msg.isOwn ? "items-end" : "items-start")}>
+              <span className="mx-1 mb-1 text-[0.7rem] text-muted-foreground">
                 {msg.sender.name} • {msg.sender.role}
               </span>
-              <div style={{
-                background: msg.isOwn ? "var(--primary)" : "var(--cream)",
-                color: msg.isOwn ? "white" : "var(--text-primary)",
-                padding: "0.6rem 0.85rem",
-                borderRadius: "12px",
-                borderBottomRightRadius: msg.isOwn ? "0" : "12px",
-                borderBottomLeftRadius: msg.isOwn ? "12px" : "0",
-                maxWidth: "85%",
-                fontSize: "0.875rem",
-                lineHeight: 1.4,
-                boxShadow: "0 1px 2px rgba(0,0,0,0.05)"
-              }}>
+              <div
+                className={cn(
+                  "max-w-[85%] rounded-xl px-3.5 py-2.5 text-sm leading-snug shadow-xs [overflow-wrap:anywhere]",
+                  msg.isOwn ? "rounded-br-none bg-primary text-primary-foreground" : "rounded-bl-none bg-muted text-foreground",
+                )}
+              >
                 {msg.message}
               </div>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.25rem", marginTop: "0.25rem", fontSize: "0.7rem", color: "var(--text-muted)", marginLeft: "0.25rem", marginRight: "0.25rem" }}>
+              <div className="mx-1 mt-1 flex items-center gap-1 text-[0.7rem] text-muted-foreground">
                 {formatDateTime(msg.created_at)}
-                {msg.isOwn && (
-                  msg.is_read ? <CheckCheck size={12} color="var(--primary)" /> : <Check size={12} />
-                )}
+                {msg.isOwn &&
+                  (msg.is_read ? (
+                    <CheckCheck aria-label="Read" className="size-3 text-primary" />
+                  ) : (
+                    <Check aria-label="Sent" className="size-3" />
+                  ))}
               </div>
             </div>
           ))
         )}
-
       </div>
 
-      <div style={{ padding: "1rem", borderTop: "1px solid var(--border-light)" }}>
-        <form onSubmit={handleSubmit} style={{ display: "flex", gap: "0.5rem" }}>
-          <input
+      <div className="border-t border-border p-4">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <label htmlFor={`ticket-chat-${ticketId}`} className="sr-only">Message</label>
+          <Input
+            id={`ticket-chat-${ticketId}`}
             type="text"
-            className="form-input"
             placeholder="Type a message..."
             value={newMessage}
             onChange={(e) => setNewMessage(e.target.value)}
             disabled={isPending}
-            style={{ flex: 1 }}
+            className="flex-1 bg-card"
           />
-          <button type="submit" className="btn btn-primary" disabled={isPending || !newMessage.trim()} style={{ padding: "0.5rem 1rem" }}>
-            {isPending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
-          </button>
+          <Button type="submit" size="icon" disabled={isPending || !newMessage.trim()} aria-label="Send message">
+            {isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Send aria-hidden="true" />}
+          </Button>
         </form>
       </div>
-    </div>
+    </section>
   );
 }

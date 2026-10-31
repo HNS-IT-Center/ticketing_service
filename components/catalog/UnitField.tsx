@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { PackageCheck, X } from "lucide-react";
 import CatalogItemPicker from "./CatalogItemPicker";
+import CatalogEntryToggle from "./CatalogEntryToggle";
 
 /** The unit as picked from the catalogue — what the intake form keeps and drafts. */
 export type PickedUnit = { id: number; sku: string; name: string; category: string | null };
@@ -47,25 +48,6 @@ export default function UnitField({
       {label}{" "}
       {optional && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>}
     </label>
-  );
-
-  const linkButton = (text: string, onClick: () => void) => (
-    <button
-      type="button"
-      onClick={onClick}
-      style={{
-        background: "none",
-        border: "none",
-        color: "var(--primary)",
-        textDecoration: "underline",
-        cursor: "pointer",
-        padding: 0,
-        fontSize: "0.8125rem",
-        alignSelf: "flex-start",
-      }}
-    >
-      {text}
-    </button>
   );
 
   if (mode === "picked" && unit) {
@@ -115,7 +97,7 @@ export default function UnitField({
             onNameChange(item.name);
           }}
         />
-        {linkButton("Unit tidak ada di katalog? Ketik manual", () => setTyping(true))}
+        <CatalogEntryToggle to="manual" question="Unit tidak ada di katalog?" label="Ketik manual" onClick={() => setTyping(true)} />
       </div>
     );
   }
@@ -134,11 +116,16 @@ export default function UnitField({
         }}
         placeholder={placeholder}
       />
-      {catalogEnabled &&
-        linkButton("Cari di katalog Accurate", () => {
-          onNameChange("");
-          setTyping(false);
-        })}
+      {catalogEnabled && (
+        <CatalogEntryToggle
+          to="search"
+          label="Cari di katalog Accurate"
+          onClick={() => {
+            onNameChange("");
+            setTyping(false);
+          }}
+        />
+      )}
     </div>
   );
 }

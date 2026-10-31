@@ -17,7 +17,7 @@ import {
   type DemandRow,
 } from "@/lib/reports/part-demand";
 import { CatalogUnavailableError, getCatalogItem, isCatalogConfigured } from "@/lib/catalog/hns-data";
-import { stockAtStore } from "@/lib/catalog/items";
+import { stockAtStore, type StoreRef } from "@/lib/catalog/items";
 
 export const metadata = { title: "Laporan Pergantian Part — HNS IT Center" };
 
@@ -32,7 +32,7 @@ type StockNow = { here: number | null; total: number };
  * What the catalogue holds now for the most-used items. One lookup each, in
  * parallel; a lookup that fails shows as unknown rather than failing the page.
  */
-async function stockFor(rows: DemandRow[], storeName: string | null): Promise<{ stock: Map<string, StockNow>; unavailable: boolean }> {
+async function stockFor(rows: DemandRow[], store: StoreRef | null): Promise<{ stock: Map<string, StockNow>; unavailable: boolean }> {
   const stock = new Map<string, StockNow>();
   if (!isCatalogConfigured()) return { stock, unavailable: true };
   let unavailable = false;
@@ -41,7 +41,7 @@ async function stockFor(rows: DemandRow[], storeName: string | null): Promise<{ 
       if (!r.catalogItemId) return;
       try {
         const item = await getCatalogItem(r.catalogItemId);
-        if (item) stock.set(r.sku, { here: stockAtStore(item, storeName), total: item.stockTotal });
+        if (item) stock.set(r.sku, { here: stockAtStore(item, store), total: item.stockTotal });
       } catch (err) {
         if (!(err instanceof CatalogUnavailableError)) throw err;
         unavailable = true;
@@ -62,7 +62,7 @@ export default async function PartsReportPage({
   const storeId = params.store || null;
 
   const [stores, rows] = await Promise.all([
-    db.storeLocation.findMany({ where: { is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } }),
+    db.storeLocation.findMany({ where: { is_active: true }, select: { id: true, name: true, code: true }, orderBy: { name: "asc" } }),
     loadPartRows(month, storeId),
   ]);
   const data = rows ?? [];
@@ -73,8 +73,9 @@ export default async function PartsReportPage({
   const demandRows = await loadPartRowsBetween(span.start, span.end, storeId);
   const demand = rankCatalogDemand(demandRows).slice(0, DEMAND_LIMIT);
   const outside = outsideCatalog(demandRows);
-  const storeName = storeId ? (stores.find((s) => s.id === storeId)?.name ?? null) : null;
-  const { stock, unavailable: stockUnavailable } = await stockFor(demand, storeName);
+  const store = storeId ? (stores.find((s) => s.id === storeId) ?? null) : null;
+  const storeName = store?.name ?? null;
+  const { stock, unavailable: stockUnavailable } = await stockFor(demand, store);
   const windowLabel = `${monthLabel(span.firstMonth)} – ${monthLabel(month)}`;
   const exportHref = `/admin/reports/parts/export?month=${month}${storeId ? `&store=${storeId}` : ""}`;
   const catalogShare = summary.entries ? Math.round((summary.fromCatalog / summary.entries) * 100) : 0;
@@ -203,8 +204,9 @@ export default async function PartsReportPage({
             <PackageX size={18} /> Di luar katalog Accurate — {windowLabel}
           </h3>
           <p className="text-sm" style={{ color: "var(--text-muted)", margin: 0 }}>
-            Part yang diketik manual karena tidak ada di katalog. Yang sering muncul layak ditambahkan ke Accurate,
-            supaya berikutnya bisa dipilih teknisi dan dihitung per SKU.
+            Part yang diketik manual karena tidak ada di katalog, atau barangnya belum diterima di Accurate. Begitu
+            kodenya ada, masukkan lewat &ldquo;Masukkan kode&rdquo; di Rincian Biaya tiketnya dan part itu keluar dari
+            daftar ini. Yang sering muncul tanpa kode layak ditambahkan ke Accurate.
           </p>
         </div>
         {outside.length === 0 ? (
@@ -220,6 +222,7 @@ export default async function PartsReportPage({
                   <th>Nama yang diketik</th>
                   <th>Dipakai</th>
                   <th>Unit</th>
+                  <th>Tiket</th>
                 </tr>
               </thead>
               <tbody>
@@ -229,6 +232,15 @@ export default async function PartsReportPage({
                     <td style={{ fontWeight: 600 }}>{o.name}</td>
                     <td style={{ fontWeight: 700 }}>{o.uses}×</td>
                     <td>{o.quantity}</td>
+                    <td>
+                      <div className="flex flex-wrap gap-x-2 gap-y-1">
+                        {o.tickets.map((t) => (
+                          <Link key={t.id} href={`/admin/tickets/${t.id}`} style={{ color: "var(--primary)", fontWeight: 600 }}>
+                            {t.code}
+                          </Link>
+                        ))}
+                      </div>
+                    </td>
                   </tr>
                 ))}
               </tbody>

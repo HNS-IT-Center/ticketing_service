@@ -1,14 +1,17 @@
+import type { Role } from "@prisma/client";
 import { getSession } from "@/lib/session";
 import { CatalogUnavailableError, isCatalogConfigured, searchCatalog } from "@/lib/catalog/hns-data";
 import { MAX_QUERY, MIN_QUERY } from "@/lib/catalog/items";
 
-const STAFF = new Set(["Administrator", "Technician", "Sales", "RMA"]);
+// Typed against the enum, so a misspelt role fails tsc instead of locking it out.
+const STAFF: ReadonlySet<string> = new Set<Role>(["Administrator", "Technician", "Sales", "RMA"]);
 
 /**
  * GET /api/catalog/items?q=… — search the item catalogue for the parts panel.
  *
  * A thin, authenticated proxy: the data API's token never reaches a browser.
- * Staff sessions only.
+ * Staff sessions only, and this check is the only one — proxy.ts lets every
+ * /api route through, so nothing in front of this handler asks for a login.
  */
 export async function GET(request: Request) {
   const session = await getSession();

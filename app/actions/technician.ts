@@ -5,11 +5,11 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
 import { uploadToR2, getExt, getFileType, deleteFromStorage } from "@/lib/r2";
+import { storageFailedMessage } from "@/lib/upload-limit";
 import { performanceEffect } from "@/lib/kpi";
 import { getTicketPoints } from "@/lib/points";
-import { isServicePart, requiresItemName, MAX_PART_PHOTOS } from "@/lib/service-parts";
-import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
-import { MAX_QUANTITY, type CatalogItem } from "@/lib/catalog/items";
+import { isServicePart, MAX_PART_PHOTOS } from "@/lib/service-parts";
+import { readPartInput } from "@/lib/replaced-part-input";
 import { EXTERNAL_WORK_OUTSTANDING, partChargeDescription } from "@/lib/charges";
 import { hasExternalWorkOutstanding } from "@/lib/charges-server";
 
@@ -287,7 +287,7 @@ export async function updateTicketStatusAction(formData: FormData) {
         uploadedFiles = await Promise.all(uploadOps);
       } catch (err) {
         console.error("[UPLOAD ERROR]", err);
-        return { error: "Failed to upload proof attachment. Please check file size and try again." };
+        return { error: storageFailedMessage("lampiran bukti") };
       }
     }
 
@@ -476,14 +476,10 @@ export async function addReplacedPartAction(formData: FormData) {
   const session = await requireRole("Technician");
 
   const ticketId = String(formData.get("ticket_id") ?? "");
-  const part = String(formData.get("part") ?? "");
-  const itemName = String(formData.get("item_name") ?? "");
   const notes = String(formData.get("notes") ?? "");
   const photos = (formData.getAll("photos") as File[]).filter((f) => f.size > 0);
-  const catalogIdRaw = String(formData.get("catalog_item_id") ?? "").trim();
-  const quantity = Number(String(formData.get("quantity") ?? "1").trim() || "1");
 
-  if (!isServicePart(part)) {
+  if (!isServicePart(String(formData.get("part") ?? ""))) {
     return { error: "Jenis part tidak dikenal." };
   }
 
@@ -510,36 +506,9 @@ export async function addReplacedPartAction(formData: FormData) {
     return { error: "Penggantian part hanya dicatat pada tiket service." };
   }
 
-  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_QUANTITY) {
-    return { error: `Jumlah harus angka 1–${MAX_QUANTITY}.` };
-  }
-
-  // Picked from the catalogue: re-read it there by id, so the SKU and name on
-  // record are the catalogue's and not whatever the browser sent.
-  let catalog: CatalogItem | null = null;
-  if (catalogIdRaw) {
-    const catalogId = Number(catalogIdRaw);
-    if (!Number.isInteger(catalogId) || catalogId <= 0) {
-      return { error: "Barang katalog tidak valid." };
-    }
-    try {
-      catalog = await getCatalogItem(catalogId);
-    } catch (err) {
-      if (!(err instanceof CatalogUnavailableError)) throw err;
-      console.error("[CATALOG LOOKUP]", err.message);
-      return {
-        error: "Katalog barang sedang tidak dapat dihubungi. Hapus pilihan katalog dan isi nama barang secara manual.",
-      };
-    }
-    if (!catalog) return { error: "Barang tidak ditemukan di katalog." };
-  }
-
-  const trimmedName = catalog?.name ?? itemName.trim();
-  // `other` carries no meaning by itself, so the name is what says what was
-  // fitted. Every named category already describes itself.
-  if (requiresItemName(part) && !trimmedName) {
-    return { error: "Nama barang wajib diisi bila jenis part-nya Lainnya." };
-  }
+  const input = await readPartInput(formData);
+  if ("error" in input) return { error: input.error };
+  const { part, name, quantity, catalog } = input;
 
   // Uploaded before the row exists, the same way handoverToRmaAction does it:
   // a failed upload then leaves nothing behind rather than a part record
@@ -552,7 +521,7 @@ export async function addReplacedPartAction(formData: FormData) {
       photoUrls.push(await uploadToR2(file, path));
     } catch (err) {
       console.error("[REPLACED PART PHOTO UPLOAD ERROR]", err);
-      return { error: "Gagal mengunggah foto part. Periksa ukuran file lalu coba lagi." };
+      return { error: storageFailedMessage("foto part") };
     }
   }
 
@@ -560,7 +529,7 @@ export async function addReplacedPartAction(formData: FormData) {
     data: {
       ticket_id: ticketId,
       part,
-      item_name: trimmedName || null,
+      item_name: name,
       notes: notes.trim() || null,
       catalog_item_id: catalog?.id ?? null,
       sku: catalog?.sku ?? null,
@@ -574,7 +543,7 @@ export async function addReplacedPartAction(formData: FormData) {
         create: {
           ticket_id: ticketId,
           kind: "part",
-          description: partChargeDescription(part, trimmedName),
+          description: partChargeDescription(part, name),
           quantity,
           created_by_id: session.userId,
         },

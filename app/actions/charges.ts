@@ -5,12 +5,17 @@ import type { ChargeKind, Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { chargePermissions } from "@/lib/charges-server";
+import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
+import { readPartInput } from "@/lib/replaced-part-input";
+import { deleteFromStorage } from "@/lib/r2";
+import { isServicePart, requiresItemName } from "@/lib/service-parts";
 import {
   MAX_CHARGE_QUANTITY,
   MAX_DESCRIPTION,
   isAddableChargeKind,
   isExternalResult,
   parseRupiah,
+  partChargeDescription,
   vendorFitsCharge,
   vendorMismatchMessage,
   type ChargePermissions,
@@ -199,19 +204,103 @@ export async function addChargeAction(formData: FormData): Promise<Fail | Ok> {
 }
 
 /**
+ * Add a fitted part from Rincian Biaya — for whoever may change the bill, an
+ * administrator included, not only the technician holding the ticket.
+ *
+ * It records exactly what the "Part yang Diganti" panel records: the part, and
+ * its line of the bill created with it, so the two cannot disagree. Here the
+ * line can carry its prices and supplier at once. Photos stay with the panel.
+ * A part typed by hand because Accurate has not received it yet gets its code
+ * later through `linkPartCatalogAction`.
+ */
+export async function addPartChargeAction(formData: FormData): Promise<Fail | Ok> {
+  const ticketId = String(formData.get("ticket_id") ?? "");
+  const guard = await guardTicket(ticketId);
+  if ("error" in guard) return guard;
+
+  const input = await readPartInput(formData);
+  if ("error" in input) return input;
+  const prices = readPrices(formData, guard.perms);
+  if ("error" in prices) return prices;
+  const vendor = await readVendor(formData, "part", null);
+  if (vendor && "error" in vendor) return vendor;
+
+  await db.ticketReplacedPart.create({
+    data: {
+      ticket_id: ticketId,
+      part: input.part,
+      item_name: input.name,
+      notes: String(formData.get("notes") ?? "").trim() || null,
+      catalog_item_id: input.catalog?.id ?? null,
+      sku: input.catalog?.sku ?? null,
+      catalog_category: input.catalog?.category ?? null,
+      quantity: input.quantity,
+      recorded_by_id: guard.userId,
+      charge: {
+        create: {
+          ticket_id: ticketId,
+          kind: "part",
+          description: partChargeDescription(input.part, input.name),
+          quantity: input.quantity,
+          vendor_id: vendor?.vendor_id ?? null,
+          ...prices,
+          created_by_id: guard.userId,
+        },
+      },
+    },
+  });
+
+  revalidateTicket(ticketId);
+  return { success: true };
+}
+
+/**
  * Change a line. A part line's name and quantity belong to the replaced part
  * and are not edited here; its vendor and prices are.
  */
 export async function updateChargeAction(chargeId: string, formData: FormData): Promise<Fail | Ok> {
   const charge = await db.ticketCharge.findUnique({
     where: { id: chargeId },
-    select: { ticket_id: true, kind: true, vendor_id: true, service_job_id: true },
+    select: {
+      ticket_id: true,
+      kind: true,
+      vendor_id: true,
+      service_job_id: true,
+      replaced_part: { select: { id: true, part: true, item_name: true, sku: true } },
+    },
   });
   if (!charge) return { error: "Baris biaya tidak ditemukan." };
   const guard = await guardTicket(charge.ticket_id);
   if ("error" in guard) return guard;
 
   const data: Prisma.TicketChargeUncheckedUpdateInput = { updated_by_id: guard.userId };
+  // A part line's quantity — and, until it has its Accurate code, its category
+  // and name — belong to the part. They are written to the part and mirrored
+  // on the line, so the two never disagree. Once linked, the name is the
+  // catalogue's and stays.
+  let partUpdate: Prisma.TicketReplacedPartUpdateInput | null = null;
+  const part = charge.replaced_part;
+  if (part) {
+    partUpdate = {};
+    if (formData.has("quantity")) {
+      const quantity = readQuantity(formData);
+      if (typeof quantity !== "number") return quantity;
+      partUpdate.quantity = quantity;
+      data.quantity = quantity;
+    }
+    if (!part.sku && (formData.has("part") || formData.has("item_name"))) {
+      const category = formData.has("part") ? String(formData.get("part")) : part.part;
+      if (!isServicePart(category)) return { error: "Jenis part tidak dikenal." };
+      const name = formData.has("item_name")
+        ? String(formData.get("item_name") ?? "").trim().replace(/\s+/g, " ") || null
+        : part.item_name;
+      if (name && name.length > MAX_DESCRIPTION) return { error: `Nama barang maksimal ${MAX_DESCRIPTION} karakter.` };
+      if (requiresItemName(category) && !name) return { error: "Nama barang wajib diisi bila jenis part-nya Lainnya." };
+      partUpdate.part = category;
+      partUpdate.item_name = name;
+      data.description = partChargeDescription(category, name);
+    }
+  }
   // A labour line names its job. Choosing another one renames the line and
   // gives it that job's points; keeping the same one keeps the points it had.
   let newJobPrice: number | null | undefined;
@@ -251,7 +340,21 @@ export async function updateChargeAction(chargeId: string, formData: FormData): 
   if (vendor && "error" in vendor) return vendor;
   if (vendor) data.vendor_id = vendor.vendor_id;
 
-  await db.ticketCharge.update({ where: { id: chargeId }, data });
+  const renames = partUpdate !== null && "item_name" in partUpdate;
+  const saved = await db.$transaction(async (tx) => {
+    if (part && partUpdate && Object.keys(partUpdate).length > 0) {
+      // A rename only while the part has no code: someone may have linked it
+      // since this form was opened, and the catalogue's name must win.
+      const written = await tx.ticketReplacedPart.updateMany({
+        where: renames ? { id: part.id, sku: null } : { id: part.id },
+        data: partUpdate as Prisma.TicketReplacedPartUpdateManyMutationInput,
+      });
+      if (written.count === 0) return false;
+    }
+    await tx.ticketCharge.update({ where: { id: chargeId }, data });
+    return true;
+  });
+  if (!saved) return { error: "Part ini baru saja diberi kode Accurate. Muat ulang halaman, lalu coba lagi." };
   revalidateTicket(charge.ticket_id);
   return { success: true };
 }
@@ -265,10 +368,25 @@ export async function removeChargeAction(chargeId: string): Promise<Fail | Ok> {
   if (!charge) return { error: "Baris biaya tidak ditemukan." };
   const guard = await guardTicket(charge.ticket_id);
   if ("error" in guard) return guard;
+
   if (charge.replaced_part_id) {
-    return { error: "Baris ini milik part yang diganti. Hapus part-nya di panel Part yang Diganti; harganya ikut terhapus." };
+    // A part line is the part: removing it removes the part, its line and its
+    // photo rows by cascade. The files in the bucket do not cascade, so they go
+    // here — best effort and after the delete, so a storage error never makes
+    // a completed removal look like it failed (removeReplacedPartAction's rule).
+    const photos = await db.ticketReplacedPartPhoto.findMany({
+      where: { part_id: charge.replaced_part_id },
+      select: { file_url: true },
+    });
+    await db.ticketReplacedPart.delete({ where: { id: charge.replaced_part_id } });
+    for (const photo of photos) {
+      if (!(await deleteFromStorage(photo.file_url))) {
+        console.error(`[removeChargeAction] berkas tertinggal: ${photo.file_url}`);
+      }
+    }
+  } else {
+    await db.ticketCharge.delete({ where: { id: chargeId } });
   }
-  await db.ticketCharge.delete({ where: { id: chargeId } });
   revalidateTicket(charge.ticket_id);
   return { success: true };
 }
@@ -311,6 +429,64 @@ export async function receiveExternalAction(chargeId: string, formData: FormData
     },
   });
   if (updated.count === 0) return { error: "Pekerjaan ini sudah dicatat kembali dari vendor." };
+
+  revalidateTicket(charge.ticket_id);
+  return { success: true };
+}
+
+/**
+ * Give a part typed by hand its Accurate code, once the item has been received
+ * there. Receiving often lags the repair, so a part is first recorded under a
+ * plain name ("Baterai") and linked later; the catalogue's name then replaces
+ * the typed one, on the part and on its line of the bill. Prices, quantity and
+ * photos are left alone.
+ *
+ * Only a part with no code yet — a wrong link is not overwritten from here —
+ * and conditionally, so two people linking at once record one item.
+ */
+export async function linkPartCatalogAction(chargeId: string, catalogItemId: number): Promise<Fail | Ok> {
+  const session = await requireSession();
+  const charge = await db.ticketCharge.findUnique({
+    where: { id: chargeId },
+    select: {
+      ticket_id: true,
+      ticket: { select: TICKET_SCOPE },
+      replaced_part: { select: { id: true, part: true, sku: true } },
+    },
+  });
+  const part = charge?.replaced_part;
+  if (!charge || !part) return { error: "Part tidak ditemukan." };
+  if (charge.ticket.ticket_type !== "service") return { error: "Rincian biaya hanya ada pada tiket service." };
+  const perms = await chargePermissions(session.userId, charge.ticket);
+  if (!perms.canLinkPartCode) return { error: "Anda tidak dapat mengubah part pada tiket ini." };
+  if (part.sku) return { error: "Part ini sudah punya kode Accurate." };
+
+  if (!Number.isInteger(catalogItemId) || catalogItemId <= 0) return { error: "Barang katalog tidak valid." };
+  // Re-read by id, so the code and name on record are the catalogue's and not
+  // whatever the browser sent.
+  let item;
+  try {
+    item = await getCatalogItem(catalogItemId);
+  } catch (err) {
+    if (!(err instanceof CatalogUnavailableError)) throw err;
+    console.error("[LINK PART CODE]", err.message);
+    return { error: "Katalog barang sedang tidak dapat dihubungi. Coba lagi nanti." };
+  }
+  if (!item) return { error: "Barang tidak ditemukan di katalog." };
+
+  const linked = await db.$transaction(async (tx) => {
+    const updated = await tx.ticketReplacedPart.updateMany({
+      where: { id: part.id, sku: null },
+      data: { catalog_item_id: item.id, sku: item.sku, catalog_category: item.category, item_name: item.name },
+    });
+    if (updated.count === 0) return false;
+    await tx.ticketCharge.update({
+      where: { id: chargeId },
+      data: { description: partChargeDescription(part.part, item.name), updated_by_id: session.userId },
+    });
+    return true;
+  });
+  if (!linked) return { error: "Part ini sudah punya kode Accurate." };
 
   revalidateTicket(charge.ticket_id);
   return { success: true };

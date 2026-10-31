@@ -6,6 +6,7 @@ import {
   externalState,
   groupDigits,
   mayEditCharges,
+  mayLinkPartCode,
   parseRupiah,
   partChargeDescription,
   summarizeCharges,
@@ -132,6 +133,24 @@ describe("mayEditCharges", () => {
   it("refuses RMA and anyone with no group", () => {
     expect(may("r", ["rma"])).toBe(false);
     expect(may("x", [])).toBe(false);
+  });
+
+  describe("mayLinkPartCode", () => {
+    const link = (userId: string, audiences: Audience[], t = ticket()) =>
+      mayLinkPartCode({ userId, audiences, coordinatorStoreIds: [], ticket: t });
+
+    it("lets the holding technician add a code after the ticket is closed — receiving lags", () => {
+      for (const status of ["completed", "cancelled", "rejected"] as const) {
+        expect(link("tech", ["technician"], ticket({ status }))).toBe(true);
+      }
+    });
+
+    it("follows the bill otherwise: sales until closed, nobody else", () => {
+      expect(link("sales", ["sales"])).toBe(true);
+      expect(link("sales", ["sales"], ticket({ status: "completed" }))).toBe(false);
+      expect(link("other", ["technician"])).toBe(false);
+      expect(link("r", ["rma"])).toBe(false);
+    });
   });
 });
 

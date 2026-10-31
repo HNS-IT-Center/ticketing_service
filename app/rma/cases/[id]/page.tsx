@@ -1,12 +1,15 @@
 import Link from "next/link";
+import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { formatDateTime } from "@/lib/utils";
 import RmaStatusCard, { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import RmaActionPanel from "./RmaActionPanel";
+import ClaimStock, { ClaimStockShell } from "./ClaimStock";
 import FilePreview from "@/components/ui/FilePreview";
 import { attachmentKindLabel } from "@/lib/attachment-kind";
+import { vendorLocationText } from "@/lib/vendors";
 import { ArrowLeft } from "lucide-react";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
@@ -53,6 +56,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
       recommended_eligible: true,
       recommendation_note: true,
       vendor_name: true,
+      vendor: { select: { location: true } },
       vendor_rma_number: true,
       shipping_tracking: true,
       submitted_at: true,
@@ -86,6 +90,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
           customer_phone: true,
           device_name: true,
           device_sku: true,
+          device_catalog_item_id: true,
           device_sn: true,
           device_type: true,
           notes: true,
@@ -109,7 +114,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
   const claimVendors = await db.vendor.findMany({
     where: { is_active: true, handles_claims: true },
     orderBy: { name: "asc" },
-    select: { id: true, name: true },
+    select: { id: true, name: true, location: true },
   });
 
 
@@ -154,6 +159,9 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
               <Field label="Telepon" value={ticket.customer_phone} />
               <Field label="Perangkat" value={ticket.device_name} />
               {ticket.device_sku && <Field label="SKU (katalog Accurate)" value={ticket.device_sku} mono />}
+              <Suspense fallback={<ClaimStockShell value="Memuat…" muted />}>
+                <ClaimStock catalogItemId={ticket.device_catalog_item_id} />
+              </Suspense>
               <Field label="Kategori" value={ticket.device_type.replace(/_/g, " ")} />
               <Field label="Serial Number" value={ticket.device_sn} mono />
               <Field
@@ -179,6 +187,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                   rendered until now: the desk typed a supplier claim number at
                   handover to the vendor and then had no way to read it back. */}
               <Field label="Vendor" value={rmaCase.vendor_name} />
+              <Field label="Lokasi Vendor" value={vendorLocationText(rmaCase.vendor?.location)} />
               <Field label="Nomor Klaim Pemasok" value={rmaCase.vendor_rma_number} mono />
               <Field label="Nomor Tiket User" value={rmaCase.customer_ticket_number} mono />
               <Field label="Teknisi" value={ticket.technician?.name} />

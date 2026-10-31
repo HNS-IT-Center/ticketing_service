@@ -254,13 +254,6 @@ a:where(:not([data-slot], [data-slot] *)):hover { color: var(--primary-dark); }
   100% { background-position: 200% 0; }
 }
 
-.animate-fade-in      { animation: fadeIn 0.3s ease forwards; }
-.animate-slide-in     { animation: slideInRight 0.3s ease forwards; }
-.animate-slide-up     { animation: slideUp 0.4s ease forwards; }
-.animate-spin-custom  { animation: spin 0.8s linear infinite; }
-.animate-grow-vertical { animation: growBarVertical 0.8s ease both; }
-.animate-grow-horizontal { animation: growBarHorizontal 0.8s ease both; }
-
 /* ─── Cards ──────────────────────────────────────────────────────────────── */
 .card {
   background: var(--white);
@@ -283,16 +276,6 @@ a:where(:not([data-slot], [data-slot] *)):hover { color: var(--primary-dark); }
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
-}
-
-.stat-card-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.25rem;
 }
 
 .stat-card-body {
@@ -386,10 +369,6 @@ a:where(:not([data-slot], [data-slot] *)):hover { color: var(--primary-dark); }
   padding: 0.4rem 0.875rem;
   font-size: 0.875rem;
 }
-.btn-lg {
-  padding: 0.875rem 1.75rem;
-  font-size: 1rem;
-}
 
 /* ─── Form Elements ──────────────────────────────────────────────────────── */
 .form-group { display: flex; flex-direction: column; gap: 0.375rem; }
@@ -454,14 +433,7 @@ textarea.form-input {
   font-weight: 600;
   white-space: nowrap;
 }
-.badge-waiting  { background: #fef9c3; color: #854d0e; }
-.badge-on_progress { background: #dbeafe; color: #1e40af; }
-.badge-done     { background: #dcfce7; color: #166534; }
-.badge-cancelled, .badge-rejected { background: #fee2e2; color: #991b1b; }
-.badge-admin    { background: #ede9fe; color: #5b21b6; }
 .badge-technician { background: #dbeafe; color: #1e40af; }
-.badge-sales    { background: #d1fae5; color: #065f46; }
-.badge-customer { background: var(--cream-dark); color: var(--text-secondary); }
 
 /* ─── Table ──────────────────────────────────────────────────────────────── */
 .table-wrapper {
@@ -513,19 +485,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
 }
 
 /* ─── Modals ──────────────────────────────────────────────────────────────── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(4px);
-  z-index: 100;
-  display: flex;
-  align-items: flex-start;      /* don't center — let the modal sit at top + padded */
-  justify-content: center;
-  padding: 1.5rem 1rem;         /* vertical padding so modal is inset from edges */
-  overflow-y: auto;             /* entire overlay scrolls if modal is very tall */
-  animation: fadeIn 0.2s ease;
-}
 
 .modal {
   background: var(--white);
@@ -541,43 +500,7 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   margin: auto;                      /* self-center vertically when content fits */
 }
 
-.modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-  gap: 1rem;
-  position: sticky;
-  top: -2rem;               /* offset equal to modal padding so it sticks at the top edge */
-  background: var(--white);
-  padding-top: 0.25rem;
-  padding-bottom: 0.75rem;
-  z-index: 1;
-  margin-top: -0.25rem;
-}
-
-.modal-title { font-size: 1.125rem; font-weight: 700; }
-.modal-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 0.25rem;
-  border-radius: var(--radius-sm);
-  transition: color 0.2s ease;
-}
-.modal-close:hover { color: var(--text-primary); }
-
 /* ─── Chat ────────────────────────────────────────────────────────────────── */
-.chat-container {
-  display: flex;
-  flex-direction: column;
-  height: 400px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  background: var(--cream);
-}
 
 .chat-messages {
   flex: 1;
@@ -622,66 +545,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
 }
 
 /* ─── File Upload ─────────────────────────────────────────────────────────── */
-.file-upload-area {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius-lg);
-  padding: 2rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 0.375rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: var(--cream);
-  user-select: none;
-  position: relative;
-}
-.file-upload-area:hover {
-  border-color: var(--primary);
-  background: rgba(22, 70, 157, 0.04);
-  box-shadow: 0 0 0 4px rgba(22, 70, 157, 0.06);
-  transform: translateY(-1px);
-}
-.file-upload-area:hover svg {
-  transform: scale(1.1) translateY(-2px);
-  color: var(--primary) !important;
-  transition: transform 0.2s ease;
-}
-.file-upload-area:active {
-  transform: translateY(0);
-  box-shadow: none;
-}
-.file-upload-area.dragover {
-  border-color: var(--primary);
-  background: rgba(22, 70, 157, 0.08);
-  box-shadow: 0 0 0 4px rgba(22, 70, 157, 0.12);
-  transform: scale(1.01);
-}
-
-.file-preview-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.file-preview-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
-  background: var(--white);
-  border: 1.5px solid var(--border-light);
-  border-radius: var(--radius-md);
-  transition: all 0.15s ease;
-  cursor: default;
-}
-.file-preview-item:hover {
-  border-color: var(--primary);
-  background: rgba(22, 70, 157, 0.02);
-  box-shadow: var(--shadow-sm);
-}
 
 /* ─── Rich Text Editor ───────────────────────────────────────────────────── */
 .tiptap-editor {
@@ -739,47 +602,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
 }
 
 /* ─── Tag Input ───────────────────────────────────────────────────────────── */
-.tag-input-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-  padding: 0.5rem;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--white);
-  min-height: 2.75rem;
-  cursor: text;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-.tag-input-container:focus-within {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(22, 70, 157, 0.1);
-}
-
-.tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  background: var(--primary);
-  color: var(--white);
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  animation: fadeIn 0.15s ease;
-}
-
-.tag-chip button {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.8);
-  cursor: pointer;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  transition: color 0.15s;
-}
-.tag-chip button:hover { color: var(--white); }
 
 .tag-input {
   border: none;
@@ -794,38 +616,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
 }
 
 /* ─── File Upload ─────────────────────────────────────────────────────────── */
-.file-upload-area {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius-lg);
-  padding: 2rem;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: var(--cream);
-  position: relative;
-}
-.file-upload-area:hover, .file-upload-area.dragover {
-  border-color: var(--primary);
-  background: rgba(22, 70, 157, 0.04);
-}
-
-.file-preview-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.file-preview-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: var(--white);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-}
 
 /* ─── Spinner ─────────────────────────────────────────────────────────────── */
 .spinner {
@@ -838,7 +628,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   animation: spin 0.7s linear infinite;
 }
 .spinner-sm { width: 1rem; height: 1rem; border-width: 1.5px; }
-.spinner-lg { width: 2rem; height: 2rem; border-width: 3px; }
 
 /* ─── Animations / Keyframes ──────────────────────────────────────────────── */
 @keyframes shimmer {
@@ -872,18 +661,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   animation: shimmer 1.4s ease infinite;
   border-radius: var(--radius-md);
 }
-.skeleton-text { height: 0.875rem; border-radius: 999px; }
-.skeleton-title { height: 1.5rem; border-radius: 999px; }
-.skeleton-card {
-  background: var(--white);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-light);
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
 
 /* ─── Empty State ─────────────────────────────────────────────────────────── */
 .empty-state {
@@ -901,7 +678,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   .dashboard-content {
     padding: 1.25rem 1rem;
   }
-
 
   .modal {
     padding: 1.5rem;
@@ -929,32 +705,10 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
 
 /* ─── Table / Card toggle (responsive) ────────────────────────────────────── */
 /* Desktop: show table, hide cards */
-.admin-ticket-table { display: block; }
-.admin-ticket-cards { display: none; }
 
 /* Mobile: hide table, show cards */
-@media (max-width: 768px) {
-  .admin-ticket-table { display: none; }
-  .admin-ticket-cards { display: block; }
-}
 
 /* ─── Mobile ticket card ───────────────────────────────────────────────────── */
-.mobile-ticket-card {
-  padding: 0.875rem 1rem;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.625rem;
-  background: var(--white);
-  cursor: pointer;
-  transition: box-shadow 0.15s, border-color 0.15s;
-}
-.mobile-ticket-card:hover {
-  box-shadow: var(--shadow-sm);
-  border-color: var(--border);
-}
 
 /* ─── Admin stats grid ─────────────────────────────────────────────────────── */
 .admin-stats-grid {
@@ -975,22 +729,9 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
     overflow-x: hidden;
   }
   /* Only allow scroll on tables that are not inside card-toggle wrappers */
-  .admin-ticket-table .table-wrapper {
-    overflow-x: auto;
-  }
 }
 
 /* ─── Customer stats grid 2x2 ───────────────────────────────────────────────── */
-.customer-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.875rem;
-}
-@media (min-width: 640px) {
-  .customer-stats-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
 
 @theme inline {
   /* Inter, loaded by the <link> in app/layout.tsx. This was the circular
@@ -1120,40 +861,6 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   }
 }
 /* ─── Global Component Primitives ────────────────────────────────────────── */
-@layer components {
-  .radio-card {
-    @apply p-3 md:p-4 border-2 rounded-lg cursor-pointer text-left transition-all flex items-center gap-3 bg-card text-card-foreground border-border hover:border-primary/50;
-  }
-  .radio-card-active {
-    @apply border-primary bg-primary/5;
-  }
-  .radio-card-circle {
-    @apply w-5 h-5 rounded-full border-2 border-border flex-shrink-0 transition-colors;
-  }
-  .radio-card-active .radio-card-circle {
-    @apply border-primary bg-primary;
-  }
-
-  .toggle-container {
-    @apply flex bg-card border-[1.5px] border-border rounded-lg p-1 gap-1;
-  }
-  .toggle-btn {
-    @apply flex-1 flex flex-col items-center justify-center p-2 rounded-[calc(var(--radius-lg)-4px)] border-none cursor-pointer font-semibold text-sm transition-all;
-  }
-  .toggle-btn-active {
-    @apply bg-primary text-primary-foreground;
-  }
-  .toggle-btn-inactive {
-    @apply bg-transparent text-muted-foreground hover:bg-secondary/50;
-  }
-
-  .step-indicator-line {
-    @apply flex-1 h-[2px] transition-colors;
-  }
-  .step-indicator-circle {
-    @apply w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold transition-all;
-  }
-}
 /* ─── RMA ─────────────────────────────────────────────────────────────────── */
 .rma-action-btn {
   display: flex;
@@ -1176,21 +883,4 @@ tbody td:where(:not([data-slot], [data-slot] *)) {
   border-color: var(--primary);
 }
 .rma-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-
-.rma-queue-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  background: var(--white);
-  text-decoration: none;
-  color: inherit;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.rma-queue-card:hover {
-  border-color: var(--primary);
-  box-shadow: var(--shadow-sm);
-}
 

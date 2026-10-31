@@ -1118,6 +1118,23 @@ Checks: `tsc` clean; repo lint 86 → 84 problems; tests 1025 pass; `npm run bui
 
 **Not done, needs the owner:** the app has no `not-found.tsx`, so a mistyped share link shows Next's default 404 — a page of its own means new customer-facing words. The public page reads `Date.now()` during render (server component, so no hydration fault) and keeps an unused `shareUrl`; both pre-existing and left alone.
 
+### SPRINT UI-7a 2026-10-31 — UI overhaul, Phase 7a: shared leftovers and dead CSS
+Owner's go-ahead 2026-10-31 while the WIP on `feat/catalog-pcbuild-upgrade` is still uncommitted: nothing here edits a WIP file. 7b — dropping the global reset and the rest of the legacy CSS — waits for the WIP and the b-phases.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| UI7a.1 | **Badge + Modal as adapters** | ✅ `088c498` | Same props, so every caller — WIP pages included — changes look untouched. `Badge` draws through `lib/status-display.ts` (same "Waiting for Work / for Technician / Paused" logic, no emoji); `Modal` is the shadcn Dialog, `maxWidth` kept but capped at the screen less 1rem a side. Delete both in 7b |
+| UI7a.2 | **TicketChat, FileUpload, FilePreview** | ✅ `ef3ae42` | FileUpload's drop zone is a real `<button>` (a keyboard could not reach the old div); remove buttons named and 44px. FilePreview still honours a caller's legacy `className`. `/dev/ui` gains "Komponen bersama" to check them without walking a wizard |
+| UI7a.3 | **TagInput, PickupMethodSelector, RupiahInput** | ✅ `510db18` | The pickup label is now tied to its select. `RichTextEditor` left alone: only `app/customer/*` (dead code, BL8/BL29) uses it |
+| UI7a.4 | **Daftar Jasa + create headers** | ✅ `5d53804` | DataTable (phone cards); "Ubah" opens a Dialog instead of replacing the table row. Admin / technician "Create New Ticket" get a PageHeader over the legacy form |
+| UI7a.5 | **Dead CSS** | ✅ `cd2fae3` | `globals.css` 1197 → 887 lines: 65 selectors no source mentions, in this branch **or** in the WIP versions (script checks both trees and `name-${x}` forms). Kept: `.dark`, `.is-editor-empty` (Tiptap), `.tiptap-content` and every class the WIP still reads |
+| UI7a.6 | **Verification** | ✅ | Admin ticket detail (badges, chat, pickup select), the RMA "Tahan" action through the Modal adapter (opened and closed, nothing saved), Daftar Jasa with its edit dialog (not saved), create page, `/dev/ui` demos — 360 and 1024, no horizontal scroll |
+| UI7b | **Drop the unlayered reset + `[data-slot]` exemption, remaining legacy classes and tokens, the Badge/Modal adapters; final numbers into `docs/ui-audit.md`** | ⬜ | After the WIP is committed and 3b / 4b / 5b / 6b are done |
+
+Checks: `tsc` clean; repo lint 84 → 83 problems; tests 1025 pass; `npm run build` passes. Inline styles in the 14 files 7a touched: 70 → 1 (a computed width).
+
+**Still open for the owner:** delete the unused `LeaderboardSnapshot.tsx` and `TermsModal.tsx`?; dark mode (after 7b); a `not-found.tsx`.
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.

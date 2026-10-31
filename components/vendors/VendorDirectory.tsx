@@ -25,6 +25,7 @@ export default async function VendorDirectory({
       supplies_parts: true,
       repairs: true,
       handles_claims: true,
+      location: true,
     },
   });
 
@@ -55,6 +56,7 @@ export default async function VendorDirectory({
                 <tr>
                   <th>Nama</th>
                   <th>Peran</th>
+                  <th>Lokasi</th>
                   <th>Kontak</th>
                   <th>Status</th>
                   <th></th>

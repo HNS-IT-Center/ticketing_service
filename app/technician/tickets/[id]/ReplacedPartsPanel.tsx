@@ -16,8 +16,9 @@ import {
   removeReplacedPartAction,
 } from "@/app/actions/technician";
 import { uploadFailureMessage } from "@/lib/upload-limit";
-import { MAX_QUANTITY, stockAtStore, type CatalogItem } from "@/lib/catalog/items";
+import { MAX_QUANTITY, stockAtStore, type CatalogItem, type StoreRef } from "@/lib/catalog/items";
 import CatalogItemPicker from "@/components/catalog/CatalogItemPicker";
+import CatalogEntryToggle from "@/components/catalog/CatalogEntryToggle";
 
 export type ReplacedPartRow = {
   id: string;
@@ -51,7 +52,7 @@ export default function ReplacedPartsPanel({
   parts,
   canEdit,
   catalogEnabled = false,
-  storeName = null,
+  store = null,
 }: {
   ticketId: string;
   parts: ReplacedPartRow[];
@@ -59,7 +60,7 @@ export default function ReplacedPartsPanel({
   /** Whether the catalogue API is configured; without it only free text is offered. */
   catalogEnabled?: boolean;
   /** The ticket's store, to show that store's stock in the search. */
-  storeName?: string | null;
+  store?: StoreRef | null;
 }) {
   const router = useRouter();
   const [part, setPart] = useState<ServicePart>("lcd");
@@ -345,7 +346,7 @@ export default function ReplacedPartsPanel({
                   <span className="text-xs" style={{ color: "#1e40af" }}>
                     SKU {selected.sku}
                     {selected.category ? ` · ${selected.category}` : ""}
-                    {(stockAtStore(selected, storeName) ?? 0) > 0 ? ` · stok toko ini ${stockAtStore(selected, storeName)}` : ""}
+                    {(stockAtStore(selected, store) ?? 0) > 0 ? ` · stok toko ini ${stockAtStore(selected, store)}` : ""}
                   </span>
                 </div>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setSelected(null)}>
@@ -366,27 +367,18 @@ export default function ReplacedPartsPanel({
                   ditambahkan ke Accurate. Pilih dari katalog bila barangnya ada.
                 </p>
                 {catalogEnabled && (
-                  <button
-                    type="button"
-                    className="self-start text-xs underline"
-                    style={{ background: "none", border: 0, color: "var(--primary)", cursor: "pointer", padding: 0 }}
-                    onClick={() => setManual(false)}
-                  >
-                    Cari di katalog barang
-                  </button>
+                  <CatalogEntryToggle to="search" label="Cari di katalog barang" onClick={() => setManual(false)} />
                 )}
               </>
             ) : (
               <>
-                <CatalogItemPicker storeName={storeName} onPick={setSelected} />
-                <button
-                  type="button"
-                  className="self-start text-xs underline"
-                  style={{ background: "none", border: 0, color: "var(--primary)", cursor: "pointer", padding: 0 }}
+                <CatalogItemPicker store={store} onPick={setSelected} />
+                <CatalogEntryToggle
+                  to="manual"
+                  question="Tidak ada di katalog?"
+                  label="Tulis manual"
                   onClick={() => setManual(true)}
-                >
-                  Tidak ada di katalog? Tulis manual
-                </button>
+                />
               </>
             )}
           </div>

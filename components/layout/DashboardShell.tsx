@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import { DraftScopeProvider } from "@/lib/draft";
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import {
@@ -672,7 +673,9 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
         </header>
 
         {/* Page content */}
-        <main className="dashboard-content">{children}</main>
+        <main className="dashboard-content">
+          <DraftScopeProvider userId={userId}>{children}</DraftScopeProvider>
+        </main>
       </div>
     </div>
   );

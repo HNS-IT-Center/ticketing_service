@@ -17,6 +17,7 @@ import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import { ticketPartyName } from "@/lib/ticket-party";
 import ChargesPanel from "@/components/service/ChargesPanel";
 import { loadChargesPanel } from "@/lib/charges-server";
+import { PcComponentsCard, UpgradesCard } from "@/components/tickets/IntakeItems";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -281,17 +282,9 @@ export default async function SalesTicketDetailPage({
 
           {chargesPanel && <ChargesPanel ticketId={ticket.id} {...chargesPanel} />}
 
-          {/* PC Components */}
-          {ticket.pc_components.length > 0 && (
-            <div className="card">
-              <h3 style={{ marginBottom: "1rem" }}>PC Components</h3>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {ticket.pc_components.map((c) => (
-                  <span key={c.id} className="badge badge-technician">{c.component_name}</span>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* What came in: upgrades with the item fitted, PC build components */}
+          <UpgradesCard details={ticket.upgrade_details} />
+          <PcComponentsCard components={ticket.pc_components} />
 
           {/* PC Build Handover Verification */}
           {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} />}

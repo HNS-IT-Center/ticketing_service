@@ -99,11 +99,17 @@ export default async function InvoicePage({
         <PrintButton />
       </div>
 
-      {(invoice.isDraft || ticket.checking_fee !== null) && (
+      {(invoice.isDraft || invoice.awaitingCode > 0 || ticket.checking_fee !== null) && (
         <div className="inv-notes no-print">
           {invoice.reasons.map((r) => (
             <p key={r}>⚠ {r} Faktur tercetak sebagai DRAF sampai dilengkapi di Rincian Biaya.</p>
           ))}
+          {invoice.awaitingCode > 0 && (
+            <p>
+              ℹ {invoice.awaitingCode} part belum punya kode Accurate — barangnya belum diterima di Accurate. Kasir
+              memilihnya manual, atau tunggu kodenya dimasukkan lewat &ldquo;Masukkan kode&rdquo; di Rincian Biaya.
+            </p>
+          )}
           {ticket.checking_fee !== null && (
             <p>
               ℹ Tiket ini mencatat biaya cek {formatRupiah(Number(ticket.checking_fee))} saat intake. Biaya itu tidak otomatis
@@ -178,9 +184,9 @@ export default async function InvoicePage({
               invoice.lines.map((l) => (
                 <tr key={l.no}>
                   {!struk && <td className="inv-no">{l.no}</td>}
-                  {!struk && <td className="inv-code-col">{l.code ?? "—"}</td>}
+                  {!struk && <td className="inv-code-col">{l.code ?? (l.awaitingCode ? "menunggu kode" : "—")}</td>}
                   <td>
-                    {struk && <div className="inv-code-col">{l.code ?? "—"}</div>}
+                    {struk && <div className="inv-code-col">{l.code ?? (l.awaitingCode ? "menunggu kode" : "—")}</div>}
                     {l.description}
                     {struk && l.unitPrice !== null && l.quantity > 1 && (
                       <div className="inv-muted">

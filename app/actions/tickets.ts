@@ -15,6 +15,8 @@ import { ticketsListHrefForRoleName } from "@/lib/routes";
 import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
 import type { CatalogItem } from "@/lib/catalog/items";
+import { parsePostedItems, parseUpgradeSelections, typedItems } from "@/lib/catalog/picked-items";
+import { resolvePostedItems, type ResolvedItem } from "@/lib/catalog/resolve-picked";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
@@ -144,6 +146,39 @@ export async function createTicketAction(formData: FormData) {
       };
     }
     if (!deviceCatalog) return { error: "Unit tidak ditemukan di katalog." };
+  }
+
+  // A PC build's components and the item fitted for each upgrade, picked from
+  // the catalogue or typed. Picked items are re-read by id like the unit above.
+  // All of it is settled before any upload, so a list the catalogue cannot
+  // confirm stores nothing at all.
+  let pcComponents: ResolvedItem[] = [];
+  let upgradeRows: { upgrade_id: string; item: ResolvedItem | null }[] = [];
+  if (ticket_type === "pc_build") {
+    // A form loaded before this release still posts the old plain names.
+    const posted = formData.has("pc_components_json")
+      ? parsePostedItems(formData.get("pc_components_json") as string | null)
+      : { ok: true as const, value: typedItems(formData.getAll("pcComponents") as string[]) };
+    if (!posted.ok) return { error: posted.error };
+    const resolved = await resolvePostedItems(posted.value);
+    if (!resolved.ok) return { error: resolved.error };
+    pcComponents = resolved.items;
+  }
+  if (ticket_type === "upgrade") {
+    const selections = formData.has("upgrade_selections_json")
+      ? parseUpgradeSelections(formData.get("upgrade_selections_json") as string | null)
+      : {
+          ok: true as const,
+          value: (formData.getAll("upgrade_ids") as string[]).filter(Boolean).map((upgradeId) => ({ upgradeId, item: null })),
+        };
+    if (!selections.ok) return { error: selections.error };
+    const resolved = await resolvePostedItems(selections.value.flatMap((s) => (s.item ? [s.item] : [])));
+    if (!resolved.ok) return { error: resolved.error };
+    let next = 0;
+    upgradeRows = selections.value.map((s) => ({
+      upgrade_id: s.upgradeId,
+      item: s.item ? (resolved.items.at(next++) ?? null) : null,
+    }));
   }
 
   // Generate ticket code
@@ -334,25 +369,38 @@ export async function createTicketAction(formData: FormData) {
       break;
     }
     case "upgrade": {
-      const upgradeIds = formData.getAll("upgrade_ids") as string[];
-      if (upgradeIds.length > 0) {
+      if (upgradeRows.length > 0) {
         followUps.push(
           db.ticketUpgradeDetail.createMany({
-            data: upgradeIds.map((id) => ({ ticket_id: ticket.id, upgrade_id: id })),
+            data: upgradeRows.map(({ upgrade_id, item }) => ({
+              ticket_id: ticket.id,
+              upgrade_id,
+              item_name: item?.name ?? null,
+              catalog_item_id: item?.catalog_item_id ?? null,
+              sku: item?.sku ?? null,
+              catalog_category: item?.catalog_category ?? null,
+              quantity: item?.quantity ?? 1,
+            })),
           })
         );
       }
       break;
     }
     case "pc_build": {
-      const components = formData.getAll("pcComponents") as string[];
       const pcOps: Promise<unknown>[] = [
         db.ticketPcBuildDetail.create({ data: { ticket_id: ticket.id, first_build_url: firstUploadedUrl } }),
       ];
-      if (components.length > 0) {
+      if (pcComponents.length > 0) {
         pcOps.push(
           db.ticketPcBuildComponent.createMany({
-            data: components.map((name) => ({ ticket_id: ticket.id, component_name: name })),
+            data: pcComponents.map((c) => ({
+              ticket_id: ticket.id,
+              component_name: c.name,
+              catalog_item_id: c.catalog_item_id,
+              sku: c.sku,
+              catalog_category: c.catalog_category,
+              quantity: c.quantity,
+            })),
           })
         );
       }

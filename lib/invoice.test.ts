@@ -28,12 +28,21 @@ describe("buildInvoice", () => {
       line({ kind: "other", description: "Kabel", unit_price: 15000 }),
     ]);
     expect(inv.lines).toEqual([
-      { no: 1, code: "2506000002", description: "LCD 14 FHD", quantity: 1, unitPrice: 900000, amount: 900000 },
-      { no: 2, code: "100688", description: "Install Ulang OS", quantity: 2, unitPrice: 100000, amount: 200000 },
+      { no: 1, code: "2506000002", awaitingCode: false, description: "LCD 14 FHD", quantity: 1, unitPrice: 900000, amount: 900000 },
+      { no: 2, code: "100688", awaitingCode: false, description: "Install Ulang OS", quantity: 2, unitPrice: 100000, amount: 200000 },
       // No code: the cashier picks it in Accurate by hand.
-      { no: 3, code: null, description: "Kabel", quantity: 1, unitPrice: 15000, amount: 15000 },
+      { no: 3, code: null, awaitingCode: false, description: "Kabel", quantity: 1, unitPrice: 15000, amount: 15000 },
     ]);
-    expect(inv).toMatchObject({ total: 1115000, isDraft: false, reasons: [] });
+    expect(inv).toMatchObject({ total: 1115000, awaitingCode: 0, isDraft: false, reasons: [] });
+  });
+
+  it("marks a part still waiting for its Accurate code, without making it a draft", () => {
+    const inv = buildInvoice([
+      line({ kind: "part", description: "Baterai", unit_price: 450000, is_part: true, accurate_code: null }),
+      line({ kind: "other", description: "Kabel", unit_price: 15000 }),
+    ]);
+    expect(inv.lines.map((l) => l.awaitingCode)).toEqual([true, false]);
+    expect(inv).toMatchObject({ awaitingCode: 1, isDraft: false, total: 465000 });
   });
 
   it("is a draft while a line has no price — the total would be short", () => {

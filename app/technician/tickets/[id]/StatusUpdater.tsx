@@ -13,7 +13,7 @@ import {
 import Modal from "@/components/ui/Modal";
 import { uploadFailureMessage, UPLOAD_BUDGET_MB } from "@/lib/upload-limit";
 import DraftBanner from "@/components/ui/DraftBanner";
-import { useDraft } from "@/lib/draft";
+import { useDraft, useDraftKey } from "@/lib/draft";
 
 /** Matches MAX_DAMAGE_PHOTOS in app/actions/rma.ts. */
 const MAX_DAMAGE_PHOTOS = 5;
@@ -132,7 +132,7 @@ export default function StatusUpdater({
   // The handover form is long and typed on a phone, beside the unit. Kept per
   // ticket so a reload does not cost the technician the whole examination.
   // Photos and video cannot be kept and must be picked again.
-  const handoverDraft = useDraft(`rma-handover:${ticketId}`, {
+  const handoverDraft = useDraft(useDraftKey(`rma-handover:${ticketId}`), {
     unitOwnership, stockOrigin, snVerified, physicalCondition, faultDescription,
     testResult, invoiceUrl, recommendEligible, recommendNote,
   });

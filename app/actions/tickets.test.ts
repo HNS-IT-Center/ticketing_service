@@ -382,7 +382,7 @@ describe("createTicketAction — the unit picked from the Accurate catalogue", (
     unit: "PCS",
     serialized: true,
     stockTotal: 0,
-    warehouses: [],
+    warehouses: [], claimWarehouses: [],
   };
   const unitOf = (sn: string) =>
     db.ticket.findFirstOrThrow({
@@ -451,5 +451,126 @@ describe("createTicketAction — the unit picked from the Accurate catalogue", (
     const fd = claimForm({ ticket_type: "service", device_sn: "SN-LONG-1", purchase_date: null, device_catalog_item_id: "9102" });
     expect(await createTicketAction(fd)).toMatchObject({ success: true });
     expect((await unitOf("SN-LONG-1")).device_name).toHaveLength(240);
+  });
+});
+
+describe("createTicketAction — PC build components and upgrade items from the catalogue", () => {
+  const item = (id: number, sku: string, name: string, category: string) => ({
+    id, sku, name, category, brand: null, type: "INVENTORY", unit: "PCS", serialized: false, stockTotal: 3, warehouses: [], claimWarehouses: [],
+  });
+  const gpu = item(9201, "VGA-RTX4060", "MSI RTX 4060 VENTUS 2X 8GB", "VGA CARD");
+  const ram = item(9202, "RAM-DDR4-8", "RAM KINGSTON 8GB DDR4 3200", "MEMORY");
+  let upgradeRam: string;
+  let upgradeSsd: string;
+
+  const ticketBySn = (sn: string) =>
+    db.ticket.findFirst({
+      where: { store_location_id: storeId, device_sn: sn },
+      select: {
+        id: true,
+        pc_components: { select: { component_name: true, catalog_item_id: true, sku: true, catalog_category: true, quantity: true } },
+        upgrade_details: {
+          select: { upgrade_id: true, item_name: true, catalog_item_id: true, sku: true, catalog_category: true, quantity: true },
+        },
+      },
+    });
+  const build = (sn: string, extra: Record<string, string | null>) =>
+    claimForm({ ticket_type: "pc_build", device_type: "PC_Office", device_sn: sn, purchase_date: null, ...extra });
+  const upgrade = (sn: string, extra: Record<string, string | null>) =>
+    claimForm({ ticket_type: "upgrade", device_sn: sn, purchase_date: null, ...extra });
+  const byName = <T extends { component_name: string }>(rows: T[]) => [...rows].sort((a, b) => a.component_name.localeCompare(b.component_name));
+
+  beforeAll(async () => {
+    catalog.items.set(gpu.id, gpu);
+    catalog.items.set(ram.id, ram);
+    [upgradeRam, upgradeSsd] = await Promise.all([
+      db.upgrade.create({ data: { name: `${CODE} RAM`, points: 2 }, select: { id: true } }).then((u) => u.id),
+      db.upgrade.create({ data: { name: `${CODE} SSD`, points: 2 }, select: { id: true } }).then((u) => u.id),
+    ]);
+  });
+
+  afterAll(async () => {
+    // The upgrades are referenced without a cascade, so their tickets go first.
+    await db.ticket.deleteMany({ where: { store_location_id: storeId, ticket_type: "upgrade" } });
+    await db.upgrade.deleteMany({ where: { id: { in: [upgradeRam, upgradeSsd] } } });
+  });
+
+  it("records a picked component with the catalogue's name, SKU and quantity, and a typed one as typed", async () => {
+    const posted = [
+      { catalogItemId: gpu.id, name: "rtx yang murah", quantity: 1 },
+      { catalogItemId: null, name: "Casing bawaan customer", quantity: 1 },
+      { catalogItemId: ram.id, name: "", quantity: 2 },
+    ];
+    expect(await createTicketAction(build("SN-PCB-1", { pc_components_json: JSON.stringify(posted) }))).toMatchObject({ success: true });
+    const t = await ticketBySn("SN-PCB-1");
+    expect(byName(t!.pc_components)).toEqual([
+      { component_name: "Casing bawaan customer", catalog_item_id: null, sku: null, catalog_category: null, quantity: 1 },
+      { component_name: "MSI RTX 4060 VENTUS 2X 8GB", catalog_item_id: gpu.id, sku: "VGA-RTX4060", catalog_category: "VGA CARD", quantity: 1 },
+      { component_name: "RAM KINGSTON 8GB DDR4 3200", catalog_item_id: ram.id, sku: "RAM-DDR4-8", catalog_category: "MEMORY", quantity: 2 },
+    ]);
+  });
+
+  it("still accepts the plain names a form loaded before this release posts", async () => {
+    const fd = build("SN-PCB-OLD", {});
+    fd.append("pcComponents", "RTX 4060");
+    fd.append("pcComponents", "i5-13400F");
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    const t = await ticketBySn("SN-PCB-OLD");
+    expect(byName(t!.pc_components).map((c) => [c.component_name, c.sku, c.quantity])).toEqual([
+      ["i5-13400F", null, 1],
+      ["RTX 4060", null, 1],
+    ]);
+  });
+
+  it("refuses an id the catalogue does not know, a broken list, or a catalogue that is down — and creates nothing", async () => {
+    const unknown = JSON.stringify([{ catalogItemId: 777777, name: "x", quantity: 1 }]);
+    expect(await createTicketAction(build("SN-PCB-BAD-1", { pc_components_json: unknown }))).toMatchObject({
+      error: expect.stringMatching(/tidak ditemukan di katalog/),
+    });
+    expect(await createTicketAction(build("SN-PCB-BAD-2", { pc_components_json: "[{" }))).toMatchObject({
+      error: expect.stringMatching(/tidak terbaca/),
+    });
+    catalog.down = true;
+    try {
+      const picked = JSON.stringify([{ catalogItemId: gpu.id, name: "", quantity: 1 }]);
+      expect(await createTicketAction(build("SN-PCB-BAD-3", { pc_components_json: picked }))).toMatchObject({
+        error: expect.stringContaining("ketik namanya secara manual"),
+      });
+    } finally {
+      catalog.down = false;
+    }
+    expect(await db.ticket.count({ where: { store_location_id: storeId, device_sn: { startsWith: "SN-PCB-BAD-" } } })).toBe(0);
+  });
+
+  it("records the item fitted for each upgrade, and an upgrade chosen without one", async () => {
+    const selections = [
+      { upgradeId: upgradeRam, item: { catalogItemId: ram.id, name: "ram", quantity: 2 } },
+      { upgradeId: upgradeSsd, item: null },
+    ];
+    expect(await createTicketAction(upgrade("SN-UPG-1", { upgrade_selections_json: JSON.stringify(selections) }))).toMatchObject({
+      success: true,
+    });
+    const t = await ticketBySn("SN-UPG-1");
+    const byUpgrade = Object.fromEntries(t!.upgrade_details.map((d) => [d.upgrade_id, d]));
+    expect(byUpgrade[upgradeRam]).toEqual({
+      upgrade_id: upgradeRam, item_name: "RAM KINGSTON 8GB DDR4 3200", catalog_item_id: ram.id, sku: "RAM-DDR4-8",
+      catalog_category: "MEMORY", quantity: 2,
+    });
+    expect(byUpgrade[upgradeSsd]).toEqual({
+      upgrade_id: upgradeSsd, item_name: null, catalog_item_id: null, sku: null, catalog_category: null, quantity: 1,
+    });
+  });
+
+  it("still accepts the upgrade ids a form loaded before this release posts, and refuses one upgrade chosen twice", async () => {
+    const fd = upgrade("SN-UPG-OLD", {});
+    fd.append("upgrade_ids", upgradeSsd);
+    expect(await createTicketAction(fd)).toMatchObject({ success: true });
+    expect((await ticketBySn("SN-UPG-OLD"))!.upgrade_details).toMatchObject([{ upgrade_id: upgradeSsd, item_name: null }]);
+
+    const twice = JSON.stringify([{ upgradeId: upgradeRam, item: null }, { upgradeId: upgradeRam, item: null }]);
+    expect(await createTicketAction(upgrade("SN-UPG-TWICE", { upgrade_selections_json: twice }))).toMatchObject({
+      error: expect.stringMatching(/dua kali/),
+    });
+    expect(await ticketBySn("SN-UPG-TWICE")).toBeNull();
   });
 });

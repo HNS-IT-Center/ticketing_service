@@ -422,6 +422,18 @@ model TicketUpgradeDetail {
   ticket     Ticket  @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   upgrade_id String
   upgrade    Upgrade @relation(fields: [upgrade_id], references: [id])
+
+  // The item fitted for this upgrade (the RAM or SSD itself), optional: the
+  // upgrade type above carries the points, this says what was put in. Picked
+  // from the company catalogue and kept as a snapshot like a replaced part —
+  // or typed, with no catalogue id, when the catalogue does not hold it.
+  item_name        String? @db.Text
+  catalog_item_id  Int?
+  sku              String?
+  catalog_category String?
+  quantity         Int     @default(1)
+
+  @@index([sku])
 }
 
 model TicketPcBuildDetail {
@@ -436,7 +448,18 @@ model TicketPcBuildComponent {
   id             String @id @default(cuid())
   ticket_id      String
   ticket         Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
-  component_name String
+  // TEXT: catalogue names run to ~120 characters and a typed one can exceed
+  // 191 (the reason Ticket.device_name was widened, W4-1).
+  component_name String @db.Text
+
+  // Picked from the company catalogue at intake (a snapshot, as for a
+  // replaced part), or typed — then all three are null.
+  catalog_item_id  Int?
+  sku              String?
+  catalog_category String?
+  quantity         Int     @default(1)
+
+  @@index([sku])
 }
 
 // ─────────────────────────────────────────────
@@ -920,6 +943,11 @@ model Vendor {
   repairs        Boolean @default(false) // repairs what the shop does not, e.g. board / IC work
   handles_claims Boolean @default(false) // takes warranty claims from the RMA desk
 
+  // In town (LKL) or out of town (ITR), as the shop's supplier list marks it —
+  // an out-of-town vendor means shipping, so the desk wants to see it when it
+  // picks one. Null = not recorded yet.
+  location VendorLocation?
+
   contact    String?  @db.Text
   notes      String?  @db.Text
   is_active  Boolean  @default(true)
@@ -928,6 +956,12 @@ model Vendor {
 
   charges   TicketCharge[]
   rma_cases RmaCase[]
+}
+
+/// Where a vendor is, as the shop's supplier list codes it.
+enum VendorLocation {
+  in_town     // LKL — dalam kota (Batam)
+  out_of_town // ITR — luar kota, the unit is shipped
 }
 
 /// What a line of a service bill is for.

@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Search, Loader2 } from "lucide-react";
-import { MIN_QUERY, stockAtStore, type CatalogItem } from "@/lib/catalog/items";
+import { Search, Loader2, X } from "lucide-react";
+import { MIN_QUERY, stockAtStore, type CatalogItem, type StoreRef } from "@/lib/catalog/items";
 
 /**
  * Search the company catalogue (Accurate, read through data.hnsitcenter.id) and
@@ -10,12 +10,12 @@ import { MIN_QUERY, stockAtStore, type CatalogItem } from "@/lib/catalog/items";
  * nothing here touches stock or writes to Accurate.
  */
 export default function CatalogItemPicker({
-  storeName = null,
+  store = null,
   showStock = true,
   placeholder = "Cari nama barang atau SKU, mis. baterai asus",
   onPick,
 }: {
-  storeName?: string | null;
+  store?: StoreRef | null;
   /** Off for a customer's own unit: the shop's stock says nothing about it. */
   showStock?: boolean;
   placeholder?: string;
@@ -25,6 +25,8 @@ export default function CatalogItemPicker({
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** The query whose answer is on screen. Until it matches, a search is still on its way. */
+  const [answered, setAnswered] = useState("");
   const latest = useRef(0);
 
   useEffect(() => {
@@ -42,20 +44,40 @@ export default function CatalogItemPicker({
       } catch {
         if (ticket === latest.current) setError("Pencarian gagal. Periksa koneksi.");
       } finally {
-        if (ticket === latest.current) setLoading(false);
+        if (ticket === latest.current) {
+          setLoading(false);
+          setAnswered(q);
+        }
       }
     }, 300);
     return () => clearTimeout(timer);
   }, [query]);
 
   const short = query.trim().length < MIN_QUERY;
+  // Busy from the first keystroke, not only once the request leaves: otherwise
+  // "nothing matches" flashed during the debounce, before anything was asked.
+  const busy = !short && (loading || answered !== query.trim());
+
+  const clear = () => {
+    latest.current++;
+    setQuery("");
+    setItems([]);
+    setError(null);
+    setLoading(false);
+    setAnswered("");
+  };
 
   return (
     <div className="flex flex-col gap-2">
       <div style={{ position: "relative" }}>
         <Search size={15} style={{ position: "absolute", left: "0.75rem", top: "50%", transform: "translateY(-50%)", color: "var(--text-muted)" }} />
+        {/* type="text", not "search": the browser's own clear cross sat exactly
+            where the spinner spins, and the two overlapped. One slot, one icon. */}
         <input
-          type="search"
+          type="text"
+          inputMode="search"
+          enterKeyHint="search"
+          autoComplete="off"
           value={query}
           onChange={(e) => {
             setQuery(e.target.value);
@@ -66,17 +88,34 @@ export default function CatalogItemPicker({
           }}
           className="form-input"
           placeholder={placeholder}
-          style={{ paddingLeft: "2.25rem" }}
+          style={{ paddingLeft: "2.25rem", paddingRight: "2.5rem" }}
           aria-label="Cari barang di katalog"
         />
-        {loading && (
-          <Loader2 size={15} style={{ position: "absolute", right: "0.75rem", top: "50%", transform: "translateY(-50%)", animation: "spin 1s linear infinite", color: "var(--primary)" }} />
-        )}
+        <span style={{ position: "absolute", right: "0.5rem", top: "50%", transform: "translateY(-50%)", display: "flex" }}>
+          {busy ? (
+            <Loader2 size={16} aria-label="Mencari" style={{ animation: "spin 1s linear infinite", color: "var(--primary)", margin: "0.25rem" }} />
+          ) : query ? (
+            <button
+              type="button"
+              onClick={clear}
+              aria-label="Hapus pencarian"
+              style={{ background: "none", border: 0, padding: "0.25rem", cursor: "pointer", color: "var(--text-muted)", display: "flex" }}
+            >
+              <X size={16} />
+            </button>
+          ) : null}
+        </span>
       </div>
 
-      {error && <p className="form-error">{error}</p>}
+      {busy && (
+        <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>
+          Mencari di katalog Accurate…
+        </p>
+      )}
 
-      {!short && !loading && !error && items.length === 0 && (
+      {error && !busy && <p className="form-error">{error}</p>}
+
+      {!short && !busy && !error && items.length === 0 && (
         <p className="text-xs" style={{ color: "var(--text-muted)" }}>
           Tidak ada barang yang cocok. Coba kata lain, atau tulis manual.
         </p>
@@ -88,7 +127,7 @@ export default function CatalogItemPicker({
           style={{ borderColor: "var(--border)", maxHeight: "260px", overflowY: "auto", margin: 0, padding: 0, listStyle: "none" }}
         >
           {items.map((item) => {
-            const here = stockAtStore(item, storeName);
+            const here = stockAtStore(item, store);
             return (
               <li key={item.id} style={{ borderTop: "1px solid var(--border-light)" }}>
                 <button

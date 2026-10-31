@@ -21,6 +21,7 @@ import { servicePartLabel } from "@/lib/service-parts";
 import { ticketPartyName } from "@/lib/ticket-party";
 import ChargesPanel from "@/components/service/ChargesPanel";
 import { loadChargesPanel } from "@/lib/charges-server";
+import { PcComponentsCard, UpgradesCard } from "@/components/tickets/IntakeItems";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -429,31 +430,10 @@ export default async function AdminTicketDetailPage({
 
           {chargesPanel && <ChargesPanel ticketId={ticket.id} {...chargesPanel} />}
 
-          {/* Upgrade details */}
-          {ticket.upgrade_details.length > 0 && (
-            <div className="card">
-              <h3 style={{ marginBottom: "0.75rem" }}>Upgrade Items</h3>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {ticket.upgrade_details.map((u) => (
-                  <span key={u.id} className="badge badge-technician">
-                    {u.upgrade.name}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
 
-          {/* PC Components */}
-          {ticket.pc_components.length > 0 && (
-            <div className="card">
-              <h3 style={{ marginBottom: "0.75rem" }}>PC Build Components</h3>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-                {ticket.pc_components.map((c) => (
-                  <span key={c.id} className="badge badge-technician">{c.component_name}</span>
-                ))}
-              </div>
-            </div>
-          )}
+          {/* What came in: upgrades with the item fitted, PC build components */}
+          <UpgradesCard details={ticket.upgrade_details} />
+          <PcComponentsCard components={ticket.pc_components} />
 
           {/* PC Build Handover Verification */}
           {ticket.ticket_type === "pc_build" && (

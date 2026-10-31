@@ -65,13 +65,23 @@ describe("rankCatalogDemand", () => {
 describe("outsideCatalog", () => {
   it("groups typed parts by category and name, ignoring case and spacing, showing the commonest spelling", () => {
     const out = outsideCatalog([
-      row({ sku: null, catalogItemId: null, itemName: "Baterai KW 6 cell" }),
-      row({ sku: null, catalogItemId: null, itemName: "baterai  kw 6 CELL" }),
-      row({ sku: null, catalogItemId: null, itemName: "Baterai KW 6 cell", quantity: 2 }),
+      row({ sku: null, catalogItemId: null, itemName: "Baterai KW 6 cell", ticketId: "t3", ticketCode: "NGW-3" }),
+      row({ sku: null, catalogItemId: null, itemName: "baterai  kw 6 CELL", ticketId: "t2", ticketCode: "NGW-2" }),
+      row({ sku: null, catalogItemId: null, itemName: "Baterai KW 6 cell", quantity: 2, ticketId: "t3", ticketCode: "NGW-3" }),
       row({ sku: null, catalogItemId: null, itemName: "Baterai KW 6 cell", part: "other" }),
       row({ sku: "BAT-1" }),
     ]);
-    expect(out[0]).toEqual({ part: "battery", name: "Baterai KW 6 cell", uses: 3, quantity: 4 });
+    expect(out[0]).toEqual({
+      part: "battery",
+      name: "Baterai KW 6 cell",
+      uses: 3,
+      quantity: 4,
+      // Each ticket once, in the order the rows came — the tickets to chase for a code.
+      tickets: [
+        { id: "t3", code: "NGW-3" },
+        { id: "t2", code: "NGW-2" },
+      ],
+    });
     expect(out).toHaveLength(2);
   });
 

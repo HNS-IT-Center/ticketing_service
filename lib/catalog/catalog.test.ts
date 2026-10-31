@@ -1,47 +1,106 @@
 import { describe, expect, it } from "vitest";
-import { stockAtStore, toCatalogItem } from "./items";
+import { CLAIM_WAREHOUSE_IDS, STOCK_WAREHOUSE_IDS, stockAtStore, toCatalogItem } from "./items";
 import { currentMonth, monthRange, summarizeParts, type PartReportRow } from "../reports/parts";
 
-// The shape data.hnsitcenter.id returns, as observed on 2026-10-19.
+// A real answer from data.hnsitcenter.id, 2026-10-26, for a client that is
+// given every warehouse, plus one display row. GRIYA holds 88 of `stock.total`.
 const apiItem = {
   id: 7311,
-  sku: "2505000019",
-  name: "NEW LCD LAPTOP ASUS VIVOBOOOK A1400E 14 INCH",
+  sku: "2503000069",
+  name: "NEW BACKPACK LENOVO BP210 15.6 GREY",
   barcode: null,
   type: "INVENTORY",
   unit: "PCS",
-  category: { id: 210, name: "SPAREPART SERVICE" },
+  category: { id: 210, name: "AKSESSORIES" },
   brand: null,
   status: "active",
   manageSerialNumber: false,
   price: 0,
   stock: {
-    total: 3,
-    availableToSell: 3,
+    total: 172,
+    availableToSell: 172,
     warehouses: [
-      { id: 400, name: "NAGOYAHILL", quantity: 2, countsInTotal: true },
-      { id: 401, name: "NAGOYA WIKA", quantity: 1, countsInTotal: true },
+      { id: 250, name: "GATEWAY", quantity: 24, countsInTotal: true },
+      { id: 350, name: "GRIYA", quantity: 88, countsInTotal: true },
+      { id: 50, name: "GUDANG UTAMA", quantity: 29, countsInTotal: true },
+      { id: 150, name: "INVENTARIS NAGOYA GATEWAY", quantity: 1, countsInTotal: true },
+      { id: 450, name: "KLAIM GARANSI", quantity: 1, countsInTotal: false },
+      { id: 400, name: "NAGOYAHILL", quantity: 27, countsInTotal: true },
+      { id: 2250, name: "GUDANG DISPLAY NAGOYAHILL", quantity: 3, countsInTotal: true },
+      { id: 200, name: "Transit (AOL System)", quantity: 43, countsInTotal: false },
     ],
   },
 };
 
 describe("toCatalogItem", () => {
-  it("keeps what a part record needs", () => {
+  it("keeps what a part record needs, and only the warehouses this app reads", () => {
     expect(toCatalogItem(apiItem)).toEqual({
       id: 7311,
-      sku: "2505000019",
-      name: "NEW LCD LAPTOP ASUS VIVOBOOOK A1400E 14 INCH",
-      category: "SPAREPART SERVICE",
+      sku: "2503000069",
+      name: "NEW BACKPACK LENOVO BP210 15.6 GREY",
+      category: "AKSESSORIES",
       brand: null,
       type: "INVENTORY",
       unit: "PCS",
       serialized: false,
-      stockTotal: 3,
+      stockTotal: 80,
       warehouses: [
-        { name: "NAGOYAHILL", quantity: 2 },
-        { name: "NAGOYA WIKA", quantity: 1 },
+        { id: 250, name: "GATEWAY", quantity: 24 },
+        { id: 50, name: "GUDANG UTAMA", quantity: 29 },
+        { id: 400, name: "NAGOYAHILL", quantity: 27 },
       ],
+      claimWarehouses: [{ id: 450, name: "KLAIM GARANSI", quantity: 1 }],
     });
+  });
+
+  it("keeps claim stock apart: out of the total, the store figures and the store list", () => {
+    const item = toCatalogItem(apiItem)!;
+    expect(CLAIM_WAREHOUSE_IDS.has(350)).toBe(false);
+    expect(item.warehouses.some((w) => CLAIM_WAREHOUSE_IDS.has(w.id))).toBe(false);
+    expect(item.claimWarehouses.map((w) => w.id)).toEqual([450]);
+  });
+
+  it("takes KLAIM PEMASOK by name the day it appears, under any id but Griya's", () => {
+    const item = toCatalogItem({
+      ...apiItem,
+      stock: {
+        total: 0,
+        warehouses: [
+          { id: 450, name: "KLAIM GARANSI", quantity: 1, countsInTotal: false },
+          { id: 9001, name: "Klaim  Pemasok", quantity: 2, countsInTotal: false },
+          { id: 350, name: "KLAIM PEMASOK", quantity: 7, countsInTotal: true },
+        ],
+      },
+    })!;
+    expect(item.claimWarehouses).toEqual([
+      { id: 450, name: "KLAIM GARANSI", quantity: 1 },
+      { id: 9001, name: "Klaim  Pemasok", quantity: 2 },
+    ]);
+    expect(item.warehouses).toEqual([]);
+    expect(item.stockTotal).toBe(0);
+  });
+
+  it("never lets Griya through — not as a row, a name, or a share of the total", () => {
+    expect(STOCK_WAREHOUSE_IDS.has(350)).toBe(false);
+    const item = toCatalogItem(apiItem)!;
+    expect(JSON.stringify(item)).not.toMatch(/griya|350/i);
+    // 172 from the API, less GRIYA's 88, display's 3 and inventaris' 1.
+    expect(item.stockTotal).toBe(172 - 88 - 3 - 1);
+  });
+
+  it("drops a warehouse row whose id is missing or not a number", () => {
+    const item = toCatalogItem({
+      ...apiItem,
+      stock: {
+        total: 9,
+        warehouses: [
+          { id: "350", name: "GRIYA", quantity: 5, countsInTotal: true },
+          { name: "GATEWAY", quantity: 4, countsInTotal: true },
+        ],
+      },
+    })!;
+    expect(item.warehouses).toEqual([]);
+    expect(item.stockTotal).toBe(0);
   });
 
   it("drops an item with no id, SKU or name", () => {
@@ -53,12 +112,23 @@ describe("toCatalogItem", () => {
 
 describe("stockAtStore", () => {
   const item = toCatalogItem(apiItem)!;
-  it("matches a store to its warehouse whatever the spacing and case", () => {
-    expect(stockAtStore(item, "Nagoya Hill")).toBe(2);
-    expect(stockAtStore(item, "nagoya wika")).toBe(1);
+
+  it("reads a known store's own warehouses by id", () => {
+    expect(stockAtStore(item, { code: "NGH", name: "Nagoya Hill" })).toBe(27);
+    // GATEWAY only, not INVENTARIS NAGOYA GATEWAY. Matching by name never
+    // found it: "Nagoya Gateway" is not "GATEWAY".
+    expect(stockAtStore(item, { code: "NGW", name: "Nagoya Gateway" })).toBe(24);
   });
-  it("says nothing for a store with no warehouse", () => {
-    expect(stockAtStore(item, "Batam Center")).toBeNull();
+
+  it("knows a known store with no row holds none", () => {
+    const empty = toCatalogItem({ ...apiItem, stock: { total: 0, warehouses: [] } })!;
+    expect(stockAtStore(empty, { code: "NGW", name: "Nagoya Gateway" })).toBe(0);
+  });
+
+  it("falls back to the name for a store it has no map for", () => {
+    expect(stockAtStore(item, { code: "GU", name: "Gudang Utama" })).toBe(29);
+    expect(stockAtStore(item, { code: "BTC", name: "Batam Center" })).toBeNull();
+    expect(stockAtStore(item, { code: "GRY", name: "Griya" })).toBeNull();
     expect(stockAtStore(item, null)).toBeNull();
   });
 });

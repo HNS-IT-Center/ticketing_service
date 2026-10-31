@@ -2,15 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { createTicketAction } from "@/app/actions/tickets";
-import { AlertCircle, ChevronLeft, ChevronRight, Check, Laptop, Monitor, Printer, Settings, Cpu, HardDrive } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Check, History, Laptop, Monitor, Printer, Settings, Cpu, HardDrive } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import FileUpload from "@/components/ui/FileUpload";
-import TagInput from "@/components/ui/TagInput";
-import DraftBanner from "@/components/ui/DraftBanner";
-import { useDraft } from "@/lib/draft";
+import { useDraft, useDraftKey } from "@/lib/draft";
 import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
+import CatalogItemList from "@/components/catalog/CatalogItemList";
+import { MAX_PC_COMPONENTS, restorePickedItems, toPosted, type PickedItem } from "@/lib/catalog/picked-items";
 
 type Props = {
   storeLocations: { id: string; name: string; code: string }[];
@@ -82,8 +82,11 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [unitPhotoUrls, setUnitPhotoUrls] = useState<string[]>([]);
   const [isUploadingUnitPhotos, setIsUploadingUnitPhotos] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const [pcComponents, setPcComponents] = useState<string[]>([]);
-  
+  // PC build components and the item fitted for each chosen upgrade, picked
+  // from the Accurate catalogue or typed. An upgrade holds at most one item.
+  const [pcComponents, setPcComponents] = useState<PickedItem[]>([]);
+  const [upgradeItems, setUpgradeItems] = useState<Record<string, PickedItem[]>>({});
+
   // Keep overnight/pickup in case needed later, or default
   const [pickupMethod, setPickupMethod] = useState("self_pickup");
   const [isOvernight, setIsOvernight] = useState(false);
@@ -102,9 +105,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     customerName, customerEmail, phone, gridDevice, ticketType, deviceType,
     deviceName, deviceCatalog, deviceSn, purchaseDate, conditions, selectedAccessories,
     customAccessory, notes, checkDiagnosisFee, cleaningPackage, selectedUpgrades,
-    uploadedFileUrls, unitPhotoUrls, pcComponents, pickupMethod, isOvernight,
+    uploadedFileUrls, unitPhotoUrls, pcComponents, upgradeItems, pickupMethod, isOvernight,
   };
-  const draft = useDraft("create-ticket", draftData);
+  const draft = useDraft(useDraftKey("create-ticket"), draftData);
 
   const restoreDraft = () => {
     const d = draft.offer?.data;
@@ -120,7 +123,29 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     setCheckDiagnosisFee(d.checkDiagnosisFee); setCleaningPackage(d.cleaningPackage);
     setSelectedUpgrades(d.selectedUpgrades); setUploadedFileUrls(d.uploadedFileUrls);
     setUnitPhotoUrls(d.unitPhotoUrls ?? []);
-    setPcComponents(d.pcComponents); setPickupMethod(d.pickupMethod); setIsOvernight(d.isOvernight);
+    // Drafts saved before 2026-10-26 hold components as plain strings and no
+    // upgrade items; both come back as what they can be read as.
+    setPcComponents(restorePickedItems(d.pcComponents));
+    setUpgradeItems(
+      Object.fromEntries(Object.entries(d.upgradeItems ?? {}).map(([id, items]) => [id, restorePickedItems(items).slice(0, 1)]))
+    );
+    setPickupMethod(d.pickupMethod); setIsOvernight(d.isOvernight);
+  };
+
+  // Restored on its own, once, as soon as the browser's draft can be read
+  // (after hydration — the server cannot see it). The form autosaves, so asking
+  // first only got in the way (owner, 2026-10-27). It cannot be someone else's
+  // customer: drafts are per account (useDraftKey). Set during render, guarded
+  // to run once — React re-renders straight away, with no effect cascade.
+  const [restoredAt, setRestoredAt] = useState<number | null>(null);
+  if (draft.offer && restoredAt === null) {
+    setRestoredAt(draft.offer.savedAt);
+    restoreDraft();
+  }
+  /** Throw the restored input away and start from an empty form. */
+  const startOver = () => {
+    draft.discard();
+    window.location.reload();
   };
 
   // Shown under the picker when the draft brought back uploads the picker
@@ -275,8 +300,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (deviceCatalog) fd.append("device_catalog_item_id", String(deviceCatalog.id));
       if (deviceSn) fd.append("device_sn", deviceSn);
       if (ticketType === "warranty_claim" && purchaseDate) fd.append("purchase_date", purchaseDate);
-      if (pcComponents.length > 0) {
-        pcComponents.forEach((c) => fd.append("pcComponents", c));
+      if (ticketType === "pc_build") {
+        fd.append("pc_components_json", JSON.stringify(pcComponents.map(toPosted)));
       }
       fd.append("device_condition", conditions.join(", ")); // Saved to new field
 
@@ -293,7 +318,15 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
 
       if (ticketType === "cleaning" && cleaningPackage) fd.append("service_package", cleaningPackage);
       if (ticketType === "upgrade") {
-        selectedUpgrades.forEach(id => fd.append("upgrade_ids", id));
+        fd.append(
+          "upgrade_selections_json",
+          JSON.stringify(
+            selectedUpgrades.map((id) => {
+              const item = upgradeItems[id]?.at(0);
+              return { upgradeId: id, item: item ? toPosted(item) : null };
+            })
+          )
+        );
       }
       
       uploadedFileUrls.forEach(url => fd.append("preuploaded_urls", url));
@@ -330,19 +363,35 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   };
 
   const toggleUpgrade = (id: string) => {
+    const deselecting = selectedUpgrades.includes(id);
     setSelectedUpgrades(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]);
+    // An item picked for an upgrade that is then deselected must not ride
+    // along unseen if the upgrade is chosen again later.
+    if (deselecting) setUpgradeItems((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== id)));
   };
 
+  const store = storeLocations.find((s) => s.id === storeLocationId) ?? null;
+
   return (
-    <div style={{ maxWidth: "700px", margin: "0 auto" }}>
-      {draft.offer && (
-        <div style={{ marginBottom: "1.5rem" }}>
-          <DraftBanner
-            savedAt={draft.offer.savedAt}
-            note={draft.offer.data.uploadedFileUrls.length > 0 ? "Lampiran yang sudah terunggah ikut dipulihkan." : undefined}
-            onRestore={restoreDraft}
-            onDiscard={draft.discard}
-          />
+    <div style={{ maxWidth: "960px", margin: "0 auto" }}>
+      {restoredAt !== null && (
+        <div
+          className="flex flex-wrap items-center gap-2 text-sm"
+          style={{ marginBottom: "1.25rem", color: "var(--text-muted)" }}
+        >
+          <History size={15} style={{ flexShrink: 0 }} />
+          <span>
+            Isian sebelumnya dipulihkan (
+            {new Date(restoredAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            ).
+          </span>
+          <button
+            type="button"
+            onClick={startOver}
+            style={{ background: "none", border: 0, padding: 0, color: "var(--primary)", textDecoration: "underline", cursor: "pointer", fontSize: "inherit" }}
+          >
+            Kosongkan
+          </button>
         </div>
       )}
 
@@ -353,7 +402,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
           const done = step > num;
           const active = step === num;
           return (
-            <div key={label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.375rem" }}>
+            <div key={label} style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.375rem" }}>
               <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
                 {i > 0 && <div style={{ flex: 1, height: "2px", background: done ? "var(--primary)" : "var(--border)" }} />}
                 <div style={{
@@ -367,7 +416,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 </div>
                 {i < STEPS.length - 1 && <div style={{ flex: 1, height: "2px", background: done ? "var(--primary)" : "var(--border)" }} />}
               </div>
-              <span style={{ fontSize: "0.75rem", color: active ? "var(--primary)" : "var(--text-muted)", fontWeight: active ? 600 : 400, whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: "0.75rem", color: active ? "var(--primary)" : "var(--text-muted)", fontWeight: active ? 600 : 400, textAlign: "center", lineHeight: 1.3, padding: "0 0.3rem" }}>
                 {label}
               </span>
             </div>
@@ -398,8 +447,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
               </div>
             </div>
 
-            <div style={{ display: "flex", gap: "1rem" }}>
-              <div className="form-group" style={{ flex: 1 }}>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "1rem" }}>
+              <div className="form-group" style={{ flex: "1 1 200px" }}>
                 <label className="form-label">Assign Technician</label>
                 <select className="form-input" value={technicianId} onChange={e => setTechnicianId(e.target.value)}>
                   <option value="">(Assign Later)</option>
@@ -408,7 +457,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     .map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                 </select>
               </div>
-              <div className="form-group" style={{ flex: 1 }}>
+              <div className="form-group" style={{ flex: "1 1 200px" }}>
                 <label className="form-label">Assign Sales</label>
                 <select className="form-input" value={salesId} onChange={e => setSalesId(e.target.value)}>
                   <option value="">(Assign Later)</option>
@@ -530,8 +579,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
               justifyContent: "center",
               gap: "1.25rem",
               marginTop: "0.5rem",
-              maxWidth: "600px",
-              margin: "0.5rem auto 0"
+              width: "100%",
             }}>
               {DEVICES.filter(d => !(isStoreStock && d.id === "Build PC")).map(d => (
                 <button
@@ -544,7 +592,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     setTicketType(d.id === "Build PC" ? "pc_build" : isStoreStock ? "warranty_claim" : "");
                   }}
                   style={{
-                    flex: "1 1 140px",
+                    flex: "1 1 120px",
                     maxWidth: "180px",
                     display: "flex",
                     flexDirection: "column",
@@ -579,7 +627,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 <label className="form-label" style={{ display: "block", marginBottom: "0.5rem" }}>
                   Jenis Kasus <span style={{ color: "var(--accent)" }}>*</span>
                 </label>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
+                {/* A grid, not a wrapping row: on a phone four buttons wrapped 3 + 1
+                    and left the last one alone; this gives 2 × 2 there, one row here. */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: "0.5rem", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
                 {getAvailableCases().map(caseType => {
                   const labels: Record<string, string> = { service: "Service", cleaning: "Cleaning", upgrade: "Upgrade Part", pc_build: "Build PC", warranty_claim: "Warranty Claim" };
                   return (
@@ -626,16 +676,19 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             {/* Warranty Claim */}
             {ticketType === "warranty_claim" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
-                  <UnitField
-                    catalogEnabled={catalogEnabled}
-                    unit={deviceCatalog}
-                    onUnitChange={setDeviceCatalog}
-                    name={deviceName}
-                    onNameChange={setDeviceName}
-                    label="Nama Perangkat"
-                  />
+                {/* Full width: catalogue names run to two lines, and in half a
+                    column the result list became a tall, narrow strip. */}
+                <UnitField
+                  catalogEnabled={catalogEnabled}
+                  unit={deviceCatalog}
+                  onUnitChange={setDeviceCatalog}
+                  name={deviceName}
+                  onNameChange={setDeviceName}
+                  label="Nama Perangkat"
+                />
 
+                {/* The two short fields side by side; stacked on a phone. */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem", alignItems: "start" }}>
                   <div className="form-group">
                     <label className="form-label">
                       SN <span style={{ color: "var(--accent)" }}>*</span>
@@ -649,26 +702,26 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     <p className="form-help">Diverifikasi ulang oleh RMA sebelum diajukan ke vendor.</p>
                     {errors.deviceSn && <span className="form-error"><AlertCircle size={12} />{errors.deviceSn}</span>}
                   </div>
-                </div>
 
-                <div className="form-group">
-                  <label className="form-label">
-                    Tanggal Pembelian{" "}
-                    {isStoreStock
-                      ? <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
-                      : <span style={{ color: "var(--accent)" }}>*</span>}
-                  </label>
-                  <input
-                    type="date"
-                    className={`form-input ${errors.purchaseDate ? "error" : ""}`}
-                    value={purchaseDate}
-                    max={new Date().toISOString().slice(0, 10)}
-                    onChange={e => setPurchaseDate(e.target.value)}
-                  />
-                  <p className="form-help">
-                    {isStoreStock ? "Kosongkan bila tidak ada." : "Sesuai tanggal pada nota pembelian."}
-                  </p>
-                  {errors.purchaseDate && <span className="form-error"><AlertCircle size={12} />{errors.purchaseDate}</span>}
+                  <div className="form-group">
+                    <label className="form-label">
+                      Tanggal Pembelian{" "}
+                      {isStoreStock
+                        ? <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
+                        : <span style={{ color: "var(--accent)" }}>*</span>}
+                    </label>
+                    <input
+                      type="date"
+                      className={`form-input ${errors.purchaseDate ? "error" : ""}`}
+                      value={purchaseDate}
+                      max={new Date().toISOString().slice(0, 10)}
+                      onChange={e => setPurchaseDate(e.target.value)}
+                    />
+                    <p className="form-help">
+                      {isStoreStock ? "Kosongkan bila tidak ada." : "Sesuai tanggal pada nota pembelian."}
+                    </p>
+                    {errors.purchaseDate && <span className="form-error"><AlertCircle size={12} />{errors.purchaseDate}</span>}
+                  </div>
                 </div>
 
                 <div className="form-group">
@@ -730,14 +783,21 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
             {/* PC Build */}
             {ticketType === "pc_build" && (
               <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                <div className="form-group">
-                  <label className="form-label">PC Components (Optional)</label>
-                  <TagInput
-                    value={pcComponents}
+                <div className="form-group flex flex-col gap-2">
+                  <label className="form-label">
+                    Komponen PC <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
+                  </label>
+                  <CatalogItemList
+                    items={pcComponents}
                     onChange={setPcComponents}
-                    placeholder="Type component name and press Enter (e.g. RTX 4060, i5-13400F)"
+                    catalogEnabled={catalogEnabled}
+                    max={MAX_PC_COMPONENTS}
+                    store={store}
+                    searchPlaceholder="Cari komponen di katalog, mis. rtx 4060"
+                    manualPlaceholder="Nama komponen, mis. i5-13400F"
+                    addAnotherLabel="Tambah komponen"
                   />
-                  <p className="form-help">Enter the list of parts needed or provided for this PC Build.</p>
+                  <p className="form-help">Komponen yang dibeli customer atau disiapkan untuk rakitan ini.</p>
                 </div>
                 
                 <div className="form-group">
@@ -907,6 +967,28 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   </div>
                   {errors.selectedUpgrades && <span className="form-error"><AlertCircle size={12} />{errors.selectedUpgrades}</span>}
                 </div>
+
+                {/* The item fitted for each chosen upgrade: the type keeps its
+                    points, this records what was actually put in. */}
+                {upgrades
+                  .filter((u) => selectedUpgrades.includes(u.id))
+                  .map((u) => (
+                    <div key={u.id} className="form-group flex flex-col gap-2">
+                      <label className="form-label">
+                        Barang untuk {u.name}{" "}
+                        <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
+                      </label>
+                      <CatalogItemList
+                        items={upgradeItems[u.id] ?? []}
+                        onChange={(items) => setUpgradeItems((prev) => ({ ...prev, [u.id]: items }))}
+                        catalogEnabled={catalogEnabled}
+                        max={1}
+                        store={store}
+                        searchPlaceholder="Cari barang di katalog, mis. ram ddr4 8gb"
+                        manualPlaceholder="Nama barang, mis. RAM 8GB DDR4"
+                      />
+                    </div>
+                  ))}
 
                 <div className="form-group">
                   <label className="form-label">Attachment (Upgraded Item) *</label>

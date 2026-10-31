@@ -1,61 +1,31 @@
-type BadgeVariant =
-  | "waiting"
-  | "on_progress"
-  | "rma_process"
-  | "done"
-  | "ready_for_pickup"
-  | "waiting_pickup"
-  | "handed_to_courier"
-  | "delivered"
-  | "completed"
-  | "cancelled"
-  | "rejected"
-  | "Administrator"
-  | "Technician"
-  | "Sales"
-  | "Customer"
-  | "RMA"
-  | "Pending";
+import type { Role, TicketStatus } from "@prisma/client";
+import { roleDisplay, ticketStatusDisplay, TONE_CLASSES, type StatusDisplay } from "@/lib/status-display";
+import { cn } from "@/lib/utils";
 
-const BADGE_LABELS: Record<string, string> = {
-  waiting: "⏳ Waiting",
-  on_progress: "🔵 On Progress",
-  rma_process: "🛡️ RMA Process",
-  done: "✅ Done",
-  ready_for_pickup: "📦 Ready Pickup",
-  waiting_pickup: "🔔 Waiting Pickup",
-  handed_to_courier: "🚚 To Courier",
-  delivered: "📬 Delivered",
-  completed: "🎉 Completed",
-  cancelled: "🔴 Cancelled",
-  rejected: "🔴 Rejected",
-  Administrator: "Admin",
-  Technician: "Technician",
-  Sales: "CS",
-  Customer: "Customer",
-  RMA: "RMA",
-  Pending: "⏳ Menunggu role",
-};
+/**
+ * The legacy badge, kept as an adapter.
+ *
+ * Pages that are not migrated yet still render `<Badge variant=… />`. Rather
+ * than keep the old `.badge-*` CSS and its emoji labels alive for them, this
+ * now draws the same thing StatusBadge and RoleBadge draw — same words, same
+ * tones, from lib/status-display.ts — so every page agrees while the callers
+ * move over one by one. Same props as before; delete once nothing imports it.
+ */
 
-const BADGE_CLASSES: Record<string, string> = {
-  waiting: "badge badge-waiting",
-  on_progress: "badge badge-on_progress",
-  rma_process: "badge badge-on_progress",
-  done: "badge badge-done",
-  ready_for_pickup: "badge badge-done",
-  waiting_pickup: "badge badge-on_progress",
-  handed_to_courier: "badge badge-on_progress",
-  delivered: "badge badge-done",
-  completed: "badge badge-done",
-  cancelled: "badge badge-cancelled",
-  rejected: "badge badge-rejected",
-  Administrator: "badge badge-admin",
-  Technician: "badge badge-technician",
-  Sales: "badge badge-sales",
-  Customer: "badge badge-customer",
-  RMA: "badge badge-sales",
-  Pending: "badge badge-waiting",
-};
+const ROLES: readonly string[] = ["Administrator", "Technician", "Sales", "Customer", "RMA", "Pending"];
+const TICKET_STATUSES: readonly string[] = [
+  "waiting",
+  "on_progress",
+  "rma_process",
+  "done",
+  "ready_for_pickup",
+  "waiting_pickup",
+  "handed_to_courier",
+  "delivered",
+  "completed",
+  "cancelled",
+  "rejected",
+];
 
 export default function Badge({
   variant,
@@ -63,26 +33,36 @@ export default function Badge({
   technicianId,
   isPaused,
 }: {
-  variant: BadgeVariant | string;
+  variant: string;
   label?: string;
   technicianId?: string | null;
   isPaused?: boolean;
 }) {
-  let displayLabel = label ?? BADGE_LABELS[variant] ?? variant.replace(/_/g, " ");
-  let badgeClass = BADGE_CLASSES[variant] ?? "badge";
-
-  if (isPaused && variant === "on_progress") {
-    displayLabel = "⏸️ Paused";
-    badgeClass = "badge badge-waiting"; // Or a specific pause class
-  }
-  if (!label && variant === "waiting") {
-    // Determine dynamic waiting label
-    displayLabel = technicianId ? "⏳ Waiting for Work" : "⏳ Waiting for Technician";
+  let display: StatusDisplay;
+  if (ROLES.includes(variant)) {
+    display = roleDisplay(variant as Role);
+  } else if (TICKET_STATUSES.includes(variant)) {
+    // As before: a waiting ticket says whether someone holds it, and a running
+    // one can read "Paused".
+    display = ticketStatusDisplay(variant as TicketStatus, {
+      hasTechnician: Boolean(technicianId),
+      paused: isPaused,
+    });
+  } else {
+    display = { label: variant.replace(/_/g, " "), tone: "gray" };
   }
 
   return (
-    <span className={badgeClass}>
-      {displayLabel}
+    <span
+      data-slot="status-badge"
+      data-status={variant}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold whitespace-nowrap",
+        TONE_CLASSES[display.tone],
+      )}
+    >
+      <span aria-hidden="true" className="size-1.5 rounded-full bg-current" />
+      {label ?? display.label}
     </span>
   );
 }

@@ -313,7 +313,7 @@ export default function DevUiPage() {
         <OverlayDemos />
       </Section>
 
-      <Section id="shared" title="Komponen bersama" description="FileUpload dan FilePreview: dipakai di dalam alur (langkah wizard, ganti status), jadi dicek di sini.">
+      <Section id="shared" title="Komponen bersama" description="FileUpload, FilePreview, TagInput, RupiahInput: dipakai di dalam alur (langkah wizard, ganti status), jadi dicek di sini.">
         <SharedDemos />
       </Section>
     </main>

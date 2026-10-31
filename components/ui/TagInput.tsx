@@ -41,11 +41,15 @@ export default function TagInput({
 
   return (
     <div
-      className="tag-input-container"
+      data-slot="tag-input"
+      className="flex min-h-11 cursor-text flex-wrap items-center gap-1.5 rounded-lg border border-input bg-card p-1.5 transition-colors focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/50"
       onClick={() => inputRef.current?.focus()}
     >
       {value.map((tag, i) => (
-        <span key={i} className="tag-chip">
+        <span
+          key={i}
+          className="inline-flex items-center gap-1 rounded-full bg-primary py-0.5 pr-1 pl-2.5 text-[0.8125rem] font-medium text-primary-foreground"
+        >
           {tag}
           <button
             type="button"
@@ -54,20 +58,21 @@ export default function TagInput({
               removeTag(i);
             }}
             aria-label={`Remove ${tag}`}
+            className="flex size-6 items-center justify-center rounded-full text-primary-foreground/80 outline-none hover:bg-white/15 hover:text-primary-foreground focus-visible:ring-2 focus-visible:ring-white/70"
           >
-            <X size={12} />
+            <X aria-hidden="true" className="size-3" />
           </button>
         </span>
       ))}
       <input
         ref={inputRef}
         type="text"
-        className="tag-input"
         value={input}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKey}
         onBlur={() => { if (input) addTag(input); }}
         placeholder={value.length === 0 ? placeholder : ""}
+        className="h-8 min-w-32 flex-1 bg-transparent px-1.5 text-base outline-none placeholder:text-muted-foreground md:text-sm"
       />
     </div>
   );

@@ -8,18 +8,87 @@ import toast from "react-hot-toast";
 import {
   Play, Pause, CheckCircle, XCircle,
   PackageCheck, Truck, ArrowRight, HandshakeIcon,
-  ShieldCheck, FileText,
+  ShieldCheck, FileText, Loader2, MailCheck, PartyPopper,
+  type LucideIcon,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import { uploadFailureMessage, UPLOAD_BUDGET_MB } from "@/lib/upload-limit";
 import DraftBanner from "@/components/ui/DraftBanner";
 import { useDraft, useDraftKey } from "@/lib/draft";
+import { FormField } from "@/components/app/FormField";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
+import { TONE_CLASSES, type StatusTone } from "@/lib/status-display";
+import { cn } from "@/lib/utils";
 
 /** Matches MAX_DAMAGE_PHOTOS in app/actions/rma.ts. */
 const MAX_DAMAGE_PHOTOS = 5;
 
 type Status = string;
 type TimeLog = { id?: string; event: string; created_at: Date | string };
+
+/** Solid action colours — the same hues the buttons had, as classes. */
+const TONE_BUTTON = {
+  green: "bg-green-600 text-white hover:bg-green-600/90",
+  cyan: "bg-cyan-600 text-white hover:bg-cyan-600/90",
+  violet: "bg-violet-600 text-white hover:bg-violet-600/90",
+  danger: "bg-destructive text-white hover:bg-destructive/90",
+} as const;
+
+/**
+ * Where the ticket's actions live. On a phone it is pinned to the bottom of
+ * the screen, so Pause / Done stay under the thumb however far the page is
+ * scrolled (owner's choice, 2026-10-31); from md up it sits in the page
+ * header as before. The page leaves room for it at the bottom.
+ */
+function ActionBar({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      data-slot="ticket-action-bar"
+      className="fixed inset-x-0 bottom-0 z-30 flex gap-2 border-t border-border bg-card/95 p-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-4px_16px_rgba(0,0,0,0.08)] backdrop-blur *:flex-1 md:static md:z-auto md:flex-wrap md:justify-end md:border-0 md:bg-transparent md:p-0 md:shadow-none md:backdrop-blur-none md:*:flex-none"
+    >
+      {children}
+    </div>
+  );
+}
+
+function Spinner() {
+  return <Loader2 aria-hidden="true" className="animate-spin" />;
+}
+
+/** The footer of a dialog: actions right-aligned, full width on a phone. */
+function DialogActions({ children }: { children: React.ReactNode }) {
+  return <div className="flex flex-col-reverse gap-2 pt-1 sm:flex-row sm:justify-end">{children}</div>;
+}
+
+/** A labelled block for a control with no single input to point at (a file picker, a group). */
+function FieldBlock({
+  label,
+  required,
+  hint,
+  help,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  help?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <span className="text-sm font-medium text-foreground">
+        {label}
+        {required && <span aria-hidden="true" className="text-destructive"> *</span>}
+        {hint && <span className="font-normal text-muted-foreground"> {hint}</span>}
+      </span>
+      {help && <p className="text-[0.8125rem] text-muted-foreground">{help}</p>}
+      {children}
+    </div>
+  );
+}
 
 // ── Proof step card shown in handover dialogs ─────────────────────────────
 function ProofStepInfo({
@@ -36,43 +105,16 @@ function ProofStepInfo({
   description: string;
 }) {
   return (
-    <div
-      style={{
-        display: "flex",
-        gap: "0.75rem",
-        alignItems: "flex-start",
-        padding: "0.875rem 1rem",
-        background: "linear-gradient(135deg, rgba(22,70,157,0.04) 0%, rgba(22,70,157,0.01) 100%)",
-        border: "1px solid rgba(22,70,157,0.12)",
-        borderRadius: "var(--radius-md)",
-        marginBottom: "1rem",
-      }}
-    >
-      <div
-        style={{
-          width: "2.25rem",
-          height: "2.25rem",
-          borderRadius: "50%",
-          background: "var(--primary-brand, #16469d)",
-          color: "white",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          flexShrink: 0,
-        }}
-      >
+    <div className="flex items-start gap-3 rounded-lg border border-primary/15 bg-primary/5 px-4 py-3.5">
+      <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary text-primary-foreground">
         {icon}
       </div>
-      <div style={{ minWidth: 0 }}>
-        <div style={{ fontSize: "0.65rem", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "0.2rem" }}>
+      <div className="min-w-0">
+        <div className="mb-0.5 text-[0.65rem] font-bold tracking-wider text-muted-foreground uppercase">
           Step {step} of {total}
         </div>
-        <div style={{ fontSize: "0.9375rem", fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.2rem" }}>
-          {title}
-        </div>
-        <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", lineHeight: 1.5 }}>
-          {description}
-        </div>
+        <div className="mb-0.5 text-[0.9375rem] font-bold text-foreground">{title}</div>
+        <div className="text-[0.8125rem] leading-normal text-muted-foreground">{description}</div>
       </div>
     </div>
   );
@@ -270,7 +312,7 @@ export default function StatusUpdater({
           toast.success("Status updated!");
           closeDialog();
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Action error:", err);
         toast.error(uploadFailureMessage(err));
       }
@@ -278,12 +320,12 @@ export default function StatusUpdater({
   };
 
   // ── Status label map ───────────────────────────────────────────────────────
-  const statusLabels: Record<string, { emoji: string; text: string; color: string; bg: string; border: string }> = {
-    done:              { emoji: "✅", text: "Work done — proceed with handover below", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
-    ready_for_pickup:  { emoji: "📦", text: "Item ready at counter — upload pickup handover proof", color: "#0369a1", bg: "#eff6ff", border: "#bfdbfe" },
-    handed_to_courier: { emoji: "🚚", text: "Package handed to courier — waiting for delivery confirmation", color: "#7c3aed", bg: "#faf5ff", border: "#e9d5ff" },
-    delivered:         { emoji: "📬", text: "Delivered — upload delivery proof to auto-complete", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
-    completed:         { emoji: "🎉", text: "Ticket fully completed!", color: "#15803d", bg: "#f0fdf4", border: "#bbf7d0" },
+  const statusLabels: Record<string, { Icon: LucideIcon; text: string; tone: StatusTone }> = {
+    done:              { Icon: CheckCircle, text: "Work done — proceed with handover below", tone: "green" },
+    ready_for_pickup:  { Icon: PackageCheck, text: "Item ready at counter — upload pickup handover proof", tone: "blue" },
+    handed_to_courier: { Icon: Truck, text: "Package handed to courier — waiting for delivery confirmation", tone: "violet" },
+    delivered:         { Icon: MailCheck, text: "Delivered — upload delivery proof to auto-complete", tone: "green" },
+    completed:         { Icon: PartyPopper, text: "Ticket fully completed!", tone: "green" },
   };
 
   // ── Handover section (post-done statuses) ─────────────────────────────────
@@ -292,241 +334,140 @@ export default function StatusUpdater({
 
   if (isInHandover) {
     const info = statusLabels[currentStatus];
+    const canHandover = ticketType === "pc_build" ? isSalesMode : !isSalesMode;
+    const hasAction =
+      canHandover &&
+      ((currentStatus === "done") || currentStatus === "ready_for_pickup" || currentStatus === "handed_to_courier");
 
     return (
       <>
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem", minWidth: 0 }}>
+        <div data-slot="status-updater" className="flex min-w-0 flex-col gap-3">
           {/* Status label */}
           <div
-            style={{
-              padding: "0.75rem 1rem",
-              background: info?.bg ?? "#f8fafc",
-              border: `1px solid ${info?.border ?? "var(--border)"}`,
-              borderRadius: "var(--radius-md)",
-              fontSize: "0.875rem",
-              color: info?.color ?? "var(--text-secondary)",
-              fontWeight: 600,
-              display: "flex",
-              alignItems: "center",
-              gap: "0.5rem",
-            }}
+            className={cn(
+              "flex items-center gap-2 rounded-lg border px-4 py-3 text-sm font-semibold",
+              TONE_CLASSES[info?.tone ?? "gray"],
+            )}
           >
-            <span style={{ fontSize: "1.1rem" }}>{info?.emoji}</span>
+            {info && <info.Icon aria-hidden="true" className="size-[18px] shrink-0" />}
             {info?.text ?? currentStatus.replace(/_/g, " ")}
           </div>
 
           {/* Role Check for Handover */}
-          {(ticketType === "pc_build" ? isSalesMode : !isSalesMode) ? (
-            <>
-              {/* ── Self-pickup path ── */}
-              {currentStatus === "done" && pickupMethod !== "courier" && (
-            <button
-              onClick={() => setActiveDialog("ready_confirm")}
-              disabled={isPending}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: "0.4rem",
-                padding: "0.6rem 1.1rem",
-                borderRadius: "var(--radius-md)",
-                background: "#0891b2", color: "white",
-                border: "none", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.875rem",
-                opacity: isPending ? 0.6 : 1,
-              }}
-            >
-              <PackageCheck size={16} /> Mark as Ready for Pickup
-            </button>
-          )}
+          {canHandover ? (
+            hasAction && (
+              <ActionBar>
+                {/* ── Self-pickup path ── */}
+                {currentStatus === "done" && pickupMethod !== "courier" && (
+                  <Button size="lg" onClick={() => setActiveDialog("ready_confirm")} disabled={isPending} className={TONE_BUTTON.cyan}>
+                    <PackageCheck aria-hidden="true" /> Mark as Ready for Pickup
+                  </Button>
+                )}
 
-          {currentStatus === "ready_for_pickup" && (
-            <button
-              onClick={() => setActiveDialog("pickup_proof")}
-              disabled={isPending}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: "0.4rem",
-                padding: "0.6rem 1.1rem",
-                borderRadius: "var(--radius-md)",
-                background: "#16a34a", color: "white",
-                border: "none", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.875rem",
-                opacity: isPending ? 0.6 : 1,
-              }}
-            >
-              <CheckCircle size={16} /> Item Picked Up by Customer
-            </button>
-          )}
+                {currentStatus === "ready_for_pickup" && (
+                  <Button size="lg" onClick={() => setActiveDialog("pickup_proof")} disabled={isPending} className={TONE_BUTTON.green}>
+                    <CheckCircle aria-hidden="true" /> Item Picked Up by Customer
+                  </Button>
+                )}
 
-          {/* ── Courier path ── */}
-          {currentStatus === "done" && pickupMethod === "courier" && (
-            <button
-              onClick={() => setActiveDialog("courier_proof")}
-              disabled={isPending}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: "0.4rem",
-                padding: "0.6rem 1.1rem",
-                borderRadius: "var(--radius-md)",
-                background: "#7c3aed", color: "white",
-                border: "none", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.875rem",
-                opacity: isPending ? 0.6 : 1,
-              }}
-            >
-              <Truck size={16} /> Proceed to Delivery
-            </button>
-          )}
+                {/* ── Courier path ── */}
+                {currentStatus === "done" && pickupMethod === "courier" && (
+                  <Button size="lg" onClick={() => setActiveDialog("courier_proof")} disabled={isPending} className={TONE_BUTTON.violet}>
+                    <Truck aria-hidden="true" /> Proceed to Delivery
+                  </Button>
+                )}
 
-          {currentStatus === "handed_to_courier" && (
-            <button
-              onClick={() => setActiveDialog("delivery_proof")}
-              disabled={isPending}
-              style={{
-                display: "inline-flex", alignItems: "center", gap: "0.4rem",
-                padding: "0.6rem 1.1rem",
-                borderRadius: "var(--radius-md)",
-                background: "#16a34a", color: "white",
-                border: "none", cursor: "pointer",
-                fontWeight: 600, fontSize: "0.875rem",
-                opacity: isPending ? 0.6 : 1,
-              }}
-            >
-              <PackageCheck size={16} /> Confirm Delivered
-            </button>
-          )}
-            </>
+                {currentStatus === "handed_to_courier" && (
+                  <Button size="lg" onClick={() => setActiveDialog("delivery_proof")} disabled={isPending} className={TONE_BUTTON.green}>
+                    <PackageCheck aria-hidden="true" /> Confirm Delivered
+                  </Button>
+                )}
+              </ActionBar>
+            )
           ) : (
-            <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", padding: "0.5rem 0" }}>
-              {ticketType === "pc_build" 
-                ? "Waiting for Sales to manage handover." 
+            <p className="py-2 text-sm text-muted-foreground">
+              {ticketType === "pc_build"
+                ? "Waiting for Sales to manage handover."
                 : "Waiting for Technician to manage handover."}
-            </div>
+            </p>
           )}
         </div>
 
         {/* ── READY FOR PICKUP CONFIRM (no proof needed) ── */}
-        <Modal
-          open={activeDialog === "ready_confirm"}
-          onClose={closeDialog}
-          title="Mark as Ready for Pickup"
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.25rem 0" }}>
-            <p style={{ color: "var(--text-secondary)", fontSize: "0.9375rem" }}>
-              Confirm that the item is ready at the counter for customer pickup. The customer will be notified.
-            </p>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-              <button
-                className="btn btn-primary"
-                onClick={() => handleAction("ready_for_pickup")}
-                disabled={isPending}
-              >
-                {isPending ? "Updating..." : "Confirm Ready"}
-              </button>
-            </div>
-          </div>
+        <Modal open={activeDialog === "ready_confirm"} onClose={closeDialog} title="Mark as Ready for Pickup">
+          <p className="text-[0.9375rem] text-muted-foreground">
+            Confirm that the item is ready at the counter for customer pickup. The customer will be notified.
+          </p>
+          <DialogActions>
+            <Button variant="ghost" onClick={closeDialog}>Cancel</Button>
+            <Button onClick={() => handleAction("ready_for_pickup")} disabled={isPending}>
+              {isPending && <Spinner />}
+              {isPending ? "Updating..." : "Confirm Ready"}
+            </Button>
+          </DialogActions>
         </Modal>
 
         {/* ── PICKUP PROOF — self-pickup: handover to customer ── */}
-        <Modal
-          open={activeDialog === "pickup_proof"}
-          onClose={closeDialog}
-          title="Pickup Handover Proof"
-          maxWidth="540px"
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <ProofStepInfo
-              step={2}
-              total={2}
-              icon={<HandshakeIcon size={16} />}
-              title="Upload Handover Proof"
-              description="Take a photo of handing the item to the customer. This completes the ticket automatically."
-            />
-            <div>
-              <label style={{ fontSize: "0.875rem", fontWeight: 600, display: "block", marginBottom: "0.5rem" }}>
-                Proof Photo / File <span style={{ color: "var(--accent)" }}>*</span>
-              </label>
-              <FileUpload onChange={setFiles} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-              <button
-                className="btn"
-                style={{ background: "#16a34a", color: "white" }}
-                onClick={() => handleAction("completed", null, { requireFiles: true })}
-                disabled={isPending}
-              >
-                {isPending ? "Uploading..." : "Confirm Handover & Complete"}
-              </button>
-            </div>
-          </div>
+        <Modal open={activeDialog === "pickup_proof"} onClose={closeDialog} title="Pickup Handover Proof" maxWidth="540px">
+          <ProofStepInfo
+            step={2}
+            total={2}
+            icon={<HandshakeIcon aria-hidden="true" className="size-4" />}
+            title="Upload Handover Proof"
+            description="Take a photo of handing the item to the customer. This completes the ticket automatically."
+          />
+          <FieldBlock label="Proof Photo / File" required>
+            <FileUpload onChange={setFiles} />
+          </FieldBlock>
+          <DialogActions>
+            <Button variant="ghost" onClick={closeDialog}>Cancel</Button>
+            <Button onClick={() => handleAction("completed", null, { requireFiles: true })} disabled={isPending} className={TONE_BUTTON.green}>
+              {isPending && <Spinner />}
+              {isPending ? "Uploading..." : "Confirm Handover & Complete"}
+            </Button>
+          </DialogActions>
         </Modal>
 
         {/* ── COURIER PROOF — handover package to courier ── */}
-        <Modal
-          open={activeDialog === "courier_proof"}
-          onClose={closeDialog}
-          title="Proceed to Delivery"
-          maxWidth="540px"
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <ProofStepInfo
-              step={1}
-              total={2}
-              icon={<Truck size={16} />}
-              title="Upload Courier Handover Proof"
-              description="Take a photo of handing the package to the courier / delivery service. Status will change to 'On Delivery'."
-            />
-            <div>
-              <label style={{ fontSize: "0.875rem", fontWeight: 600, display: "block", marginBottom: "0.5rem" }}>
-                Courier Handover Photo <span style={{ color: "var(--accent)" }}>*</span>
-              </label>
-              <FileUpload onChange={setFiles} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-              <button
-                className="btn"
-                style={{ background: "#7c3aed", color: "white" }}
-                onClick={() => handleAction("handed_to_courier", null, { requireFiles: true })}
-                disabled={isPending}
-              >
-                {isPending ? "Uploading..." : "Confirm Handover to Courier"}
-              </button>
-            </div>
-          </div>
+        <Modal open={activeDialog === "courier_proof"} onClose={closeDialog} title="Proceed to Delivery" maxWidth="540px">
+          <ProofStepInfo
+            step={1}
+            total={2}
+            icon={<Truck aria-hidden="true" className="size-4" />}
+            title="Upload Courier Handover Proof"
+            description="Take a photo of handing the package to the courier / delivery service. Status will change to 'On Delivery'."
+          />
+          <FieldBlock label="Courier Handover Photo" required>
+            <FileUpload onChange={setFiles} />
+          </FieldBlock>
+          <DialogActions>
+            <Button variant="ghost" onClick={closeDialog}>Cancel</Button>
+            <Button onClick={() => handleAction("handed_to_courier", null, { requireFiles: true })} disabled={isPending} className={TONE_BUTTON.violet}>
+              {isPending && <Spinner />}
+              {isPending ? "Uploading..." : "Confirm Handover to Courier"}
+            </Button>
+          </DialogActions>
         </Modal>
 
         {/* ── DELIVERY PROOF — receipt/photo from courier ── */}
-        <Modal
-          open={activeDialog === "delivery_proof"}
-          onClose={closeDialog}
-          title="Confirm Delivery"
-          maxWidth="540px"
-        >
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <ProofStepInfo
-              step={2}
-              total={2}
-              icon={<PackageCheck size={16} />}
-              title="Upload Delivery Confirmation"
-              description="Upload the proof from the courier that the item has been delivered to the recipient (e.g. delivery receipt, courier app screenshot). This auto-completes the ticket."
-            />
-            <div>
-              <label style={{ fontSize: "0.875rem", fontWeight: 600, display: "block", marginBottom: "0.5rem" }}>
-                Delivery Proof <span style={{ color: "var(--accent)" }}>*</span>
-              </label>
-              <FileUpload onChange={setFiles} />
-            </div>
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-              <button className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-              <button
-                className="btn"
-                style={{ background: "#16a34a", color: "white" }}
-                onClick={() => handleAction("delivered", null, { requireFiles: true })}
-                disabled={isPending}
-              >
-                {isPending ? "Uploading..." : "Confirm Delivered & Complete"}
-              </button>
-            </div>
-          </div>
+        <Modal open={activeDialog === "delivery_proof"} onClose={closeDialog} title="Confirm Delivery" maxWidth="540px">
+          <ProofStepInfo
+            step={2}
+            total={2}
+            icon={<PackageCheck aria-hidden="true" className="size-4" />}
+            title="Upload Delivery Confirmation"
+            description="Upload the proof from the courier that the item has been delivered to the recipient (e.g. delivery receipt, courier app screenshot). This auto-completes the ticket."
+          />
+          <FieldBlock label="Delivery Proof" required>
+            <FileUpload onChange={setFiles} />
+          </FieldBlock>
+          <DialogActions>
+            <Button variant="ghost" onClick={closeDialog}>Cancel</Button>
+            <Button onClick={() => handleAction("delivered", null, { requireFiles: true })} disabled={isPending} className={TONE_BUTTON.green}>
+              {isPending && <Spinner />}
+              {isPending ? "Uploading..." : "Confirm Delivered & Complete"}
+            </Button>
+          </DialogActions>
         </Modal>
       </>
     );
@@ -534,472 +475,335 @@ export default function StatusUpdater({
 
   // ── Default work-in-progress view ─────────────────────────────────────────
   if (isSalesMode) return null;
-  
+
   return (
     <>
-      <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-        {currentStatus === "waiting" && (
-          <button
-            onClick={() => handleAction("on_progress", "START")}
-            disabled={isPending}
-            className="btn btn-primary px-5 py-2.5"
-          >
-            <Play className="mr-2 h-4 w-4" /> Start Work
-          </button>
-        )}
+      {currentStatus === "waiting" || currentStatus === "on_progress" ? (
+        <ActionBar>
+          {currentStatus === "waiting" && (
+            <Button size="lg" onClick={() => handleAction("on_progress", "START")} disabled={isPending}>
+              {isPending ? <Spinner /> : <Play aria-hidden="true" />} Start Work
+            </Button>
+          )}
 
-        {currentStatus === "on_progress" && isPaused && (
-          <button
-            onClick={() => setActiveDialog("resume")}
-            disabled={isPending}
-            className="btn btn-secondary px-5 py-2.5"
-          >
-            <Play className="mr-2 h-4 w-4" /> Resume Work
-          </button>
-        )}
+          {currentStatus === "on_progress" && isPaused && (
+            <Button size="lg" variant="outline" onClick={() => setActiveDialog("resume")} disabled={isPending} className="bg-card">
+              <Play aria-hidden="true" /> Resume Work
+            </Button>
+          )}
 
-        {currentStatus === "on_progress" && !isPaused && (
-          <>
-            <button
-              onClick={() => setActiveDialog("pause")}
-              disabled={isPending}
-              className="btn btn-secondary px-4 py-2.5"
-            >
-              <Pause className="mr-2 h-4 w-4" /> Pause
-            </button>
-            {isWarrantyClaim ? (
-              <>
-                <button
-                  onClick={() => setActiveDialog("rma_handover")}
-                  disabled={isPending}
-                  style={{ background: "#16469d", color: "white" }}
-                  className="btn px-5 py-2.5"
-                >
-                  <ShieldCheck className="mr-2 h-4 w-4" /> Serahkan ke RMA
-                </button>
-              </>
-            ) : (
-              <button
-                onClick={() => setActiveDialog("done")}
+          {currentStatus === "on_progress" && !isPaused && (
+            <>
+              <Button size="lg" variant="outline" onClick={() => setActiveDialog("pause")} disabled={isPending} className="bg-card">
+                <Pause aria-hidden="true" /> Pause
+              </Button>
+              {isWarrantyClaim ? (
+                <Button size="lg" onClick={() => setActiveDialog("rma_handover")} disabled={isPending} className="grow-[2]">
+                  <ShieldCheck aria-hidden="true" /> Serahkan ke RMA
+                </Button>
+              ) : (
+                <Button size="lg" onClick={() => setActiveDialog("done")} disabled={isPending} className={cn(TONE_BUTTON.green, "grow-[2]")}>
+                  <CheckCircle aria-hidden="true" /> Mark Done
+                </Button>
+              )}
+              {/* Icon-only beside the main action on a phone; the label stays for screen readers. */}
+              <Button
+                size="lg"
+                onClick={() => setActiveDialog("cancel")}
                 disabled={isPending}
-                style={{ background: "#16a34a", color: "white" }}
-                className="btn px-5 py-2.5"
+                className={cn(TONE_BUTTON.danger, "max-md:flex-none max-md:px-3")}
               >
-                <CheckCircle className="mr-2 h-4 w-4" /> Mark Done
-              </button>
-            )}
-            <button
-              onClick={() => setActiveDialog("cancel")}
-              disabled={isPending}
-              className="btn"
-              style={{ background: "var(--destructive)", color: "white" }}
-            >
-              <XCircle className="mr-2 h-4 w-4" /> Cancel
-            </button>
-          </>
-        )}
-      </div>
+                <XCircle aria-hidden="true" /> <span className="max-md:sr-only">Cancel</span>
+              </Button>
+            </>
+          )}
+        </ActionBar>
+      ) : null}
 
       {/* ── PAUSE DIALOG — requires reason ── */}
       <Modal open={activeDialog === "pause"} onClose={closeDialog} title="Pause Work">
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.25rem 0" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label htmlFor="pause-reason" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Reason for Pausing <span style={{ color: "var(--accent-brand)" }}>*</span>
-            </label>
-            <textarea
-              id="pause-reason"
-              className="form-input"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="e.g. Waiting for customer to approve part replacement..."
-            />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-            <button className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-            <button
-              className="btn btn-primary"
-              onClick={() => handleAction("on_progress", "PAUSE", { requireReason: true })}
-              disabled={isPending}
-            >
-              {isPending ? "Saving..." : "Confirm Pause"}
-            </button>
-          </div>
-        </div>
+        <FormField label="Reason for Pausing" htmlFor="pause-reason" required>
+          <Textarea
+            id="pause-reason"
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="e.g. Waiting for customer to approve part replacement..."
+            className="bg-card"
+          />
+        </FormField>
+        <DialogActions>
+          <Button variant="ghost" onClick={closeDialog}>Cancel</Button>
+          <Button onClick={() => handleAction("on_progress", "PAUSE", { requireReason: true })} disabled={isPending}>
+            {isPending && <Spinner />}
+            {isPending ? "Saving..." : "Confirm Pause"}
+          </Button>
+        </DialogActions>
       </Modal>
 
       {/* ── RESUME DIALOG — no reason needed, just confirm ── */}
       <Modal open={activeDialog === "resume"} onClose={closeDialog} title="Resume Work">
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem", padding: "0.25rem 0" }}>
-          <p style={{ color: "var(--text-secondary)", fontSize: "0.9375rem" }}>
-            Ready to continue working on this ticket?
-          </p>
-          <div
-            style={{
-              display: "flex", alignItems: "center", gap: "0.5rem",
-              padding: "0.75rem 1rem",
-              background: "#eff6ff",
-              border: "1px solid #bfdbfe",
-              borderRadius: "var(--radius-md)",
-              fontSize: "0.875rem",
-              color: "#1d4ed8",
-            }}
-          >
-            <ArrowRight size={16} />
-            Work timer will resume from where it left off.
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-            <button className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-            <button
-              className="btn btn-primary"
-              onClick={() => handleAction("on_progress", "RESUME")}
-              disabled={isPending}
-            >
-              {isPending ? "Resuming..." : "Resume Work"}
-            </button>
-          </div>
+        <p className="text-[0.9375rem] text-muted-foreground">Ready to continue working on this ticket?</p>
+        <div className={cn("flex items-center gap-2 rounded-lg border px-4 py-3 text-sm", TONE_CLASSES.blue)}>
+          <ArrowRight aria-hidden="true" className="size-4 shrink-0" />
+          Work timer will resume from where it left off.
         </div>
+        <DialogActions>
+          <Button variant="ghost" onClick={closeDialog}>Cancel</Button>
+          <Button onClick={() => handleAction("on_progress", "RESUME")} disabled={isPending}>
+            {isPending && <Spinner />}
+            {isPending ? "Resuming..." : "Resume Work"}
+          </Button>
+        </DialogActions>
       </Modal>
 
       {/* ── DONE DIALOG — requires proof files ── */}
-      <Modal
-        open={activeDialog === "done"}
-        onClose={closeDialog}
-        title="Mark Work as Done"
-        maxWidth="560px"
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <ProofStepInfo
-            step={1}
-            total={pickupMethod === "courier" ? 3 : 2}
-            icon={<CheckCircle size={16} />}
-            title="Upload Proof of Finished Work"
-            description="Attach photos or videos showing the completed repair/service. This stops your working timer."
-          />
-          <div>
-            <label style={{ fontSize: "0.875rem", fontWeight: 600, display: "block", marginBottom: "0.5rem" }}>
-              Work Completion Proof <span style={{ color: "var(--accent)" }}>*</span>
-            </label>
-            <FileUpload onChange={setFiles} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-            <button className="btn btn-ghost" onClick={closeDialog}>Go Back</button>
-            <button
-              className="btn"
-              style={{ background: "#16a34a", color: "white" }}
-              onClick={() => handleAction("done", "DONE", { requireFiles: true })}
-              disabled={isPending}
-            >
-              {isPending ? "Uploading..." : "Confirm Work Done"}
-            </button>
-          </div>
-        </div>
+      <Modal open={activeDialog === "done"} onClose={closeDialog} title="Mark Work as Done" maxWidth="560px">
+        <ProofStepInfo
+          step={1}
+          total={pickupMethod === "courier" ? 3 : 2}
+          icon={<CheckCircle aria-hidden="true" className="size-4" />}
+          title="Upload Proof of Finished Work"
+          description="Attach photos or videos showing the completed repair/service. This stops your working timer."
+        />
+        <FieldBlock label="Work Completion Proof" required>
+          <FileUpload onChange={setFiles} />
+        </FieldBlock>
+        <DialogActions>
+          <Button variant="ghost" onClick={closeDialog}>Go Back</Button>
+          <Button onClick={() => handleAction("done", "DONE", { requireFiles: true })} disabled={isPending} className={TONE_BUTTON.green}>
+            {isPending && <Spinner />}
+            {isPending ? "Uploading..." : "Confirm Work Done"}
+          </Button>
+        </DialogActions>
       </Modal>
 
       {/* ── CANCEL DIALOG ── */}
-      <Modal
-        open={activeDialog === "cancel"}
-        onClose={closeDialog}
-        title="Cancel Ticket"
-        maxWidth="560px"
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label htmlFor="cancel-reason" style={{ fontSize: "0.875rem", fontWeight: 600, color: "var(--destructive)" }}>
-              Reason for Cancelling <span style={{ color: "var(--accent-brand)" }}>*</span>
-            </label>
-            <textarea
-              id="cancel-reason"
-              className="form-input"
-              rows={3}
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Explain why this ticket is being cancelled..."
-            />
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Attachments <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 400 }}>(optional)</span>
-            </label>
-            <FileUpload onChange={setFiles} />
-          </div>
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-            <button className="btn btn-ghost" onClick={closeDialog}>Go Back</button>
-            <button
-              className="btn"
-              style={{ background: "var(--destructive)", color: "white" }}
-              onClick={() => handleAction("cancelled", null, { requireReason: true })}
-              disabled={isPending}
-            >
-              {isPending ? "Cancelling..." : "Confirm Cancellation"}
-            </button>
-          </div>
-        </div>
+      <Modal open={activeDialog === "cancel"} onClose={closeDialog} title="Cancel Ticket" maxWidth="560px">
+        <FormField label={<span className="text-destructive">Reason for Cancelling</span>} htmlFor="cancel-reason" required>
+          <Textarea
+            id="cancel-reason"
+            rows={3}
+            value={reason}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder="Explain why this ticket is being cancelled..."
+            className="bg-card"
+          />
+        </FormField>
+        <FieldBlock label="Attachments" hint="(optional)">
+          <FileUpload onChange={setFiles} />
+        </FieldBlock>
+        <DialogActions>
+          <Button variant="ghost" onClick={closeDialog}>Go Back</Button>
+          <Button onClick={() => handleAction("cancelled", null, { requireReason: true })} disabled={isPending} className={TONE_BUTTON.danger}>
+            {isPending && <Spinner />}
+            {isPending ? "Cancelling..." : "Confirm Cancellation"}
+          </Button>
+        </DialogActions>
       </Modal>
 
       {/* Warranty claim: service form before handing the unit to the RMA desk */}
-      <Modal
-        open={activeDialog === "rma_handover"}
-        onClose={closeDialog}
-        title="Serahkan Unit ke RMA"
-        maxWidth="640px"
-      >
-        <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <ProofStepInfo
-            step={1}
-            total={1}
-            icon={<ShieldCheck size={18} />}
-            title="Service Form"
-            description="Isi hasil pemeriksaan unit. Data ini yang diverifikasi tim RMA sebelum klaim diajukan ke vendor."
+      <Modal open={activeDialog === "rma_handover"} onClose={closeDialog} title="Serahkan Unit ke RMA" maxWidth="640px">
+        <ProofStepInfo
+          step={1}
+          total={1}
+          icon={<ShieldCheck aria-hidden="true" className="size-[18px]" />}
+          title="Service Form"
+          description="Isi hasil pemeriksaan unit. Data ini yang diverifikasi tim RMA sebelum klaim diajukan ke vendor."
+        />
+
+        {handoverDraft.offer && (
+          <DraftBanner
+            savedAt={handoverDraft.offer.savedAt}
+            note="Foto/video kerusakan dan nota perlu dipilih ulang."
+            onRestore={restoreHandoverDraft}
+            onDiscard={handoverDraft.discard}
           />
+        )}
 
-          {handoverDraft.offer && (
-            <DraftBanner
-              savedAt={handoverDraft.offer.savedAt}
-              note="Foto/video kerusakan dan nota perlu dipilih ulang."
-              onRestore={restoreHandoverDraft}
-              onDiscard={handoverDraft.discard}
-            />
-          )}
-
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Kepemilikan Unit <span style={{ color: "var(--accent-brand)" }}>*</span>
-            </label>
-            {intakeOwnership ? (
-              // Decided at the counter when the unit arrived; not re-asked here.
-              <p className="form-input" style={{ background: "var(--cream-dark)", margin: 0 }}>
-                {intakeOwnership.unit_ownership === "store_stock" ? "Stok Toko" : "Milik Customer"}
-                <span style={{ color: "var(--text-muted)", fontSize: "0.8125rem" }}> — dicatat saat intake</span>
-              </p>
-            ) : (
-              <select
-                className="form-input"
-                value={unitOwnership}
-                onChange={(e) => setUnitOwnership(e.target.value as "customer" | "store_stock")}
-              >
-                <option value="customer">Milik Customer</option>
-                <option value="store_stock">Stok Toko</option>
-              </select>
-            )}
-          </div>
-
-          {unitOwnership === "store_stock" ? (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-              <label htmlFor="rma-stock-origin" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-                Asal Stok <span style={{ color: "var(--accent-brand)" }}>*</span>
-              </label>
-              <input
-                id="rma-stock-origin"
-                className="form-input"
-                value={stockOrigin}
-                onChange={(e) => setStockOrigin(e.target.value)}
-                placeholder="Misal: Gudang Nagoya rak B3"
-              />
-            </div>
+        <FormField label="Kepemilikan Unit" htmlFor="rma-ownership" required>
+          {intakeOwnership ? (
+            // Decided at the counter when the unit arrived; not re-asked here.
+            <p id="rma-ownership" className="rounded-lg border border-input bg-muted px-3 py-2.5 text-sm">
+              {intakeOwnership.unit_ownership === "store_stock" ? "Stok Toko" : "Milik Customer"}
+              <span className="text-[0.8125rem] text-muted-foreground"> — dicatat saat intake</span>
+            </p>
           ) : (
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-              <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-                Nota Pembelian <span style={{ color: "var(--accent-brand)" }}>*</span>
-              </label>
-              {attachments.length > 0 ? (
-                <select
-                  className="form-input"
-                  value={invoiceUrl}
-                  onChange={(e) => setInvoiceUrl(e.target.value)}
-                >
-                  <option value="">Pilih lampiran tiket</option>
-                  {attachments.map((a, i) => (
-                    <option key={a.id} value={a.file_url}>
-                      {"Lampiran " + (i + 1) + " (" + a.file_type + ")"}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                  Tiket ini belum punya lampiran. Unggah nota di bawah.
-                </p>
-              )}
-              {!invoiceUrl && (
-                <div style={{ marginTop: "0.5rem" }}>
-                  <span
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      gap: "0.375rem",
-                      fontSize: "0.8125rem",
-                      color: "var(--text-muted)",
-                      marginBottom: "0.375rem",
-                    }}
-                  >
-                    <FileText size={14} /> Unggah nota baru
-                  </span>
-                  <FileUpload onChange={setFiles} />
-                </div>
-              )}
-            </div>
+            <NativeSelect
+              id="rma-ownership"
+              value={unitOwnership}
+              onChange={(e) => setUnitOwnership(e.target.value as "customer" | "store_stock")}
+            >
+              <option value="customer">Milik Customer</option>
+              <option value="store_stock">Stok Toko</option>
+            </NativeSelect>
           )}
+        </FormField>
 
-          <label
-            style={{
-              display: "flex",
-              alignItems: "flex-start",
-              gap: "0.625rem",
-              cursor: "pointer",
-              padding: "0.75rem",
-              border: "1px solid var(--border)",
-              borderRadius: "var(--radius-md)",
-            }}
-          >
-            <input
-              type="checkbox"
-              checked={snVerified}
-              onChange={(e) => setSnVerified(e.target.checked)}
-              style={{ width: "1.1rem", height: "1.1rem", marginTop: "0.125rem" }}
+        {unitOwnership === "store_stock" ? (
+          <FormField label="Asal Stok" htmlFor="rma-stock-origin" required>
+            <Input
+              id="rma-stock-origin"
+              value={stockOrigin}
+              onChange={(e) => setStockOrigin(e.target.value)}
+              placeholder="Misal: Gudang Nagoya rak B3"
+              className="bg-card"
             />
-            <span style={{ fontSize: "0.875rem" }}>
-              <strong>Serial number sudah saya cocokkan</strong> dengan fisik unit dan nota.
-              <span style={{ display: "block", color: "var(--text-muted)", fontSize: "0.8125rem" }}>
-                Wajib dicentang. RMA menolak klaim tanpa verifikasi SN.
-              </span>
+          </FormField>
+        ) : (
+          <FormField label="Nota Pembelian" htmlFor="rma-invoice" required>
+            {attachments.length > 0 ? (
+              <NativeSelect id="rma-invoice" value={invoiceUrl} onChange={(e) => setInvoiceUrl(e.target.value)}>
+                <option value="">Pilih lampiran tiket</option>
+                {attachments.map((a, i) => (
+                  <option key={a.id} value={a.file_url}>
+                    {"Lampiran " + (i + 1) + " (" + a.file_type + ")"}
+                  </option>
+                ))}
+              </NativeSelect>
+            ) : (
+              <p className="text-[0.8125rem] text-muted-foreground">Tiket ini belum punya lampiran. Unggah nota di bawah.</p>
+            )}
+            {!invoiceUrl && (
+              <div className="mt-2 flex flex-col gap-1.5">
+                <span className="flex items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
+                  <FileText aria-hidden="true" className="size-3.5" /> Unggah nota baru
+                </span>
+                <FileUpload onChange={setFiles} />
+              </div>
+            )}
+          </FormField>
+        )}
+
+        <label className="flex cursor-pointer items-start gap-2.5 rounded-lg border border-border p-3">
+          <input
+            type="checkbox"
+            checked={snVerified}
+            onChange={(e) => setSnVerified(e.target.checked)}
+            className="mt-0.5 size-5 shrink-0 accent-primary md:size-4"
+          />
+          <span className="text-sm">
+            <strong>Serial number sudah saya cocokkan</strong> dengan fisik unit dan nota.
+            <span className="block text-[0.8125rem] text-muted-foreground">
+              Wajib dicentang. RMA menolak klaim tanpa verifikasi SN.
             </span>
-          </label>
+          </span>
+        </label>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label htmlFor="rma-physical" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Kondisi Fisik <span style={{ color: "var(--accent-brand)" }}>*</span>
-            </label>
-            <textarea
-              id="rma-physical"
-              className="form-input"
-              rows={2}
-              value={physicalCondition}
-              onChange={(e) => setPhysicalCondition(e.target.value)}
-              placeholder="Misal: lecet ringan di sudut kiri, segel utuh"
-            />
-          </div>
+        <FormField label="Kondisi Fisik" htmlFor="rma-physical" required>
+          <Textarea
+            id="rma-physical"
+            rows={2}
+            value={physicalCondition}
+            onChange={(e) => setPhysicalCondition(e.target.value)}
+            placeholder="Misal: lecet ringan di sudut kiri, segel utuh"
+            className="bg-card"
+          />
+        </FormField>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label htmlFor="rma-fault" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Deskripsi Kerusakan <span style={{ color: "var(--accent-brand)" }}>*</span>
-            </label>
-            <textarea
-              id="rma-fault"
-              className="form-input"
-              rows={2}
-              value={faultDescription}
-              onChange={(e) => setFaultDescription(e.target.value)}
-              placeholder="Misal: layar berkedip saat booting"
-            />
-          </div>
+        <FormField label="Deskripsi Kerusakan" htmlFor="rma-fault" required>
+          <Textarea
+            id="rma-fault"
+            rows={2}
+            value={faultDescription}
+            onChange={(e) => setFaultDescription(e.target.value)}
+            placeholder="Misal: layar berkedip saat booting"
+            className="bg-card"
+          />
+        </FormField>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label htmlFor="rma-test" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Hasil Tes <span style={{ color: "var(--accent-brand)" }}>*</span>
-            </label>
-            <textarea
-              id="rma-test"
-              className="form-input"
-              rows={2}
-              value={testResult}
-              onChange={(e) => setTestResult(e.target.value)}
-              placeholder="Misal: reproduksi konsisten pada 3 kali percobaan"
-            />
-          </div>
+        <FormField label="Hasil Tes" htmlFor="rma-test" required>
+          <Textarea
+            id="rma-test"
+            rows={2}
+            value={testResult}
+            onChange={(e) => setTestResult(e.target.value)}
+            placeholder="Misal: reproduksi konsisten pada 3 kali percobaan"
+            className="bg-card"
+          />
+        </FormField>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Foto / Video Kondisi Kerusakan <span style={{ color: "var(--accent-brand)" }}>*</span>
-            </label>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+        <FieldBlock
+          label="Foto / Video Kondisi Kerusakan"
+          required
+          help={
+            <>
               1–{MAX_DAMAGE_PHOTOS} berkas, foto atau video. Tim RMA memutuskan kelayakan klaim
               dari bukti ini — tanpa bukti mereka hanya punya tulisan. Untuk kerusakan yang
               kambuhan, video jauh lebih meyakinkan daripada foto. Total seluruh unggahan
               maksimal {UPLOAD_BUDGET_MB} MB — rekam video singkat, atau set kamera ke 720p.
-            </p>
-            <FileUpload
-              onChange={setDamagePhotos}
-              accept="image/*,image/heic,image/heif,video/*"
-              maxFiles={MAX_DAMAGE_PHOTOS}
-            />
-          </div>
+            </>
+          }
+        >
+          <FileUpload
+            onChange={setDamagePhotos}
+            accept="image/*,image/heic,image/heif,video/*"
+            maxFiles={MAX_DAMAGE_PHOTOS}
+          />
+        </FieldBlock>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Rekomendasi Anda <span style={{ color: "var(--accent-brand)" }}>*</span>
-            </label>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+        <FieldBlock
+          label="Rekomendasi Anda"
+          required
+          help={
+            <>
               Menurut pemeriksaan Anda, apakah unit ini layak diklaim? Ini{" "}
               <strong>masukan</strong>, bukan keputusan — tim RMA yang memutuskan.
-            </p>
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.25rem" }}>
-              {([
-                { value: "yes", label: "Layak diklaim", bg: "#f0fdf4", fg: "#15803d", border: "#bbf7d0" },
-                { value: "no", label: "Tidak layak", bg: "#fffbeb", fg: "#92400e", border: "#fde68a" },
-              ] as const).map((opt) => {
-                const active = recommendEligible === opt.value;
-                return (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => setRecommendEligible(opt.value)}
-                    className="btn"
-                    style={{
-                      background: active ? opt.bg : "transparent",
-                      color: active ? opt.fg : "var(--text-secondary)",
-                      border: `1px solid ${active ? opt.border : "var(--border)"}`,
-                      fontWeight: active ? 700 : 500,
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                );
-              })}
-            </div>
+            </>
+          }
+        >
+          <div role="group" aria-label="Rekomendasi Anda" className="grid grid-cols-2 gap-2 sm:flex">
+            {([
+              { value: "yes", label: "Layak diklaim", tone: "green" },
+              { value: "no", label: "Tidak layak", tone: "amber" },
+            ] as const).map((opt) => {
+              const active = recommendEligible === opt.value;
+              return (
+                <Button
+                  key={opt.value}
+                  type="button"
+                  variant="outline"
+                  aria-pressed={active}
+                  onClick={() => setRecommendEligible(opt.value)}
+                  className={cn("bg-card", active && cn("font-bold", TONE_CLASSES[opt.tone]))}
+                >
+                  {opt.label}
+                </Button>
+              );
+            })}
           </div>
+        </FieldBlock>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
-            <label htmlFor="rma-recommend-note" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-              Catatan Rekomendasi{" "}
-              {recommendEligible === "no" ? (
-                <span style={{ color: "var(--accent-brand)" }}>*</span>
-              ) : (
-                <span style={{ fontSize: "0.8rem", color: "var(--text-muted)", fontWeight: 400 }}>
-                  (opsional)
-                </span>
-              )}
-            </label>
-            <textarea
-              id="rma-recommend-note"
-              className="form-input"
-              rows={2}
-              value={recommendNote}
-              onChange={(e) => setRecommendNote(e.target.value)}
-              placeholder={
-                recommendEligible === "no"
-                  ? "Wajib diisi. Misal: ada bekas cairan di board"
-                  : "Opsional. Hal yang perlu diketahui tim RMA"
-              }
-            />
-          </div>
+        <FormField
+          label="Catatan Rekomendasi"
+          htmlFor="rma-recommend-note"
+          required={recommendEligible === "no"}
+          hint={recommendEligible === "no" ? undefined : " (opsional)"}
+        >
+          <Textarea
+            id="rma-recommend-note"
+            rows={2}
+            value={recommendNote}
+            onChange={(e) => setRecommendNote(e.target.value)}
+            placeholder={
+              recommendEligible === "no"
+                ? "Wajib diisi. Misal: ada bekas cairan di board"
+                : "Opsional. Hal yang perlu diketahui tim RMA"
+            }
+            className="bg-card"
+          />
+        </FormField>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-            <button className="btn btn-ghost" onClick={closeDialog} disabled={isPending}>
-              Batal
-            </button>
-            <button
-              className="btn"
-              style={{ background: "#16469d", color: "white" }}
-              onClick={handleHandover}
-              disabled={isPending}
-            >
-              {isPending ? "Menyerahkan..." : "Serahkan ke RMA"}
-            </button>
-          </div>
-        </div>
+        <DialogActions>
+          <Button variant="ghost" onClick={closeDialog} disabled={isPending}>
+            Batal
+          </Button>
+          <Button onClick={handleHandover} disabled={isPending}>
+            {isPending && <Spinner />}
+            {isPending ? "Menyerahkan..." : "Serahkan ke RMA"}
+          </Button>
+        </DialogActions>
       </Modal>
-
     </>
   );
 }

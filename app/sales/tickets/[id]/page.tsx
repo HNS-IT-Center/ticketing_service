@@ -457,6 +457,10 @@ export default async function SalesTicketDetailPage({
           )}
         </div>
       </div>
+
+      {/* StatusUpdater pins its actions to the bottom of a phone screen; this
+          keeps the last card clear of them (a height: the root has no data-slot). */}
+      {isAssignedSales && <div aria-hidden="true" className="h-20 md:hidden" />}
     </div>
   );
 }

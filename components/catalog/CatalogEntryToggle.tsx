@@ -1,6 +1,7 @@
 "use client";
 
 import { PenLine, Search } from "lucide-react";
+import { buttonVariants } from "@/components/ui/button";
 
 /**
  * Switches an item field between searching the Accurate catalogue and typing a
@@ -28,17 +29,16 @@ export default function CatalogEntryToggle({
   return (
     <div className="flex flex-wrap items-center gap-2">
       {question && (
-        <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+        <span className="text-xs text-muted-foreground">
           {question}
         </span>
       )}
       <button
         type="button"
-        className="btn btn-secondary btn-sm"
+        className={buttonVariants({ variant: "outline", size: "sm", className: "bg-card" })}
         onClick={onClick}
-        style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
       >
-        <Icon size={13} /> {label}
+        <Icon aria-hidden="true" size={13} /> {label}
       </button>
     </div>
   );

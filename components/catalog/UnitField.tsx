@@ -1,9 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { PackageCheck, X } from "lucide-react";
 import CatalogItemPicker from "./CatalogItemPicker";
 import CatalogEntryToggle from "./CatalogEntryToggle";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { TONE_CLASSES } from "@/lib/status-display";
+import { cn } from "@/lib/utils";
 
 /** The unit as picked from the catalogue — what the intake form keeps and drafts. */
 export type PickedUnit = { id: number; sku: string; name: string; category: string | null };
@@ -42,44 +46,45 @@ export default function UnitField({
   // hidden name can never ride along unseen.
   const [typing, setTyping] = useState(false);
   const mode = unit ? "picked" : !catalogEnabled || typing || name.trim() ? "manual" : "search";
+  const inputId = useId();
 
+  // A real <label> only when there is one box to point it at (typing); the
+  // picker and the picked card are named by the same words as a heading.
+  const LabelTag = mode === "manual" ? "label" : "span";
   const labelEl = (
-    <label className="form-label">
+    <LabelTag {...(mode === "manual" ? { htmlFor: inputId } : {})} className="text-sm font-medium text-foreground">
       {label}{" "}
-      {optional && <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>}
-    </label>
+      {optional && <span className="font-normal text-muted-foreground">(opsional)</span>}
+    </LabelTag>
   );
 
   if (mode === "picked" && unit) {
     return (
-      <div className="form-group">
+      <div data-slot="unit-field" className="flex min-w-0 flex-col gap-1.5">
         {labelEl}
-        <div
-          className="flex items-start justify-between gap-3 rounded-lg"
-          style={{ border: "1px solid #bfdbfe", background: "#eff6ff", padding: "0.75rem 0.875rem" }}
-        >
+        <div className={cn("flex items-start justify-between gap-3 rounded-lg border px-3.5 py-3", TONE_CLASSES.blue)}>
           <div className="flex min-w-0 flex-col gap-1">
-            <span className="text-sm font-semibold" style={{ wordBreak: "break-word" }}>
-              {unit.name}
-            </span>
-            <span className="flex flex-wrap items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
-              <PackageCheck size={13} style={{ color: "#1e40af" }} />
+            <span className="text-sm font-semibold [overflow-wrap:anywhere]">{unit.name}</span>
+            <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+              <PackageCheck aria-hidden="true" className="size-[13px] text-blue-800 dark:text-blue-300" />
               SKU {unit.sku}
               {unit.category ? ` · ${unit.category}` : ""} · dari katalog Accurate
             </span>
           </div>
-          <button
+          <Button
             type="button"
-            className="btn btn-ghost btn-sm"
+            variant="ghost"
+            size="sm"
             onClick={() => {
               onUnitChange(null);
               onNameChange("");
               setTyping(false);
             }}
             aria-label="Ganti unit"
+            className="shrink-0"
           >
-            <X size={14} /> Ganti
-          </button>
+            <X aria-hidden="true" /> Ganti
+          </Button>
         </div>
       </div>
     );
@@ -87,7 +92,7 @@ export default function UnitField({
 
   if (mode === "search") {
     return (
-      <div className="form-group flex flex-col gap-2">
+      <div data-slot="unit-field" className="flex min-w-0 flex-col gap-2">
         {labelEl}
         <CatalogItemPicker
           showStock={false}
@@ -103,10 +108,11 @@ export default function UnitField({
   }
 
   return (
-    <div className="form-group flex flex-col gap-2">
+    <div data-slot="unit-field" className="flex min-w-0 flex-col gap-2">
       {labelEl}
-      <input
-        className="form-input"
+      <Input
+        id={inputId}
+        className="bg-card"
         value={name}
         onChange={(e) => {
           // Pinned once someone types, so clearing the box to retype does not

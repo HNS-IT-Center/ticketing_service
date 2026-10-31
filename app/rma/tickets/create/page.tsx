@@ -30,9 +30,7 @@ export default async function RmaCreateTicketPage() {
   ]);
 
   return (
-    // The form below is still legacy markup, so the root keeps no data-slot
-    // (the UI-1 rule); PageHeader brings its own.
-    <div className="flex flex-col gap-6">
+    <div data-slot="create-ticket-page" className="flex flex-col gap-6">
       <PageHeader
         title="Create New Ticket"
         description="Buat tiket atas nama customer. Kosongkan teknisi bila belum ada yang tersedia — tiket akan masuk antrean dan bisa diambil teknisi mana pun."

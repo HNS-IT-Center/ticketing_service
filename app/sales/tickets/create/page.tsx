@@ -25,9 +25,7 @@ export default async function SalesCreateTicketPage() {
   const defaultStoreLocationId = currentUserStores[0]?.store_id || "";
 
   return (
-    // The form below is still legacy markup, so the root keeps no data-slot
-    // (the UI-1 rule); PageHeader brings its own.
-    <div className="flex flex-col gap-6">
+    <div data-slot="create-ticket-page" className="flex flex-col gap-6">
       <PageHeader
         title="Create New Ticket"
         description="Create a service ticket on behalf of a customer."

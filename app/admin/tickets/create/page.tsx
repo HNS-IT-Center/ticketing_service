@@ -15,9 +15,7 @@ export default async function AdminCreateTicketPage() {
   const upgrades = await db.upgrade.findMany();
 
   return (
-    // The form below is still legacy markup, so the root keeps no data-slot
-    // (the UI-1 rule); PageHeader brings its own.
-    <div className="flex flex-col gap-6">
+    <div data-slot="create-ticket-page" className="flex flex-col gap-6">
       <PageHeader title="Create New Ticket" description="Create a service ticket on behalf of a customer." />
 
       <CreateTicketForm 

@@ -6,6 +6,10 @@ import CatalogItemPicker from "./CatalogItemPicker";
 import CatalogEntryToggle from "./CatalogEntryToggle";
 import { MAX_QUANTITY, type StoreRef } from "@/lib/catalog/items";
 import { addPicked, MAX_ITEM_NAME, type PickedItem } from "@/lib/catalog/picked-items";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { TONE_CLASSES } from "@/lib/status-display";
+import { cn } from "@/lib/utils";
 
 /**
  * A list of items picked from the company catalogue (Accurate, through
@@ -60,58 +64,45 @@ export default function CatalogItemList({
     <button
       type="button"
       onClick={onClick}
-      style={{
-        background: "none",
-        border: "none",
-        color: "var(--primary)",
-        textDecoration: "underline",
-        cursor: "pointer",
-        padding: 0,
-        fontSize: "0.8125rem",
-        alignSelf: "flex-start",
-      }}
+      className="inline-flex min-h-11 cursor-pointer items-center self-start rounded-sm text-[0.8125rem] text-primary underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-0"
     >
       {text}
     </button>
   );
 
   return (
-    <div className="flex flex-col gap-2">
+    <div data-slot="catalog-item-list" className="flex flex-col gap-2">
       {items.map((item, i) => {
         const picked = item.catalogItemId !== null;
         return (
           <div
             key={`${item.catalogItemId ?? "typed"}-${i}`}
-            className="flex items-start justify-between gap-3 rounded-lg"
-            style={{
-              border: `1px solid ${picked ? "#bfdbfe" : "var(--border)"}`,
-              background: picked ? "#eff6ff" : "var(--white)",
-              padding: "0.625rem 0.75rem",
-            }}
+            className={cn(
+              "flex flex-wrap items-start justify-between gap-x-3 gap-y-2 rounded-lg border px-3 py-2.5",
+              picked ? TONE_CLASSES.blue : "border-border bg-card"
+            )}
           >
-            <div className="flex min-w-0 flex-col gap-1">
-              <span className="text-sm font-semibold" style={{ wordBreak: "break-word" }}>
-                {item.name}
-              </span>
-              <span className="flex flex-wrap items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+            <div className="flex min-w-0 flex-1 basis-48 flex-col gap-1">
+              <span className="text-sm font-semibold text-foreground [overflow-wrap:anywhere]">{item.name}</span>
+              <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
                 {picked ? (
                   <>
-                    <PackageCheck size={13} style={{ color: "#1e40af" }} />
+                    <PackageCheck aria-hidden="true" className="size-[13px] text-blue-800 dark:text-blue-300" />
                     SKU {item.sku}
                     {item.category ? ` · ${item.category}` : ""}
                   </>
                 ) : (
                   <>
-                    <PenLine size={13} />
+                    <PenLine aria-hidden="true" className="size-[13px]" />
                     Diketik manual — ditandai di laporan
                   </>
                 )}
               </span>
             </div>
             <div className="flex shrink-0 items-center gap-2">
-              <label className="flex items-center gap-1 text-xs" style={{ color: "var(--text-muted)" }}>
+              <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 Qty
-                <input
+                <Input
                   type="number"
                   inputMode="numeric"
                   min={1}
@@ -119,23 +110,24 @@ export default function CatalogItemList({
                   value={item.quantity}
                   onChange={(e) => setQuantity(i, e.target.value)}
                   onWheel={(e) => e.currentTarget.blur()}
-                  className="form-input"
-                  style={{ width: "4rem", padding: "0.375rem 0.5rem" }}
+                  className="w-16 bg-card px-2"
                   aria-label={`Jumlah ${item.name}`}
                 />
               </label>
-              <button
+              <Button
                 type="button"
-                className="btn btn-ghost btn-sm"
+                variant="ghost"
+                size="icon"
                 onClick={() => {
                   const next = items.filter((_, n) => n !== i);
                   onChange(next);
                   if (next.length === 0) setAdding(true);
                 }}
                 aria-label={`Hapus ${item.name}`}
+                className="text-muted-foreground hover:text-destructive"
               >
-                <X size={14} />
-              </button>
+                <X aria-hidden="true" />
+              </Button>
             </div>
           </div>
         );
@@ -160,9 +152,10 @@ export default function CatalogItemList({
           ) : (
             <>
               <div className="flex gap-2">
-                <input
+                <Input
                   type="text"
-                  className="form-input"
+                  className="min-w-0 flex-1 bg-card"
+                  aria-label={manualPlaceholder}
                   value={typed}
                   maxLength={MAX_ITEM_NAME}
                   onChange={(e) => setTyped(e.target.value)}
@@ -174,7 +167,12 @@ export default function CatalogItemList({
                   }}
                   placeholder={manualPlaceholder}
                 />
-                <button type="button" className="btn btn-secondary btn-sm" onClick={addTyped} disabled={!typed.trim()}>
+                <button
+                  type="button"
+                  className={buttonVariants({ variant: "outline", className: "h-11 shrink-0 bg-card md:h-9" })}
+                  onClick={addTyped}
+                  disabled={!typed.trim()}
+                >
                   Tambah
                 </button>
               </div>

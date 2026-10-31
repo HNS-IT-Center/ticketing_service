@@ -29,7 +29,9 @@ import {
   type ChargeRow,
   type VendorOption,
 } from "@/lib/charges";
-import { formatDateTime } from "@/lib/utils";
+import { cn, formatDateTime } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
+import { TONE_CLASSES, type StatusTone } from "@/lib/status-display";
 import RupiahInput from "./RupiahInput";
 import CatalogItemPicker from "@/components/catalog/CatalogItemPicker";
 import CatalogEntryToggle from "@/components/catalog/CatalogEntryToggle";
@@ -42,11 +44,19 @@ import type { PriceReference } from "@/lib/price-reference";
 
 type ActionResult = { error: string } | { success: true };
 
-const KIND_STYLE: Record<ChargeKind, { bg: string; fg: string; border: string }> = {
-  part: { bg: "#dbeafe", fg: "#1e40af", border: "#bfdbfe" },
-  external_service: { bg: "#f3e8ff", fg: "#6b21a8", border: "#e9d5ff" },
-  service_fee: { bg: "#dcfce7", fg: "#166534", border: "#bbf7d0" },
-  other: { bg: "#f1f5f9", fg: "#334155", border: "#e2e8f0" },
+/** The shadcn field look, for the native inputs and selects this form keeps. */
+const FIELD =
+  "h-11 w-full min-w-0 rounded-lg border border-input bg-card px-3 py-1 text-base text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 disabled:opacity-50 aria-invalid:border-destructive md:h-9 md:text-sm";
+const TEXTAREA =
+  "min-h-16 w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2 text-base text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm";
+const LABEL = "text-xs font-semibold text-muted-foreground";
+const DANGER_SOLID = "bg-destructive text-white hover:bg-destructive/90";
+
+const KIND_TONE: Record<ChargeKind, StatusTone> = {
+  part: "blue",
+  external_service: "violet",
+  service_fee: "green",
+  other: "gray",
 };
 
 const DESCRIPTION_HINT: Record<ChargeKind, string> = {
@@ -56,12 +66,9 @@ const DESCRIPTION_HINT: Record<ChargeKind, string> = {
   other: "mis. Kabel fleksibel",
 };
 
-function Pill({ children, bg, fg, border }: { children: React.ReactNode; bg: string; fg: string; border: string }) {
+function Pill({ children, tone }: { children: React.ReactNode; tone: StatusTone }) {
   return (
-    <span
-      className="whitespace-nowrap rounded-full text-[0.71875rem] font-bold"
-      style={{ background: bg, color: fg, border: `1px solid ${border}`, padding: "0.1rem 0.6rem" }}
-    >
+    <span className={cn("whitespace-nowrap rounded-full border px-2.5 py-px text-[0.71875rem] font-bold", TONE_CLASSES[tone])}>
       {children}
     </span>
   );
@@ -69,7 +76,7 @@ function Pill({ children, bg, fg, border }: { children: React.ReactNode; bg: str
 
 function Missing({ children }: { children: React.ReactNode }) {
   return (
-    <span className="font-semibold" style={{ color: "#b45309" }}>
+    <span className="font-semibold text-tone-amber-fg">
       {children}
     </span>
   );
@@ -142,45 +149,45 @@ export default function ChargesPanel({
   };
 
   return (
-    <div className="card flex flex-col gap-4">
+    // A self-contained card (own data-slot), so it renders the same inside the
+    // legacy ticket pages that still embed it.
+    <div data-slot="charges-panel" className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 text-card-foreground shadow-xs md:p-6">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
-          <Receipt size={16} style={{ color: "var(--primary-brand)" }} />
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>Rincian Biaya</h3>
+          <Receipt aria-hidden="true" className="size-4 text-primary" />
+          <h3 className="text-base font-semibold text-foreground">Rincian Biaya</h3>
           {lines.length > 0 && (
             <span
-              className="rounded-full text-[0.71875rem] font-bold"
-              style={{ background: "var(--cream)", border: "1px solid var(--border-brand)", color: "var(--text-secondary)", padding: "0.1rem 0.55rem" }}
+              className="rounded-full border border-border bg-muted px-2 py-px text-[0.71875rem] font-bold text-muted-foreground"
             >
               {lines.length}
             </span>
           )}
         </div>
-        <p className="text-[0.8125rem]" style={{ color: "var(--text-muted)", margin: 0 }}>
+        <p className="text-[0.8125rem] text-muted-foreground">
           Jasa, part, dan pekerjaan vendor untuk tiket ini.
         </p>
         {!perms.canViewCost && (
-          <p className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)", margin: 0 }}>
-            <EyeOff size={12} /> Harga modal tidak ditampilkan untuk akun Anda.
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <EyeOff aria-hidden="true" size={12} /> Harga modal tidak ditampilkan untuk akun Anda.
           </p>
         )}
       </div>
 
       {lines.length === 0 ? (
-        <p className="text-[0.8125rem] italic" style={{ color: "var(--text-muted)", margin: 0 }}>
+        <p className="text-[0.8125rem] text-muted-foreground italic">
           Belum ada biaya yang dicatat.
         </p>
       ) : (
         <ul className="flex list-none flex-col">
           {lines.map((line) => (
-            <li key={line.id} className="flex flex-col gap-3" style={{ borderTop: "1px solid var(--border-light)", padding: "0.85rem 0" }}>
+            <li key={line.id} className="flex flex-col gap-3 border-t border-border py-3.5">
               {editing === line.id ? (
                 <form
                   onSubmit={(e) =>
                     submit(e, (fd) => updateChargeAction(line.id, fd), "Rincian biaya diperbarui.", () => setEditing(null))
                   }
-                  className="flex flex-col gap-3 rounded-lg"
-                  style={{ background: "var(--cream)", padding: "0.875rem" }}
+                  className="flex flex-col gap-3 rounded-lg bg-muted p-3.5"
                 >
                   <LineFields kind={line.kind} line={line} perms={perms} vendors={vendors} serviceJobs={serviceJobs} />
                   <FormButtons pending={pending} label="Simpan" onCancel={() => setEditing(null)} />
@@ -225,22 +232,21 @@ export default function ChargesPanel({
                       setReceiving(null)
                     )
                   }
-                  className="flex flex-col gap-3 rounded-lg"
-                  style={{ background: "#faf5ff", border: "1px solid #e9d5ff", padding: "0.875rem" }}
+                  className={cn("flex flex-col gap-3 rounded-lg border p-3.5 text-foreground", TONE_CLASSES.violet)}
                 >
                   <p className="m-0 text-sm font-semibold">Terima dari {line.vendor?.name ?? "vendor"}</p>
                   <fieldset className="flex flex-wrap gap-4 border-0">
                     {(["repaired", "not_repaired"] as const).map((r) => (
-                      <label key={r} className="flex items-center gap-2 text-sm">
-                        <input type="radio" name="external_result" value={r} required /> {externalResultLabel(r)}
+                      <label key={r} className="flex min-h-11 items-center gap-2 text-sm text-foreground md:min-h-0">
+                        <input type="radio" name="external_result" value={r} required className="size-5 accent-primary md:size-4" /> {externalResultLabel(r)}
                       </label>
                     ))}
                   </fieldset>
                   <label className="flex flex-col gap-1">
-                    <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+                    <span className={LABEL}>
                       Keterangan dari vendor <span className="font-normal">(wajib bila tidak bisa diperbaiki)</span>
                     </span>
-                    <textarea name="external_note" rows={2} className="form-input" defaultValue={line.external_note ?? ""} />
+                    <textarea name="external_note" rows={2} className={TEXTAREA} defaultValue={line.external_note ?? ""} />
                   </label>
                   <PriceFields line={line} perms={perms} />
                   <FormButtons pending={pending} label="Simpan penerimaan" onCancel={() => setReceiving(null)} />
@@ -258,10 +264,9 @@ export default function ChargesPanel({
           href={`/faktur/${ticketId}`}
           target="_blank"
           rel="noopener noreferrer"
-          className="btn btn-secondary btn-sm self-start"
-          style={{ display: "inline-flex", alignItems: "center", gap: "0.4rem" }}
+          className={buttonVariants({ variant: "outline", size: "sm", className: "self-start bg-card" })}
         >
-          <Printer size={14} /> Cetak faktur
+          <Printer aria-hidden="true" size={14} /> Cetak faktur
         </a>
       )}
 
@@ -292,7 +297,7 @@ export default function ChargesPanel({
             }
           />
         ) : (
-          <button type="button" className="btn btn-secondary btn-sm self-start" onClick={() => setAdding(true)}>
+          <button type="button" className={buttonVariants({ variant: "outline", size: "sm", className: "self-start bg-card" })} onClick={() => setAdding(true)}>
             <Plus size={14} /> Tambah biaya
           </button>
         ))}
@@ -307,12 +312,12 @@ export default function ChargesPanel({
         title={removing.is_part ? "Hapus part?" : "Hapus baris biaya?"}
       >
         {(
-          <div className="flex flex-col gap-3" style={{ marginBottom: "1.5rem" }}>
-            <p className="m-0" style={{ color: "var(--text-secondary)" }}>
-              <strong style={{ color: "var(--text-primary)", wordBreak: "break-word" }}>{removing.description}</strong>{" "}
+          <div className="flex flex-col gap-3">
+            <p className="text-muted-foreground">
+              <strong className="text-foreground [overflow-wrap:anywhere]">{removing.description}</strong>{" "}
               akan dihapus dari rincian biaya tiket ini.
             </p>
-            <p className="m-0 text-sm" style={{ color: "var(--text-muted)" }}>
+            <p className="text-sm text-muted-foreground">
               {removing.is_part
                 ? "Catatan part, harganya, dan fotonya ikut terhapus. Tidak bisa dibatalkan."
                 : removing.kind === "external_service" && externalState(removing) === "at_vendor"
@@ -321,12 +326,12 @@ export default function ChargesPanel({
             </p>
           </div>
         )}
-        <div className="flex justify-end gap-3">
-          <button type="button" className="btn btn-ghost" disabled={pending} onClick={() => setRemoving(null)}>
+        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <button type="button" className={buttonVariants({ variant: "ghost" })} disabled={pending} onClick={() => setRemoving(null)}>
             Batal
           </button>
-          <button type="button" className="btn btn-danger" disabled={pending} onClick={confirmRemove}>
-            {pending ? <span className="spinner spinner-sm" /> : (
+          <button type="button" className={buttonVariants({ className: DANGER_SOLID })} disabled={pending} onClick={confirmRemove}>
+            {pending ? <span aria-hidden="true" className="size-4 animate-spin rounded-full border-2 border-white/40 border-t-white" /> : (
               <>
                 <Trash2 size={14} /> Hapus
               </>
@@ -359,20 +364,20 @@ function LineView({
   canLink: boolean;
   onLink: () => void;
 }) {
-  const style = KIND_STYLE[line.kind];
+  const tone = KIND_TONE[line.kind];
   const state = externalState(line);
   const hasCost = line.unit_cost !== undefined;
   return (
     <div className="flex items-start justify-between gap-3">
       <div className="flex min-w-0 flex-col gap-1.5">
         <div className="flex flex-wrap items-center gap-2">
-          <Pill {...style}>{chargeKindLabel(line.kind)}</Pill>
-          <span className="text-sm font-semibold" style={{ wordBreak: "break-word" }}>
+          <Pill tone={tone}>{chargeKindLabel(line.kind)}</Pill>
+          <span className="text-sm font-semibold [overflow-wrap:anywhere]">
             {line.description}
           </span>
           {line.quantity > 1 && <span className="text-[0.8125rem] font-bold">× {line.quantity}</span>}
           {line.job_points !== null && line.job_points > 0 && (
-            <Pill bg="#fef9c3" fg="#854d0e" border="#fde68a">
+            <Pill tone="amber">
               +{line.job_points * line.quantity} poin
             </Pill>
           )}
@@ -380,24 +385,23 @@ function LineView({
         {line.is_part && (
           <div className="flex flex-wrap items-center gap-2 text-xs">
             {line.accurate_code ? (
-              <span style={{ color: "var(--text-muted)" }}>
+              <span className="text-muted-foreground">
                 Kode Accurate{" "}
-                <strong style={{ fontFamily: "ui-monospace, monospace", color: "var(--text-secondary)" }}>
+                <strong className="font-mono text-foreground">
                   {line.accurate_code}
                 </strong>
               </span>
             ) : (
               <>
-                <Pill bg="#fef3c7" fg="#92400e" border="#fde68a">
+                <Pill tone="amber">
                   Menunggu kode Accurate
                 </Pill>
                 {canLink && (
                   <button
                     type="button"
-                    className="btn btn-secondary btn-sm"
+                    className={buttonVariants({ variant: "outline", size: "sm", className: "bg-card" })}
                     disabled={pending}
                     onClick={onLink}
-                    style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}
                   >
                     <Link2 size={13} /> Masukkan kode
                   </button>
@@ -407,36 +411,32 @@ function LineView({
           </div>
         )}
         {line.kind === "service_fee" && !line.service_job && perms.canEdit && (
-          <p className="m-0 text-xs" style={{ color: "#b45309" }}>
+          <p className="text-xs text-tone-amber-fg">
             Diketik bebas, belum dari Daftar Jasa — tidak terhitung di target. Pilih jasanya lewat Ubah.
           </p>
         )}
 
         {(line.vendor || state) && (
-          <div className="flex flex-wrap items-center gap-2 text-xs" style={{ color: "var(--text-muted)" }}>
+          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
             {line.vendor && (
               <span className="flex items-center gap-1">
                 <Truck size={12} /> {line.vendor.name}
               </span>
             )}
             {state === "at_vendor" && line.sent_at && (
-              <Pill bg="#fef3c7" fg="#92400e" border="#fde68a">
+              <Pill tone="amber">
                 Di vendor sejak {formatDateTime(line.sent_at)}
               </Pill>
             )}
             {state === "returned" && line.external_result && (
-              <Pill
-                {...(line.external_result === "repaired"
-                  ? { bg: "#dcfce7", fg: "#166534", border: "#bbf7d0" }
-                  : { bg: "#fee2e2", fg: "#991b1b", border: "#fecaca" })}
-              >
+              <Pill tone={line.external_result === "repaired" ? "green" : "red"}>
                 Kembali · {externalResultLabel(line.external_result)}
               </Pill>
             )}
           </div>
         )}
         {line.external_note && (
-          <p className="m-0 text-[0.8125rem]" style={{ color: "var(--text-secondary)", wordBreak: "break-word" }}>
+          <p className="text-[0.8125rem] text-muted-foreground [overflow-wrap:anywhere]">
             {line.external_note}
           </p>
         )}
@@ -462,7 +462,7 @@ function LineView({
             )}
           </span>
           {hasCost && (
-            <span style={{ color: "var(--text-secondary)" }}>
+            <span className="text-muted-foreground">
               Modal:{" "}
               {line.unit_cost === null || line.unit_cost === undefined ? (
                 line.kind === "service_fee" ? "—" : <Missing>belum diisi</Missing>
@@ -472,7 +472,7 @@ function LineView({
             </span>
           )}
           {perms.canViewMargin && typeof line.unit_cost === "number" && line.unit_price !== null && (
-            <span style={{ color: "var(--text-secondary)" }}>
+            <span className="text-muted-foreground">
               Margin: {formatRupiah((line.unit_price - line.unit_cost) * line.quantity)}
             </span>
           )}
@@ -482,13 +482,13 @@ function LineView({
       {perms.canEdit && (
         <div className="flex shrink-0 flex-col items-end gap-1.5">
           {state === "at_vendor" && (
-            <button type="button" className="btn btn-primary btn-sm" disabled={pending} onClick={onReceive}>
+            <button type="button" className={buttonVariants({ size: "sm" })} disabled={pending} onClick={onReceive}>
               <PackageCheck size={14} /> Terima
             </button>
           )}
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            className={buttonVariants({ variant: "ghost", size: "sm" })}
             disabled={pending}
             onClick={onEdit}
             aria-label={`Ubah ${line.description}`}
@@ -497,11 +497,10 @@ function LineView({
           </button>
           <button
             type="button"
-            className="btn btn-ghost btn-sm"
+            className={buttonVariants({ variant: "ghost", size: "sm", className: "text-destructive hover:text-destructive" })}
             disabled={pending}
             onClick={onRemove}
             aria-label={`Hapus ${line.description}`}
-            style={{ color: "var(--accent-brand)" }}
           >
             <Trash2 size={14} />
           </button>
@@ -528,20 +527,19 @@ function LinkCodeForm({
   const [picked, setPicked] = useState<CatalogItem | null>(null);
   return (
     <div
-      className="flex flex-col gap-3 rounded-lg"
-      style={{ background: "#eff6ff", border: "1px solid #bfdbfe", padding: "0.875rem" }}
+      className={cn("flex flex-col gap-3 rounded-lg border p-3.5", TONE_CLASSES.blue)}
     >
-      <p className="m-0 text-sm font-semibold">Masukkan kode Accurate</p>
+      <p className="text-sm font-semibold">Masukkan kode Accurate</p>
       {picked ? (
         <div className="flex flex-col gap-1">
-          <span className="text-sm font-semibold" style={{ color: "#1e3a8a", wordBreak: "break-word" }}>
+          <span className="text-sm font-semibold [overflow-wrap:anywhere]">
             {picked.name}
           </span>
-          <span className="text-xs" style={{ color: "#1e40af" }}>
+          <span className="text-xs">
             Kode {picked.sku}
             {picked.category ? ` · ${picked.category}` : ""}
           </span>
-          <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+          <span className="text-xs text-muted-foreground">
             Nama part di tiket dan di faktur akan diganti dengan nama ini. Harga tidak berubah.
           </span>
         </div>
@@ -554,16 +552,16 @@ function LinkCodeForm({
       )}
       <div className="flex flex-wrap gap-2">
         {picked && (
-          <button type="button" className="btn btn-primary btn-sm" disabled={pending} onClick={() => onConfirm(picked)}>
+          <button type="button" className={buttonVariants({ size: "sm" })} disabled={pending} onClick={() => onConfirm(picked)}>
             <Link2 size={14} /> Tautkan
           </button>
         )}
         {picked && (
-          <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => setPicked(null)}>
+          <button type="button" className={buttonVariants({ variant: "ghost", size: "sm" })} disabled={pending} onClick={() => setPicked(null)}>
             Pilih lain
           </button>
         )}
-        <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={onCancel}>
+        <button type="button" className={buttonVariants({ variant: "ghost", size: "sm" })} disabled={pending} onClick={onCancel}>
           Batal
         </button>
       </div>
@@ -581,13 +579,13 @@ const SHORT_DATE = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "sh
 function PriceHint({ reference }: { reference: PriceReference }) {
   const last = `${formatRupiahCompact(reference.last)}, ${SHORT_DATE.format(new Date(reference.lastAt))}`;
   return (
-    <span className="text-xs" style={{ color: "#1e40af" }}>
+    <span className="text-xs text-tone-blue-fg">
       {reference.count === 1 || reference.min === reference.max
         ? `Terakhir dijual ${last}`
         : `Biasanya ${formatRupiahCompact(reference.min)}–${formatRupiahCompact(reference.max)} · tengah ${formatRupiahCompact(
             reference.median
           )} · ${reference.count}× · terakhir ${last}`}{" "}
-      <span style={{ color: "var(--text-muted)" }}>({reference.label})</span>
+      <span className="text-muted-foreground">({reference.label})</span>
     </span>
   );
 }
@@ -624,11 +622,11 @@ function VendorSelect({
   const required = kind === "external_service";
   return (
     <label className="flex min-w-0 flex-col gap-1">
-      <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+      <span className={LABEL}>
         {kind === "external_service" ? "Vendor service" : "Supplier"}{" "}
         {!required && <span className="font-normal">(opsional)</span>}
       </span>
-      <select name="vendor_id" defaultValue={current?.id ?? draft.vendor_id ?? ""} required={required} className="form-input">
+      <select name="vendor_id" defaultValue={current?.id ?? draft.vendor_id ?? ""} required={required} className={FIELD}>
         <option value="">{required ? "Pilih vendor…" : "—"}</option>
         {keepCurrent && <option value={current.id}>{current.name} (nonaktif)</option>}
         {options.map((v) => (
@@ -638,7 +636,7 @@ function VendorSelect({
         ))}
       </select>
       {required && options.length === 0 && (
-        <span className="flex items-center gap-1 text-xs" style={{ color: "#b45309" }}>
+        <span className="flex items-center gap-1 text-xs text-tone-amber-fg">
           <AlertTriangle size={12} /> Belum ada vendor service eksternal. Minta Admin atau Head Teknisi menambahkannya di
           Daftar Vendor.
         </span>
@@ -670,7 +668,7 @@ function LineFields({
       {ownFields && (
         <div className="grid gap-3 sm:grid-cols-[1fr_6rem]">
           <label className="flex min-w-0 flex-col gap-1">
-            <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+            <span className={LABEL}>
               Keterangan
             </span>
             <input
@@ -679,11 +677,11 @@ function LineFields({
               maxLength={MAX_DESCRIPTION}
               defaultValue={line?.description ?? draft.description ?? ""}
               placeholder={DESCRIPTION_HINT[kind]}
-              className="form-input"
+              className={FIELD}
             />
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+            <span className={LABEL}>
               Jumlah
             </span>
             <input
@@ -693,7 +691,7 @@ function LineFields({
               max={MAX_CHARGE_QUANTITY}
               defaultValue={line?.quantity ?? (draft.quantity || 1)}
               required
-              className="form-input"
+              className={FIELD}
               onWheel={(e) => e.currentTarget.blur()}
             />
           </label>
@@ -702,10 +700,10 @@ function LineFields({
       <VendorSelect kind={kind} vendors={vendors} current={line?.vendor} />
       {kind === "external_service" && (
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+          <span className={LABEL}>
             Catatan <span className="font-normal">(opsional — yang dikirim, keluhan, estimasi)</span>
           </span>
-          <textarea name="external_note" rows={2} defaultValue={line?.external_note ?? draft.external_note ?? ""} className="form-input" />
+          <textarea name="external_note" rows={2} defaultValue={line?.external_note ?? draft.external_note ?? ""} className={TEXTAREA} />
         </label>
       )}
       <PriceFields line={line} perms={perms} />
@@ -743,7 +741,7 @@ function JobFields({
     <>
       <div className="grid gap-3 sm:grid-cols-[1fr_6rem]">
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+          <span className={LABEL}>
             Jasa
           </span>
           <select
@@ -751,7 +749,7 @@ function JobFields({
             value={jobId}
             onChange={(e) => setJobId(e.target.value)}
             required
-            className="form-input"
+            className={FIELD}
           >
             <option value="">Pilih jasa…</option>
             {keepCurrent && <option value={keepCurrent.id}>{keepCurrent.name} (nonaktif)</option>}
@@ -764,7 +762,7 @@ function JobFields({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+          <span className={LABEL}>
             Jumlah
           </span>
           <input
@@ -774,18 +772,18 @@ function JobFields({
             max={MAX_CHARGE_QUANTITY}
             defaultValue={line?.quantity ?? (draft.quantity || 1)}
             required
-            className="form-input"
+            className={FIELD}
             onWheel={(e) => e.currentTarget.blur()}
           />
         </label>
       </div>
       {line && !current && (
-        <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>
+        <p className="text-xs text-muted-foreground">
           Baris lama ini diketik &ldquo;{line.description}&rdquo;. Pilih jasa yang sesuai supaya terhitung di target.
         </p>
       )}
       {serviceJobs.length === 0 && (
-        <p className="m-0 flex items-center gap-1 text-xs" style={{ color: "#b45309" }}>
+        <p className="flex items-center gap-1 text-xs text-tone-amber-fg">
           <AlertTriangle size={12} /> Daftar Jasa masih kosong. Minta Admin atau Head Teknisi mengisinya.
         </p>
       )}
@@ -797,7 +795,7 @@ function JobFields({
         </div>
       )}
       {!perms.canEditPrice && job && (
-        <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>
+        <p className="text-xs text-muted-foreground">
           Harga jual mengikuti Daftar Jasa
           {job.default_price !== null ? `: ${formatRupiah(job.default_price)}` : " (belum ada harga default)"}.
         </p>
@@ -815,7 +813,7 @@ function PartEditFields({ line }: { line: ChargeRow }) {
   const linked = Boolean(line.accurate_code);
   const quantity = (
     <label className="flex flex-col gap-1">
-      <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+      <span className={LABEL}>
         Jumlah
       </span>
       <input
@@ -825,7 +823,7 @@ function PartEditFields({ line }: { line: ChargeRow }) {
         max={MAX_CHARGE_QUANTITY}
         defaultValue={line.quantity}
         required
-        className="form-input"
+        className={FIELD}
         onWheel={(e) => e.currentTarget.blur()}
       />
     </label>
@@ -834,12 +832,12 @@ function PartEditFields({ line }: { line: ChargeRow }) {
     return (
       <div className="grid gap-3 sm:grid-cols-[1fr_6rem]">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+          <span className={LABEL}>
             Barang
           </span>
-          <span className="text-sm" style={{ wordBreak: "break-word", paddingTop: "0.4rem" }}>
+          <span className="pt-1.5 text-sm [overflow-wrap:anywhere]">
             {line.description}{" "}
-            <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+            <span className="text-xs text-muted-foreground">
               · kode {line.accurate_code}
             </span>
           </span>
@@ -852,10 +850,10 @@ function PartEditFields({ line }: { line: ChargeRow }) {
     <>
       <div className="grid gap-3 sm:grid-cols-[1fr_6rem]">
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+          <span className={LABEL}>
             Jenis part
           </span>
-          <select name="part" value={part} onChange={(e) => setPart(e.target.value as ServicePart)} className="form-input">
+          <select name="part" value={part} onChange={(e) => setPart(e.target.value as ServicePart)} className={FIELD}>
             {SERVICE_PART_ORDER.map((p) => (
               <option key={p} value={p}>
                 {servicePartLabel(p)}
@@ -866,10 +864,10 @@ function PartEditFields({ line }: { line: ChargeRow }) {
         {quantity}
       </div>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+        <span className={LABEL}>
           Nama barang{" "}
           {!requiresItemName(part) && (
-            <span className="font-normal" style={{ color: "var(--text-muted)" }}>
+            <span className="font-normal">
               — kosongkan kalau belum tahu, tercatat sebagai &ldquo;{servicePartLabel(part)}&rdquo;
             </span>
           )}
@@ -879,7 +877,7 @@ function PartEditFields({ line }: { line: ChargeRow }) {
           defaultValue={line.part_item_name ?? ""}
           required={requiresItemName(part)}
           maxLength={MAX_DESCRIPTION}
-          className="form-input"
+          className={FIELD}
         />
       </label>
     </>
@@ -918,10 +916,10 @@ function PartFields({
     <>
       <div className="grid gap-3 sm:grid-cols-[1fr_6rem]">
         <label className="flex min-w-0 flex-col gap-1">
-          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+          <span className={LABEL}>
             Jenis part
           </span>
-          <select name="part" value={part} onChange={(e) => setPart(e.target.value as ServicePart)} className="form-input">
+          <select name="part" value={part} onChange={(e) => setPart(e.target.value as ServicePart)} className={FIELD}>
             {SERVICE_PART_ORDER.map((p) => (
               <option key={p} value={p}>
                 {servicePartLabel(p)}
@@ -930,7 +928,7 @@ function PartFields({
           </select>
         </label>
         <label className="flex flex-col gap-1">
-          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+          <span className={LABEL}>
             Jumlah
           </span>
           <input
@@ -940,36 +938,35 @@ function PartFields({
             max={MAX_CHARGE_QUANTITY}
             defaultValue={draft.quantity || 1}
             required
-            className="form-input"
+            className={FIELD}
             onWheel={(e) => e.currentTarget.blur()}
           />
         </label>
       </div>
 
       <div className="flex flex-col gap-1">
-        <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+        <span className={LABEL}>
           Barang{" "}
           {!nameRequired && (
-            <span className="font-normal" style={{ color: "var(--text-muted)" }}>
+            <span className="font-normal">
               — kosongkan kalau belum tahu, tercatat sebagai &ldquo;{servicePartLabel(part)}&rdquo;
             </span>
           )}
         </span>
         {picked ? (
           <div
-            className="flex items-start justify-between gap-3 rounded-lg border"
-            style={{ borderColor: "#bfdbfe", background: "#eff6ff", padding: "0.6rem 0.75rem" }}
+            className={cn("flex items-start justify-between gap-3 rounded-lg border px-3 py-2.5", TONE_CLASSES.blue)}
           >
             <input type="hidden" name="catalog_item_id" value={picked.id} />
             <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="text-sm font-semibold" style={{ color: "#1e3a8a", wordBreak: "break-word" }}>
+              <span className="text-sm font-semibold [overflow-wrap:anywhere]">
                 {picked.name}
               </span>
-              <span className="text-xs" style={{ color: "#1e40af" }}>
+              <span className="text-xs">
                 Kode Accurate {picked.sku}
               </span>
             </div>
-            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setPicked(null)}>
+            <button type="button" className={buttonVariants({ variant: "ghost", size: "sm" })} onClick={() => setPicked(null)}>
               Ganti
             </button>
           </div>
@@ -981,7 +978,7 @@ function PartFields({
               maxLength={MAX_DESCRIPTION}
               defaultValue={draft.item_name ?? ""}
               placeholder={`mis. ${servicePartLabel(part)} — kodenya bisa dimasukkan nanti`}
-              className="form-input"
+              className={FIELD}
             />
             {catalogEnabled && (
               <CatalogEntryToggle to="search" label="Cari di katalog Accurate" onClick={() => setTyping(false)} />
@@ -1090,23 +1087,22 @@ function AddForm({
           return next;
         });
       }}
-      className="flex flex-col gap-3 rounded-lg"
-      style={{ background: "var(--cream)", padding: "1rem" }}
+      className="flex flex-col gap-3 rounded-lg bg-muted p-4"
     >
       {initial && generation === 0 && (
-        <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>
+        <p className="text-xs text-muted-foreground">
           Isian sebelumnya dipulihkan.
         </p>
       )}
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
+        <span className={LABEL}>
           Jenis biaya
         </span>
         <select
           name="kind"
           value={kind}
           onChange={(e) => setKind(e.target.value as ChargeKind)}
-          className="form-input"
+          className={FIELD}
         >
           {/* Part right after the labour, since the two are nearly always recorded together. */}
           {(["service_fee", "part", ...ADDABLE_CHARGE_KINDS.filter((k) => k !== "service_fee")] as ChargeKind[]).map((k) => (
@@ -1139,7 +1135,7 @@ function AddForm({
         )}
       </DraftValues.Provider>
       {kind === "external_service" && (
-        <p className="m-0 text-xs" style={{ color: "var(--text-muted)" }}>
+        <p className="text-xs text-muted-foreground">
           Tercatat dikirim ke vendor sekarang. Saat kembali, klik <strong>Terima</strong> lalu catat hasil dan harganya.
           Tiket tidak bisa diselesaikan selama pekerjaan masih di vendor.
         </p>
@@ -1151,7 +1147,7 @@ function AddForm({
           onCancel={onCancel}
         />
         {hasInput && (
-          <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={reset} style={{ color: "var(--text-muted)" }}>
+          <button type="button" className={buttonVariants({ variant: "ghost", size: "sm", className: "text-muted-foreground" })} disabled={pending} onClick={reset}>
             Kosongkan
           </button>
         )}
@@ -1181,10 +1177,10 @@ function draftAmount(raw: string | undefined): number | null | undefined {
 function FormButtons({ pending, label, onCancel }: { pending: boolean; label: string; onCancel: () => void }) {
   return (
     <div className="flex gap-2">
-      <button type="submit" className="btn btn-primary btn-sm" disabled={pending}>
+      <button type="submit" className={buttonVariants({ size: "sm" })} disabled={pending}>
         {pending ? "Menyimpan…" : label}
       </button>
-      <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={onCancel}>
+      <button type="button" className={buttonVariants({ variant: "ghost", size: "sm" })} disabled={pending} onClick={onCancel}>
         Batal
       </button>
     </div>
@@ -1194,26 +1190,25 @@ function FormButtons({ pending, label, onCancel }: { pending: boolean; label: st
 function SummaryView({ summary, perms }: { summary: ReturnType<typeof summarizeCharges>; perms: ChargePermissions }) {
   return (
     <div
-      className="flex flex-col gap-2 rounded-lg text-sm"
-      style={{ background: "var(--cream)", border: "1px solid var(--border-brand)", padding: "0.875rem 1rem" }}
+      className="flex flex-col gap-2 rounded-lg border border-border bg-muted px-4 py-3.5 text-sm"
     >
       <div className="flex items-baseline justify-between gap-3">
         <span className="font-semibold">Total tagihan</span>
         <strong className="text-base">{formatRupiah(summary.total)}</strong>
       </div>
       {summary.unpriced > 0 && (
-        <p className="m-0 flex items-center gap-1.5 text-xs" style={{ color: "#b45309" }}>
+        <p className="flex items-center gap-1.5 text-xs text-tone-amber-fg">
           <AlertTriangle size={12} /> {summary.unpriced} baris belum ada harga jual — total belum final.
         </p>
       )}
       {perms.canViewCost && (
         <>
-          <div className="flex items-baseline justify-between gap-3" style={{ color: "var(--text-secondary)" }}>
+          <div className="flex items-baseline justify-between gap-3 text-muted-foreground">
             <span>Total modal</span>
             <span>{formatRupiah(summary.cost)}</span>
           </div>
           {summary.uncosted > 0 && (
-            <p className="m-0 flex items-center gap-1.5 text-xs" style={{ color: "#b45309" }}>
+            <p className="flex items-center gap-1.5 text-xs text-tone-amber-fg">
               <AlertTriangle size={12} /> {summary.uncosted} baris belum ada harga modal.
             </p>
           )}
@@ -1222,7 +1217,7 @@ function SummaryView({ summary, perms }: { summary: ReturnType<typeof summarizeC
       {perms.canViewMargin && (
         <div className="flex items-baseline justify-between gap-3">
           <span>Margin{!summary.complete && " (sementara)"}</span>
-          <strong style={{ color: summary.margin < 0 ? "var(--accent-brand)" : "#166534" }}>
+          <strong className={summary.margin < 0 ? "text-destructive" : "text-tone-green-fg"}>
             {formatRupiah(summary.margin)}
           </strong>
         </div>

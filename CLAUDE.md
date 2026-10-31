@@ -1076,7 +1076,7 @@ Phase 3 is split by the owner's call (2026-10-28): the four heaviest technician 
 | UI3a.5 | **Profile + Schedule** | ✅ `6a15895` | "Cancelled" stat and "Access Denied" were `var(--accent)` (near-white) — now red. `ProfileForm` / `ChangePasswordForm` stay legacy (shared with admin, Phase 4): the profile root deliberately has **no** `data-slot`. Schedule dialog = shadcn Dialog + Tabs. 42 → 3 |
 | UI3a.6 | **Unused CSS** | ✅ `5da4d7b` | `.workload-bar/-fill`, `.tech-stats-grid`, `.tech-workload-card` (−43 lines; `globals.css` 1,267) |
 | UI3a.7 | **Verification** | ✅ | budi at 360×800 and 1024: dashboard, list (search keeps `q`, chips keep it too, Clear link identical), leaderboard both tabs, profile, schedule (denied and coordinator). Request Ticket → "Requested" + Cancel → "Request cancelled." round trip on the local DB. Local fixtures used and **reverted**: budi assigned to a store and made coordinator for the test, both undone; the request was cancelled. No console errors |
-| UI3b | **Ticket detail, StatusUpdater (proof upload), ReplacedPartsPanel, CreateTicketForm, ChargesPanel** | ⬜ | Waits for the WIP on `feat/catalog-pcbuild-upgrade` to be committed. (`ProfileForm` / `ChangePasswordForm` were migrated in UI-4a) |
+| UI3b | **Ticket detail, StatusUpdater (proof upload), ReplacedPartsPanel, CreateTicketForm, ChargesPanel** | ✅ | Done in SPRINT UI-3b below, after the WIP was committed (`77ac939`). (`ProfileForm` / `ChangePasswordForm` were migrated in UI-4a) |
 
 Checks: `tsc` clean; repo lint 141 → 129 problems; tests 1016 pass; `npm run build` passes. Inline styles in the 3a files: 256 → 35, every one a runtime value.
 
@@ -1151,6 +1151,20 @@ Owner's go-ahead 2026-10-31 while the WIP on `feat/catalog-pcbuild-upgrade` is s
 Checks: `tsc` clean; repo lint 84 → 83 problems; tests 1025 pass; `npm run build` passes. Inline styles in the 14 files 7a touched: 70 → 1 (a computed width).
 
 **Still open for the owner:** delete the unused `LeaderboardSnapshot.tsx` and `TermsModal.tsx`?; dark mode (after 7b); a `not-found.tsx`.
+
+### SPRINT UI-3b 2026-10-31 — UI overhaul, Phase 3b: technician ticket detail and the intake wizard
+After the owner committed the WIP (`77ac939`) and merged the UI branch into it (conflicts resolved in `beb62ae`: the new shell keeps `DraftScopeProvider` inside `<main id="konten">`). Presentation only: actions, validation, drafts and status rules untouched; staff-facing text kept word for word. **Not pushed** — the owner approves any push or merge to main.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| UI3b.1 | **Ticket detail sections** | ✅ `4d634dc` | New `components/tickets/TicketSections.tsx` (DetailCard, TicketHeader, CustomerInfoCard, AttachmentsCard, StatusHistoryCard, ProofAttachmentsCard) + `proof.ts`; `IntakeItems` on DetailCard. Reusable by the admin / sales / RMA detail pages in 4b and 5b |
+| UI3b.2 | **StatusUpdater** | ✅ `1dbd39b` | Owner's choice "B": on a phone the actions are pinned to the bottom of the screen; from md they sit in the header. Dialogs on FormField / Textarea / NativeSelect. Logic diff-checked identical |
+| UI3b.3 | **ReplacedPartsPanel** | ✅ `e6fe9ef` | Card + form primitives, 44px photo picker, icon delete |
+| UI3b.4 | **ChargesPanel + catalog picker** | ✅ `c2ecfef` | Tone pills per charge kind; `CatalogItemPicker` / `CatalogEntryToggle` on tokens |
+| UI3b.5 | **CreateTicketForm (staff wizard, 4 create pages)** | ✅ `5662b13` | Phone: "Langkah X dari 4" + progress bar instead of four squeezed circles. Device tiles, case and upgrade chips are `aria-pressed` toggles; checkbox groups are fieldsets. `UnitField` / `CatalogItemList` migrated; create page roots get a data-slot. Draft restore and "Kosongkan" checked live |
+| UI3b.6 | **Verification** | ✅ | Seed ticket DEMO-000002 temporarily assigned to budi (restored afterwards): detail, every StatusUpdater dialog opened and closed, parts / charges forms and catalog search — nothing saved. Wizard walked to Confirm, not submitted, test draft discarded. 360 and 1024, no horizontal scroll |
+
+Checks: `tsc` clean; repo lint 77 problems (was 83 at 7a); tests 1079 pass; `npm run build` passes. Inline styles in the 3b files: 401 → 1 (the stepper's computed width). `app/customer/tickets/create/CreateTicketForm.tsx` left alone — dead customer portal (BL8/BL29).
 
 ## 📋 BACKLOG — what is likely to come next
 

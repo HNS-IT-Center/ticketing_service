@@ -1,6 +1,14 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
+import Link from "next/link";
 import { TrendingUp } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
+import { EmptyState } from "@/components/app/EmptyState";
+import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
+import { PageHeader } from "@/components/app/PageHeader";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { NativeSelect } from "@/components/ui/native-select";
+import { cn } from "@/lib/utils";
 import ExportToPDF from "./ExportToPDF";
 import SharePerformance from "./SharePerformance";
 import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
@@ -292,181 +300,176 @@ export default async function AdminPerformancePage({
     }
   }
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem", minWidth: 0 }}>
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <div>
-          <h1 style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-            <TrendingUp size={24} /> Performance Tracking
-          </h1>
-          <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>
-            {filterMonth && filterYear
-              ? `${MONTHS[filterMonth - 1]} ${filterYear} — filtered period`
-              : "All-time technician statistics"}
-          </p>
-        </div>
+  const monthLabel = filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time";
+  const ranked = rows.map((r, i) => ({ ...r, rank: i + 1 }));
+  type RankedRow = (typeof ranked)[number];
 
-        {/* Filter toolbar — wraps gracefully on mobile */}
-        <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap", alignItems: "flex-start" }}>
-          <form style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap", minWidth: 0 }}>
-            <select name="store" defaultValue={filterStore ?? ""} className="form-input" style={{ width: "auto", minWidth: 0 }}>
-              <option value="">All stores</option>
-              {stores.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
-            </select>
-            <select name="month" defaultValue={filterMonth ?? ""} className="form-input" style={{ width: "auto", minWidth: 0 }}>
-              <option value="">All months</option>
-              {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </select>
-            <select name="year" defaultValue={filterYear ?? now.getFullYear()} className="form-input" style={{ width: "auto", minWidth: 0 }}>
-              {[2024, 2025, 2026].map((y) => <option key={y} value={y}>{y}</option>)}
-            </select>
-            <button type="submit" className="btn btn-primary btn-sm">Apply</button>
-            {(filterMonth || filterYear || filterStore) && (
-              <a href="/admin/performance" className="btn btn-ghost btn-sm">Clear</a>
-            )}
-          </form>
-          <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap" }}>
-            {rows.length > 0 && (
-              <SharePerformance
-                topTechnician={rows[0]}
-                monthLabel={filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time"}
-              />
-            )}
+  const medal = (rank: number) => (rank === 1 ? "🥇" : rank === 2 ? "🥈" : rank === 3 ? "🥉" : `#${rank}`);
+
+  // One tag per ticket type: how many, and the average worked time when the
+  // time log has any. Same figures as before, in one place for both layouts.
+  const breakdown = (p: RankedRow) =>
+    p.details && Object.keys(p.details).length > 0 ? (
+      <ul className="flex flex-wrap gap-1.5">
+        {Object.entries(p.details).map(([type, stats]) => {
+          const avgFormatted = stats.timedCount > 0 ? formatAvgTime(stats.totalHours / stats.timedCount) : null;
+          const typeLabel = type.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+          return (
+            <li
+              key={type}
+              className="flex flex-col gap-0.5 rounded-md border border-border bg-muted/60 px-2 py-1 text-[0.7rem] leading-tight"
+            >
+              <span className="font-semibold whitespace-nowrap text-foreground">
+                {typeLabel} × {stats.count}
+              </span>
+              <span className={cn("whitespace-nowrap", avgFormatted ? "font-semibold text-primary" : "text-muted-foreground")}>
+                {avgFormatted ? `⏱ avg ${avgFormatted}` : "no time tracked"}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+    ) : null;
+
+  const columns: DataTableColumn<RankedRow>[] = [
+    {
+      key: "rank",
+      header: "Rank",
+      mobile: "hidden",
+      className: "w-16",
+      cell: (p) => (
+        <span className={cn("font-extrabold", p.rank === 1 ? "text-amber-600" : "text-muted-foreground")}>
+          {medal(p.rank)}
+        </span>
+      ),
+    },
+    {
+      key: "name",
+      header: "Technician",
+      mobile: "title",
+      className: "min-w-56",
+      cell: (p) => (
+        <div className="flex flex-col gap-2">
+          <span className="font-semibold">
+            <span className="mr-1.5 md:hidden">{medal(p.rank)}</span>
+            {p.name}
+          </span>
+          <div className="hidden md:block">{breakdown(p)}</div>
+        </div>
+      ),
+    },
+    {
+      key: "shift",
+      header: "Shift",
+      // Shift and Active give way first on a narrow desktop; the phone card keeps them.
+      className: "hidden whitespace-nowrap xl:table-cell",
+      cell: (p) => <span className="capitalize">{p.shift ?? "—"}</span>,
+    },
+    {
+      key: "active",
+      header: "Active",
+      className: "hidden xl:table-cell",
+      cell: (p) => (
+        <span className="inline-flex rounded-full bg-tone-blue-bg px-2 py-0.5 text-xs font-semibold text-tone-blue-fg">
+          {p.activeTickets}
+        </span>
+      ),
+    },
+    { key: "completed", header: "Completed", cell: (p) => <span className="font-semibold">{p.tickets}</span> },
+    { key: "success", header: "Success", cell: (p) => <span className="font-semibold text-tone-green-fg">{p.success}</span> },
+    { key: "failed", header: "Cancelled", cell: (p) => <span className="font-semibold text-destructive">{p.failed}</span> },
+    {
+      key: "points",
+      header: "Points",
+      mobile: "badge",
+      className: "whitespace-nowrap text-right",
+      cell: (p) => <span className="font-bold whitespace-nowrap text-primary">{p.points} pts</span>,
+    },
+    {
+      key: "breakdown",
+      header: "Breakdown",
+      mobile: "footer",
+      // The tags sit under the name on desktop; this column is the phone card's.
+      className: "hidden",
+      cell: (p) => breakdown(p),
+    },
+  ];
+
+  return (
+    // Built from components/app and shadcn only (the UI-1 reset rule).
+    <div data-slot="admin-performance" className="flex min-w-0 flex-col gap-5">
+      <PageHeader
+        title={
+          <span className="flex items-center gap-2">
+            <TrendingUp aria-hidden="true" className="size-6" /> Performance Tracking
+          </span>
+        }
+        description={
+          filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear} — filtered period` : "All-time technician statistics"
+        }
+        actions={
+          <>
+            {rows.length > 0 && <SharePerformance topTechnician={rows[0]} monthLabel={monthLabel} />}
             <ExportToPDF
               rows={rows}
               filterMonth={filterMonth}
               filterYear={filterYear}
-              monthLabel={filterMonth && filterYear ? `${MONTHS[filterMonth - 1]} ${filterYear}` : "All Time"}
-              storeName={filterStore ? (stores.find(s => s.id === filterStore)?.name ?? null) : null}
+              monthLabel={monthLabel}
+              storeName={filterStore ? (stores.find((s) => s.id === filterStore)?.name ?? null) : null}
             />
-          </div>
-        </div>
-      </div>
+          </>
+        }
+      />
 
-      {rows.length === 0 ? (
-        <div className="card">
-          <div className="empty-state">
-            <TrendingUp size={48} style={{ opacity: 0.2 }} />
-            <p>No performance data for the selected period.</p>
-          </div>
-        </div>
-      ) : (
-        <>
-          {/* ── Desktop table (hidden on mobile) ── */}
-          <div className="admin-ticket-table">
-            <div className="table-wrapper">
-              <table>
-                <thead>
-                  <tr>
-                    <th>Rank</th><th>Technician</th><th>Shift</th>
-                    <th>Active</th><th>Completed</th>
-                    <th>Success</th><th>Cancelled</th><th>Points</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((p, i) => (
-                    <tr key={p.id}>
-                      <td style={{ fontWeight: 800, color: i === 0 ? "#ca8a04" : "var(--text-muted)" }}>
-                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
-                      </td>
-                      <td>
-                        <div style={{ fontWeight: 600 }}>{p.name}</div>
-                        {p.details && (
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem", marginTop: "0.5rem" }}>
-                            {Object.entries(p.details).map(([type, stats]) => {
-                              const avgFormatted = stats.timedCount > 0 ? formatAvgTime(stats.totalHours / stats.timedCount) : null;
-                              const typeLabel = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-                              return (
-                                <div key={type} style={{ fontSize: "0.7rem", background: "var(--cream)", padding: "0.3rem 0.5rem", borderRadius: "0.375rem", border: "1px solid var(--border-light)", display: "flex", flexDirection: "column", gap: "0.1rem" }}>
-                                  <span style={{ fontWeight: 600, color: "var(--text-primary)" }}>{typeLabel} × {stats.count}</span>
-                                  <span style={{ color: avgFormatted ? "var(--primary-brand)" : "var(--text-muted)", fontSize: "0.65rem", fontWeight: avgFormatted ? 600 : 400 }}>
-                                    {avgFormatted ? `⏱ avg ${avgFormatted}` : "no time tracked"}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </td>
-                      <td style={{ textTransform: "capitalize", whiteSpace: "nowrap" }}>{p.shift ?? "—"}</td>
-                      <td><span className="badge badge-technician">{p.activeTickets}</span></td>
-                      <td style={{ fontWeight: 600 }}>{p.tickets}</td>
-                      <td style={{ color: "#16a34a", fontWeight: 600 }}>{p.success}</td>
-                      <td style={{ color: "var(--accent)", fontWeight: 600 }}>{p.failed}</td>
-                      <td style={{ fontWeight: 700, color: "var(--primary-brand)" }}>{p.points} pts</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-
-          {/* ── Mobile cards (hidden on desktop) ── */}
-          <div className="admin-ticket-cards">
-            {rows.map((p, i) => (
-              <div key={p.id} className="card" style={{ display: "flex", flexDirection: "column", gap: "0.75rem", padding: "1rem" }}>
-                {/* Header row */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "0.5rem" }}>
-                  <div>
-                    <div style={{ fontSize: "1rem", fontWeight: 700 }}>
-                      <span style={{ marginRight: "0.4rem" }}>
-                        {i === 0 ? "🥇" : i === 1 ? "🥈" : i === 2 ? "🥉" : `#${i + 1}`}
-                      </span>
-                      {p.name}
-                    </div>
-                    {p.shift && (
-                      <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)", marginTop: "0.15rem", textTransform: "capitalize" }}>
-                        {p.shift} shift
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ fontWeight: 800, fontSize: "1.25rem", color: "var(--primary-brand)", whiteSpace: "nowrap" }}>
-                    {p.points} pts
-                  </div>
-                </div>
-
-                {/* Stats row */}
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "0.5rem" }}>
-                  {[
-                    { label: "Completed", value: p.tickets, color: "var(--text-primary)" },
-                    { label: "Success", value: p.success, color: "#16a34a" },
-                    { label: "Cancelled", value: p.failed, color: "var(--accent)" },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} style={{ background: "var(--cream)", borderRadius: "0.5rem", padding: "0.5rem", textAlign: "center" }}>
-                      <div style={{ fontWeight: 700, color, fontSize: "1.1rem" }}>{value}</div>
-                      <div style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>{label}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Active tickets */}
-                <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-                  <span className="badge badge-technician">{p.activeTickets} active</span>
-                </div>
-
-                {/* Breakdown tags */}
-                {p.details && Object.keys(p.details).length > 0 && (
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.35rem" }}>
-                    {Object.entries(p.details).map(([type, stats]) => {
-                      const avgFormatted = stats.timedCount > 0 ? formatAvgTime(stats.totalHours / stats.timedCount) : null;
-                      const typeLabel = type.replace(/_/g, " ").replace(/\b\w/g, l => l.toUpperCase());
-                      return (
-                        <div key={type} style={{ fontSize: "0.75rem", background: "var(--cream-dark)", padding: "0.3rem 0.6rem", borderRadius: "0.375rem", border: "1px solid var(--border-light)", display: "flex", flexDirection: "column", gap: "0.1rem" }}>
-                          <span style={{ fontWeight: 600 }}>{typeLabel} × {stats.count}</span>
-                          {avgFormatted
-                            ? <span style={{ fontSize: "0.7rem", color: "var(--primary-brand)", fontWeight: 600 }}>⏱ avg {avgFormatted}</span>
-                            : <span style={{ fontSize: "0.7rem", color: "var(--text-muted)" }}>no time tracked</span>
-                          }
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
+      <FilterBar action="/admin/performance">
+        <FilterBarField label="Store" htmlFor="perf-store">
+          <NativeSelect id="perf-store" name="store" defaultValue={filterStore ?? ""}>
+            <option value="">All stores</option>
+            {stores.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
             ))}
-          </div>
-        </>
-      )}
+          </NativeSelect>
+        </FilterBarField>
+        <div className="grid grid-cols-2 gap-2 md:contents">
+          <FilterBarField label="Month" htmlFor="perf-month" className="md:w-36">
+            <NativeSelect id="perf-month" name="month" defaultValue={filterMonth ?? ""}>
+              <option value="">All months</option>
+              {MONTHS.map((m, i) => (
+                <option key={m} value={i + 1}>
+                  {m}
+                </option>
+              ))}
+            </NativeSelect>
+          </FilterBarField>
+          <FilterBarField label="Year" htmlFor="perf-year" className="md:w-28">
+            <NativeSelect id="perf-year" name="year" defaultValue={filterYear ?? now.getFullYear()}>
+              {[2024, 2025, 2026].map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </NativeSelect>
+          </FilterBarField>
+        </div>
+        <div className="flex gap-2 *:flex-1 md:*:flex-none">
+          <Button type="submit">Apply</Button>
+          {(filterMonth || filterYear || filterStore) && (
+            <Link href="/admin/performance" className={buttonVariants({ variant: "ghost" })}>
+              Clear
+            </Link>
+          )}
+        </div>
+      </FilterBar>
+
+      <DataTable
+        caption="Technician performance"
+        columns={columns}
+        rows={ranked}
+        getRowKey={(p) => p.id}
+        empty={<EmptyState icon={TrendingUp} title="No performance data for the selected period." />}
+      />
     </div>
   );
 }

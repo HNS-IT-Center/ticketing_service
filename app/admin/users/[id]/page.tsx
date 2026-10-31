@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
+import { PageHeader } from "@/components/app/PageHeader";
 import EditUserForm from "./EditUserForm";
 
 export const metadata = { title: "Edit User — HNS IT Center" };
@@ -14,9 +15,9 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
   if (!user) notFound();
 
   return (
-    <div className="mx-auto" style={{ maxWidth: "600px" }}>
-      <h1 style={{ marginBottom: "1.5rem" }}>Edit User</h1>
-      <EditUserForm user={user as any} />
+    <div data-slot="edit-user-page" className="flex w-full max-w-2xl flex-col gap-6">
+      <PageHeader breadcrumb={[{ label: "Users", href: "/admin/users" }, { label: user.name }]} title="Edit User" />
+      <EditUserForm user={user} />
     </div>
   );
 }

@@ -3,14 +3,30 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { Loader2 } from "lucide-react";
 import { saveTargetAction } from "@/app/actions/targets";
 import RupiahInput from "@/components/service/RupiahInput";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 
 type Values = { jobs: number | null; revenue: number | null; points: number | null };
 
 /**
  * Set a monthly target — the shop's default, or one technician's own — from
  * the month on screen onward. Earlier months keep the target they had.
+ *
+ * Opens in a dialog: the form used to unfold inside the table cell, which
+ * pushed the whole table sideways.
  */
 export default function TargetEditor({
   scope,
@@ -18,7 +34,9 @@ export default function TargetEditor({
   monthText,
   initial,
   buttonLabel,
+  title,
   canUseDefault = false,
+  className,
 }: {
   /** "default", or a technician's id. */
   scope: string;
@@ -26,8 +44,11 @@ export default function TargetEditor({
   monthText: string;
   initial: Values;
   buttonLabel: string;
+  /** The dialog's heading: whose target this is. */
+  title: string;
   /** A technician with their own target may be sent back to the default. */
   canUseDefault?: boolean;
+  className?: string;
 }) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
@@ -62,68 +83,58 @@ export default function TargetEditor({
     send(fd, "Kembali memakai target umum.");
   };
 
-  if (!open) {
-    return (
-      <button type="button" className="btn btn-secondary btn-sm" onClick={() => setOpen(true)}>
-        {buttonLabel}
-      </button>
-    );
-  }
+  const numberField = (name: "jobs" | "points", label: string) => (
+    <label className="flex flex-col gap-1">
+      <span className="text-xs font-semibold text-muted-foreground">{label}</span>
+      <Input
+        name={name}
+        type="number"
+        min={0}
+        defaultValue={initial[name] ?? ""}
+        placeholder="tanpa target"
+        className="bg-card"
+        onWheel={(e) => e.currentTarget.blur()}
+      />
+    </label>
+  );
 
   return (
-    <form
-      onSubmit={submit}
-      className="flex flex-col gap-3 rounded-lg"
-      style={{ background: "var(--cream)", border: "1px solid var(--border-brand)", padding: "0.875rem", minWidth: "16rem" }}
-    >
-      <div className="grid gap-3 sm:grid-cols-3">
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-            Jasa / bulan
-          </span>
-          <input
-            name="jobs"
-            type="number"
-            min={0}
-            defaultValue={initial.jobs ?? ""}
-            placeholder="tanpa target"
-            className="form-input"
-            onWheel={(e) => e.currentTarget.blur()}
-          />
-        </label>
-        <RupiahInput name="revenue" label="Omzet jasa / bulan" defaultValue={initial.revenue} placeholder="tanpa target" />
-        <label className="flex flex-col gap-1">
-          <span className="text-xs font-semibold" style={{ color: "var(--text-secondary)" }}>
-            Poin / bulan
-          </span>
-          <input
-            name="points"
-            type="number"
-            min={0}
-            defaultValue={initial.points ?? ""}
-            placeholder="tanpa target"
-            className="form-input"
-            onWheel={(e) => e.currentTarget.blur()}
-          />
-        </label>
-      </div>
-      <p className="text-xs" style={{ color: "var(--text-muted)", margin: 0 }}>
-        Berlaku mulai <strong>{monthText}</strong> sampai diubah lagi. Bulan sebelumnya tetap dinilai dengan target lamanya.
-        Kosongkan kolom yang tidak ditargetkan.
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <button type="submit" className="btn btn-primary btn-sm" disabled={pending}>
-          {pending ? "Menyimpan…" : "Simpan target"}
-        </button>
-        {canUseDefault && (
-          <button type="button" className="btn btn-secondary btn-sm" disabled={pending} onClick={backToDefault}>
-            Pakai target umum
-          </button>
-        )}
-        <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => setOpen(false)}>
-          Batal
-        </button>
-      </div>
-    </form>
+    <Dialog open={open} onOpenChange={(next) => !pending && setOpen(next)}>
+      <DialogTrigger render={<Button variant="outline" size="sm" className={cn("bg-card", className)} />}>
+        {buttonLabel}
+      </DialogTrigger>
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-md">
+        <form onSubmit={submit} className="flex flex-col gap-4">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
+            <DialogDescription>
+              Berlaku mulai <strong className="text-foreground">{monthText}</strong> sampai diubah lagi. Bulan sebelumnya
+              tetap dinilai dengan target lamanya. Kosongkan kolom yang tidak ditargetkan.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex flex-col gap-3">
+            {numberField("jobs", "Jasa / bulan")}
+            <RupiahInput name="revenue" label="Omzet jasa / bulan" defaultValue={initial.revenue} placeholder="tanpa target" />
+            {numberField("points", "Poin / bulan")}
+          </div>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>
+              Batal
+            </Button>
+            {canUseDefault && (
+              <Button type="button" variant="secondary" disabled={pending} onClick={backToDefault}>
+                Pakai target umum
+              </Button>
+            )}
+            <Button type="submit" disabled={pending}>
+              {pending && <Loader2 aria-hidden="true" className="animate-spin" />}
+              {pending ? "Menyimpan…" : "Simpan target"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -1,9 +1,16 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState } from "react";
 import { useSearchParams } from "next/navigation";
 import { loginAction, type FormState } from "@/app/actions/auth";
-import { AlertCircle, Eye, EyeOff, Info, KeyRound } from "lucide-react";
+import { AlertCircle, Info, KeyRound, Loader2 } from "lucide-react";
+import { AuthShell } from "@/components/app/AuthShell";
+import { FormField } from "@/components/app/FormField";
+import { PasswordInput } from "@/components/app/PasswordInput";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { cn } from "@/lib/utils";
 import { useLoginOptions } from "./login-options";
 
 export default function LoginPage() {
@@ -13,95 +20,71 @@ export default function LoginPage() {
   const ssoOff = searchParams.get("sso") === "off";
 
   return (
-    <div className="auth-container">
-      <div className="auth-card">
-        {/* Logo */}
-        <div style={{ textAlign: "center", marginBottom: "2rem" }}>
-          <div style={{ display: "flex", justifyContent: "center", marginBottom: "1.25rem" }}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src="/logo-hns.jpg"
-              alt="HNS IT Center"
-              style={{ width: "160px", height: "80px", objectFit: "contain", borderRadius: "0.5rem", display: "block" }}
-            />
-          </div>
-          <h1 style={{ fontSize: "1.5rem", marginBottom: "0.375rem" }}>
-            Welcome back
-          </h1>
-          <p style={{ color: "var(--text-muted)", fontSize: "0.9375rem" }}>
-            Sign in to your HNS IT Center account
-          </p>
-        </div>
-
-        {ended && <Notice>Sesi Anda telah berakhir. Silakan masuk lagi.</Notice>}
-        {ssoOff && <Notice>Masuk dengan SSO HNS belum diaktifkan di aplikasi ini.</Notice>}
-
-        {ssoEnabled ? (
-          <div className="flex flex-col gap-4">
-            {/* A route handler that redirects to SSO: a full page navigation, not <Link>. */}
-            {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
-            <a href="/auth/sso/login" className="btn btn-primary btn-lg flex items-center justify-center gap-2" style={{ width: "100%" }}>
-              <KeyRound size={18} /> Masuk dengan SSO HNS
-            </a>
-
-            {localLogin === "all" ? (
-              <>
-                <Divider label="atau masuk dengan password" />
-                <PasswordForm />
-              </>
-            ) : (
-              <details className="rounded-lg border p-4" style={{ borderColor: "var(--border)" }}>
-                <summary className="cursor-pointer text-sm font-medium" style={{ color: "var(--text-secondary)" }}>
-                  Login darurat (khusus admin)
-                </summary>
-                <div className="pt-4">
-                  <PasswordForm />
-                </div>
-              </details>
-            )}
-          </div>
-        ) : (
-          <PasswordForm primary />
-        )}
-
-        <p
-          style={{
-            textAlign: "center",
-            marginTop: "1.5rem",
-            color: "var(--text-muted)",
-            fontSize: "0.9375rem",
-          }}
-        >
-          Staff login only.
-        </p>
+    <AuthShell>
+      {/* Logo */}
+      <div className="flex flex-col items-center gap-1.5 text-center">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/logo-hns.jpg" alt="HNS IT Center" className="mb-3 block h-20 w-40 rounded-lg object-contain" />
+        <h1 className="text-2xl font-bold tracking-tight text-foreground">Welcome back</h1>
+        <p className="text-[0.9375rem] text-muted-foreground">Sign in to your HNS IT Center account</p>
       </div>
-    </div>
+
+      {(ended || ssoOff) && (
+        <div className="flex flex-col gap-2">
+          {ended && <Notice>Sesi Anda telah berakhir. Silakan masuk lagi.</Notice>}
+          {ssoOff && <Notice>Masuk dengan SSO HNS belum diaktifkan di aplikasi ini.</Notice>}
+        </div>
+      )}
+
+      {ssoEnabled ? (
+        <div className="flex flex-col gap-4">
+          {/* A route handler that redirects to SSO: a full page navigation, not <Link>. */}
+          {/* eslint-disable-next-line @next/next/no-html-link-for-pages */}
+          <a href="/auth/sso/login" className={buttonVariants({ size: "lg", className: "w-full" })}>
+            <KeyRound aria-hidden="true" /> Masuk dengan SSO HNS
+          </a>
+
+          {localLogin === "all" ? (
+            <>
+              <Divider label="atau masuk dengan password" />
+              <PasswordForm />
+            </>
+          ) : (
+            <details className="group rounded-lg border border-border">
+              <summary className="flex min-h-11 cursor-pointer list-none items-center px-4 text-sm font-medium text-muted-foreground [&::-webkit-details-marker]:hidden">
+                Login darurat (khusus admin)
+              </summary>
+              <div className="border-t border-border p-4">
+                <PasswordForm />
+              </div>
+            </details>
+          )}
+        </div>
+      ) : (
+        <PasswordForm primary />
+      )}
+
+      <p className="text-center text-[0.9375rem] text-muted-foreground">Staff login only.</p>
+    </AuthShell>
   );
 }
 
 function Notice({ children }: { children: React.ReactNode }) {
   return (
-    <div
-      className="mb-5 flex items-center gap-2 rounded-lg border px-4 py-3 text-sm"
-      style={{ background: "#eff6ff", borderColor: "#bfdbfe", color: "#1e40af" }}
-    >
-      <Info size={16} />
-      {children}
-    </div>
+    <Alert variant="info">
+      <Info aria-hidden="true" />
+      <AlertDescription>{children}</AlertDescription>
+    </Alert>
   );
 }
 
 function Divider({ label }: { label: string }) {
+  // The label sat on var(--background), which turned cream with the UI-1
+  // tokens and showed as a strip on the white card; it sits on the card now.
   return (
-    <div style={{ position: "relative" }}>
-      <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center" }}>
-        <div style={{ width: "100%", borderTop: "1px solid #e5e7eb" }}></div>
-      </div>
-      <div style={{ position: "relative", display: "flex", justifyContent: "center", fontSize: "0.875rem" }}>
-        <span style={{ padding: "0 0.5rem", background: "var(--background, #fff)", color: "var(--text-muted, #6b7280)" }}>
-          {label}
-        </span>
-      </div>
+    <div className="relative flex items-center justify-center">
+      <span aria-hidden="true" className="absolute inset-x-0 top-1/2 border-t border-border" />
+      <span className="relative bg-card px-2 text-sm text-muted-foreground">{label}</span>
     </div>
   );
 }
@@ -112,124 +95,84 @@ function PasswordForm({ primary = false }: { primary?: boolean }) {
     loginAction,
     undefined
   );
-  const [showPassword, setShowPassword] = useState(false);
+  const emailError = state?.errors?.email?.[0];
+  const passwordError = state?.errors?.password?.[0];
 
   return (
-    <>
+    <div className="flex flex-col gap-5">
       {state?.message && (
-        <div
-          style={{
-            background: "#fee2e2",
-            border: "1px solid #fca5a5",
-            borderRadius: "var(--radius-md)",
-            padding: "0.75rem 1rem",
-            marginBottom: "1.25rem",
-            display: "flex",
-            alignItems: "center",
-            gap: "0.5rem",
-            color: "#991b1b",
-            fontSize: "0.9rem",
-          }}
-        >
-          <AlertCircle size={16} />
-          {state.message}
-        </div>
+        <Alert variant="destructive">
+          <AlertCircle aria-hidden="true" />
+          <AlertDescription>{state.message}</AlertDescription>
+        </Alert>
       )}
 
-      <form
-        action={action}
-        style={{ display: "flex", flexDirection: "column", gap: "1rem" }}
-      >
-        <div className="form-group">
-          <label htmlFor="email" className="form-label">Email address</label>
-          <input
+      <form action={action} className="flex flex-col gap-4">
+        <FormField
+          label="Email address"
+          htmlFor="email"
+          error={emailError && <FieldError>{emailError}</FieldError>}
+        >
+          <Input
             id="email"
             name="email"
             type="email"
             autoComplete="email"
             required
-            className={`form-input ${state?.errors?.email ? "error" : ""}`}
             placeholder="you@example.com"
+            aria-invalid={emailError ? true : undefined}
+            className="bg-card"
           />
-          {state?.errors?.email && (
-            <span className="form-error">
-              <AlertCircle size={12} />
-              {state.errors.email[0]}
-            </span>
-          )}
-        </div>
+        </FormField>
 
-        <div className="form-group">
-          <label htmlFor="password" className="form-label">Password</label>
-          <div style={{ position: "relative" }}>
-            <input
-              id="password"
-              name="password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="current-password"
-              required
-              minLength={6}
-              className={`form-input ${state?.errors?.password ? "error" : ""}`}
-              placeholder="Your password"
-              style={{ paddingRight: "2.75rem" }}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              style={{
-                position: "absolute",
-                right: "0.75rem",
-                top: "50%",
-                transform: "translateY(-50%)",
-                background: "none",
-                border: "none",
-                cursor: "pointer",
-                color: "var(--text-muted)",
-                padding: 0,
-                display: "flex",
-                alignItems: "center",
-              }}
-            >
-              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-          {state?.errors?.password && (
-            <span className="form-error">
-              <AlertCircle size={12} />
-              {state.errors.password[0]}
-            </span>
-          )}
-        </div>
+        <FormField
+          label="Password"
+          htmlFor="password"
+          error={passwordError && <FieldError>{passwordError}</FieldError>}
+        >
+          <PasswordInput
+            id="password"
+            name="password"
+            autoComplete="current-password"
+            required
+            minLength={6}
+            placeholder="Your password"
+            aria-invalid={passwordError ? true : undefined}
+            className="bg-card"
+          />
+        </FormField>
 
-        <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginTop: "-0.25rem", marginBottom: "0.5rem" }}>
+        <label htmlFor="rememberMe" className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm text-muted-foreground select-none md:min-h-9">
           <input
             type="checkbox"
             id="rememberMe"
             name="rememberMe"
             defaultChecked={state?.rememberMe}
-            style={{ width: "1rem", height: "1rem", cursor: "pointer", accentColor: "var(--primary)" }}
+            className="size-5 accent-primary md:size-4"
           />
-          <label htmlFor="rememberMe" style={{ fontSize: "0.875rem", color: "var(--text-secondary)", cursor: "pointer", userSelect: "none" }}>
-            Remember me
-          </label>
-        </div>
+          Remember me
+        </label>
 
-        <button
-          type="submit"
-          disabled={pending}
-          className={primary ? "btn btn-primary btn-lg" : "btn btn-outline btn-lg"}
-          style={{ width: "100%", marginTop: "0.5rem" }}
-        >
+        <Button type="submit" size="lg" variant={primary ? "default" : "outline"} disabled={pending} className={cn("w-full", !primary && "bg-card")}>
           {pending ? (
             <>
-              <span className="spinner spinner-sm" />
+              <Loader2 aria-hidden="true" className="animate-spin" />
               Signing in...
             </>
           ) : (
             "Sign In"
           )}
-        </button>
+        </Button>
       </form>
-    </>
+    </div>
+  );
+}
+
+function FieldError({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="flex items-center gap-1">
+      <AlertCircle aria-hidden="true" className="size-3" />
+      {children}
+    </span>
   );
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useRef, useState, useEffect, DragEvent, ChangeEvent } from "react";
-import { Upload, X, FileText, Image as ImageIcon, Video, Loader2 } from "lucide-react";
+import { AlertCircle, Upload, X, FileText, Image as ImageIcon, Video, Loader2, Paperclip } from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   compressFile,
   normalizeFileType,
@@ -136,127 +137,91 @@ export default function FileUpload({
   };
 
   return (
-    <div>
-      {/* Drop zone / Click to browse */}
-      <div
-        className={`file-upload-area ${dragOver ? "dragover" : ""} ${isCompressing ? "pointer-events-none opacity-60" : ""}`}
+    // Self-contained (it brings its own data-slot), so it renders the same
+    // inside legacy forms and migrated ones.
+    <div data-slot="file-upload" className="flex flex-col gap-3">
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple
+        onChange={onInput}
+        className="hidden"
+        // capture prop enables direct camera access on mobile
+        {...(capture ? { capture } : {})}
+      />
+
+      {/* Drop zone / Click to browse — a real button, so a keyboard reaches it too */}
+      <button
+        type="button"
         onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
         onDragLeave={() => setDragOver(false)}
         onDrop={onDrop}
         onClick={() => !isCompressing && inputRef.current?.click()}
-        style={{ cursor: isCompressing ? "wait" : "pointer" }}
+        disabled={isCompressing}
+        aria-busy={isCompressing || undefined}
+        className={cn(
+          "group flex w-full cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed px-6 py-8 text-center transition-all outline-none select-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          dragOver
+            ? "border-primary bg-primary/10"
+            : "border-border bg-muted/60 hover:border-primary hover:bg-primary/5",
+          isCompressing && "cursor-wait opacity-60",
+        )}
       >
-        <input
-          ref={inputRef}
-          type="file"
-          accept={accept}
-          multiple
-          onChange={onInput}
-          style={{ display: "none" }}
-          // capture prop enables direct camera access on mobile
-          {...(capture ? { capture } : {})}
-        />
-
         {isCompressing ? (
           <>
-            <Loader2
-              size={28}
-              style={{
-                color: "var(--primary)",
-                margin: "0 auto 0.5rem",
-                animation: "spin 1s linear infinite",
-              }}
-            />
-            <p style={{ fontWeight: 600, color: "var(--text-primary)", marginBottom: "0.25rem" }}>
-              Memproses berkas…
-            </p>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-              Foto diperkecil sebelum dikirim
-            </p>
+            <Loader2 aria-hidden="true" className="mb-2 size-7 animate-spin text-primary" />
+            <span className="font-semibold text-foreground">Memproses berkas…</span>
+            <span className="text-[0.8125rem] text-muted-foreground">Foto diperkecil sebelum dikirim</span>
           </>
         ) : (
           <>
-            <Upload size={32} style={{ color: "var(--primary)", margin: "0 auto 0.5rem", transition: "transform 0.2s ease" }} />
-            <p style={{ fontWeight: 700, color: "var(--text-primary)", marginBottom: "0.125rem", fontSize: "0.9375rem" }}>
-              Drop files here or <span style={{ color: "var(--primary)", textDecoration: "underline", textDecorationStyle: "dotted" }}>click to browse</span>
-            </p>
-            <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+            <Upload aria-hidden="true" className="mb-2 size-8 text-primary transition-transform group-hover:-translate-y-0.5" />
+            <span className="text-[0.9375rem] font-bold text-foreground">
+              Drop files here or <span className="text-primary underline decoration-dotted">click to browse</span>
+            </span>
+            <span className="text-[0.8125rem] text-muted-foreground">
               Foto, video, PDF • Maks. {UPLOAD_BUDGET_MB} MB total
-            </p>
-            <span style={{
-              display: "inline-flex", alignItems: "center", gap: "0.25rem",
-              marginTop: "0.5rem", padding: "0.2rem 0.6rem",
-              background: "rgba(22,70,157,0.08)", color: "var(--primary)",
-              borderRadius: "999px", fontSize: "0.72rem", fontWeight: 600,
-              border: "1px solid rgba(22,70,157,0.15)",
-            }}>
-              📎 Tap or click here
+            </span>
+            <span className="mt-2 inline-flex items-center gap-1 rounded-full border border-primary/15 bg-primary/10 px-2.5 py-0.5 text-[0.72rem] font-semibold text-primary">
+              <Paperclip aria-hidden="true" className="size-3" /> Tap or click here
             </span>
           </>
         )}
-      </div>
+      </button>
 
       {error && (
-        <p className="form-error" style={{ marginTop: "0.5rem" }}>{error}</p>
+        <p role="alert" className="flex items-start gap-1.5 text-sm text-destructive">
+          <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+          {error}
+        </p>
       )}
 
       {items.length > 0 && (
-        <div className="file-preview-list">
+        <ul className="flex flex-col gap-2">
           {items.map((item, i) => {
             const resolvedMime = resolveMimeType(item.file);
             return (
-              <div key={i} className="file-preview-item">
+              <li
+                key={i}
+                className="flex items-center gap-3 rounded-lg border-[1.5px] border-border bg-card px-3.5 py-2.5 transition-colors hover:border-primary/40"
+              >
                 {item.preview ? (
                   // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={item.preview}
-                    alt={item.file.name}
-                    style={{
-                      width: "2.5rem",
-                      height: "2.5rem",
-                      objectFit: "cover",
-                      borderRadius: "0.375rem",
-                      flexShrink: 0,
-                    }}
-                  />
+                  <img src={item.preview} alt={item.file.name} className="size-10 shrink-0 rounded-md object-cover" />
                 ) : (
-                  <div
-                    style={{
-                      width: "2.5rem",
-                      height: "2.5rem",
-                      background: "var(--cream)",
-                      borderRadius: "0.375rem",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      flexShrink: 0,
-                      color: "var(--text-muted)",
-                    }}
-                  >
+                  <div className="flex size-10 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
                     {getFileIcon(resolvedMime)}
                   </div>
                 )}
 
-                <div style={{ flex: 1, minWidth: 0, overflow: "hidden" }}>
-                  <p
-                    style={{
-                      fontWeight: 500,
-                      fontSize: "0.875rem",
-                      wordBreak: "break-all",
-                      overflowWrap: "anywhere",
-                    }}
-                  >
-                    {item.file.name}
-                  </p>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium [overflow-wrap:anywhere]">{item.file.name}</p>
+                  <p className="text-xs text-muted-foreground">
                     {item.compressed && item.originalSize ? (
                       <>
-                        <span style={{ textDecoration: "line-through", marginRight: "0.3rem" }}>
-                          {formatBytes(item.originalSize)}
-                        </span>
-                        <span style={{ color: "#16a34a", fontWeight: 600 }}>
-                          → {formatBytes(item.file.size)}
-                        </span>
+                        <span className="mr-1 line-through">{formatBytes(item.originalSize)}</span>
+                        <span className="font-semibold text-tone-green-fg">→ {formatBytes(item.file.size)}</span>
                       </>
                     ) : (
                       formatBytes(item.file.size)
@@ -267,21 +232,15 @@ export default function FileUpload({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); remove(i); }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    color: "var(--text-muted)",
-                    padding: "0.25rem",
-                    borderRadius: "0.25rem",
-                  }}
+                  aria-label={`Hapus ${item.file.name}`}
+                  className="-mr-2 flex size-11 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 md:size-8"
                 >
-                  <X size={14} />
+                  <X aria-hidden="true" className="size-3.5" />
                 </button>
-              </div>
+              </li>
             );
           })}
-        </div>
+        </ul>
       )}
     </div>
   );

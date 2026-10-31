@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback, useTransition } from "react";
 import { ClipboardList, Check, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 /**
  * How often the pending-request list is refetched, in milliseconds.
@@ -85,8 +88,15 @@ export default function RequestsBell() {
         setOpen(false);
       }
     };
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
     document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
+    document.addEventListener("keydown", handleEscape);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+      document.removeEventListener("keydown", handleEscape);
+    };
   }, []);
 
   const handleAction = (requestId: string, action: "accept" | "reject") => {
@@ -107,74 +117,60 @@ export default function RequestsBell() {
   };
 
   return (
-    <div ref={ref} style={{ position: "relative" }}>
+    <div ref={ref} data-slot="requests-bell" className="relative">
       {/* Bell button */}
-      <button
-        className="notif-bell"
+      <Button
+        variant="ghost"
+        size="icon"
+        className="relative text-muted-foreground"
         onClick={() => setOpen((v) => !v)}
-        aria-label="Ticket Requests"
+        aria-label={pendingCount > 0 ? `Ticket Requests, ${pendingCount} pending` : "Ticket Requests"}
         title="Ticket Assignment Requests"
+        aria-expanded={open}
+        aria-haspopup="true"
       >
-        <ClipboardList size={18} />
+        <ClipboardList />
         {pendingCount > 0 && (
-          <span className="notif-dot" style={{ background: "#7c3aed" }} />
+          <span
+            aria-hidden="true"
+            className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-tone-violet-fg px-1 text-[0.625rem] leading-none font-bold text-white tabular-nums"
+          >
+            {pendingCount > 9 ? "9+" : pendingCount}
+          </span>
         )}
-      </button>
+      </Button>
 
       {/* Dropdown panel */}
       {open && (
         <div
-          style={{
-            position: "fixed",
-            right: "0.5rem",
-            top: "calc(var(--topbar-height, 56px) + 0.5rem)",
-            width: "min(380px, calc(100vw - 1rem))",
-            background: "var(--white)",
-            border: "1px solid var(--border)",
-            borderRadius: "var(--radius-lg)",
-            boxShadow: "var(--shadow-lg)",
-            zIndex: 200,
-            overflow: "hidden",
-            animation: "fadeIn 0.2s ease",
-          }}
+          role="dialog"
+          aria-label="Ticket Requests"
+          className="fixed top-[calc(var(--topbar-height,56px)+0.5rem)] right-2 z-[200] w-[min(380px,calc(100vw-1rem))] overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-lg animate-in fade-in-0 zoom-in-95"
         >
           {/* Header */}
-          <div
-            style={{
-              padding: "0.875rem 1rem",
-              borderBottom: "1px solid var(--border-light)",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              background: "linear-gradient(135deg, rgba(124,58,237,0.06) 0%, rgba(124,58,237,0.02) 100%)",
-            }}
-          >
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <ClipboardList size={16} style={{ color: "#7c3aed" }} />
-              <span style={{ fontWeight: 700, fontSize: "0.9375rem", color: "#7c3aed" }}>
-                Ticket Requests
-              </span>
+          <div className="flex items-center justify-between gap-2 border-b border-border bg-tone-violet-bg/60 px-4 py-3">
+            <div className="flex items-center gap-2 text-tone-violet-fg">
+              <ClipboardList aria-hidden="true" className="size-4" />
+              <span className="text-[0.9375rem] font-bold">Ticket Requests</span>
             </div>
             {pendingCount > 0 && (
-              <span style={{
-                fontSize: "0.7rem", fontWeight: 700,
-                background: "#7c3aed", color: "white",
-                padding: "0.15rem 0.5rem", borderRadius: "999px",
-              }}>
+              <span className="rounded-full bg-tone-violet-fg px-2 py-0.5 text-[0.7rem] font-bold text-white">
                 {pendingCount} pending
               </span>
             )}
           </div>
 
           {/* List */}
-          <div style={{ maxHeight: "400px", overflowY: "auto" }}>
+          <div className="max-h-[400px] overflow-y-auto">
             {!loaded ? (
-              <div style={{ padding: "1.5rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                Loading…
+              <div className="flex flex-col gap-2 px-4 py-4" aria-label="Loading…">
+                <Skeleton className="h-4 w-1/3" />
+                <Skeleton className="h-3 w-3/4" />
+                <Skeleton className="h-9 w-full" />
               </div>
             ) : requests.length === 0 ? (
-              <div style={{ padding: "2rem 1rem", textAlign: "center", color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                <ClipboardList size={32} style={{ opacity: 0.15, marginBottom: "0.5rem", display: "block", margin: "0 auto 0.5rem" }} />
+              <div className="flex flex-col items-center gap-2 px-4 py-8 text-center text-sm text-muted-foreground">
+                <ClipboardList aria-hidden="true" className="size-8 opacity-20" />
                 No pending requests
               </div>
             ) : (
@@ -185,83 +181,67 @@ export default function RequestsBell() {
                 return (
                   <div
                     key={req.id}
-                    style={{
-                      padding: "0.875rem 1rem",
-                      borderBottom: "1px solid var(--border-light)",
-                      background: handled ? "rgba(0,0,0,0.025)" : "var(--white)",
-                      opacity: handled ? 0.6 : 1,
-                      transition: "all 0.3s ease",
-                    }}
+                    className={cn(
+                      "flex flex-col gap-2 border-b border-border px-4 py-3 transition-all last:border-b-0",
+                      handled && "bg-muted/60 opacity-60",
+                    )}
                   >
                     {/* Top row: ticket code + points */}
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.3rem" }}>
-                      <span style={{ fontFamily: "monospace", fontWeight: 700, fontSize: "0.875rem", color: "var(--primary)" }}>
-                        #{req.ticket.ticket_code}
-                      </span>
-                      <span style={{
-                        fontSize: "0.7rem", fontWeight: 700,
-                        padding: "0.15rem 0.45rem", borderRadius: "999px",
-                        background: pts >= 4 ? "rgba(124,58,237,0.1)" : pts === 3 ? "rgba(22,70,157,0.1)" : "rgba(22,163,74,0.1)",
-                        color: pts >= 4 ? "#6d28d9" : pts === 3 ? "var(--primary)" : "#15803d",
-                      }}>
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-sm font-bold text-primary">#{req.ticket.ticket_code}</span>
+                      <span
+                        className={cn(
+                          "rounded-full px-2 py-0.5 text-[0.7rem] font-bold",
+                          pts >= 4
+                            ? "bg-tone-violet-bg text-tone-violet-fg"
+                            : pts === 3
+                            ? "bg-tone-blue-bg text-tone-blue-fg"
+                            : "bg-tone-green-bg text-tone-green-fg",
+                        )}
+                      >
                         ⭐ {pts} pts
                       </span>
                     </div>
 
                     {/* Middle row: type + technician */}
-                    <div style={{ fontSize: "0.8125rem", color: "var(--text-secondary)", marginBottom: "0.5rem" }}>
-                      <span style={{ textTransform: "capitalize" }}>
+                    <div className="flex flex-col gap-0.5 text-[0.8125rem] text-muted-foreground">
+                      <span className="capitalize">
                         {req.ticket.ticket_type.replace(/_/g, " ")}
                         {req.ticket.device_type ? ` · ${req.ticket.device_type.replace(/_/g, " ")}` : ""}
                       </span>
-                      <span style={{ display: "block", marginTop: "0.15rem" }}>
+                      <span className="text-foreground">
                         👤 <strong>{req.technician.name}</strong> wants this ticket
                       </span>
-                      <span style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                        {new Date(req.created_at).toLocaleString()}
-                      </span>
+                      <span className="text-xs">{new Date(req.created_at).toLocaleString()}</span>
                     </div>
 
                     {/* Action buttons / result label */}
                     {handled ? (
-                      <div style={{
-                        display: "inline-flex", alignItems: "center", gap: "0.3rem",
-                        fontSize: "0.8rem", fontWeight: 700,
-                        color: handled === "accept" ? "#16a34a" : "#dc2626",
-                        padding: "0.2rem 0.6rem", borderRadius: "999px",
-                        background: handled === "accept" ? "rgba(22,163,74,0.08)" : "rgba(220,38,38,0.08)",
-                      }}>
+                      <div
+                        className={cn(
+                          "inline-flex w-fit items-center gap-1 rounded-full px-2.5 py-1 text-[0.8rem] font-bold",
+                          handled === "accept" ? "bg-tone-green-bg text-tone-green-fg" : "bg-tone-red-bg text-tone-red-fg",
+                        )}
+                      >
                         {handled === "accept" ? <><Check size={12} /> Approved</> : <><X size={12} /> Rejected</>}
                       </div>
                     ) : (
-                      <div style={{ display: "flex", gap: "0.5rem" }}>
-                        <button
+                      <div className="flex gap-2">
+                        <Button
                           onClick={() => handleAction(req.id, "accept")}
                           disabled={isPending}
-                          style={{
-                            flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem",
-                            padding: "0.35rem 0.75rem", borderRadius: "var(--radius-md)",
-                            background: "#16a34a", color: "white", border: "none",
-                            fontSize: "0.8125rem", fontWeight: 600, cursor: "pointer",
-                            opacity: isPending ? 0.6 : 1,
-                          }}
+                          className="flex-1 bg-tone-green-fg text-white hover:bg-tone-green-fg/90"
                         >
-                          <Check size={14} /> Accept
-                        </button>
-                        <button
+                          <Check aria-hidden="true" /> Accept
+                        </Button>
+                        <Button
+                          variant="outline"
                           onClick={() => handleAction(req.id, "reject")}
                           disabled={isPending}
-                          style={{
-                            flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: "0.3rem",
-                            padding: "0.35rem 0.75rem", borderRadius: "var(--radius-md)",
-                            background: "var(--white)", color: "#dc2626",
-                            border: "1.5px solid rgba(220,38,38,0.35)",
-                            fontSize: "0.8125rem", fontWeight: 600, cursor: "pointer",
-                            opacity: isPending ? 0.6 : 1,
-                          }}
+                          className="flex-1 border-tone-red-border bg-card text-destructive hover:bg-tone-red-bg hover:text-destructive"
                         >
-                          <X size={14} /> Reject
-                        </button>
+                          <X aria-hidden="true" /> Reject
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -272,13 +252,10 @@ export default function RequestsBell() {
 
           {/* Footer */}
           {requests.length > 0 && (
-            <div style={{ padding: "0.5rem 1rem", borderTop: "1px solid var(--border-light)", textAlign: "center" }}>
-              <button
-                onClick={fetchRequests}
-                style={{ fontSize: "0.75rem", color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer" }}
-              >
+            <div className="border-t border-border px-4 py-1 text-center">
+              <Button variant="ghost" size="sm" onClick={fetchRequests} className="text-xs text-muted-foreground">
                 ↻ Refresh
-              </button>
+              </Button>
             </div>
           )}
         </div>

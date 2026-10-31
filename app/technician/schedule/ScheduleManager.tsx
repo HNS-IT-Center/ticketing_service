@@ -4,14 +4,19 @@ import { useState, useTransition } from "react";
 import { assignLeaveAction, overrideShiftAction } from "@/app/actions/schedule";
 import toast from "react-hot-toast";
 import { Calendar, UserX, UserCheck } from "lucide-react";
-import Modal from "@/components/ui/Modal";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 type Technician = {
   id: string;
   name: string;
   shift: string | null;
-  leaves: any[];
-  overridden_shifts: any[];
+  leaves: { id: string; date: Date | string; reason: string | null }[];
+  overridden_shifts: { id: string; date: Date | string }[];
 };
 
 export default function ScheduleManager({ technicians }: { technicians: Technician[] }) {
@@ -64,93 +69,109 @@ export default function ScheduleManager({ technicians }: { technicians: Technici
     });
   };
 
+  const selectClass =
+    "h-11 w-full rounded-lg border border-input bg-card px-3 text-base text-foreground outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:h-9 md:text-sm";
+
   return (
-    <div>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div data-slot="schedule-manager">
+      <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
         {technicians.map((t) => (
-          <div key={t.id} className="card flex flex-col gap-2">
-            <h3 className="font-bold text-lg">{t.name}</h3>
-            <p className="text-sm text-gray-500">Default Shift: {t.shift || "Not set"}</p>
-            
-            {t.leaves.length > 0 && (
-              <div className="mt-2 p-2 bg-red-50 text-red-800 rounded text-sm">
-                <strong>Upcoming Leaves:</strong>
-                <ul className="list-disc pl-4 mt-1">
-                  {t.leaves.map((l: any) => (
-                    <li key={l.id}>{new Date(l.date).toLocaleDateString()} {l.reason && `- ${l.reason}`}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+          <li key={t.id}>
+            <Card className="h-full">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">{t.name}</CardTitle>
+                <CardDescription>Default Shift: {t.shift || "Not set"}</CardDescription>
+              </CardHeader>
+              <CardContent className="flex flex-1 flex-col gap-3">
+                {t.leaves.length > 0 && (
+                  <div className="rounded-lg border border-tone-red-border bg-tone-red-bg p-3 text-sm text-tone-red-fg">
+                    <strong>Upcoming Leaves:</strong>
+                    <ul className="mt-1 list-disc pl-4">
+                      {t.leaves.map((l) => (
+                        <li key={l.id}>{new Date(l.date).toLocaleDateString()} {l.reason && `- ${l.reason}`}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-            {t.overridden_shifts.length > 0 && (
-              <div className="mt-2 p-2 bg-yellow-50 text-yellow-800 rounded text-sm">
-                <strong>Shift Overrides:</strong>
-                <ul className="list-disc pl-4 mt-1">
-                  {t.overridden_shifts.map((o: any) => (
-                    <li key={o.id}>{new Date(o.date).toLocaleDateString()} - Covered by another tech</li>
-                  ))}
-                </ul>
-              </div>
-            )}
+                {t.overridden_shifts.length > 0 && (
+                  <div className="rounded-lg border border-tone-amber-border bg-tone-amber-bg p-3 text-sm text-tone-amber-fg">
+                    <strong>Shift Overrides:</strong>
+                    <ul className="mt-1 list-disc pl-4">
+                      {t.overridden_shifts.map((o) => (
+                        <li key={o.id}>{new Date(o.date).toLocaleDateString()} - Covered by another tech</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
-            <button type="button" className="btn btn-outline mt-4 flex items-center justify-center gap-2" onClick={() => setSelectedTech(t)}>
-              <Calendar className="h-4 w-4" /> Manage Schedule
-            </button>
-          </div>
+                <Button variant="outline" className="mt-auto w-full" onClick={() => setSelectedTech(t)}>
+                  <Calendar aria-hidden="true" /> Manage Schedule
+                </Button>
+              </CardContent>
+            </Card>
+          </li>
         ))}
-      </div>
+      </ul>
 
-      <Modal open={!!selectedTech} onClose={closeDialog} title={`Manage Schedule: ${selectedTech?.name || ""}`}>
-        <div className="flex gap-2 border-b pb-2 mb-4 mt-4">
-          <button type="button" className={`btn flex items-center gap-2 ${activeTab === "leave" ? "btn-primary" : "btn-ghost"}`} onClick={() => setActiveTab("leave")}>
-            <UserX className="h-4 w-4" /> Assign Leave
-          </button>
-          <button type="button" className={`btn flex items-center gap-2 ${activeTab === "override" ? "btn-primary" : "btn-ghost"}`} onClick={() => setActiveTab("override")}>
-            <UserCheck className="h-4 w-4" /> Override Shift
-          </button>
-        </div>
+      <Dialog open={!!selectedTech} onOpenChange={(open) => { if (!open) closeDialog(); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">{`Manage Schedule: ${selectedTech?.name || ""}`}</DialogTitle>
+          </DialogHeader>
 
-        <div className="grid gap-4 py-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Date *</label>
-            <input type="date" className="form-input" value={date} onChange={(e) => setDate(e.target.value)} />
+          <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "leave" | "override")}>
+            <TabsList className="w-full">
+              <TabsTrigger value="leave">
+                <UserX aria-hidden="true" /> Assign Leave
+              </TabsTrigger>
+              <TabsTrigger value="override">
+                <UserCheck aria-hidden="true" /> Override Shift
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
+
+          <div className="grid gap-4">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="schedule-date">Date *</Label>
+              <Input id="schedule-date" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </div>
+
+            {activeTab === "leave" ? (
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="schedule-reason">Reason (Optional)</Label>
+                <Input id="schedule-reason" type="text" placeholder="e.g., Sick, Vacation" value={reason} onChange={(e) => setReason(e.target.value)} />
+              </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="schedule-cover">Covering Technician *</Label>
+                  <select id="schedule-cover" className={selectClass} value={overrideTechId} onChange={(e) => setOverrideTechId(e.target.value)}>
+                    <option value="">Select Technician</option>
+                    {technicians.filter((t) => t.id !== selectedTech?.id).map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="schedule-shift">Shift *</Label>
+                  <select id="schedule-shift" className={selectClass} value={shift} onChange={(e) => setShift(e.target.value as "morning" | "noon")}>
+                    <option value="morning">Morning (10:00 - 19:00)</option>
+                    <option value="noon">Noon (13:00 - 22:00)</option>
+                  </select>
+                </div>
+              </>
+            )}
           </div>
 
-          {activeTab === "leave" ? (
-            <div className="flex flex-col gap-2">
-              <label className="text-sm font-medium">Reason (Optional)</label>
-              <input type="text" className="form-input" placeholder="e.g., Sick, Vacation" value={reason} onChange={(e) => setReason(e.target.value)} />
-            </div>
-          ) : (
-            <>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Covering Technician *</label>
-                <select className="form-input" value={overrideTechId} onChange={(e) => setOverrideTechId(e.target.value)}>
-                  <option value="">Select Technician</option>
-                  {technicians.filter((t) => t.id !== selectedTech?.id).map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="text-sm font-medium">Shift *</label>
-                <select className="form-input" value={shift} onChange={(e) => setShift(e.target.value as any)}>
-                  <option value="morning">Morning (10:00 - 19:00)</option>
-                  <option value="noon">Noon (13:00 - 22:00)</option>
-                </select>
-              </div>
-            </>
-          )}
-        </div>
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
-          <button type="button" className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-          <button type="button" className="btn btn-primary" onClick={activeTab === "leave" ? handleLeaveSubmit : handleOverrideSubmit} disabled={isPending}>
-            {isPending ? "Saving..." : "Save Changes"}
-          </button>
-        </div>
-      </Modal>
+          <DialogFooter>
+            <Button variant="outline" onClick={closeDialog}>Cancel</Button>
+            <Button onClick={activeTab === "leave" ? handleLeaveSubmit : handleOverrideSubmit} disabled={isPending}>
+              {isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

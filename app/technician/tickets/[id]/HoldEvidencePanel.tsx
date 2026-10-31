@@ -8,6 +8,7 @@ import { submitHoldEvidenceAction } from "@/app/actions/rma";
 import { RMA_HOLD_REASONS } from "@/lib/rma/hold-reason";
 import { UploadCloud } from "lucide-react";
 import { uploadFailureMessage } from "@/lib/upload-limit";
+import { Button } from "@/components/ui/button";
 
 /**
  * What the RMA desk is waiting for, on the page of the person who can supply it.
@@ -66,44 +67,39 @@ export default function HoldEvidencePanel({
   };
 
   return (
-    <div
-      className="card"
-      style={{ borderColor: "#fde68a", background: "#fffbeb", padding: "1.25rem" }}
+    <section
+      data-slot="hold-evidence-panel"
+      aria-labelledby="hold-evidence-title"
+      className="flex flex-col gap-3 rounded-xl border border-tone-amber-border bg-tone-amber-bg/50 p-5"
     >
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
-        <UploadCloud size={18} style={{ color: "#92400e" }} />
-        <h3 style={{ margin: 0, fontSize: "1rem", color: "#92400e" }}>Tim RMA Menunggu Kiriman Anda</h3>
+      <div className="flex items-center gap-2 text-tone-amber-fg">
+        <UploadCloud aria-hidden="true" className="size-[18px]" />
+        <h3 id="hold-evidence-title" className="text-base font-semibold">Tim RMA Menunggu Kiriman Anda</h3>
       </div>
 
-      <p style={{ fontSize: "0.875rem", color: "#92400e", margin: "0 0 0.25rem" }}>
+      <p className="text-sm text-tone-amber-fg">
         Klaim ini ditahan karena <strong>{meta.label.toLowerCase()}</strong>. Kirimkan{" "}
         <strong>{meta.asksTechnicianFor}</strong> agar prosesnya bisa dilanjutkan.
       </p>
 
-      {holdReason && (
-        <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: "0 0 0.75rem" }}>
-          Catatan tim RMA: {holdReason}
-        </p>
-      )}
+      {holdReason && <p className="text-[0.8125rem] text-muted-foreground">Catatan tim RMA: {holdReason}</p>}
 
-      <div style={{ marginTop: "0.75rem", display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+      {/* FileUpload is still a legacy component (Phase 3b). Inside a data-slot
+          its paragraphs lose the legacy p rule, so give them the same size
+          and line height here and it renders exactly as before. */}
+      <div className="text-[0.9375rem] leading-[1.7]">
         <FileUpload onChange={setFiles} accept={meta.accept ?? undefined} maxFiles={5} />
-
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem" }}>
-          <button
-            type="button"
-            className="btn btn-primary btn-sm"
-            onClick={submit}
-            disabled={isPending || files.length === 0}
-          >
-            {isPending ? "Mengirim…" : "Kirim ke Tim RMA"}
-          </button>
-        </div>
-
-        <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", margin: 0 }}>
-          Mengirim tidak otomatis melepas penahanan — tim RMA yang memutuskan setelah melihatnya.
-        </p>
       </div>
-    </div>
+
+      <div className="flex justify-end">
+        <Button onClick={submit} disabled={isPending || files.length === 0} className="w-full sm:w-auto">
+          {isPending ? "Mengirim…" : "Kirim ke Tim RMA"}
+        </Button>
+      </div>
+
+      <p className="text-xs text-muted-foreground">
+        Mengirim tidak otomatis melepas penahanan — tim RMA yang memutuskan setelah melihatnya.
+      </p>
+    </section>
   );
 }

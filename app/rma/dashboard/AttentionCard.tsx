@@ -1,32 +1,22 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import type { RmaQueueRow, RmaSeverity } from "@/lib/rma/queue";
+import { cn } from "@/lib/utils";
 
 /** How many rows a card shows before the rest fold away. */
 export const CARD_PREVIEW_ROWS = 5;
 
-const TONES: Record<RmaSeverity, { bg: string; fg: string; border: string }> = {
-  overdue: { bg: "#fef2f2", fg: "#991b1b", border: "#fecaca" },
-  warning: { bg: "#fffbeb", fg: "#92400e", border: "#fde68a" },
-  ok: { bg: "var(--cream)", fg: "var(--text-secondary)", border: "var(--border)" },
+// Pill, card border and the corner ribbon per severity, through the tones.
+const TONES: Record<RmaSeverity, { pill: string; border: string; ribbon: string }> = {
+  overdue: { pill: "border-tone-red-border bg-tone-red-bg text-tone-red-fg", border: "border-tone-red-border", ribbon: "bg-tone-red-fg" },
+  warning: { pill: "border-tone-amber-border bg-tone-amber-bg text-tone-amber-fg", border: "border-tone-amber-border", ribbon: "bg-tone-amber-fg" },
+  ok: { pill: "border-border bg-muted text-muted-foreground", border: "border-border", ribbon: "" },
 };
 
 function CountPill({ n, tone, label }: { n: number; tone: RmaSeverity; label: string }) {
   if (n === 0) return null;
-  const c = TONES[tone];
   return (
-    <span
-      style={{
-        background: c.bg,
-        color: c.fg,
-        border: `1px solid ${c.border}`,
-        borderRadius: "999px",
-        padding: "0.15rem 0.6rem",
-        fontSize: "0.75rem",
-        fontWeight: 600,
-        whiteSpace: "nowrap",
-      }}
-    >
+    <span className={cn("rounded-full border px-2.5 py-0.5 text-xs font-semibold whitespace-nowrap", TONES[tone].pill)}>
       {n} {label}
     </span>
   );
@@ -34,46 +24,16 @@ function CountPill({ n, tone, label }: { n: number; tone: RmaSeverity; label: st
 
 /** One case: code and who it belongs to on the left, how long it has sat on the right. */
 function QueueRow({ row }: { row: RmaQueueRow }) {
-  const tone = TONES[row.severity];
   return (
-    <li style={{ borderTop: "1px solid var(--border)" }}>
+    <li className="border-t border-border">
       <Link
         href={`/rma/cases/${row.id}`}
-        style={{
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: "0.75rem",
-          padding: "0.6rem 0",
-          color: "inherit",
-          textDecoration: "none",
-        }}
+        className="-mx-2 flex min-h-11 items-center justify-between gap-3 rounded-md px-2 py-2.5 text-inherit outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
       >
-        <span style={{ minWidth: 0 }}>
-          <span
-            style={{
-              display: "block",
-              fontFamily: "ui-monospace, monospace",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              overflow: "hidden",
-              textOverflow: "ellipsis",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {row.rma_code}
-          </span>
-          <span
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: "0.4rem",
-              fontSize: "0.8125rem",
-              color: "var(--text-muted)",
-              minWidth: 0,
-            }}
-          >
-            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+        <span className="min-w-0">
+          <span className="block truncate font-mono text-sm font-semibold">{row.rma_code}</span>
+          <span className="flex min-w-0 items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
+            <span className="truncate">
               {row.ticket.customer_name || row.ticket.device_name || `#${row.ticket.ticket_code}`}
             </span>
             {/* What the technician who held the unit thought. Advice, not a
@@ -81,16 +41,7 @@ function QueueRow({ row }: { row: RmaQueueRow }) {
             {row.recommended_eligible === false && (
               <span
                 title="Rekomendasi teknisi: tidak layak"
-                style={{
-                  flexShrink: 0,
-                  fontSize: "0.6875rem",
-                  fontWeight: 600,
-                  borderRadius: "999px",
-                  padding: "0.05rem 0.4rem",
-                  background: "#fffbeb",
-                  color: "#92400e",
-                  border: "1px solid #fde68a",
-                }}
+                className="shrink-0 rounded-full border border-tone-amber-border bg-tone-amber-bg px-1.5 text-[0.6875rem] font-semibold text-tone-amber-fg"
               >
                 tek: tidak layak
               </span>
@@ -99,22 +50,12 @@ function QueueRow({ row }: { row: RmaQueueRow }) {
         </span>
 
         <span
-          style={{
-            display: "inline-flex",
-            alignItems: "center",
-            gap: "0.3rem",
-            flexShrink: 0,
-            background: tone.bg,
-            color: tone.fg,
-            border: `1px solid ${tone.border}`,
-            borderRadius: "999px",
-            padding: "0.2rem 0.6rem",
-            fontSize: "0.75rem",
-            fontWeight: 600,
-            fontFamily: "ui-monospace, monospace",
-          }}
+          className={cn(
+            "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold",
+            TONES[row.severity].pill,
+          )}
         >
-          {row.severity !== "ok" && <AlertTriangle size={12} />}
+          {row.severity !== "ok" && <AlertTriangle aria-hidden="true" className="size-3" />}
           {row.daysInStage} hari
         </span>
       </Link>
@@ -150,63 +91,35 @@ export default function AttentionCard({
   const rest = sorted.slice(CARD_PREVIEW_ROWS);
 
   return (
-    <div
-      className="card"
-      style={{
-        position: "relative",
-        padding: "1.25rem",
-        borderColor: flagged === "ok" ? undefined : accent.border,
-        display: "flex",
-        flexDirection: "column",
-        gap: "0.75rem",
-      }}
+    <section
+      data-slot="rma-attention-card"
+      className={cn("relative flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs md:p-5", accent.border)}
     >
       {flagged !== "ok" && (
         <span
-          aria-hidden
-          style={{
-            position: "absolute",
-            top: 0,
-            left: "1.25rem",
-            width: "1.75rem",
-            height: "2rem",
-            background: accent.fg,
-            clipPath: "polygon(0 0, 100% 0, 100% 100%, 50% 78%, 0 100%)",
-            display: "flex",
-            alignItems: "flex-start",
-            justifyContent: "center",
-            paddingTop: "0.3rem",
-            color: "#fff",
-          }}
+          aria-hidden="true"
+          className={cn(
+            "absolute top-0 left-4 flex h-8 w-7 items-start justify-center pt-1.5 text-white [clip-path:polygon(0_0,100%_0,100%_100%,50%_78%,0_100%)] md:left-5",
+            accent.ribbon,
+          )}
         >
-          <AlertTriangle size={13} />
+          <AlertTriangle className="size-3.5" />
         </span>
       )}
 
-      <div
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: "0.75rem",
-          flexWrap: "wrap",
-          paddingLeft: flagged !== "ok" ? "2.25rem" : 0,
-        }}
-      >
-        <div style={{ minWidth: 0 }}>
-          <h3 style={{ margin: 0, fontSize: "1rem" }}>{title}</h3>
-          <p style={{ margin: "0.2rem 0 0", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-            {hint}
-          </p>
+      <div className={cn("flex flex-wrap items-start justify-between gap-3", flagged !== "ok" && "pl-9")}>
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-foreground">{title}</h3>
+          <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">{hint}</p>
         </div>
-        <div style={{ display: "flex", gap: "0.35rem", flexWrap: "wrap" }}>
+        <div className="flex flex-wrap gap-1.5">
           <CountPill n={overdue} tone="overdue" label="mendesak" />
           <CountPill n={warning} tone="warning" label="peringatan" />
           {overdue === 0 && warning === 0 && <CountPill n={rows.length} tone="ok" label="case" />}
         </div>
       </div>
 
-      <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+      <ul>
         {preview.map((row) => (
           <QueueRow key={row.id} row={row} />
         ))}
@@ -214,26 +127,16 @@ export default function AttentionCard({
 
       {rest.length > 0 && (
         <details>
-          <summary
-            style={{
-              cursor: "pointer",
-              borderTop: "1px solid var(--border)",
-              paddingTop: "0.75rem",
-              fontSize: "0.875rem",
-              fontWeight: 600,
-              color: "var(--primary)",
-              listStyle: "none",
-            }}
-          >
+          <summary className="flex min-h-11 cursor-pointer list-none items-center border-t border-border text-sm font-semibold text-primary md:min-h-9 [&::-webkit-details-marker]:hidden">
             Lihat {rest.length} case lainnya
           </summary>
-          <ul style={{ listStyle: "none", margin: 0, padding: 0 }}>
+          <ul>
             {rest.map((row) => (
               <QueueRow key={row.id} row={row} />
             ))}
           </ul>
         </details>
       )}
-    </div>
+    </section>
   );
 }

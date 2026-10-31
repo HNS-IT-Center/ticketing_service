@@ -1,16 +1,20 @@
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Breadcrumb and title, then the case and its history beside the action
+// panel (stacked on a phone) — the case page's frame.
 export default function Loading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div>
-        <div className="skeleton" style={{ height: "0.8rem", width: "9rem", borderRadius: "6px" }} />
-        <div className="skeleton" style={{ height: "1.5rem", width: "16rem", borderRadius: "6px", marginTop: "0.6rem" }} />
+    <div data-slot="rma-case-loading" aria-busy="true" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2.5">
+        <Skeleton className="h-3 w-36" />
+        <Skeleton className="h-7 w-64 max-w-full" />
       </div>
-      <div className="ticket-detail-grid">
-        <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          <div className="skeleton" style={{ height: "16rem", width: "100%", borderRadius: "var(--radius-lg)" }} />
-          <div className="skeleton" style={{ height: "24rem", width: "100%", borderRadius: "var(--radius-lg)" }} />
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
+        <div className="flex flex-col gap-6">
+          <Skeleton className="h-64 w-full rounded-xl" />
+          <Skeleton className="h-96 w-full rounded-xl" />
         </div>
-        <div className="skeleton" style={{ height: "18rem", width: "100%", borderRadius: "var(--radius-lg)" }} />
+        <Skeleton className="h-72 w-full rounded-xl" />
       </div>
     </div>
   );

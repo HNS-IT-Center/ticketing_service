@@ -4,8 +4,19 @@ import { useState, useTransition } from "react";
 import { adminUpdateTicketStatusAction } from "@/app/actions/admin";
 import { uploadDeliveryProofAction } from "@/app/actions/delivery";
 import toast from "react-hot-toast";
-import { Upload, X, FileText, Image as ImageIcon, Video, Loader2, CheckCircle, Truck, Package, Flag, Printer } from "lucide-react";
-import Modal from "@/components/ui/Modal";
+import { CheckCircle, Truck, Package, Flag, Printer, Copy, Loader2 } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { errorOf } from "@/lib/action-result";
 import { compressFile, normalizeFileType } from "@/lib/compress";
 
 type TicketStatus =
@@ -21,6 +32,8 @@ interface Props {
   userRole: string;
 }
 
+const SUCCESS = "bg-green-600 text-white hover:bg-green-600/90";
+
 export default function AdminWorkflowPanel({ ticketId, currentStatus, pickupMethod, customerAddress, userRole }: Props) {
   const [isPending, startTransition] = useTransition();
 
@@ -33,7 +46,8 @@ export default function AdminWorkflowPanel({ ticketId, currentStatus, pickupMeth
   const moveStatus = (status: TicketStatus) => {
     startTransition(async () => {
       const result = await adminUpdateTicketStatusAction(ticketId, status);
-      if ((result as any)?.error) toast.error((result as any).error);
+      const error = errorOf(result);
+      if (error) toast.error(error);
       else toast.success(`Status updated to: ${status.replace(/_/g, " ")}`);
     });
   };
@@ -53,7 +67,7 @@ export default function AdminWorkflowPanel({ ticketId, currentStatus, pickupMeth
       toast.error("Please select a file to upload as proof");
       return;
     }
-    
+
     startTransition(async () => {
       let uploadFile = normalizeFileType(file);
       toast("Processing file...", { id: "compress", icon: "⏳" });
@@ -66,7 +80,7 @@ export default function AdminWorkflowPanel({ ticketId, currentStatus, pickupMeth
       const fd = new FormData();
       fd.append("ticketId", ticketId);
       fd.append("file", uploadFile);
-      
+
       if (activeDialog === "courier_handover") {
         fd.append("status", "handed_to_courier");
         fd.append("proofType", "payment");
@@ -83,9 +97,10 @@ export default function AdminWorkflowPanel({ ticketId, currentStatus, pickupMeth
           setActiveDialog(null);
           setFile(null);
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error("Action error:", err);
-        if (err.message?.includes("Unexpected end of form") || err.message?.includes("Body exceeded")) {
+        const message = err instanceof Error ? err.message : "";
+        if (message.includes("Unexpected end of form") || message.includes("Body exceeded")) {
           toast.error("Upload failed: File size is too large. Please limit to 10MB.");
         } else {
           toast.error("An unexpected error occurred. Please try again.");
@@ -101,177 +116,146 @@ export default function AdminWorkflowPanel({ ticketId, currentStatus, pickupMeth
 
   const isTerminal = ["completed", "cancelled", "rejected"].includes(currentStatus);
 
+  // The proof upload is the same field in both dialogs; only its label differs.
+  const proofField = (label: string) => (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor="workflow-proof">{label}</Label>
+      <Input
+        id="workflow-proof"
+        type="file"
+        accept="image/*,image/heic,image/heif"
+        onChange={(e) => setFile(e.target.files?.[0] || null)}
+        className="bg-card"
+        required
+      />
+    </div>
+  );
+
+  const submitButton = (idle: string) => (
+    <Button type="submit" disabled={isPending || !file}>
+      {isPending && <Loader2 aria-hidden="true" className="animate-spin" />}
+      {isPending ? "Uploading..." : idle}
+    </Button>
+  );
+
   return (
-    <div className="card" style={{ border: "2px solid var(--primary-light, #e0e7ff)" }}>
-      <h3 style={{ marginBottom: "1rem", display: "flex", alignItems: "center", gap: "0.5rem" }}>
-        <Flag size={18} style={{ color: "var(--primary)" }} />
-        Workflow Actions
-      </h3>
+    <Card className="border-2 border-primary/20 ring-0">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <Flag aria-hidden="true" className="size-[18px] text-primary" />
+          Workflow Actions
+        </CardTitle>
+      </CardHeader>
 
-      {isTerminal ? (
-        <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-          This ticket is in a terminal state: <strong>{currentStatus.replace(/_/g, " ")}</strong>.
-        </p>
-      ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-          {/* Print buttons — Sales/Admin only */}
-          {isSales && (
-            <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", paddingBottom: "0.75rem", borderBottom: "1px solid var(--border-light)", marginBottom: "0.25rem" }}>
-              <button
-                type="button"
-                onClick={() => toast("🖨️ Print Tanda Terima — Feature coming soon")}
-                className="btn btn-ghost"
-                style={{ fontSize: "0.8125rem", display: "flex", alignItems: "center", gap: "0.375rem" }}
-              >
-                <Printer size={15} /> Print Tanda Terima
-              </button>
-              <button
-                type="button"
-                onClick={() => toast("📄 Print Surat Penyerahan — Feature coming soon")}
-                className="btn btn-ghost"
-                style={{ fontSize: "0.8125rem", display: "flex", alignItems: "center", gap: "0.375rem" }}
-              >
-                <Printer size={15} /> Print Surat Penyerahan
-              </button>
-            </div>
-          )}
+      <CardContent>
+        {isTerminal ? (
+          <p className="text-sm text-muted-foreground">
+            This ticket is in a terminal state: <strong className="text-foreground">{currentStatus.replace(/_/g, " ")}</strong>.
+          </p>
+        ) : (
+          <div className="flex flex-col gap-3 *:data-[slot=button]:w-full sm:*:data-[slot=button]:w-auto sm:*:data-[slot=button]:self-start">
+            {/* Print buttons — Sales/Admin only */}
+            {isSales && (
+              <div className="flex flex-col gap-2 border-b border-border pb-3 sm:flex-row sm:flex-wrap">
+                <Button type="button" variant="ghost" onClick={() => toast("🖨️ Print Tanda Terima — Feature coming soon")}>
+                  <Printer aria-hidden="true" /> Print Tanda Terima
+                </Button>
+                <Button type="button" variant="ghost" onClick={() => toast("📄 Print Surat Penyerahan — Feature coming soon")}>
+                  <Printer aria-hidden="true" /> Print Surat Penyerahan
+                </Button>
+              </div>
+            )}
 
-          {/* Post-done handover buttons */}
-          {currentStatus === "done" && isSales && (
-            <>
-              {pickupMethod === "courier" ? (
-                <button
-                  onClick={() => setActiveDialog("courier_handover")}
-                  disabled={isPending}
-                  className="btn btn-primary"
-                  style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-                >
-                  <Truck size={16} />
+            {/* Post-done handover buttons */}
+            {currentStatus === "done" && isSales && (
+              pickupMethod === "courier" ? (
+                <Button onClick={() => setActiveDialog("courier_handover")} disabled={isPending}>
+                  <Truck aria-hidden="true" />
                   Hand to Courier
-                </button>
+                </Button>
               ) : (
-                <button
-                  onClick={() => moveStatus("ready_for_pickup")}
-                  disabled={isPending}
-                  className="btn btn-primary"
-                  style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-                >
-                  <Package size={16} />
+                <Button onClick={() => moveStatus("ready_for_pickup")} disabled={isPending}>
+                  <Package aria-hidden="true" />
                   Mark Ready for Pickup
-                </button>
-              )}
-            </>
-          )}
+                </Button>
+              )
+            )}
 
-          {currentStatus === "ready_for_pickup" && isSales && (
-            <button
-              onClick={() => moveStatus("waiting_pickup")}
-              disabled={isPending}
-              className="btn btn-primary"
-              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-            >
-              <Package size={16} />
-              {isPending ? "Processing..." : "Customer Notified — Waiting Pickup"}
-            </button>
-          )}
+            {currentStatus === "ready_for_pickup" && isSales && (
+              <Button onClick={() => moveStatus("waiting_pickup")} disabled={isPending}>
+                <Package aria-hidden="true" />
+                {isPending ? "Processing..." : "Customer Notified — Waiting Pickup"}
+              </Button>
+            )}
 
-          {currentStatus === "waiting_pickup" && isSales && (
-            <button
-              onClick={() => setActiveDialog("self_pickup_complete")}
-              disabled={isPending}
-              className="btn"
-              style={{ background: "#16a34a", color: "white", display: "flex", alignItems: "center", gap: "0.5rem" }}
-            >
-              <CheckCircle size={16} />
-              Mark Picked Up — Complete
-            </button>
-          )}
+            {currentStatus === "waiting_pickup" && isSales && (
+              <Button onClick={() => setActiveDialog("self_pickup_complete")} disabled={isPending} className={SUCCESS}>
+                <CheckCircle aria-hidden="true" />
+                Mark Picked Up — Complete
+              </Button>
+            )}
 
-          {currentStatus === "handed_to_courier" && isSales && (
-            <button
-              onClick={() => moveStatus("delivered")}
-              disabled={isPending}
-              className="btn btn-primary"
-              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-            >
-              <Truck size={16} />
-              {isPending ? "Processing..." : "Mark Delivered"}
-            </button>
-          )}
+            {currentStatus === "handed_to_courier" && isSales && (
+              <Button onClick={() => moveStatus("delivered")} disabled={isPending}>
+                <Truck aria-hidden="true" />
+                {isPending ? "Processing..." : "Mark Delivered"}
+              </Button>
+            )}
 
-          {currentStatus === "delivered" && isSales && (
-            <button
-              onClick={() => moveStatus("completed")}
-              disabled={isPending}
-              className="btn"
-              style={{ background: "#16a34a", color: "white", display: "flex", alignItems: "center", gap: "0.5rem" }}
-            >
-              <CheckCircle size={16} />
-              {isPending ? "Processing..." : "Confirm Completed"}
-            </button>
-          )}
+            {currentStatus === "delivered" && isSales && (
+              <Button onClick={() => moveStatus("completed")} disabled={isPending} className={SUCCESS}>
+                <CheckCircle aria-hidden="true" />
+                {isPending ? "Processing..." : "Confirm Completed"}
+              </Button>
+            )}
 
-          {!["done", "ready_for_pickup", "waiting_pickup", "handed_to_courier", "delivered"].includes(currentStatus) && isSales && currentStatus !== "completed" && (
-            <p style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-              Handover actions become available once technician marks ticket as <strong>Done</strong>.
-            </p>
-          )}
-        </div>
-      )}
+            {!["done", "ready_for_pickup", "waiting_pickup", "handed_to_courier", "delivered"].includes(currentStatus) && isSales && currentStatus !== "completed" && (
+              <p className="text-sm text-muted-foreground">
+                Handover actions become available once technician marks ticket as <strong className="text-foreground">Done</strong>.
+              </p>
+            )}
+          </div>
+        )}
+      </CardContent>
 
       {/* Dialog for Courier Handover */}
-      <Modal open={activeDialog === "courier_handover"} onClose={closeDialog} title="Hand to Courier">
-        <form onSubmit={handleProofSubmit} className="flex flex-col gap-4 py-4">
-          <div className="bg-blue-50 text-blue-800 p-3 rounded-md text-sm">
-            <p className="font-semibold mb-1">Customer Address:</p>
-            <p className="mb-2">{customerAddress || "No address provided."}</p>
-            <button type="button" className="btn btn-outline" style={{ fontSize: "0.75rem", padding: "0.25rem 0.5rem" }} onClick={copyAddress}>
-              Copy Address
-            </button>
-          </div>
-          
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Upload Payment Proof (Required)</label>
-            <input 
-              type="file" 
-              accept="image/*,image/heic,image/heif" 
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="form-input"
-              required
-            />
-          </div>
-          
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
-            <button type="button" className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={isPending || !file}>
-              {isPending ? "Uploading..." : "Upload & Hand to Courier"}
-            </button>
-          </div>
-        </form>
-      </Modal>
+      <Dialog open={activeDialog === "courier_handover"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-md">
+          <form onSubmit={handleProofSubmit} className="flex flex-col gap-4">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold">Hand to Courier</DialogTitle>
+            </DialogHeader>
+            <div className="flex flex-col items-start gap-2 rounded-lg border border-tone-blue-border bg-tone-blue-bg p-3 text-sm text-tone-blue-fg">
+              <p className="font-semibold">Customer Address:</p>
+              <p className="[overflow-wrap:anywhere]">{customerAddress || "No address provided."}</p>
+              <Button type="button" variant="outline" size="sm" className="bg-card" onClick={copyAddress}>
+                <Copy aria-hidden="true" /> Copy Address
+              </Button>
+            </div>
+            {proofField("Upload Payment Proof (Required)")}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={closeDialog}>Cancel</Button>
+              {submitButton("Upload & Hand to Courier")}
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       {/* Dialog for Self Pickup Completion */}
-      <Modal open={activeDialog === "self_pickup_complete"} onClose={closeDialog} title="Complete Handover">
-        <form onSubmit={handleProofSubmit} className="flex flex-col gap-4 py-4">
-          <div className="flex flex-col gap-2">
-            <label className="text-sm font-medium">Upload Progress Proof / Handover Photo (Required)</label>
-            <input 
-              type="file" 
-              accept="image/*,image/heic,image/heif" 
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              className="form-input"
-              required
-            />
-          </div>
-          
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "0.5rem", marginTop: "1rem" }}>
-            <button type="button" className="btn btn-ghost" onClick={closeDialog}>Cancel</button>
-            <button type="submit" className="btn btn-primary" disabled={isPending || !file}>
-              {isPending ? "Uploading..." : "Upload & Complete"}
-            </button>
-          </div>
-        </form>
-      </Modal>
-    </div>
+      <Dialog open={activeDialog === "self_pickup_complete"} onOpenChange={(open) => !open && closeDialog()}>
+        <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-md">
+          <form onSubmit={handleProofSubmit} className="flex flex-col gap-4">
+            <DialogHeader>
+              <DialogTitle className="text-lg font-semibold">Complete Handover</DialogTitle>
+            </DialogHeader>
+            {proofField("Upload Progress Proof / Handover Photo (Required)")}
+            <DialogFooter>
+              <Button type="button" variant="ghost" onClick={closeDialog}>Cancel</Button>
+              {submitButton("Upload & Complete")}
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </Card>
   );
 }

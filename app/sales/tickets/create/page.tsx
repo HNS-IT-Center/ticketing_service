@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import CreateTicketForm from "@/app/technician/tickets/create/CreateTicketForm";
+import { PageHeader } from "@/components/app/PageHeader";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 
 export const metadata = { title: "Create Ticket — HNS IT Center" };
@@ -24,11 +25,13 @@ export default async function SalesCreateTicketPage() {
   const defaultStoreLocationId = currentUserStores[0]?.store_id || "";
 
   return (
-    <div className="container" style={{ padding: "2rem 0" }}>
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 className="page-title">Create New Ticket</h1>
-        <p className="page-description">Create a service ticket on behalf of a customer.</p>
-      </div>
+    // The form below is still legacy markup, so the root keeps no data-slot
+    // (the UI-1 rule); PageHeader brings its own.
+    <div className="flex flex-col gap-6">
+      <PageHeader
+        title="Create New Ticket"
+        description="Create a service ticket on behalf of a customer."
+      />
 
       <CreateTicketForm 
         storeLocations={storeLocations}

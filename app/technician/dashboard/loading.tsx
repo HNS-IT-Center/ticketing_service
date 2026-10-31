@@ -1,37 +1,31 @@
+import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Same order as the dashboard: active tickets, available tickets, then the
+// folded stats — so nothing jumps when the real page arrives.
+const COLUMNS: DataTableColumn<never>[] = ["Ticket Code", "Type", "Customer", "Points", "Status"].map((header, i) => ({
+  key: String(i),
+  header,
+  cell: () => null,
+  mobile: i === 0 ? "title" : i === 4 ? "badge" : "detail",
+}));
+
 export default function TechnicianDashboardLoading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div>
-        <div className="skeleton skeleton-title" style={{ width: "220px" }} />
-        <div className="skeleton skeleton-text" style={{ width: "200px", marginTop: "0.5rem" }} />
+    <div data-slot="technician-dashboard-loading" aria-busy="true" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-8 w-56" />
+        <Skeleton className="h-4 w-64" />
       </div>
-
-      {/* Stat cards */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "1rem" }}>
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="stat-card">
-            <div className="skeleton" style={{ width: "2.25rem", height: "2.25rem", borderRadius: "0.75rem" }} />
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem" }}>
-              <div className="skeleton skeleton-title" style={{ width: "50px" }} />
-              <div className="skeleton skeleton-text" style={{ width: "80px" }} />
-            </div>
-          </div>
-        ))}
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-6 w-44" />
+        <DataTable caption="Loading" columns={COLUMNS} rows={[]} getRowKey={() => ""} loading skeletonRows={3} />
       </div>
-
-      {/* Available tickets card */}
-      <div className="skeleton-card">
-        <div className="skeleton skeleton-title" style={{ width: "180px" }} />
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} style={{ padding: "0.875rem", borderBottom: "1px solid var(--border-light)", display: "flex", gap: "1rem", alignItems: "center" }}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "0.4rem", flex: 1 }}>
-              <div className="skeleton skeleton-text" style={{ width: "100px" }} />
-              <div className="skeleton skeleton-text" style={{ width: "140px" }} />
-            </div>
-            <div className="skeleton" style={{ width: "80px", height: "32px" }} />
-          </div>
-        ))}
+      <div className="flex flex-col gap-3">
+        <Skeleton className="h-6 w-40" />
+        <DataTable caption="Loading" columns={COLUMNS} rows={[]} getRowKey={() => ""} loading skeletonRows={3} />
       </div>
+      <Skeleton className="h-12 w-full rounded-xl" />
     </div>
   );
 }

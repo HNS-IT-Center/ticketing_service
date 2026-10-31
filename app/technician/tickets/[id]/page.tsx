@@ -183,9 +183,8 @@ export default async function TechnicianTicketDetailPage({
   const customerPhone = ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone;
 
   return (
-    // StatusUpdater, ReplacedPartsPanel and ChargesPanel still carry legacy
-    // markup, so the root keeps no data-slot (the UI-1 rule); every section
-    // brings its own.
+    // ReplacedPartsPanel and ChargesPanel still carry legacy markup, so the
+    // root keeps no data-slot (the UI-1 rule); every section brings its own.
     <div className="flex flex-col gap-6">
       <TicketHeader
         code={ticket.ticket_code}
@@ -354,6 +353,11 @@ export default async function TechnicianTicketDetailPage({
           )}
         </div>
       </div>
+
+      {/* On a phone the assigned technician's actions are pinned to the bottom
+          of the screen (StatusUpdater); this keeps the last card clear of them.
+          A height, not padding: the root has no data-slot, so padding is reset. */}
+      {isAssigned && <div aria-hidden="true" className="h-20 md:hidden" />}
     </div>
   );
 }

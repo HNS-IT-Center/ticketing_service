@@ -5,13 +5,13 @@ import { Prisma } from "@prisma/client";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { accessFor } from "@/lib/access-server";
-import { readVendorRoles, vendorRolesOf } from "@/lib/vendors";
+import { readVendorLocation, readVendorRoles, vendorRolesOf } from "@/lib/vendors";
 
 function readVendor(formData: FormData) {
   const name = String(formData.get("name") ?? "").trim().replace(/\s+/g, " ");
   const contact = String(formData.get("contact") ?? "").trim() || null;
   const notes = String(formData.get("notes") ?? "").trim() || null;
-  return { name, contact, notes, ...readVendorRoles(formData) };
+  return { name, contact, notes, location: readVendorLocation(formData), ...readVendorRoles(formData) };
 }
 
 function invalid(v: ReturnType<typeof readVendor>): string | null {

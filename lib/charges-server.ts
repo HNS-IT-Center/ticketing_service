@@ -2,9 +2,10 @@ import "server-only";
 import type { ChargeKind, ServicePart, TicketStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { accessFor } from "@/lib/access-server";
-import { mayEditCharges, type ChargePermissions, type ChargeRow, type VendorOption } from "@/lib/charges";
+import { mayEditCharges, mayLinkPartCode, type ChargePermissions, type ChargeRow, type VendorOption } from "@/lib/charges";
 import type { ServiceJobOption } from "@/lib/service-jobs";
 import { priceReference, type PriceSample } from "@/lib/price-reference";
+import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 
 export type { ChargePermissions, ChargeRow, VendorOption, ServiceJobOption };
 
@@ -32,10 +33,12 @@ export async function chargePermissions(userId: string, ticket: TicketScope): Pr
         })
       ).map((r) => r.store_id)
     : [];
-  const canEdit = mayEditCharges({ userId, audiences: access.audiences, coordinatorStoreIds, ticket });
+  const scope = { userId, audiences: access.audiences, coordinatorStoreIds, ticket };
+  const canEdit = mayEditCharges(scope);
   const canViewCost = access.can("view_cost");
   return {
     canEdit,
+    canLinkPartCode: mayLinkPartCode(scope),
     canEditPrice: canEdit && access.can("edit_price"),
     canEditCost: canEdit && canViewCost && access.can("edit_cost"),
     canViewCost,
@@ -95,6 +98,8 @@ export async function loadTicketCharges(
       job_points: r.job_points,
       accurate_code: r.replaced_part ? r.replaced_part.sku : (r.service_job?.accurate_sku ?? null),
       is_part: r.replaced_part_id !== null,
+      part: r.replaced_part?.part ?? null,
+      part_item_name: r.replaced_part?.item_name ?? null,
       sent_at: r.sent_at?.toISOString() ?? null,
       returned_at: r.returned_at?.toISOString() ?? null,
       external_result: r.external_result,
@@ -173,6 +178,8 @@ export async function loadChargesPanel(
   lines: ChargeRow[];
   vendors: VendorOption[];
   serviceJobs: ServiceJobOption[];
+  /** Whether a part's Accurate code can be searched for; off, the panel offers no link. */
+  catalogEnabled: boolean;
 } | null> {
   if (ticket.ticket_type !== "service") return null;
   const perms = await chargePermissions(userId, ticket);
@@ -181,5 +188,5 @@ export async function loadChargesPanel(
     perms.canEdit ? activeVendors() : Promise.resolve([]),
     perms.canEdit ? activeServiceJobs() : Promise.resolve([]),
   ]);
-  return { perms, lines, vendors, serviceJobs };
+  return { perms, lines, vendors, serviceJobs, catalogEnabled: isCatalogConfigured() };
 }

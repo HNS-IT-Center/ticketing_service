@@ -4,8 +4,15 @@ import { useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createStoreAction } from "@/app/actions/stores";
 import toast from "react-hot-toast";
-import { Store, ArrowLeft } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import Link from "next/link";
+import { FormField } from "@/components/app/FormField";
+import { PageHeader } from "@/components/app/PageHeader";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { errorOf } from "@/lib/action-result";
 
 export default function CreateStorePage() {
   const router = useRouter();
@@ -14,8 +21,9 @@ export default function CreateStorePage() {
   const handleSubmit = (formData: FormData) => {
     startTransition(async () => {
       const result = await createStoreAction(formData);
-      if ((result as any)?.error) {
-        toast.error((result as any).error);
+      const error = errorOf(result);
+      if (error) {
+        toast.error(error);
       } else {
         toast.success("Store created successfully!");
         router.push("/admin/stores");
@@ -24,62 +32,46 @@ export default function CreateStorePage() {
   };
 
   return (
-    <div className="max-w-lg mx-auto flex flex-col gap-6">
-      <div className="flex items-center gap-3">
-        <Link href="/admin/stores" className="p-2 rounded-lg hover:bg-gray-100 transition-colors text-gray-500">
-          <ArrowLeft size={20} />
-        </Link>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Add Store Location</h1>
-          <p className="text-gray-500 text-sm">Create a new operational store</p>
-        </div>
-      </div>
+    <div data-slot="create-store-page" className="flex w-full max-w-lg flex-col gap-6">
+      <PageHeader
+        breadcrumb={[{ label: "Store Locations", href: "/admin/stores" }, { label: "Add Store Location" }]}
+        title="Add Store Location"
+        description="Create a new operational store"
+      />
 
-      <div className="card">
-        <form action={handleSubmit} className="flex flex-col gap-4">
-          <div className="form-group">
-            <label className="form-label">Store Name *</label>
-            <input
-              name="name"
-              className="form-input"
-              placeholder="e.g. Nagoya Gateway"
+      <Card>
+        <CardContent>
+          <form action={handleSubmit} className="flex flex-col gap-4">
+            <FormField label="Store Name" htmlFor="cs-name" required>
+              <Input id="cs-name" name="name" placeholder="e.g. Nagoya Gateway" required />
+            </FormField>
+
+            <FormField
+              label="Store Code"
+              htmlFor="cs-code"
               required
-            />
-          </div>
+              hint=" (2–6 uppercase letters, used in ticket numbers)"
+            >
+              <Input id="cs-code" name="code" className="font-mono uppercase" placeholder="e.g. NGW" maxLength={6} required />
+              <p className="text-xs text-muted-foreground">
+                Tickets from this store will be numbered: <strong className="font-mono">NGW-000001</strong>
+              </p>
+            </FormField>
 
-          <div className="form-group">
-            <label className="form-label">Store Code * <span className="text-gray-400 font-normal text-xs">(2–6 uppercase letters, used in ticket numbers)</span></label>
-            <input
-              name="code"
-              className="form-input font-mono uppercase"
-              placeholder="e.g. NGW"
-              maxLength={6}
-              required
-              style={{ textTransform: "uppercase" }}
-            />
-            <p className="text-xs text-gray-400 mt-1">
-              Tickets from this store will be numbered: <strong className="font-mono">NGW-000001</strong>
-            </p>
-          </div>
+            <FormField label="Address" htmlFor="cs-address" hint=" (optional)">
+              <Textarea id="cs-address" name="address" rows={2} placeholder="Store address..." />
+            </FormField>
 
-          <div className="form-group">
-            <label className="form-label">Address <span className="text-gray-400 font-normal">(optional)</span></label>
-            <textarea
-              name="address"
-              className="form-input"
-              rows={2}
-              placeholder="Store address..."
-            />
-          </div>
-
-          <div className="flex gap-3 mt-2">
-            <button type="submit" className="btn btn-primary" disabled={isPending}>
-              {isPending ? <><span className="spinner spinner-sm" />Creating...</> : "Create Store"}
-            </button>
-            <Link href="/admin/stores" className="btn btn-ghost">Cancel</Link>
-          </div>
-        </form>
-      </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <Button type="submit" disabled={isPending}>
+                {isPending && <Loader2 aria-hidden="true" className="animate-spin" />}
+                {isPending ? "Creating..." : "Create Store"}
+              </Button>
+              <Link href="/admin/stores" className={buttonVariants({ variant: "ghost" })}>Cancel</Link>
+            </div>
+          </form>
+        </CardContent>
+      </Card>
     </div>
   );
 }

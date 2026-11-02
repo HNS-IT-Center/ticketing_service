@@ -4,8 +4,16 @@ import { useState, useTransition } from "react";
 import { updateUserAction, checkUserDeletionAction, deactivateUserAction } from "@/app/actions/admin";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import Modal from "@/components/ui/Modal";
-import { AlertTriangle, Trash2, UserX } from "lucide-react";
+import { AlertTriangle, Loader2, Trash2, UserX } from "lucide-react";
+import { FormField } from "@/components/app/FormField";
+import { errorOf } from "@/lib/action-result";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Textarea } from "@/components/ui/textarea";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -63,7 +71,8 @@ export default function EditUserForm({ user }: { user: User }) {
     formData.append("is_head_technician", isHeadTechnician ? "1" : "0");
     startTransition(async () => {
       const result = await updateUserAction(user.id, formData);
-      if ((result as any)?.error) toast.error((result as any).error);
+      const error = errorOf(result);
+      if (error) toast.error(error);
       else { toast.success("User updated!"); router.push("/admin/users"); }
     });
   };
@@ -102,8 +111,9 @@ export default function EditUserForm({ user }: { user: User }) {
   const confirmDeactivate = (reassignTo?: string) => {
     startTransition(async () => {
       const result = await deactivateUserAction(user.id, reassignTo || null);
-      if ((result as any)?.error) {
-        toast.error((result as any).error);
+      const error = errorOf(result);
+      if (error) {
+        toast.error(error);
         closeModal();
         return;
       }
@@ -125,250 +135,239 @@ export default function EditUserForm({ user }: { user: User }) {
     upgrade: "Upgrade",
   };
 
+  // A solid red for the irreversible step, as the legacy btn-danger was.
+  const dangerSolid = "bg-destructive text-destructive-foreground hover:bg-destructive/90";
+
+  const flagRow = (id: string, label: string, help: string, checked: boolean, onChange: (v: boolean) => void) => (
+    <label
+      htmlFor={id}
+      className="flex min-h-11 cursor-pointer items-start gap-3 rounded-lg border border-border bg-card px-4 py-3"
+    >
+      <input
+        type="checkbox"
+        id={id}
+        checked={checked}
+        onChange={(e) => onChange(e.target.checked)}
+        className="mt-0.5 size-5 shrink-0 cursor-pointer accent-primary"
+      />
+      <span className="flex flex-col gap-0.5">
+        <span className="text-sm font-semibold">{label}</span>
+        <span className="text-xs text-muted-foreground">{help}</span>
+      </span>
+    </label>
+  );
+
   return (
     <>
-      <form action={save} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          <div className="form-group">
-            <label className="form-label">Full Name</label>
-            <input name="name" className="form-input" defaultValue={user.name} required />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Email</label>
-            <input name="email" type="email" className="form-input" defaultValue={user.email} required />
-          </div>
-        </div>
+      <form action={save} data-slot="edit-user-form" className="flex flex-col gap-4">
+        <Card>
+          <CardContent className="flex flex-col gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Full Name" htmlFor="eu-name">
+                <Input id="eu-name" name="name" defaultValue={user.name} required />
+              </FormField>
+              <FormField label="Email" htmlFor="eu-email">
+                <Input id="eu-email" name="email" type="email" defaultValue={user.email} required />
+              </FormField>
+            </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-          <div className="form-group">
-            <label className="form-label">Phone</label>
-            <input name="phone_number" className="form-input" defaultValue={user.phone_number} />
-          </div>
-          <div className="form-group">
-            <label className="form-label">Role</label>
-            <select name="role" className="form-input" value={role} onChange={(e) => setRole(e.target.value)}>
-              {["Pending", "Administrator", "Technician", "Sales", "RMA", "Customer"].map((r) => (
-                <option key={r} value={r}>{r}</option>
-              ))}
-            </select>
-          </div>
-        </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <FormField label="Phone" htmlFor="eu-phone">
+                <Input id="eu-phone" name="phone_number" inputMode="tel" defaultValue={user.phone_number} />
+              </FormField>
+              <FormField label="Role" htmlFor="eu-role">
+                <NativeSelect id="eu-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
+                  {["Pending", "Administrator", "Technician", "Sales", "RMA", "Customer"].map((r) => (
+                    <option key={r} value={r}>{r}</option>
+                  ))}
+                </NativeSelect>
+              </FormField>
+            </div>
 
-        <div className="form-group">
-          <label className="form-label">Address</label>
-          <textarea name="address" className="form-input" defaultValue={user.address} rows={2} />
-        </div>
+            <FormField label="Address" htmlFor="eu-address">
+              <Textarea id="eu-address" name="address" defaultValue={user.address} rows={2} />
+            </FormField>
+          </CardContent>
+        </Card>
 
         {/* Technician-specific settings */}
         {role === "Technician" && (
-          <div className="card" style={{ background: "var(--cream)" }}>
-            <h4 style={{ marginBottom: "1rem" }}>Technician Configuration</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem" }}>
-              <div className="form-group">
-                <label className="form-label">Shift</label>
-                <select name="shift" className="form-input" defaultValue={user.shift || ""}>
+          <Card className="bg-muted/50">
+            <CardHeader>
+              <CardTitle className="font-semibold">Technician Configuration</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <FormField label="Shift" htmlFor="eu-shift" className="sm:max-w-xs">
+                <NativeSelect id="eu-shift" name="shift" defaultValue={user.shift || ""}>
                   <option value="">No shift</option>
                   <option value="morning">Morning (09:00–18:00)</option>
                   <option value="noon">Noon (12:00–22:00)</option>
-                </select>
-              </div>
-            </div>
-            <div className="form-group" style={{ marginTop: "0.75rem" }}>
-              <label className="form-label">Work Days</label>
-              <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", marginTop: "0.25rem" }}>
-                {DAYS.map((day) => (
-                  <button
-                    key={day}
-                    type="button"
-                    onClick={() => toggleDay(day)}
-                    className="btn btn-sm"
-                    style={{
-                      background: workDays.includes(day) ? "var(--primary)" : "var(--white)",
-                      color: workDays.includes(day) ? "#fff" : "var(--text-secondary)",
-                      border: "1.5px solid",
-                      borderColor: workDays.includes(day) ? "var(--primary)" : "var(--border)",
-                    }}
-                  >
-                    {day}
-                  </button>
-                ))}
-              </div>
-            </div>
+                </NativeSelect>
+              </FormField>
 
-            {/* Team Leader flag */}
-            <div style={{ marginTop: "0.75rem", padding: "0.75rem 1rem", background: "var(--white)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <input
-                type="checkbox"
-                id="is_team_leader"
-                checked={isTeamLeader}
-                onChange={(e) => setIsTeamLeader(e.target.checked)}
-                style={{ width: "1rem", height: "1rem", cursor: "pointer" }}
-              />
-              <div>
-                <label htmlFor="is_team_leader" style={{ fontWeight: 600, cursor: "pointer", fontSize: "0.875rem" }}>Team Leader</label>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>
-                  Team leaders are excluded from the leaderboard ranking but can still work on tickets.
-                </p>
-              </div>
-            </div>
+              <fieldset className="flex flex-col gap-1.5">
+                <legend className="mb-1.5 text-sm font-medium text-foreground">Work Days</legend>
+                <div className="flex flex-wrap gap-2">
+                  {DAYS.map((day) => {
+                    const on = workDays.includes(day);
+                    return (
+                      <Button
+                        key={day}
+                        type="button"
+                        size="sm"
+                        variant={on ? "default" : "outline"}
+                        aria-pressed={on}
+                        onClick={() => toggleDay(day)}
+                        className={on ? undefined : "bg-card"}
+                      >
+                        {day}
+                      </Button>
+                    );
+                  })}
+                </div>
+              </fieldset>
 
-            {/* Head technician flag — what it unlocks is set in Pengaturan Akses */}
-            <div style={{ marginTop: "0.75rem", padding: "0.75rem 1rem", background: "var(--white)", borderRadius: "var(--radius-md)", border: "1px solid var(--border-light)", display: "flex", alignItems: "center", gap: "0.75rem" }}>
-              <input
-                type="checkbox"
-                id="is_head_technician"
-                checked={isHeadTechnician}
-                onChange={(e) => setIsHeadTechnician(e.target.checked)}
-                style={{ width: "1rem", height: "1rem", cursor: "pointer" }}
-              />
-              <div>
-                <label htmlFor="is_head_technician" style={{ fontWeight: 600, cursor: "pointer", fontSize: "0.875rem" }}>Head Teknisi</label>
-                <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginTop: "2px" }}>
-                  Bersama koordinator toko, bisa melihat harga modal dan margin sesuai Pengaturan Akses.
-                </p>
-              </div>
-            </div>
-          </div>
+              {/* Team Leader flag */}
+              {flagRow(
+                "is_team_leader",
+                "Team Leader",
+                "Team leaders are excluded from the leaderboard ranking but can still work on tickets.",
+                isTeamLeader,
+                setIsTeamLeader,
+              )}
+
+              {/* Head technician flag — what it unlocks is set in Pengaturan Akses */}
+              {flagRow(
+                "is_head_technician",
+                "Head Teknisi",
+                "Bersama koordinator toko, bisa melihat harga modal dan margin sesuai Pengaturan Akses.",
+                isHeadTechnician,
+                setIsHeadTechnician,
+              )}
+            </CardContent>
+          </Card>
         )}
 
-        <div style={{ display: "flex", gap: "0.75rem", marginTop: "0.5rem" }}>
-          <button type="submit" className="btn btn-primary" disabled={isPending}>
-            {isPending ? <><span className="spinner spinner-sm" />Saving...</> : "Save Changes"}
-          </button>
-          <button type="button" onClick={() => router.back()} className="btn btn-ghost">
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <Button type="submit" disabled={isPending}>
+            {isPending && modalStep === "idle" && <Loader2 aria-hidden="true" className="animate-spin" />}
+            {isPending && modalStep === "idle" ? "Saving..." : "Save Changes"}
+          </Button>
+          <Button type="button" variant="ghost" onClick={() => router.back()}>
             Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleDeleteClick}
-            className="btn btn-danger"
-            style={{ marginLeft: "auto" }}
-            disabled={isPending}
-          >
-            <UserX size={16} /> Deactivate User
-          </button>
+          </Button>
+          <Button type="button" onClick={handleDeleteClick} disabled={isPending} className={`sm:ml-auto ${dangerSolid}`}>
+            <UserX aria-hidden="true" /> Deactivate User
+          </Button>
         </div>
       </form>
 
-      {/* ── Modal: Checking ─────────────────────────────────────── */}
-      <Modal open={modalStep === "checking"} onClose={closeModal} title="Checking Active Tickets…">
-        <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "1rem", padding: "1.5rem 0" }}>
-          <span className="spinner" style={{ width: "2rem", height: "2rem" }} />
-          <p style={{ color: "var(--text-secondary)", fontSize: "0.9rem" }}>
-            Checking if {user.name} has any active tickets…
-          </p>
-        </div>
-      </Modal>
-
-      {/* ── Modal: No Active Tickets ─────────────────────────────── */}
-      <Modal open={modalStep === "no_active"} onClose={closeModal} title="Deactivate User?">
-        <div style={{ display: "flex", alignItems: "flex-start", gap: "0.75rem", marginBottom: "1.25rem" }}>
-          <UserX size={20} style={{ color: "var(--danger)", flexShrink: 0, marginTop: "2px" }} />
-          <p style={{ color: "var(--text-secondary)", lineHeight: 1.6 }}>
-            Are you sure you want to deactivate <strong>{user.name}</strong>?
-            Their account will be disabled and they will no longer be able to log in.
-            All historical data (tickets, logs, messages) will be preserved.
-          </p>
-        </div>
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-          <button className="btn btn-ghost" onClick={closeModal} disabled={isPending}>Cancel</button>
-          <button
-            className="btn btn-danger"
-            onClick={() => confirmDeactivate()}
-            disabled={isPending}
-          >
-            {isPending ? <span className="spinner spinner-sm" /> : <><Trash2 size={14} /> Confirm Deactivate</>}
-          </button>
-        </div>
-      </Modal>
-
-      {/* ── Modal: Has Active Tickets — Reassignment Required ────── */}
-      <Modal open={modalStep === "has_active"} onClose={closeModal} title="Active Tickets Must Be Reassigned">
-        {/* Warning banner */}
-        <div style={{
-          display: "flex", alignItems: "flex-start", gap: "0.75rem",
-          background: "rgba(245, 158, 11, 0.08)",
-          border: "1px solid rgba(245, 158, 11, 0.3)",
-          borderRadius: "var(--radius-md)",
-          padding: "0.875rem 1rem",
-          marginBottom: "1.25rem",
-        }}>
-          <AlertTriangle size={18} style={{ color: "#d97706", flexShrink: 0, marginTop: "2px" }} />
-          <p style={{ fontSize: "0.875rem", color: "var(--text-secondary)", lineHeight: 1.6 }}>
-            <strong>{user.name}</strong> has{" "}
-            <strong>{activeTickets.length} active ticket{activeTickets.length > 1 ? "s" : ""}</strong>{" "}
-            that must be transferred to another technician before this account can be deactivated.
-          </p>
-        </div>
-
-        {/* Active tickets list */}
-        <div style={{ marginBottom: "1.25rem" }}>
-          <p style={{ fontSize: "0.8125rem", fontWeight: 600, color: "var(--text-muted)", marginBottom: "0.5rem", textTransform: "uppercase", letterSpacing: "0.05em" }}>
-            Active Tickets
-          </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem", maxHeight: "160px", overflowY: "auto" }}>
-            {activeTickets.map((t) => (
-              <div key={t.id} style={{
-                display: "flex", alignItems: "center", justifyContent: "space-between",
-                padding: "0.5rem 0.75rem",
-                background: "var(--bg-secondary, #f8f8f8)",
-                borderRadius: "var(--radius-sm)",
-                fontSize: "0.875rem",
-              }}>
-                <span style={{ fontWeight: 600, fontFamily: "monospace" }}>#{t.ticket_code}</span>
-                <span style={{ color: "var(--text-muted)" }}>{typeLabel[t.ticket_type] ?? t.ticket_type}</span>
-                <span style={{
-                  fontSize: "0.75rem", fontWeight: 600,
-                  color: t.status === "on_progress" ? "var(--primary)" : "var(--text-secondary)",
-                }}>
-                  {statusLabel[t.status] ?? t.status}
-                </span>
+      <Dialog open={modalStep !== "idle"} onOpenChange={(open) => { if (!open) closeModal(); }}>
+        <DialogContent className="sm:max-w-lg">
+          {/* ── Checking ─────────────────────────────────────── */}
+          {modalStep === "checking" && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-lg font-semibold">Checking Active Tickets…</DialogTitle>
+              </DialogHeader>
+              <div className="flex flex-col items-center gap-4 py-6" role="status">
+                <Loader2 aria-hidden="true" className="size-8 animate-spin text-primary" />
+                <p className="text-[0.9rem] text-muted-foreground">
+                  Checking if {user.name} has any active tickets…
+                </p>
               </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Reassignment dropdown */}
-        <div className="form-group" style={{ marginBottom: "1.25rem" }}>
-          <label className="form-label">Transfer all active tickets to:</label>
-          {technicians.length === 0 ? (
-            <div style={{
-              padding: "0.75rem 1rem",
-              background: "rgba(239, 68, 68, 0.06)",
-              border: "1px solid rgba(239, 68, 68, 0.25)",
-              borderRadius: "var(--radius-md)",
-              fontSize: "0.875rem",
-              color: "#dc2626",
-            }}>
-              ⚠️ No other active technicians found. Please create another technician account before deactivating this user.
-            </div>
-          ) : (
-            <select
-              className="form-input"
-              value={selectedTechId}
-              onChange={(e) => setSelectedTechId(e.target.value)}
-            >
-              <option value="">— Select a technician —</option>
-              {technicians.map((t) => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
+            </>
           )}
-        </div>
 
-        <div style={{ display: "flex", gap: "0.75rem", justifyContent: "flex-end" }}>
-          <button className="btn btn-ghost" onClick={closeModal} disabled={isPending}>Cancel</button>
-          <button
-            className="btn btn-danger"
-            onClick={() => confirmDeactivate(selectedTechId)}
-            disabled={isPending || !selectedTechId || technicians.length === 0}
-          >
-            {isPending
-              ? <span className="spinner spinner-sm" />
-              : <><Trash2 size={14} /> Reassign &amp; Deactivate</>}
-          </button>
-        </div>
-      </Modal>
+          {/* ── No Active Tickets ─────────────────────────────── */}
+          {modalStep === "no_active" && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-lg font-semibold">Deactivate User?</DialogTitle>
+                <DialogDescription className="flex items-start gap-3 leading-relaxed">
+                  <UserX aria-hidden="true" className="mt-0.5 size-5 shrink-0 text-destructive" />
+                  <span>
+                    Are you sure you want to deactivate <strong className="text-foreground">{user.name}</strong>?
+                    Their account will be disabled and they will no longer be able to log in.
+                    All historical data (tickets, logs, messages) will be preserved.
+                  </span>
+                </DialogDescription>
+              </DialogHeader>
+              <DialogFooter>
+                <Button variant="outline" onClick={closeModal} disabled={isPending}>Cancel</Button>
+                <Button onClick={() => confirmDeactivate()} disabled={isPending} className={dangerSolid}>
+                  {isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Trash2 aria-hidden="true" />}
+                  Confirm Deactivate
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+
+          {/* ── Has Active Tickets — Reassignment Required ────── */}
+          {modalStep === "has_active" && (
+            <>
+              <DialogHeader>
+                <DialogTitle className="text-lg font-semibold">Active Tickets Must Be Reassigned</DialogTitle>
+              </DialogHeader>
+
+              <Alert variant="warning">
+                <AlertTriangle aria-hidden="true" />
+                <AlertDescription className="leading-relaxed">
+                  <p>
+                    <strong>{user.name}</strong> has{" "}
+                    <strong>{activeTickets.length} active ticket{activeTickets.length > 1 ? "s" : ""}</strong>{" "}
+                    that must be transferred to another technician before this account can be deactivated.
+                  </p>
+                </AlertDescription>
+              </Alert>
+
+              <section className="flex flex-col gap-2">
+                <h3 className="text-[0.8125rem] font-semibold tracking-wide text-muted-foreground uppercase">Active Tickets</h3>
+                <ul className="flex max-h-40 flex-col gap-1.5 overflow-y-auto">
+                  {activeTickets.map((t) => (
+                    <li key={t.id} className="flex items-center justify-between gap-2 rounded-md bg-muted px-3 py-2 text-sm">
+                      <span className="font-mono font-semibold">#{t.ticket_code}</span>
+                      <span className="text-muted-foreground">{typeLabel[t.ticket_type] ?? t.ticket_type}</span>
+                      <span className={t.status === "on_progress" ? "text-xs font-semibold text-primary" : "text-xs font-semibold text-muted-foreground"}>
+                        {statusLabel[t.status] ?? t.status}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </section>
+
+              {technicians.length === 0 ? (
+                <Alert variant="destructive">
+                  <AlertDescription>
+                    <p>⚠️ No other active technicians found. Please create another technician account before deactivating this user.</p>
+                  </AlertDescription>
+                </Alert>
+              ) : (
+                <FormField label="Transfer all active tickets to:" htmlFor="eu-reassign">
+                  <NativeSelect id="eu-reassign" value={selectedTechId} onChange={(e) => setSelectedTechId(e.target.value)}>
+                    <option value="">— Select a technician —</option>
+                    {technicians.map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </NativeSelect>
+                </FormField>
+              )}
+
+              <DialogFooter>
+                <Button variant="outline" onClick={closeModal} disabled={isPending}>Cancel</Button>
+                <Button
+                  onClick={() => confirmDeactivate(selectedTechId)}
+                  disabled={isPending || !selectedTechId || technicians.length === 0}
+                  className={dangerSolid}
+                >
+                  {isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Trash2 aria-hidden="true" />}
+                  Reassign &amp; Deactivate
+                </Button>
+              </DialogFooter>
+            </>
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

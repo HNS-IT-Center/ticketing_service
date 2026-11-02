@@ -2,16 +2,19 @@
 
 import { useState, useTransition } from "react";
 import { changePasswordAction } from "@/app/actions/profile";
-import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from "lucide-react";
+import { Lock, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
+import { FormField } from "@/components/app/FormField";
+import { PasswordInput } from "@/components/app/PasswordInput";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { cn } from "@/lib/utils";
 
 export default function ChangePasswordForm({ hasPassword = true }: { hasPassword?: boolean }) {
   const [currentPassword, setCurrentPassword]   = useState("");
   const [newPassword, setNewPassword]           = useState("");
   const [confirmPassword, setConfirmPassword]   = useState("");
-  const [showCurrent, setShowCurrent]           = useState(false);
-  const [showNew, setShowNew]                   = useState(false);
-  const [showConfirm, setShowConfirm]           = useState(false);
   const [error, setError]                       = useState<string | null>(null);
   const [success, setSuccess]                   = useState(false);
   const [isPending, startTransition]            = useTransition();
@@ -41,150 +44,98 @@ export default function ChangePasswordForm({ hasPassword = true }: { hasPassword
     });
   };
 
-  const strengthColor = () => {
-    if (newPassword.length === 0) return "var(--border)";
-    if (newPassword.length < 8)  return "#ef4444";
-    if (newPassword.length < 12) return "#f59e0b";
-    return "#16a34a";
-  };
-  const strengthLabel = () => {
-    if (newPassword.length === 0) return "";
-    if (newPassword.length < 8)  return "Too short";
-    if (newPassword.length < 12) return "Acceptable";
-    return "Strong";
-  };
-
-  const inputStyle = { paddingRight: "2.75rem" };
-  const toggleBtnStyle = {
-    position: "absolute" as const, right: "0.75rem", top: "50%",
-    transform: "translateY(-50%)", background: "none",
-    border: "none", cursor: "pointer", color: "var(--text-muted)",
-    display: "flex", alignItems: "center", padding: 0,
-  };
+  // Same thresholds as before: under 8 too short, under 12 acceptable.
+  const strength =
+    newPassword.length === 0 ? null : newPassword.length < 8 ? "short" : newPassword.length < 12 ? "ok" : "strong";
+  const strengthLabel = { short: "Too short", ok: "Acceptable", strong: "Strong" } as const;
+  const strengthBar = { short: "bg-red-500", ok: "bg-amber-500", strong: "bg-green-600" } as const;
+  const strengthText = { short: "text-tone-red-fg", ok: "text-tone-amber-fg", strong: "text-tone-green-fg" } as const;
 
   return (
-    <div className="card" style={{ padding: "1.5rem" }}>
-      <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.25rem" }}>
-        <Lock size={18} style={{ color: "var(--primary)" }} />
-        <h2 style={{ fontSize: "1.1rem", fontWeight: 700, margin: 0 }}>{hasPassword ? "Change Password" : "Set Local Password"}</h2>
-      </div>
+    <Card className="md:[--card-spacing:--spacing(6)]">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-[1.1rem] font-bold">
+          <Lock aria-hidden="true" className="size-[18px] text-primary" />
+          {hasPassword ? "Change Password" : "Set Local Password"}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {success && (
+          <Alert variant="success">
+            <CheckCircle aria-hidden="true" />
+            <AlertDescription>Password changed successfully!</AlertDescription>
+          </Alert>
+        )}
 
-      {success && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: "0.5rem",
-          background: "#f0fdf4", border: "1px solid #bbf7d0",
-          borderRadius: "var(--radius-md)", padding: "0.75rem 1rem",
-          color: "#15803d", fontSize: "0.875rem", fontWeight: 500,
-          marginBottom: "1rem",
-        }}>
-          <CheckCircle size={16} /> Password changed successfully!
-        </div>
-      )}
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle aria-hidden="true" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      {error && (
-        <div style={{
-          display: "flex", alignItems: "center", gap: "0.5rem",
-          background: "#fff1f2", border: "1px solid #fecdd3",
-          borderRadius: "var(--radius-md)", padding: "0.75rem 1rem",
-          color: "#be123c", fontSize: "0.875rem", fontWeight: 500,
-          marginBottom: "1rem",
-        }}>
-          <AlertCircle size={16} /> {error}
-        </div>
-      )}
-
-      <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-        {hasPassword && (
-          <div className="form-group">
-            <label className="form-label" htmlFor="current-password">Current Password</label>
-            <div style={{ position: "relative" }}>
-              <input
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          {hasPassword && (
+            <FormField label="Current Password" htmlFor="current-password">
+              <PasswordInput
                 id="current-password"
-                type={showCurrent ? "text" : "password"}
-                className="form-input"
                 value={currentPassword}
                 onChange={(e) => setCurrentPassword(e.target.value)}
-                style={inputStyle}
                 autoComplete="off"
               />
-              <button type="button" onClick={() => setShowCurrent(v => !v)} style={toggleBtnStyle} tabIndex={-1}>
-                {showCurrent ? <EyeOff size={16} /> : <Eye size={16} />}
-              </button>
-            </div>
-          </div>
-        )}
+            </FormField>
+          )}
 
-        <div className="form-group">
-          <label className="form-label" htmlFor="new-password">New Password</label>
-          <div style={{ position: "relative" }}>
-            <input
+          <FormField label="New Password" htmlFor="new-password">
+            <PasswordInput
               id="new-password"
-              type={showNew ? "text" : "password"}
-              className="form-input"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
-              style={inputStyle}
               autoComplete="off"
+              aria-describedby={strength ? "new-password-strength" : undefined}
             />
-            <button type="button" onClick={() => setShowNew(v => !v)} style={toggleBtnStyle} tabIndex={-1}>
-              {showNew ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
+            {/* Password strength bar */}
+            {strength && (
+              <div className="flex flex-col gap-1">
+                <div className="h-1 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className={cn("h-full rounded-full transition-all duration-300", strengthBar[strength])}
+                    style={{ width: `${Math.min((newPassword.length / 16) * 100, 100)}%` }}
+                  />
+                </div>
+                <span id="new-password-strength" className={cn("text-[0.7rem] font-semibold", strengthText[strength])}>
+                  {strengthLabel[strength]}
+                </span>
+              </div>
+            )}
+          </FormField>
 
-        {/* Password strength bar */}
-        {newPassword.length > 0 && (
-          <div style={{ marginTop: "-0.5rem" }}>
-            <div style={{ height: "4px", borderRadius: "999px", background: "var(--border)", overflow: "hidden" }}>
-              <div style={{
-                height: "100%", borderRadius: "999px",
-                width: `${Math.min((newPassword.length / 16) * 100, 100)}%`,
-                background: strengthColor(), transition: "all 0.3s",
-              }} />
-            </div>
-            <span style={{ fontSize: "0.7rem", color: strengthColor(), fontWeight: 600, marginTop: "0.25rem", display: "block" }}>
-              {strengthLabel()}
-            </span>
-          </div>
-        )}
-
-        <div className="form-group">
-          <label className="form-label" htmlFor="confirm-password">Confirm New Password</label>
-          <div style={{ position: "relative" }}>
-            <input
+          <FormField label="Confirm New Password" htmlFor="confirm-password">
+            <PasswordInput
               id="confirm-password"
-              type={showConfirm ? "text" : "password"}
-              className="form-input"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
-              style={inputStyle}
               autoComplete="off"
+              aria-invalid={confirmPassword.length > 0 && newPassword !== confirmPassword ? true : undefined}
             />
-            <button type="button" onClick={() => setShowConfirm(v => !v)} style={toggleBtnStyle} tabIndex={-1}>
-              {showConfirm ? <EyeOff size={16} /> : <Eye size={16} />}
-            </button>
-          </div>
-        </div>
+            {/* Match indicator */}
+            {confirmPassword.length > 0 && (
+              <p className={cn("text-xs font-semibold", newPassword === confirmPassword ? "text-tone-green-fg" : "text-tone-red-fg")}>
+                {newPassword === confirmPassword ? "✓ Passwords match" : "✗ Passwords do not match"}
+              </p>
+            )}
+          </FormField>
 
-        {/* Match indicator */}
-        {confirmPassword.length > 0 && (
-          <p style={{
-            fontSize: "0.75rem", fontWeight: 600, marginTop: "-0.5rem",
-            color: newPassword === confirmPassword ? "#16a34a" : "#ef4444",
-          }}>
-            {newPassword === confirmPassword ? "✓ Passwords match" : "✗ Passwords do not match"}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={isPending || (hasPassword && !currentPassword) || !newPassword || !confirmPassword}
-          className="btn btn-primary"
-          style={{ marginTop: "0.25rem" }}
-        >
-          {isPending ? <><span className="spinner spinner-sm" /> Saving...</> : (hasPassword ? "Change Password" : "Set Password")}
-        </button>
-      </form>
-    </div>
+          <Button
+            type="submit"
+            disabled={isPending || (hasPassword && !currentPassword) || !newPassword || !confirmPassword}
+            className="w-full sm:w-auto sm:self-start"
+          >
+            {isPending && <Loader2 aria-hidden="true" className="animate-spin" />}
+            {isPending ? "Saving..." : (hasPassword ? "Change Password" : "Set Password")}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   );
 }

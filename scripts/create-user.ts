@@ -25,8 +25,8 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";
 import { mariadbPoolConfig, MARIADB_ADAPTER_OPTIONS } from "../lib/mariadb";
-import { createInterface } from "node:readline";
-import { stdin, stdout } from "node:process";
+import { validatePassword } from "../lib/password-policy";
+import { createPrompt, databaseHost } from "./lib/prompt";
 
 config({ path: ".env.local" });
 
@@ -36,91 +36,9 @@ config({ path: ".env.local" });
 const adapter = new PrismaMariaDb(mariadbPoolConfig(), MARIADB_ADAPTER_OPTIONS);
 const db = new PrismaClient({ adapter });
 
-const rl = createInterface({ input: stdin, output: stdout, terminal: stdin.isTTY });
-
-/**
- * Lines are buffered rather than read with readline/promises' `question()`.
- *
- * `question()` only captures the *next* line emitted after it is called. A
- * piped stdin delivers its whole buffer at once, so every line arriving while
- * we await a validation or a database round-trip is dropped, and the following
- * prompt then waits forever for input that has already gone past. Interactive
- * use never hits it; it made the script impossible to exercise from a script.
- */
-const buffered: string[] = [];
-let waiting: ((line: string) => void) | null = null;
-let inputClosed = false;
-
-rl.on("line", (line) => {
-  if (waiting) {
-    const resolve = waiting;
-    waiting = null;
-    resolve(line);
-  } else {
-    buffered.push(line);
-  }
-});
-
-rl.on("close", () => {
-  inputClosed = true;
-  if (waiting) {
-    const resolve = waiting;
-    waiting = null;
-    resolve("");
-  }
-});
-
-function nextLine(): Promise<string> {
-  if (buffered.length > 0) return Promise.resolve(buffered.shift()!);
-  if (inputClosed) {
-    return Promise.reject(new Error("Input habis sebelum semua pertanyaan terjawab."));
-  }
-  return new Promise((resolve) => {
-    waiting = resolve;
-  });
-}
+const { ask, askSecret, askValidated, close } = createPrompt();
 
 const ROLES: Role[] = ["RMA", "Administrator", "Technician", "Sales", "Customer"];
-
-/** Passwords this project has published in its own docs and seed. */
-const KNOWN_WEAK = [
-  "admin123",
-  "tech123",
-  "sales123",
-  "rma123",
-  "customer123",
-  "password",
-  "12345678",
-];
-
-async function ask(question: string, fallback?: string): Promise<string> {
-  const suffix = fallback ? ` [${fallback}]` : "";
-  stdout.write(`${question}${suffix}: `);
-  const answer = (await nextLine()).trim();
-  if (!stdin.isTTY) stdout.write(`${answer}\n`);
-  return answer || fallback || "";
-}
-
-/** Reads a line without echoing it back to the terminal. */
-async function askSecret(question: string): Promise<string> {
-  stdout.write(`${question}: `);
-
-  // readline echoes keystrokes on a TTY, so the echo is suppressed at the
-  // source while this prompt is open. The cast reaches an internal hook; there
-  // is no public API for a masked prompt in node:readline. Piped input is not
-  // echoed in the first place.
-  const iface = rl as unknown as { _writeToOutput?: (s: string) => void };
-  const original = iface._writeToOutput;
-  if (stdin.isTTY) iface._writeToOutput = () => {};
-
-  try {
-    const answer = await nextLine();
-    stdout.write("\n");
-    return answer;
-  } finally {
-    if (stdin.isTTY) iface._writeToOutput = original;
-  }
-}
 
 function validateEmail(value: string): string | null {
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) return "Email tidak valid.";
@@ -135,36 +53,8 @@ function validatePhone(value: string): string | null {
   return null;
 }
 
-function validatePassword(value: string): string | null {
-  // Checked before the length rule: every published password is short, so the
-  // length message would otherwise always win and this list would never speak.
-  if (KNOWN_WEAK.includes(value.toLowerCase())) {
-    return "Password itu ada di seed/dokumentasi repo ini. Pakai yang lain.";
-  }
-  if (value.length < 12) return "Password minimal 12 karakter.";
-  if (!/[a-z]/.test(value) || !/[A-Z]/.test(value) || !/\d/.test(value)) {
-    return "Password harus memuat huruf kecil, huruf besar, dan angka.";
-  }
-  return null;
-}
-
-/** Repeats the prompt until the answer validates. */
-async function askValidated(
-  question: string,
-  validate: (v: string) => string | null,
-  opts: { secret?: boolean; fallback?: string } = {},
-): Promise<string> {
-  for (;;) {
-    const value = opts.secret ? await askSecret(question) : await ask(question, opts.fallback);
-    const problem = validate(value);
-    if (!problem) return value;
-    console.error(`  ✗ ${problem}`);
-  }
-}
-
 async function main() {
-  const target = process.env.DATABASE_URL ?? "";
-  const host = target.replace(/^.*@/, "").replace(/\/.*$/, "") || "(tidak diketahui)";
+  const host = databaseHost();
 
   console.log("\n─── Buat satu user ───────────────────────────────────────────");
   console.log(`Database : ${host}`);
@@ -244,6 +134,6 @@ main()
     process.exitCode = 1;
   })
   .finally(async () => {
-    rl.close();
+    close();
     await db.$disconnect();
   });

@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import CreateTicketForm from "@/app/technician/tickets/create/CreateTicketForm";
+import { PageHeader } from "@/components/app/PageHeader";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 
 export const metadata = { title: "Create Ticket — HNS IT Center" };
@@ -14,11 +15,8 @@ export default async function AdminCreateTicketPage() {
   const upgrades = await db.upgrade.findMany();
 
   return (
-    <div className="container" style={{ padding: "2rem 0" }}>
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 className="page-title">Create New Ticket</h1>
-        <p className="page-description">Create a service ticket on behalf of a customer.</p>
-      </div>
+    <div data-slot="create-ticket-page" className="flex flex-col gap-6">
+      <PageHeader title="Create New Ticket" description="Create a service ticket on behalf of a customer." />
 
       <CreateTicketForm 
         storeLocations={storeLocations}

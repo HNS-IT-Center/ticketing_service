@@ -5,6 +5,10 @@ import TakeTicketButton from "./TakeTicketButton";
 import { CheckCircle, ArrowUp, ArrowDown, Clock, XCircle, Lock } from "lucide-react";
 import { cancelTicketRequestAction } from "@/app/actions/technician";
 import toast from "react-hot-toast";
+import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
+import { EmptyState } from "@/components/app/EmptyState";
+import { PointsBadge } from "@/components/app/PointsBadge";
+import { Button } from "@/components/ui/button";
 
 type UnassignedTicket = {
   id: string;
@@ -63,61 +67,37 @@ export default function AvailableTickets({
   };
 
   if (tickets.length === 0) {
-    return (
-      <div className="empty-state" style={{ padding: "2rem" }}>
-        <CheckCircle size={32} style={{ opacity: 0.3 }} />
-        <p>No unassigned tickets at the moment</p>
-      </div>
-    );
+    return <EmptyState icon={CheckCircle} title="No unassigned tickets at the moment" />;
   }
 
   // ── Action cell: 3 states ──────────────────────────────────────────────────
-  const ActionCell = ({ ticket }: { ticket: UnassignedTicket }) => {
+  const actionCell = (ticket: UnassignedTicket) => {
     const isMine  = mySet.has(ticket.id);
     const isOther = !isMine && otherSet.has(ticket.id);
 
     if (isOther) {
       return (
-        <span style={{
-          display: "inline-flex", alignItems: "center", gap: "0.3rem",
-          padding: "0.25rem 0.6rem", borderRadius: "999px",
-          background: "rgba(107,114,128,0.08)", color: "#6b7280",
-          fontSize: "0.75rem", fontWeight: 600,
-          border: "1px solid rgba(107,114,128,0.2)",
-          whiteSpace: "nowrap",
-        }}>
-          <Lock size={11} /> Requested by other
+        <span className="inline-flex items-center gap-1 rounded-full border border-tone-gray-border bg-tone-gray-bg px-2.5 py-1 text-xs font-semibold whitespace-nowrap text-tone-gray-fg">
+          <Lock aria-hidden="true" className="size-3" /> Requested by other
         </span>
       );
     }
 
     if (isMine) {
       return (
-        <div style={{ display: "flex", alignItems: "center", gap: "0.4rem", flexWrap: "wrap" }}>
-          <span style={{
-            display: "inline-flex", alignItems: "center", gap: "0.3rem",
-            padding: "0.25rem 0.6rem", borderRadius: "999px",
-            background: "rgba(234,179,8,0.1)", color: "#a16207",
-            fontSize: "0.75rem", fontWeight: 700,
-            border: "1px solid rgba(234,179,8,0.3)",
-            whiteSpace: "nowrap",
-          }}>
-            <Clock size={11} /> Requested
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="inline-flex items-center gap-1 rounded-full border border-tone-amber-border bg-tone-amber-bg px-2.5 py-1 text-xs font-bold whitespace-nowrap text-tone-amber-fg">
+            <Clock aria-hidden="true" className="size-3" /> Requested
           </span>
-          <button
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => handleCancel(ticket.id)}
             disabled={isPending}
-            style={{
-              display: "inline-flex", alignItems: "center", gap: "0.25rem",
-              padding: "0.2rem 0.5rem", borderRadius: "var(--radius-md)",
-              background: "none", color: "#dc2626",
-              border: "1px solid rgba(220,38,38,0.3)",
-              fontSize: "0.75rem", fontWeight: 600, cursor: "pointer",
-              opacity: isPending ? 0.5 : 1, whiteSpace: "nowrap",
-            }}
+            className="border-tone-red-border bg-card text-destructive hover:bg-tone-red-bg hover:text-destructive"
           >
-            <XCircle size={11} /> Cancel
-          </button>
+            <XCircle aria-hidden="true" /> Cancel
+          </Button>
         </div>
       );
     }
@@ -125,116 +105,39 @@ export default function AvailableTickets({
     return <TakeTicketButton ticketId={ticket.id} />;
   };
 
-  const rowStyle = (ticket: UnassignedTicket): React.CSSProperties => {
-    const isOther = !mySet.has(ticket.id) && otherSet.has(ticket.id);
-    const isMine  = mySet.has(ticket.id);
-    return {
-      opacity: isOther ? 0.6 : isMine ? 0.8 : 1,
-      background: isOther
-        ? "rgba(107,114,128,0.04)"
-        : isMine
-        ? "rgba(234,179,8,0.04)"
-        : undefined,
-      transition: "all 0.2s",
-    };
-  };
-
-  const cardBorder = (ticket: UnassignedTicket): React.CSSProperties => {
-    const isOther = !mySet.has(ticket.id) && otherSet.has(ticket.id);
-    const isMine  = mySet.has(ticket.id);
-    return {
-      border: isOther
-        ? "1.5px solid rgba(107,114,128,0.2)"
-        : isMine
-        ? "1.5px solid rgba(234,179,8,0.25)"
-        : undefined,
-    };
-  };
+  const columns: DataTableColumn<UnassignedTicket>[] = [
+    { key: "code", header: "Ticket Code", cell: (t) => <span className="font-mono font-semibold text-primary">{t.ticket_code}</span>, mobile: "title" },
+    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
+    { key: "customer", header: "Customer", cell: (t) => t.user?.name || "Guest" },
+    // Desktop tables drop Device below xl so the action column stays in view
+    // beside the sidebar; the phone cards still list it.
+    { key: "device", header: "Device", cell: (t) => t.device_type.replace(/_/g, " "), className: "hidden text-muted-foreground xl:table-cell" },
+    { key: "date", header: "Date", cell: (t) => new Date(t.created_at).toLocaleDateString("id-ID"), className: "whitespace-nowrap text-muted-foreground" },
+    { key: "points", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type)} />, mobile: "badge" },
+    { key: "action", header: "", cell: actionCell, mobile: "footer" },
+  ];
 
   return (
-    <>
-      {/* Desktop table */}
-      <div className="admin-ticket-table">
-        <div className="table-wrapper border-none" style={{ boxShadow: "none" }}>
-          <table>
-            <thead>
-              <tr>
-                <th>Ticket Code</th>
-                <th>Type</th>
-                <th>Customer</th>
-                <th>Device</th>
-                <th
-                  onClick={toggleSort}
-                  style={{ cursor: "pointer", userSelect: "none" }}
-                  title="Sort by date"
-                >
-                  <div className="flex items-center gap-1">
-                    Date
-                    {sort === "asc" ? (
-                      <ArrowUp size={14} />
-                    ) : (
-                      <ArrowDown size={14} style={{ opacity: sort === "desc" ? 1 : 0.5 }} />
-                    )}
-                  </div>
-                </th>
-                <th>Points</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {sortedTickets.map((t) => (
-                <tr key={t.id} style={rowStyle(t)}>
-                  <td className="font-mono font-semibold text-primary">{t.ticket_code}</td>
-                  <td style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</td>
-                  <td>{t.user?.name || "Guest"}</td>
-                  <td className="text-muted-foreground">{t.device_type.replace(/_/g, " ")}</td>
-                  <td className="text-muted-foreground" style={{ fontSize: "0.85rem" }}>
-                    {new Date(t.created_at).toLocaleDateString("id-ID")}
-                  </td>
-                  <td>
-                    <span className="badge badge-technician">
-                      {getTicketPoints(t.ticket_type, t.device_type)} pts
-                    </span>
-                  </td>
-                  <td>
-                    <ActionCell ticket={t} />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+    <div className="flex flex-col gap-3">
+      <div className="flex justify-end">
+        <Button variant="ghost" size="sm" onClick={toggleSort} title="Sort by date" className="text-muted-foreground">
+          Date
+          {sort === "asc" ? <ArrowUp aria-hidden="true" /> : <ArrowDown aria-hidden="true" className={sort === "desc" ? undefined : "opacity-50"} />}
+        </Button>
       </div>
-
-      {/* Mobile cards */}
-      <div className="admin-ticket-cards">
-        {sortedTickets.map((t) => {
-          const pts = getTicketPoints(t.ticket_type, t.device_type);
-          return (
-            <div
-              key={t.id}
-              className="mobile-ticket-card"
-              style={{ ...rowStyle(t), ...cardBorder(t) }}
-            >
-              <div className="flex justify-between items-center">
-                <span className="font-mono font-bold text-primary">{t.ticket_code}</span>
-                <span className="badge badge-technician">{pts} pts</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground mt-1" style={{ fontSize: "0.8125rem" }}>
-                <span style={{ textTransform: "capitalize" }}>{t.ticket_type.replace("_", " ")}</span>
-                <span>{t.user?.name || "Guest"}</span>
-              </div>
-              <div className="flex justify-between text-muted-foreground mt-1" style={{ fontSize: "0.8125rem" }}>
-                <span>{t.device_type.replace(/_/g, " ")}</span>
-                <span>{new Date(t.created_at).toLocaleDateString("id-ID")}</span>
-              </div>
-              <div style={{ marginTop: "0.75rem" }}>
-                <ActionCell ticket={t} />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </>
+      <DataTable
+        caption="Available Tickets"
+        columns={columns}
+        rows={sortedTickets}
+        getRowKey={(t) => t.id}
+        rowClassName={(t) => {
+          const isMine = mySet.has(t.id);
+          const isOther = !isMine && otherSet.has(t.id);
+          if (isOther) return "opacity-60 bg-muted/40";
+          if (isMine) return "opacity-80 border-tone-amber-border bg-tone-amber-bg/30";
+          return undefined;
+        }}
+      />
+    </div>
   );
 }

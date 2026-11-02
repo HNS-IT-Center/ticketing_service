@@ -4,12 +4,23 @@ import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { createVendorAction, updateVendorAction } from "@/app/actions/vendors";
-import { VENDOR_ROLES, VENDOR_ROLE_INFO, vendorRolesOf, type VendorRole, type VendorRoles } from "@/lib/vendors";
+import {
+  VENDOR_LOCATIONS,
+  VENDOR_LOCATION_INFO,
+  VENDOR_ROLES,
+  VENDOR_ROLE_INFO,
+  vendorLocationText,
+  vendorRolesOf,
+  type VendorLocation,
+  type VendorRole,
+  type VendorRoles,
+} from "@/lib/vendors";
 
 export type VendorRowData = VendorRoles & {
   id: string;
   name: string;
   contact: string | null;
+  location: VendorLocation | null;
   is_active: boolean;
 };
 
@@ -36,6 +47,39 @@ export function RolePills({ vendor }: { vendor: VendorRoles }) {
           {VENDOR_ROLE_INFO[role].label}
         </span>
       ))}
+    </span>
+  );
+}
+
+/** Dalam kota (LKL) / luar kota (ITR), as the shop's supplier list codes it. */
+function LocationSelect({ value }: { value?: VendorLocation | null }) {
+  return (
+    <select name="location" defaultValue={value ?? ""} className="form-input" aria-label="Lokasi vendor">
+      <option value="">Lokasi belum diisi</option>
+      {VENDOR_LOCATIONS.map((l) => (
+        <option key={l} value={l}>
+          {vendorLocationText(l)}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+function LocationPill({ location }: { location: VendorLocation | null }) {
+  if (!location) return <span style={{ color: "var(--text-muted)" }}>—</span>;
+  const far = location === "out_of_town";
+  return (
+    <span
+      className="whitespace-nowrap rounded-full text-[0.71875rem] font-bold"
+      title={vendorLocationText(location) ?? undefined}
+      style={{
+        background: far ? "#ffedd5" : "#dcfce7",
+        color: far ? "#9a3412" : "#166534",
+        border: `1px solid ${far ? "#fed7aa" : "#bbf7d0"}`,
+        padding: "0.1rem 0.6rem",
+      }}
+    >
+      {VENDOR_LOCATION_INFO[location].code} · {VENDOR_LOCATION_INFO[location].label}
     </span>
   );
 }
@@ -111,6 +155,12 @@ export function NewVendorForm({ defaultRoles = {} }: { defaultRoles?: Partial<Ve
           </span>
           <input name="contact" className="form-input" placeholder="No. WA / alamat" />
         </label>
+        <label className="flex flex-col gap-1">
+          <span className="text-sm font-semibold">
+            Lokasi <span className="font-normal" style={{ color: "var(--text-muted)" }}>(opsional)</span>
+          </span>
+          <LocationSelect />
+        </label>
       </div>
       <RoleChecks checked={defaultRoles} />
       <button type="submit" className="btn btn-primary self-start" disabled={pending}>
@@ -131,6 +181,9 @@ export function VendorRow({ vendor, canManage }: { vendor: VendorRowData; canMan
         <td>
           <RolePills vendor={vendor} />
         </td>
+        <td>
+          <LocationPill location={vendor.location} />
+        </td>
         <td style={{ color: "var(--text-muted)" }}>{vendor.contact ?? "—"}</td>
         <td>{vendor.is_active ? "Aktif" : "Nonaktif"}</td>
         <td>
@@ -146,7 +199,7 @@ export function VendorRow({ vendor, canManage }: { vendor: VendorRowData; canMan
 
   return (
     <tr>
-      <td colSpan={5}>
+      <td colSpan={6}>
         <form
           onSubmit={(e) =>
             submit(e, (fd) => updateVendorAction(vendor.id, fd), "Vendor diperbarui.", () => setEditing(false))
@@ -157,6 +210,7 @@ export function VendorRow({ vendor, canManage }: { vendor: VendorRowData; canMan
           <div className="grid gap-3 md:grid-cols-2">
             <input name="name" defaultValue={vendor.name} required minLength={2} className="form-input" />
             <input name="contact" defaultValue={vendor.contact ?? ""} className="form-input" placeholder="Kontak" />
+            <LocationSelect value={vendor.location} />
           </div>
           <RoleChecks checked={vendor} />
           <label className="flex items-center gap-2 text-sm">

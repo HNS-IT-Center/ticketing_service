@@ -46,9 +46,20 @@ export async function decrypt(
   }
 }
 
+/** Without "remember me", and for HNS SSO: about one shift. */
+export const SESSION_SHIFT_SECONDS = 60 * 60 * 12;
+
 /**
- * Cookie attributes for the session. No `maxAge` by default: a session cookie
- * the browser drops when it closes; the JWT inside still expires after 7 days.
+ * Cookie attributes for the session — always with a lifetime.
+ *
+ * It used to have none unless "remember me" was ticked (SY1), so the browser
+ * dropped it when its process ended. Android Chrome ends it often: a weak
+ * signal, the camera opening, low memory. Staff were sent back to /login in the
+ * middle of an intake and typed the ticket again (owner, 2026-10-27). The SSO
+ * callback never passes "remember me", so after the move to SSO everyone would
+ * have hit it. Now: one shift by default, seven days when remembered — the JWT
+ * inside expires after seven days regardless, and every request still checks
+ * the account against the database (lib/session.ts).
  */
 export function sessionCookieOptions(rememberMe?: boolean) {
   return {
@@ -56,6 +67,6 @@ export function sessionCookieOptions(rememberMe?: boolean) {
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax" as const,
     path: "/",
-    ...(rememberMe ? { maxAge: SESSION_MAX_AGE_SECONDS } : {}),
+    maxAge: rememberMe ? SESSION_MAX_AGE_SECONDS : SESSION_SHIFT_SECONDS,
   };
 }

@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
+import { storageFailedMessage } from "@/lib/upload-limit";
 import { getTicketPoints } from "@/lib/points";
 import { cleanVendorName } from "@/lib/rma/vendor";
 import { RMA_HOLD_REASONS, holdReasonAsksTechnician, isRmaHoldReason } from "@/lib/rma/hold-reason";
@@ -245,7 +246,7 @@ export async function handoverToRmaAction(formData: FormData) {
         invoiceUrl = await uploadToR2(file, path);
       } catch (err) {
         console.error("[RMA INVOICE UPLOAD ERROR]", err);
-        return { error: "Failed to upload the invoice. Please check the file size and try again." };
+        return { error: storageFailedMessage("nota pembelian") };
       }
       // Keep it visible in the ticket's normal attachment list too.
       await db.ticketAttachment.create({
@@ -265,7 +266,7 @@ export async function handoverToRmaAction(formData: FormData) {
       } catch (err) {
         console.error("[RMA DAMAGE PHOTO UPLOAD ERROR]", err);
         return {
-          error: "Gagal mengunggah foto kerusakan. Periksa ukuran file lalu coba lagi.",
+          error: storageFailedMessage("foto kerusakan"),
         };
       }
     }
@@ -926,7 +927,7 @@ export async function submitHoldEvidenceAction(formData: FormData) {
         uploaded.push(url);
       } catch (err) {
         console.error("[RMA HOLD EVIDENCE UPLOAD ERROR]", err);
-        return { error: "Gagal mengunggah berkas. Periksa ukuran file lalu coba lagi." };
+        return { error: storageFailedMessage("berkas") };
       }
     }
 

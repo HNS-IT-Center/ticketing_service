@@ -42,7 +42,7 @@ vi.mock("@/lib/session", () => ({
 
 const { db } = await import("@/lib/db");
 const { addChargeAction, updateChargeAction, removeChargeAction, receiveExternalAction } = await import("./charges");
-const { addReplacedPartAction, removeReplacedPartAction, updateTicketStatusAction } = await import("./technician");
+const { addReplacedPartAction, updateTicketStatusAction } = await import("./technician");
 const { adminUpdateTicketStatusAction } = await import("./admin");
 const { saveAccessRulesAction } = await import("./access");
 const { createServiceJobAction, updateServiceJobAction, setServiceJobAccurateItemAction, applyAccurateItemToUnmappedAction } =
@@ -284,27 +284,63 @@ describe("part lines follow the parts", () => {
     ]);
   });
 
-  it("a part line keeps its name and quantity, takes a supplier and prices, and is removed only with its part", async () => {
+  it("a part line takes a supplier and prices, and its quantity is the part's — written to both", async () => {
     const t = await makeTicket();
     await addReplacedPartAction(form({ ticket_id: t, part: "lcd", item_name: "" }));
     const [line] = await lines(t);
     expect(line.description).toBe("LCD / Layar");
 
+    // A free description is not a part line's to take: its name comes from the part.
     expect(
-      await updateChargeAction(line.id, form({ description: "renamed", quantity: "9", vendor_id: ids.supplier, unit_price: "900000" }))
+      await updateChargeAction(line.id, form({ description: "renamed", quantity: "2", vendor_id: ids.supplier, unit_price: "900000" }))
     ).toEqual({ success: true });
     expect(await db.ticketCharge.findUnique({ where: { id: line.id } })).toMatchObject({
       description: "LCD / Layar",
-      quantity: 1,
+      quantity: 2,
       vendor_id: ids.supplier,
       unit_price: 900000,
     });
+    expect((await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t } })).quantity).toBe(2);
     expect(await updateChargeAction(line.id, form({ vendor_id: ids.repairer }))).toMatchObject({ error: expect.stringContaining("Supplier part") });
+  });
 
-    expect(await removeChargeAction(line.id)).toMatchObject({ error: expect.stringContaining("Part yang Diganti") });
-    const part = await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t } });
-    expect(await removeReplacedPartAction(part.id)).toEqual({ success: true });
+  it("a part with no code yet can be renamed and re-categorised; one with a code keeps the catalogue's name", async () => {
+    const t = await makeTicket();
+    await addReplacedPartAction(form({ ticket_id: t, part: "lcd", item_name: "LCD" }));
+    const [line] = await lines(t);
+    expect(await updateChargeAction(line.id, form({ part: "battery", item_name: "Baterai 3 cell" }))).toEqual({ success: true });
+    expect(await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t } })).toMatchObject({ part: "battery", item_name: "Baterai 3 cell" });
+    expect((await db.ticketCharge.findUniqueOrThrow({ where: { id: line.id } })).description).toBe("Baterai 3 cell");
+    expect(await updateChargeAction(line.id, form({ part: "other", item_name: "" }))).toMatchObject({ error: expect.stringContaining("wajib") });
+
+    await db.ticketReplacedPart.updateMany({ where: { ticket_id: t }, data: { sku: "BAT-1", item_name: "BATERAI KATALOG" } });
+    await db.ticketCharge.update({ where: { id: line.id }, data: { description: "BATERAI KATALOG" } });
+    expect(await updateChargeAction(line.id, form({ item_name: "diketik lagi", quantity: "3" }))).toEqual({ success: true });
+    expect(await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t } })).toMatchObject({ item_name: "BATERAI KATALOG", quantity: 3 });
+    expect((await db.ticketCharge.findUniqueOrThrow({ where: { id: line.id } })).description).toBe("BATERAI KATALOG");
+  });
+
+  it("removing a part line from the bill removes the part, its photos and their files", async () => {
+    const { deleteFromStorage } = await import("@/lib/r2");
+    const t = await makeTicket();
+    const photo = new File([new Uint8Array([1, 2, 3])], "box.jpg", { type: "image/jpeg" });
+    const fd = form({ ticket_id: t, part: "lcd", item_name: "LCD" });
+    fd.append("photos", photo);
+    expect(await addReplacedPartAction(fd)).toEqual({ success: true });
+    const [line] = await lines(t);
+    vi.mocked(deleteFromStorage).mockClear();
+
+    as("admin");
+    expect(await removeChargeAction(line.id)).toEqual({ success: true });
     expect(await lines(t)).toHaveLength(0);
+    expect(await db.ticketReplacedPart.count({ where: { ticket_id: t } })).toBe(0);
+    expect(vi.mocked(deleteFromStorage)).toHaveBeenCalledWith("https://r2.test/x.jpg");
+
+    // Still guarded by the bill rule.
+    as("tech");
+    await addReplacedPartAction(form({ ticket_id: t, part: "lcd", item_name: "LCD" }));
+    as("other");
+    expect(await removeChargeAction((await lines(t))[0].id)).toMatchObject({ error: expect.stringContaining("tidak dapat") });
   });
 
   it("a hand-added line can be removed, and a part line cannot be added by hand", async () => {
@@ -547,7 +583,7 @@ describe("what a part usually sells for", () => {
 });
 
 describe("Accurate codes for the cashier", () => {
-  const jasaService = { id: 100688, sku: "100688", name: "JASA SERVICE", category: "JASA", brand: null, type: "SERVICE", unit: null, serialized: false, stockTotal: 0, warehouses: [] };
+  const jasaService = { id: 100688, sku: "100688", name: "JASA SERVICE", category: "JASA", brand: null, type: "SERVICE", unit: null, serialized: false, stockTotal: 0, warehouses: [], claimWarehouses: [] };
   const pengecekan = { ...jasaService, id: 101003, sku: "101003", name: "Penggantian & Pengecekan" };
   const accurateForm = (id: string) => form({ accurate_item_id: id });
 
@@ -616,5 +652,153 @@ describe("Accurate codes for the cashier", () => {
     as("tech");
     expect(await setServiceJobAccurateItemAction(ids.job, accurateForm("100688"))).toMatchObject({ error: expect.stringContaining("akses") });
     expect(await applyAccurateItemToUnmappedAction(accurateForm("100688"))).toMatchObject({ error: expect.stringContaining("akses") });
+  });
+});
+
+describe("a part's Accurate code, entered once the item is received", () => {
+  const battery = {
+    id: 880001, sku: "2507000123", name: "BATERAI ASUS C31N1915 FOR SERVIS", category: "SPAREPART SERVICE",
+    brand: null, type: "INVENTORY", unit: "PCS", serialized: false, stockTotal: 0, warehouses: [], claimWarehouses: [],
+  };
+
+  /** A battery recorded the way it is before Accurate has it: a plain name, no code, already priced. */
+  async function typedPart(status: "on_progress" | "completed" = "on_progress") {
+    const t = await makeTicket();
+    as("tech");
+    expect(await addReplacedPartAction(form({ ticket_id: t, part: "battery", item_name: "Baterai", quantity: "1" }))).toEqual({ success: true });
+    const charge = (await lines(t))[0];
+    await db.ticketCharge.update({ where: { id: charge.id }, data: { unit_price: 450000, unit_cost: 300000 } });
+    if (status !== "on_progress") await db.ticket.update({ where: { id: t }, data: { status } });
+    return { t, chargeId: charge.id };
+  }
+  const link = async (chargeId: string, itemId = battery.id) => {
+    const { linkPartCatalogAction } = await import("./charges");
+    return linkPartCatalogAction(chargeId, itemId);
+  };
+
+  beforeEach(() => {
+    catalog.items.set(battery.id, battery);
+  });
+
+  it("takes the catalogue's code and name, on the part and its bill line, and leaves the money alone", async () => {
+    const { t, chargeId } = await typedPart();
+    expect(await link(chargeId)).toEqual({ success: true });
+    expect(await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t } })).toMatchObject({
+      catalog_item_id: battery.id,
+      sku: battery.sku,
+      catalog_category: battery.category,
+      item_name: battery.name,
+      quantity: 1,
+    });
+    expect(await db.ticketCharge.findUniqueOrThrow({ where: { id: chargeId } })).toMatchObject({
+      description: battery.name,
+      unit_price: 450000,
+      unit_cost: 300000,
+      quantity: 1,
+    });
+    // And the invoice now has a code for the cashier.
+    const [row] = await loadTicketCharges(t, false);
+    expect(row).toMatchObject({ accurate_code: battery.sku, is_part: true });
+  });
+
+  it("is open to the holding technician after the customer has collected the unit", async () => {
+    const { chargeId } = await typedPart("completed");
+    as("tech");
+    expect(await link(chargeId)).toEqual({ success: true });
+  });
+
+  it("is refused to a technician who does not hold the ticket", async () => {
+    const { chargeId } = await typedPart();
+    as("other");
+    expect(await link(chargeId)).toMatchObject({ error: expect.stringContaining("tidak dapat") });
+  });
+
+  it("is open to an administrator and a head technician", async () => {
+    const a = await typedPart("completed");
+    as("admin");
+    expect(await link(a.chargeId)).toEqual({ success: true });
+    const h = await typedPart("completed");
+    as("head");
+    expect(await link(h.chargeId)).toEqual({ success: true });
+  });
+
+  it("does not overwrite a code already there", async () => {
+    const { chargeId } = await typedPart();
+    expect(await link(chargeId)).toEqual({ success: true });
+    catalog.items.set(880002, { ...battery, id: 880002, sku: "OTHER", name: "OTHER" });
+    expect(await link(chargeId, 880002)).toMatchObject({ error: expect.stringContaining("sudah punya kode") });
+    expect((await db.ticketCharge.findUniqueOrThrow({ where: { id: chargeId } })).description).toBe(battery.name);
+  });
+
+  it("records one item when two people link at once", async () => {
+    const { t, chargeId } = await typedPart();
+    catalog.items.set(880002, { ...battery, id: 880002, sku: "OTHER", name: "OTHER" });
+    const results = await Promise.all([link(chargeId), link(chargeId, 880002)]);
+    expect(results.filter((r) => "success" in r)).toHaveLength(1);
+    const part = await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t } });
+    const charge = await db.ticketCharge.findUniqueOrThrow({ where: { id: chargeId } });
+    // Whichever won, the part and its line agree.
+    expect(charge.description).toBe(part.item_name);
+  });
+
+  it("refuses an id the catalogue does not hold, and says so when the catalogue is down", async () => {
+    const { chargeId } = await typedPart();
+    expect(await link(chargeId, 999999)).toMatchObject({ error: expect.stringContaining("tidak ditemukan") });
+    catalog.down = true;
+    try {
+      expect(await link(chargeId)).toMatchObject({ error: expect.stringContaining("tidak dapat dihubungi") });
+    } finally {
+      catalog.down = false;
+    }
+  });
+
+  it("lets an administrator add the part from the bill, priced, and give it its code later", async () => {
+    const { addPartChargeAction, linkPartCatalogAction } = await import("./charges");
+    const t = await makeTicket();
+    as("admin");
+    expect(
+      await addPartChargeAction(form({ ticket_id: t, part: "battery", item_name: "Baterai", quantity: "1", unit_price: "450000", vendor_id: ids.supplier }))
+    ).toEqual({ success: true });
+    const part = await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t }, include: { charge: true } });
+    expect(part).toMatchObject({ part: "battery", item_name: "Baterai", sku: null, recorded_by_id: ids.admin });
+    expect(part.charge).toMatchObject({ kind: "part", description: "Baterai", unit_price: 450000, vendor_id: ids.supplier });
+
+    expect(await linkPartCatalogAction(part.charge!.id, battery.id)).toEqual({ success: true });
+    expect(await db.ticketCharge.findUniqueOrThrow({ where: { id: part.charge!.id } })).toMatchObject({
+      description: battery.name,
+      unit_price: 450000,
+    });
+  });
+
+  it("adds a part picked from the catalogue under the catalogue's name and code", async () => {
+    const { addPartChargeAction } = await import("./charges");
+    const t = await makeTicket();
+    as("admin");
+    expect(await addPartChargeAction(form({ ticket_id: t, part: "battery", catalog_item_id: String(battery.id), item_name: "ignored" }))).toEqual({
+      success: true,
+    });
+    expect(await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t } })).toMatchObject({
+      sku: battery.sku,
+      item_name: battery.name,
+    });
+  });
+
+  it("refuses a part from someone who may not change the bill, and an 'other' part with no name", async () => {
+    const { addPartChargeAction } = await import("./charges");
+    const t = await makeTicket();
+    as("other");
+    expect(await addPartChargeAction(form({ ticket_id: t, part: "lcd" }))).toMatchObject({ error: expect.stringContaining("tidak dapat") });
+    as("admin");
+    expect(await addPartChargeAction(form({ ticket_id: t, part: "other" }))).toMatchObject({ error: expect.stringContaining("Nama barang wajib") });
+    expect(await addPartChargeAction(form({ ticket_id: t, part: "lcd", vendor_id: ids.repairer }))).toMatchObject({
+      error: expect.any(String),
+    });
+    expect(await db.ticketReplacedPart.count({ where: { ticket_id: t } })).toBe(0);
+  });
+
+  it("is only for part lines", async () => {
+    const t = await makeTicket();
+    await add(t, { kind: "other", description: "Kabel", unit_price: "10000" });
+    expect(await link((await lines(t))[0].id)).toMatchObject({ error: expect.stringContaining("Part tidak ditemukan") });
   });
 });

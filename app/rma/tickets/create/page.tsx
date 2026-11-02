@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import CreateTicketForm from "@/app/technician/tickets/create/CreateTicketForm";
+import { PageHeader } from "@/components/app/PageHeader";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 
 export const metadata = { title: "Create Ticket — HNS IT Center" };
@@ -29,14 +30,11 @@ export default async function RmaCreateTicketPage() {
   ]);
 
   return (
-    <div className="container" style={{ padding: "2rem 0" }}>
-      <div style={{ marginBottom: "2rem" }}>
-        <h1 className="page-title">Create New Ticket</h1>
-        <p className="page-description">
-          Buat tiket atas nama customer. Kosongkan teknisi bila belum ada yang tersedia —
-          tiket akan masuk antrean dan bisa diambil teknisi mana pun.
-        </p>
-      </div>
+    <div data-slot="create-ticket-page" className="flex flex-col gap-6">
+      <PageHeader
+        title="Create New Ticket"
+        description="Buat tiket atas nama customer. Kosongkan teknisi bila belum ada yang tersedia — tiket akan masuk antrean dan bisa diambil teknisi mana pun."
+      />
 
       <CreateTicketForm
         storeLocations={storeLocations}

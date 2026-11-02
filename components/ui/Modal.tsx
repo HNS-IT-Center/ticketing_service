@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
-import { X } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 
 interface ModalProps {
   open: boolean;
@@ -11,6 +10,15 @@ interface ModalProps {
   maxWidth?: string;
 }
 
+/**
+ * The legacy modal, kept as an adapter over the shadcn Dialog.
+ *
+ * Same props as before, so the pages that still use it (some in work not yet
+ * committed) get the Dialog's focus trap, Esc to close, scroll on short
+ * screens and the 44px close button without being edited. The old version
+ * locked body scroll by hand and closed only on a backdrop click. Delete once
+ * nothing imports it.
+ */
 export default function Modal({
   open,
   onClose,
@@ -18,33 +26,18 @@ export default function Modal({
   children,
   maxWidth = "480px",
 }: ModalProps) {
-  useEffect(() => {
-    if (open) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "";
-    }
-    return () => { document.body.style.overflow = ""; };
-  }, [open]);
-
-  if (!open) return null;
-
   return (
-    <div
-      className="modal-overlay"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
-      role="dialog"
-      aria-modal="true"
-    >
-      <div className="modal" style={{ maxWidth }}>
-        <div className="modal-header">
-          <h3 className="modal-title">{title}</h3>
-          <button className="modal-close" onClick={onClose} aria-label="Close">
-            <X size={20} />
-          </button>
-        </div>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent
+        className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-none"
+        // The caller's width, never wider than the screen less a margin.
+        style={{ maxWidth: `min(${maxWidth}, calc(100% - 2rem))` }}
+      >
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold">{title}</DialogTitle>
+        </DialogHeader>
         {children}
-      </div>
-    </div>
+      </DialogContent>
+    </Dialog>
   );
 }

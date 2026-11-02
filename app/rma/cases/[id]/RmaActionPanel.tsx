@@ -21,6 +21,7 @@ import {
 } from "@/lib/rma/state-machine";
 import { Lock, ArrowRight } from "lucide-react";
 import { uploadFailureMessage } from "@/lib/upload-limit";
+import { VENDOR_LOCATION_INFO, type VendorLocation } from "@/lib/vendors";
 
 /**
  * Every button here is derived from lib/rma/state-machine.ts — the same module
@@ -55,7 +56,7 @@ const FIELD_INPUTS: Record<
   replacement_sn: { label: "Serial Number Pengganti", placeholder: "SN unit pengganti" },
 };
 
-type ClaimVendorOption = { id: string; name: string };
+type ClaimVendorOption = { id: string; name: string; location: VendorLocation | null };
 const TYPE_NEW_VENDOR = "__new__";
 
 /**
@@ -127,6 +128,7 @@ function ClaimVendorField({
           {vendors.map((v) => (
             <option key={v.id} value={v.id}>
               {v.name}
+              {v.location ? ` — ${VENDOR_LOCATION_INFO[v.location].code} (${VENDOR_LOCATION_INFO[v.location].label.toLowerCase()})` : ""}
             </option>
           ))}
           <option value={TYPE_NEW_VENDOR}>+ Vendor lain (ketik nama)</option>

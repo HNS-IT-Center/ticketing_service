@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { Share2, X, Download } from "lucide-react";
+import { useCallback, useState, useRef, useEffect } from "react";
+import { Share2, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface Row {
   id: string;
@@ -14,19 +16,29 @@ interface Row {
 
 export default function SharePerformance({ topTechnician, monthLabel }: { topTechnician: Row, monthLabel: string }) {
   const [open, setOpen] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  // The dialog mounts its content through a portal, possibly a render after
+  // `open` flips; a callback ref tells the drawing effect when the canvas is
+  // really there, instead of reading a ref that may still be empty.
+  const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
+  const attachCanvas = useCallback((el: HTMLCanvasElement | null) => {
+    canvasRef.current = el;
+    setCanvasEl(el);
+  }, []);
   const title = monthLabel === "All Time" ? "Technician of the Year" : "Technician of the Month";
 
   useEffect(() => {
-    if (open && canvasRef.current) {
-      const ctx = canvasRef.current.getContext("2d");
+    // canvasEl only says the canvas has mounted; drawing goes through the ref.
+    const canvas = canvasRef.current;
+    if (open && canvasEl && canvas) {
+      const ctx = canvas.getContext("2d");
       if (!ctx) return;
 
       // Card Dimensions (9:16)
       const w = 1080;
       const h = 1920;
-      canvasRef.current.width = w;
-      canvasRef.current.height = h;
+      canvas.width = w;
+      canvas.height = h;
 
       // Background Gradient
       const grad = ctx.createLinearGradient(0, 0, 0, h);
@@ -104,7 +116,7 @@ export default function SharePerformance({ topTechnician, monthLabel }: { topTec
       ctx.font = "400 32px 'Inter', sans-serif";
       ctx.fillText(`Generated on ${new Date().toLocaleDateString("id-ID")}`, w / 2, h - 80);
     }
-  }, [open, topTechnician, monthLabel, title]);
+  }, [open, canvasEl, topTechnician, monthLabel, title]);
 
   const handleDownload = () => {
     if (!canvasRef.current) return;
@@ -115,46 +127,26 @@ export default function SharePerformance({ topTechnician, monthLabel }: { topTec
   };
 
   return (
-    <>
-      <button className="btn btn-primary btn-sm" onClick={() => setOpen(true)} style={{ background: "#ca8a04", color: "#fff", border: "none" }}>
-        <Share2 size={15} />
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button className="bg-amber-600 text-white hover:bg-amber-600/90" />}>
+        <Share2 aria-hidden="true" />
         Share Winner
-      </button>
+      </DialogTrigger>
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto text-center sm:max-w-[450px]">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold">Share Performance Card</DialogTitle>
+          <DialogDescription>Ready to share on Instagram/Tiktok Stories (9:16)</DialogDescription>
+        </DialogHeader>
 
-      {open && (
-        <div className="modal-overlay" onClick={() => setOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "450px", textAlign: "center" }}>
-            <div className="modal-header">
-              <h3 className="modal-title">Share Performance Card</h3>
-              <button className="modal-close" onClick={() => setOpen(false)}><X size={18} /></button>
-            </div>
-            
-            <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginBottom: "1rem" }}>
-              Ready to share on Instagram/Tiktok Stories (9:16)
-            </p>
-
-            <div style={{ 
-              width: "100%", 
-              aspectRatio: "9/16", 
-              background: "var(--bg-light)", 
-              borderRadius: "var(--radius-lg)", 
-              overflow: "hidden",
-              border: "2px solid var(--border)",
-              position: "relative"
-            }}>
-              <canvas 
-                ref={canvasRef} 
-                style={{ width: "100%", height: "100%", display: "block" }} 
-              />
-            </div>
-
-            <button className="btn btn-primary" onClick={handleDownload} style={{ width: "100%", marginTop: "1rem" }}>
-              <Download size={18} />
-              Download Image
-            </button>
-          </div>
+        <div className="relative mx-auto aspect-[9/16] w-full max-w-[280px] overflow-hidden rounded-xl border-2 border-border bg-muted sm:max-w-none">
+          <canvas ref={attachCanvas} className="block size-full" />
         </div>
-      )}
-    </>
+
+        <Button onClick={handleDownload} className="w-full">
+          <Download aria-hidden="true" />
+          Download Image
+        </Button>
+      </DialogContent>
+    </Dialog>
   );
 }

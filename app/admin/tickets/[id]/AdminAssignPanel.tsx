@@ -3,7 +3,13 @@
 import { useState, useTransition } from "react";
 import { adminAssignTicketAction } from "@/app/actions/admin";
 import toast from "react-hot-toast";
-import { UserCheck } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
+import { FormField } from "@/components/app/FormField";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { NativeSelect } from "@/components/ui/native-select";
+import { errorOf } from "@/lib/action-result";
 
 interface Props {
   ticketId: string;
@@ -37,7 +43,8 @@ export default function AdminAssignPanel({
         techId || null,
         saleId || null
       );
-      if ((result as any)?.error) toast.error((result as any).error as string);
+      const error = errorOf(result);
+      if (error) toast.error(error);
       else toast.success("Assignment updated!");
     });
   };
@@ -47,78 +54,66 @@ export default function AdminAssignPanel({
   const assignedTech = technicians.find(t => t.id === currentTechnicianId);
 
   return (
-    <div className="card" style={{ alignSelf: "flex-start", width: "100%" }}>
-      <h3 style={{ marginBottom: "1rem" }}>
-        Assignment
-      </h3>
+    <Card className="w-full self-start">
+      <CardHeader>
+        <CardTitle className="text-base font-semibold">Assignment</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {pendingRequests.length > 0 && (
+          <Alert variant="info">
+            <AlertTitle>Technician Requests:</AlertTitle>
+            <AlertDescription>
+              <ul className="flex w-full flex-col gap-2">
+                {pendingRequests.map(req => (
+                  <li key={req.id} className="flex items-center justify-between gap-2">
+                    <span className="min-w-0">{req.technician.name} requested to be assigned.</span>
+                    <Button type="button" size="sm" variant="outline" className="shrink-0 bg-card" onClick={() => setTechId(req.technician_id)}>
+                      Select
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {pendingRequests.length > 0 && (
-        <div style={{ marginBottom: "1.5rem", padding: "0.75rem", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "0.5rem" }}>
-          <p style={{ fontSize: "0.875rem", fontWeight: 600, color: "#1e40af", marginBottom: "0.5rem" }}>
-            Technician Requests:
-          </p>
-          <ul style={{ margin: 0, padding: 0, listStyle: "none", display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-            {pendingRequests.map(req => (
-              <li key={req.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "0.875rem", color: "#1e3a8a" }}>
-                <span>{req.technician.name} requested to be assigned.</span>
-                <button
-                  type="button"
-                  className="btn btn-sm"
-                  style={{ background: "#3b82f6", color: "#fff", padding: "0.2rem 0.5rem" }}
-                  onClick={() => setTechId(req.technician_id)}
-                >
-                  Select
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-      <div style={{ display: "flex", flexDirection: "column", gap: "1rem", marginBottom: "1rem" }}>
-        <div className="form-group">
-          <label className="form-label" style={{ display: "flex", justifyContent: "space-between" }}>
-            Technician
-            {isTechLocked && <span style={{ color: "#92400e", fontSize: "0.7rem", fontWeight: 600 }}>🔒 Locked</span>}
-          </label>
-          {isTechLocked ? (
-            <div style={{ fontWeight: 600, color: "var(--text-primary)", padding: "0.5rem 0.75rem", background: "var(--cream-dark)", borderRadius: "var(--radius-md)", border: "1px solid var(--border)" }}>
-              {assignedTech?.name ?? <span style={{ color: "var(--text-muted)", fontStyle: "italic" }}>Unassigned</span>}
+        {isTechLocked ? (
+          <div className="flex flex-col gap-1.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-sm font-medium">Technician</span>
+              <span className="flex items-center gap-1 text-[0.7rem] font-semibold text-tone-amber-fg">
+                <Lock aria-hidden="true" className="size-3" /> Locked
+              </span>
             </div>
-          ) : (
-            <select
-              className="form-input"
-              value={techId}
-              onChange={(e) => setTechId(e.target.value)}
-            >
+            <div className="rounded-lg border border-border bg-muted px-3 py-2 font-semibold">
+              {assignedTech?.name ?? <span className="font-normal text-muted-foreground italic">Unassigned</span>}
+            </div>
+          </div>
+        ) : (
+          <FormField label="Technician" htmlFor="assign-technician">
+            <NativeSelect id="assign-technician" value={techId} onChange={(e) => setTechId(e.target.value)}>
               <option value="">— Unassigned —</option>
               {technicians.map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
-            </select>
-          )}
-        </div>
-        <div className="form-group">
-          <label className="form-label">Sales</label>
-          <select
-            className="form-input"
-            value={saleId}
-            onChange={(e) => setSaleId(e.target.value)}
-          >
+            </NativeSelect>
+          </FormField>
+        )}
+
+        <FormField label="Sales" htmlFor="assign-sales">
+          <NativeSelect id="assign-sales" value={saleId} onChange={(e) => setSaleId(e.target.value)}>
             <option value="">— Unassigned —</option>
             {salesUsers.map((s) => (
               <option key={s.id} value={s.id}>{s.name}</option>
             ))}
-          </select>
-        </div>
-      </div>
-      <button
-        className="btn btn-primary btn-sm"
-        onClick={save}
-        disabled={isPending}
-      >
-        {isPending ? <><span className="spinner spinner-sm" />Saving...</> : "Save Assignment"}
-      </button>
-    </div>
+          </NativeSelect>
+        </FormField>
+
+        <Button onClick={save} disabled={isPending} className="w-full sm:w-auto sm:self-start">
+          {isPending && <Loader2 aria-hidden="true" className="animate-spin" />}
+          {isPending ? "Saving..." : "Save Assignment"}
+        </Button>
+      </CardContent>
+    </Card>
   );
 }

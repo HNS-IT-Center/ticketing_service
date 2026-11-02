@@ -1,29 +1,37 @@
+import { Skeleton } from "@/components/ui/skeleton";
+
+const PODIUM = [
+  { h: "h-[120px]", w: "w-[90px]" },
+  { h: "h-[160px]", w: "w-[100px]" },
+  { h: "h-[100px]", w: "w-[90px]" },
+];
+
 export default function Loading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div>
-        <div className="skeleton skeleton-title" style={{ width: "200px" }} />
-        <div className="skeleton skeleton-text" style={{ width: "250px", marginTop: "0.5rem" }} />
+    <div data-slot="leaderboard-loading" aria-busy="true" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-8 w-52" />
+        <Skeleton className="h-4 w-64" />
       </div>
-      <div style={{ display: "flex", gap: "0.5rem" }}>
-        <div className="skeleton" style={{ width: "80px", height: "2rem", borderRadius: "0.5rem" }} />
-        <div className="skeleton" style={{ width: "80px", height: "2rem", borderRadius: "0.5rem" }} />
+      <div className="flex gap-2">
+        <Skeleton className="h-11 w-32 rounded-full md:h-8" />
+        <Skeleton className="h-11 w-36 rounded-full md:h-8" />
       </div>
-      <div style={{ display: "flex", justifyContent: "center", alignItems: "flex-end", gap: "1rem", padding: "1.5rem 0" }}>
-        {[{ h: "120px", w: "90px" }, { h: "160px", w: "100px" }, { h: "100px", w: "90px" }].map((s, i) => (
-          <div key={i} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.5rem" }}>
-            <div className="skeleton" style={{ width: "3rem", height: "3rem", borderRadius: "50%" }} />
-            <div className="skeleton" style={{ width: s.w, height: s.h, borderRadius: "0.5rem 0.5rem 0 0" }} />
+      <div className="flex items-end justify-center gap-4 py-6">
+        {PODIUM.map((s, i) => (
+          <div key={i} className="flex flex-col items-center gap-2">
+            <Skeleton className="size-12 rounded-full" />
+            <Skeleton className={`${s.w} ${s.h} rounded-t-lg rounded-b-none`} />
           </div>
         ))}
       </div>
-      <div className="card">
+      <div className="flex flex-col rounded-xl border border-border bg-card">
         {[1, 2, 3, 4, 5].map((i) => (
-          <div key={i} style={{ display: "flex", alignItems: "center", gap: "1rem", padding: "0.875rem", borderBottom: "1px solid var(--border-light)" }}>
-            <div className="skeleton skeleton-text" style={{ width: "2rem" }} />
-            <div className="skeleton" style={{ width: "2.25rem", height: "2.25rem", borderRadius: "50%" }} />
-            <div className="skeleton skeleton-text" style={{ width: "140px", flex: 1 }} />
-            <div className="skeleton skeleton-text" style={{ width: "60px" }} />
+          <div key={i} className="flex items-center gap-4 border-b border-border p-3.5 last:border-b-0">
+            <Skeleton className="h-4 w-8" />
+            <Skeleton className="size-9 rounded-full" />
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-4 w-14" />
           </div>
         ))}
       </div>

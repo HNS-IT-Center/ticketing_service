@@ -22,34 +22,53 @@
   --border-light: #ede7de;
   --white: #ffffff;
 
-  /* Shadcn UI & Global Theme Variables (Light Mode) */
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: var(--white);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* Shadcn UI & Global Theme Variables (Light Mode) — the HNS brand.
+     These were shadcn's neutral defaults (near-black --primary) from the
+     shadcn init on 2026-05-19 until the UI overhaul, Phase 1. Legacy CSS reads
+     them too: var(--primary) 143×, var(--border) 82× — see docs/ui-audit.md.
+     Every text pair here is WCAG AA: white on --primary 8.8:1, white on
+     --destructive 5.4:1, --muted-foreground on cream 5.2:1. --input is a
+     control boundary, so it needs 3:1 (WCAG 1.4.11): 3.8:1 on white. */
+  --background: #f7f2ec;
+  --foreground: #1a1a2e;
+  --card: #ffffff;
+  --card-foreground: #1a1a2e;
+  --popover: #ffffff;
+  --popover-foreground: #1a1a2e;
+  --primary: #16469d;
+  --primary-foreground: #ffffff;
+  --secondary: #e8eef8;
+  --secondary-foreground: #16469d;
+  --muted: #ede7de;
+  --muted-foreground: #5c6676;
+  --accent: #ede7de;
+  --accent-foreground: #1a1a2e;
+  --destructive: #cd2426;
+  --destructive-foreground: #ffffff;
+  --border: #ddd6cf;
+  --input: #8a8279;
+  --ring: #16469d;
   --radius: 0.625rem;
-  --sidebar-width: 260px;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  --sidebar: #153f8a;            /* gradient to #0d2a5e, as the legacy sidebar */
+  --sidebar-foreground: #ffffff;  /* 9.9:1 at the light end */
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #153f8a;
+  --sidebar-accent: #2d5196;      /* hover and active fill; white on it 7.7:1 */
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: #2d5196;
+  --sidebar-ring: #ffffff;        /* focus ring must show on blue */
+
+  /* Status tones — StatusBadge and lib/status-display.ts. Text on its own
+     background is 6:1 or better for every tone. */
+  --tone-amber-bg: #fef3c7;   --tone-amber-fg: #92400e;   --tone-amber-border: #fde68a;
+  --tone-orange-bg: #ffedd5;  --tone-orange-fg: #9a3412;  --tone-orange-border: #fed7aa;
+  --tone-blue-bg: #dbeafe;    --tone-blue-fg: #1e40af;    --tone-blue-border: #bfdbfe;
+  --tone-violet-bg: #ede9fe;  --tone-violet-fg: #5b21b6;  --tone-violet-border: #ddd6fe;
+  --tone-teal-bg: #ccfbf1;    --tone-teal-fg: #115e59;    --tone-teal-border: #99f6e4;
+  --tone-cyan-bg: #cffafe;    --tone-cyan-fg: #155e75;    --tone-cyan-border: #a5f3fc;
+  --tone-green-bg: #d1fae5;   --tone-green-fg: #065f46;   --tone-green-border: #a7f3d0;
+  --tone-red-bg: #fee2e2;     --tone-red-fg: #991b1b;     --tone-red-border: #fecaca;
+  --tone-gray-bg: #ede7de;    --tone-gray-fg: #4a5568;    --tone-gray-border: #ddd6cf;
 
   --shadow-sm: 0 1px 3px rgba(22, 70, 157, 0.08);
   --shadow-md: 0 4px 16px rgba(22, 70, 157, 0.12);
@@ -59,13 +78,11 @@
   --radius-md: 0.625rem;
   --radius-lg: 1rem;
   --radius-xl: 1.5rem;
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  --chart-1: #16469d;
+  --chart-2: #cd2426;
+  --chart-3: #0f766e;
+  --chart-4: #b45309;
+  --chart-5: #6d28d9;
 }
 
 .dark {
@@ -125,8 +142,19 @@
 }
 
 /* ─── Base ───────────────────────────────────────────────────────────────── */
+/* The rules below are outside any @layer, and unlayered CSS beats every
+   Tailwind utility — which is why `p-4` and `m-2` do nothing on legacy pages.
+   Shadcn and components/app put `data-slot` on every part, so each element
+   rule here skips `[data-slot]` and everything inside one: those subtrees get
+   Tailwind's own preflight (same reset, but layered) and their utilities work.
+   `:where()` keeps the specificity of every legacy rule exactly as it was, so
+   no existing page changes. Phase 7 of the UI overhaul deletes these rules. */
 *, *::before, *::after {
   box-sizing: border-box;
+}
+:where(:not([data-slot], [data-slot] *)),
+:where(:not([data-slot], [data-slot] *))::before,
+:where(:not([data-slot], [data-slot] *))::after {
   margin: 0;
   padding: 0;
 }
@@ -147,18 +175,18 @@ body {
 }
 
 /* ─── Typography ─────────────────────────────────────────────────────────── */
-h1 { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; line-height: 1.2; }
-h2 { font-size: clamp(1.25rem, 2.5vw, 1.5rem); font-weight: 700; line-height: 1.3; }
-h3 { font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 600; line-height: 1.4; }
-h4 { font-size: 1rem; font-weight: 600; }
-p  { font-size: 0.9375rem; line-height: 1.7; }
+h1:where(:not([data-slot], [data-slot] *)) { font-size: clamp(1.5rem, 3vw, 2rem); font-weight: 800; line-height: 1.2; }
+h2:where(:not([data-slot], [data-slot] *)) { font-size: clamp(1.25rem, 2.5vw, 1.5rem); font-weight: 700; line-height: 1.3; }
+h3:where(:not([data-slot], [data-slot] *)) { font-size: clamp(1rem, 2vw, 1.25rem); font-weight: 600; line-height: 1.4; }
+h4:where(:not([data-slot], [data-slot] *)) { font-size: 1rem; font-weight: 600; }
+p:where(:not([data-slot], [data-slot] *))  { font-size: 0.9375rem; line-height: 1.7; }
 
-a {
+a:where(:not([data-slot], [data-slot] *)) {
   color: var(--primary);
   text-decoration: none;
   transition: color 0.2s ease;
 }
-a:hover { color: var(--primary-dark); }
+a:where(:not([data-slot], [data-slot] *)):hover { color: var(--primary-dark); }
 
 /* ─── Layout Utilities ───────────────────────────────────────────────────── */
 .container {
@@ -175,7 +203,7 @@ a:hover { color: var(--primary-dark); }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
 
 /* ─── Focus ──────────────────────────────────────────────────────────────── */
-:focus-visible {
+:where(:not([data-slot], [data-slot] *)):focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: 2px;
   border-radius: var(--radius-sm);
@@ -226,13 +254,6 @@ a:hover { color: var(--primary-dark); }
   100% { background-position: 200% 0; }
 }
 
-.animate-fade-in      { animation: fadeIn 0.3s ease forwards; }
-.animate-slide-in     { animation: slideInRight 0.3s ease forwards; }
-.animate-slide-up     { animation: slideUp 0.4s ease forwards; }
-.animate-spin-custom  { animation: spin 0.8s linear infinite; }
-.animate-grow-vertical { animation: growBarVertical 0.8s ease both; }
-.animate-grow-horizontal { animation: growBarHorizontal 0.8s ease both; }
-
 /* ─── Cards ──────────────────────────────────────────────────────────────── */
 .card {
   background: var(--white);
@@ -255,16 +276,6 @@ a:hover { color: var(--primary-dark); }
   flex-direction: column;
   gap: 0.5rem;
   min-width: 0;
-}
-
-.stat-card-icon {
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 0.75rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 0.25rem;
 }
 
 .stat-card-body {
@@ -358,10 +369,6 @@ a:hover { color: var(--primary-dark); }
   padding: 0.4rem 0.875rem;
   font-size: 0.875rem;
 }
-.btn-lg {
-  padding: 0.875rem 1.75rem;
-  font-size: 1rem;
-}
 
 /* ─── Form Elements ──────────────────────────────────────────────────────── */
 .form-group { display: flex; flex-direction: column; gap: 0.375rem; }
@@ -426,14 +433,7 @@ textarea.form-input {
   font-weight: 600;
   white-space: nowrap;
 }
-.badge-waiting  { background: #fef9c3; color: #854d0e; }
-.badge-on_progress { background: #dbeafe; color: #1e40af; }
-.badge-done     { background: #dcfce7; color: #166534; }
-.badge-cancelled, .badge-rejected { background: #fee2e2; color: #991b1b; }
-.badge-admin    { background: #ede9fe; color: #5b21b6; }
 .badge-technician { background: #dbeafe; color: #1e40af; }
-.badge-sales    { background: #d1fae5; color: #065f46; }
-.badge-customer { background: var(--cream-dark); color: var(--text-secondary); }
 
 /* ─── Table ──────────────────────────────────────────────────────────────── */
 .table-wrapper {
@@ -443,12 +443,12 @@ textarea.form-input {
   border: 1px solid var(--border-light);
   background: var(--white);
 }
-table {
+table:where(:not([data-slot], [data-slot] *)) {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9375rem;
 }
-thead th {
+thead th:where(:not([data-slot], [data-slot] *)) {
   background: var(--cream-dark);
   padding: 0.75rem 1rem;
   text-align: left;
@@ -460,196 +460,19 @@ thead th {
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
-tbody tr {
+tbody tr:where(:not([data-slot], [data-slot] *)) {
   border-bottom: 1px solid var(--border-light);
   transition: background 0.15s ease;
 }
-tbody tr:last-child { border-bottom: none; }
-tbody tr:hover { background: var(--cream); }
-tbody td {
+tbody tr:where(:not([data-slot], [data-slot] *)):last-child { border-bottom: none; }
+tbody tr:where(:not([data-slot], [data-slot] *)):hover { background: var(--cream); }
+tbody td:where(:not([data-slot], [data-slot] *)) {
   padding: 0.875rem 1rem;
   color: var(--text-primary);
   vertical-align: middle;
 }
 
-/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-.sidebar {
-  width: var(--sidebar-width);
-  min-height: 100vh;
-  background: linear-gradient(170deg, var(--primary-dark) 0%, #0d2a5e 100%);
-  color: var(--white);
-  display: flex;
-  flex-direction: column;
-  position: fixed;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  z-index: 40;
-  transition: transform 0.3s ease, width 0.3s ease;
-  overflow: visible;
-}
-
-.sidebar-logo {
-  padding: 1.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.1);
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-}
-
-.sidebar-nav {
-  padding: 1rem 0.75rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex: 1;
-  overflow-y: auto;
-}
-
-.sidebar-link {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
-  border-radius: var(--radius-md);
-  color: rgba(255,255,255,0.75);
-  font-size: 0.9375rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.sidebar-link:hover {
-  background: rgba(255,255,255,0.12);
-  color: var(--white);
-}
-.sidebar-link.active {
-  background: rgba(255,255,255,0.18);
-  color: var(--white);
-  font-weight: 600;
-}
-.sidebar-link svg { width: 1.125rem; height: 1.125rem; flex-shrink: 0; }
-.sidebar-link.collapsed { justify-content: center; padding: 0.625rem 0; gap: 0; }
-.sidebar-link.collapsed span { display: none; }
-
-/* Collapsed sidebar (Desktop only) */
-@media (min-width: 769px) {
-  .sidebar.collapsed {
-    width: 64px;
-    --sidebar-width: 64px;
-  }
-  .sidebar.collapsed .sidebar-logo {
-    padding: 1rem 0;
-    justify-content: center;
-  }
-  .sidebar.collapsed .sidebar-nav {
-    padding: 0.75rem 0.5rem;
-  }
-  .sidebar.collapsed .sidebar-link {
-    justify-content: center;
-    padding: 0.625rem 0;
-  }
-  .sidebar.collapsed .sidebar-link span { display: none; }
-}
-
-/* Sidebar groups — a heading that folds its entries open and closed. */
-.sidebar-plain-group,
-.sidebar-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-.sidebar-group-btn {
-  width: 100%;
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-family: inherit;
-  text-align: left;
-}
-.sidebar-group-btn > span { flex: 1; }
-.sidebar-group-btn.has-active { color: var(--white); background: rgba(255,255,255,0.08); }
-.sidebar-group-btn .sidebar-group-chevron {
-  width: 0.9rem;
-  height: 0.9rem;
-  opacity: 0.7;
-  transition: transform 0.2s ease;
-}
-.sidebar-group-items {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-  margin: 0 0 0.375rem 1.35rem;
-  padding-left: 0.5rem;
-  border-left: 1px solid rgba(255,255,255,0.15);
-}
-.sidebar-link.sidebar-sublink {
-  font-size: 0.875rem;
-  padding: 0.5rem 0.75rem;
-}
-.sidebar-link.sidebar-sublink svg { width: 1rem; height: 1rem; }
-.sidebar-divider {
-  height: 1px;
-  background: rgba(255,255,255,0.12);
-  margin: 0.375rem 0.5rem;
-}
-
-.sidebar-collapse-btn {
-  position: absolute;
-  top: 1.5rem;
-  right: -0.75rem;
-  width: 1.5rem;
-  height: 1.5rem;
-  border-radius: 50%;
-  background: var(--white);
-  border: 1px solid var(--border);
-  color: var(--text-primary);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  box-shadow: var(--shadow-sm);
-  z-index: 50;
-  transition: all 0.2s;
-}
-.sidebar-collapse-btn:hover {
-  background: var(--cream);
-  transform: scale(1.05);
-}
-
 /* ─── Dashboard Layout ───────────────────────────────────────────────────── */
-.dashboard-layout {
-  display: flex;
-  min-height: 100vh;
-}
-
-.dashboard-main {
-  flex: 1;
-  margin-left: var(--sidebar-width);
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  transition: margin-left 0.3s ease;
-}
-.dashboard-main.sidebar-collapsed {
-  margin-left: 64px;
-}
-
-.dashboard-topbar {
-  position: sticky;
-  top: 0;
-  z-index: 30;
-  background: rgba(247, 242, 236, 0.9);
-  backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border);
-  padding: 0 1.5rem;
-  height: 64px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
-}
-
 .dashboard-content {
   padding: 2rem 1.5rem;
   flex: 1;
@@ -661,49 +484,7 @@ tbody td {
   width: 100%;
 }
 
-/* ─── Notification Bell ───────────────────────────────────────────────────── */
-.notif-bell {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border-radius: var(--radius-md);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  color: var(--text-secondary);
-  transition: background 0.2s ease;
-}
-.notif-bell:hover { background: var(--cream-dark); }
-
-.notif-dot {
-  position: absolute;
-  top: 4px;
-  right: 4px;
-  width: 8px;
-  height: 8px;
-  background: var(--accent-brand);
-  border-radius: 50%;
-  border: 2px solid var(--cream);
-  animation: pulse-dot 2s ease infinite;
-}
-
 /* ─── Modals ──────────────────────────────────────────────────────────────── */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  backdrop-filter: blur(4px);
-  z-index: 100;
-  display: flex;
-  align-items: flex-start;      /* don't center — let the modal sit at top + padded */
-  justify-content: center;
-  padding: 1.5rem 1rem;         /* vertical padding so modal is inset from edges */
-  overflow-y: auto;             /* entire overlay scrolls if modal is very tall */
-  animation: fadeIn 0.2s ease;
-}
 
 .modal {
   background: var(--white);
@@ -719,43 +500,7 @@ tbody td {
   margin: auto;                      /* self-center vertically when content fits */
 }
 
-.modal-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 1rem;
-  gap: 1rem;
-  position: sticky;
-  top: -2rem;               /* offset equal to modal padding so it sticks at the top edge */
-  background: var(--white);
-  padding-top: 0.25rem;
-  padding-bottom: 0.75rem;
-  z-index: 1;
-  margin-top: -0.25rem;
-}
-
-.modal-title { font-size: 1.125rem; font-weight: 700; }
-.modal-close {
-  background: none;
-  border: none;
-  cursor: pointer;
-  color: var(--text-muted);
-  padding: 0.25rem;
-  border-radius: var(--radius-sm);
-  transition: color 0.2s ease;
-}
-.modal-close:hover { color: var(--text-primary); }
-
 /* ─── Chat ────────────────────────────────────────────────────────────────── */
-.chat-container {
-  display: flex;
-  flex-direction: column;
-  height: 400px;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-  background: var(--cream);
-}
 
 .chat-messages {
   flex: 1;
@@ -800,102 +545,6 @@ tbody td {
 }
 
 /* ─── File Upload ─────────────────────────────────────────────────────────── */
-.file-upload-area {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius-lg);
-  padding: 2rem 1.5rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  text-align: center;
-  gap: 0.375rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: var(--cream);
-  user-select: none;
-  position: relative;
-}
-.file-upload-area:hover {
-  border-color: var(--primary);
-  background: rgba(22, 70, 157, 0.04);
-  box-shadow: 0 0 0 4px rgba(22, 70, 157, 0.06);
-  transform: translateY(-1px);
-}
-.file-upload-area:hover svg {
-  transform: scale(1.1) translateY(-2px);
-  color: var(--primary) !important;
-  transition: transform 0.2s ease;
-}
-.file-upload-area:active {
-  transform: translateY(0);
-  box-shadow: none;
-}
-.file-upload-area.dragover {
-  border-color: var(--primary);
-  background: rgba(22, 70, 157, 0.08);
-  box-shadow: 0 0 0 4px rgba(22, 70, 157, 0.12);
-  transform: scale(1.01);
-}
-
-.file-preview-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.file-preview-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  padding: 0.625rem 0.875rem;
-  background: var(--white);
-  border: 1.5px solid var(--border-light);
-  border-radius: var(--radius-md);
-  transition: all 0.15s ease;
-  cursor: default;
-}
-.file-preview-item:hover {
-  border-color: var(--primary);
-  background: rgba(22, 70, 157, 0.02);
-  box-shadow: var(--shadow-sm);
-}
-
-/* ─── Workload Bar ────────────────────────────────────────────────────────── */
-
-.workload-bar {
-  height: 8px;
-  background: var(--border);
-  border-radius: 999px;
-  overflow: hidden;
-}
-.workload-fill {
-  height: 100%;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--primary) 0%, var(--primary-light) 100%);
-  transition: width 0.4s ease;
-}
-.workload-fill.danger { background: linear-gradient(90deg, var(--accent-dark) 0%, var(--accent) 100%); }
-
-/* ─── Auth Pages ──────────────────────────────────────────────────────────── */
-.auth-container {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary) 50%, #2557bb 100%);
-  padding: 1.5rem;
-}
-
-.auth-card {
-  background: var(--white);
-  border-radius: var(--radius-xl);
-  padding: 2.5rem;
-  width: 100%;
-  max-width: 460px;
-  box-shadow: var(--shadow-xl);
-  animation: slideUp 0.4s ease;
-}
 
 /* ─── Rich Text Editor ───────────────────────────────────────────────────── */
 .tiptap-editor {
@@ -953,47 +602,6 @@ tbody td {
 }
 
 /* ─── Tag Input ───────────────────────────────────────────────────────────── */
-.tag-input-container {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.375rem;
-  padding: 0.5rem;
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-md);
-  background: var(--white);
-  min-height: 2.75rem;
-  cursor: text;
-  transition: border-color 0.2s, box-shadow 0.2s;
-}
-.tag-input-container:focus-within {
-  border-color: var(--primary);
-  box-shadow: 0 0 0 3px rgba(22, 70, 157, 0.1);
-}
-
-.tag-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.375rem;
-  background: var(--primary);
-  color: var(--white);
-  padding: 0.2rem 0.6rem;
-  border-radius: 999px;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  animation: fadeIn 0.15s ease;
-}
-
-.tag-chip button {
-  background: none;
-  border: none;
-  color: rgba(255,255,255,0.8);
-  cursor: pointer;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  transition: color 0.15s;
-}
-.tag-chip button:hover { color: var(--white); }
 
 .tag-input {
   border: none;
@@ -1008,38 +616,6 @@ tbody td {
 }
 
 /* ─── File Upload ─────────────────────────────────────────────────────────── */
-.file-upload-area {
-  border: 2px dashed var(--border);
-  border-radius: var(--radius-lg);
-  padding: 2rem;
-  text-align: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  background: var(--cream);
-  position: relative;
-}
-.file-upload-area:hover, .file-upload-area.dragover {
-  border-color: var(--primary);
-  background: rgba(22, 70, 157, 0.04);
-}
-
-.file-preview-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.75rem;
-}
-
-.file-preview-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: var(--white);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 0.5rem 0.75rem;
-  font-size: 0.875rem;
-}
 
 /* ─── Spinner ─────────────────────────────────────────────────────────────── */
 .spinner {
@@ -1052,7 +628,6 @@ tbody td {
   animation: spin 0.7s linear infinite;
 }
 .spinner-sm { width: 1rem; height: 1rem; border-width: 1.5px; }
-.spinner-lg { width: 2rem; height: 2rem; border-width: 3px; }
 
 /* ─── Animations / Keyframes ──────────────────────────────────────────────── */
 @keyframes shimmer {
@@ -1074,9 +649,6 @@ tbody td {
   from { opacity: 0; transform: translateY(16px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes growBar {
-  from { width: 0; }
-}
 @keyframes countUp {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -1088,18 +660,6 @@ tbody td {
   background-size: 200% 100%;
   animation: shimmer 1.4s ease infinite;
   border-radius: var(--radius-md);
-}
-.skeleton-text { height: 0.875rem; border-radius: 999px; }
-.skeleton-title { height: 1.5rem; border-radius: 999px; }
-.skeleton-card {
-  background: var(--white);
-  border-radius: var(--radius-lg);
-  padding: 1.5rem;
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-light);
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
 }
 
 /* ─── Empty State ─────────────────────────────────────────────────────────── */
@@ -1114,39 +674,9 @@ tbody td {
   color: var(--text-muted);
 }
 
-/* ─── Mobile Sidebar Overlay ──────────────────────────────────────────────── */
-.sidebar-overlay {
-  display: none;
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.5);
-  z-index: 39;
-}
-
 @media (max-width: 768px) {
-  :root { --sidebar-width: 0px; }
-
-  .sidebar {
-    transform: translateX(-100%);
-  }
-  .sidebar.open {
-    transform: translateX(0);
-  }
-  .sidebar-collapse-btn { display: none; } /* hide collapse btn on mobile */
-  .sidebar-overlay.open {
-    display: block;
-  }
-
-  .dashboard-main {
-    margin-left: 0 !important;
-  }
-
   .dashboard-content {
     padding: 1.25rem 1rem;
-  }
-
-  .auth-card {
-    padding: 1.75rem 1.25rem;
   }
 
   .modal {
@@ -1156,35 +686,8 @@ tbody td {
 }
 
 @media (max-width: 480px) {
-  .dashboard-topbar { padding: 0 1rem; }
   table { font-size: 0.875rem; }
   thead th, tbody td { padding: 0.625rem 0.75rem; }
-}
-
-/* ─── Mobile menu button ─────────────────────────────────────────────────── */
-.mobile-menu-btn {
-  display: none;
-  align-items: center;
-  justify-content: center;
-  width: 2.25rem;
-  height: 2.25rem;
-  border: none;
-  background: none;
-  cursor: pointer;
-  border-radius: var(--radius-sm);
-  color: var(--text-secondary);
-}
-@media (max-width: 768px) {
-  .mobile-menu-btn { display: flex !important; }
-}
-
-/* ─── Profile dropdown hover ────────────────────────────────────────────── */
-.dropdown-item:hover {
-  background: var(--cream) !important;
-  color: var(--text-primary) !important;
-}
-.dropdown-item-danger:hover {
-  background: #fee2e2 !important;
 }
 
 /* ─── Ticket detail — 2-col → 1-col on mobile ──────────────────────────── */
@@ -1200,42 +703,12 @@ tbody td {
   }
 }
 
-/* ─── Mobile Sidebar: 3/4 width not full-screen ──────────────────────────── */
-@media (max-width: 768px) {
-  .sidebar {
-    width: 75vw !important;    /* 3/4 width — user can see edge to tap-close */
-    max-width: 300px;
-  }
-}
-
 /* ─── Table / Card toggle (responsive) ────────────────────────────────────── */
 /* Desktop: show table, hide cards */
-.admin-ticket-table { display: block; }
-.admin-ticket-cards { display: none; }
 
 /* Mobile: hide table, show cards */
-@media (max-width: 768px) {
-  .admin-ticket-table { display: none; }
-  .admin-ticket-cards { display: block; }
-}
 
 /* ─── Mobile ticket card ───────────────────────────────────────────────────── */
-.mobile-ticket-card {
-  padding: 0.875rem 1rem;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 0.625rem;
-  background: var(--white);
-  cursor: pointer;
-  transition: box-shadow 0.15s, border-color 0.15s;
-}
-.mobile-ticket-card:hover {
-  box-shadow: var(--shadow-sm);
-  border-color: var(--border);
-}
 
 /* ─── Admin stats grid ─────────────────────────────────────────────────────── */
 .admin-stats-grid {
@@ -1250,116 +723,58 @@ tbody td {
   }
 }
 
-/* ─── Technician stats grid ────────────────────────────────────────────────── */
-.tech-stats-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
-  gap: 1rem;
-}
-.tech-workload-card {
-  grid-column: span 2;
-}
-@media (max-width: 768px) {
-  .tech-stats-grid {
-    grid-template-columns: 1fr 1fr;
-    gap: 0.75rem;
-  }
-  .tech-workload-card {
-    grid-column: span 2; /* still spans both cols on mobile */
-  }
-}
-@media (max-width: 480px) {
-  .tech-stats-grid {
-    grid-template-columns: 1fr;
-  }
-  .tech-workload-card {
-    grid-column: span 1;
-  }
-}
-
 /* ─── Prevent horizontal overflow everywhere ─────────────────────────────── */
 @media (max-width: 768px) {
   .table-wrapper {
     overflow-x: hidden;
   }
   /* Only allow scroll on tables that are not inside card-toggle wrappers */
-  .admin-ticket-table .table-wrapper {
-    overflow-x: auto;
-  }
-}
-
-/* ─── Leaderboard responsive layout ────────────────────────────────────────── */
-.leaderboard-layout {
-  display: flex;
-  gap: 1.5rem;
-  align-items: flex-start;
-}
-.leaderboard-chart {
-  flex: 7;
-  min-width: 0;
-}
-.leaderboard-list {
-  flex: 3;
-  min-width: 0;
-  max-height: 520px;
-  overflow-y: auto;
-}
-@media (max-width: 768px) {
-  .leaderboard-layout {
-    flex-direction: column;
-  }
-  .leaderboard-chart, .leaderboard-list {
-    flex: none;
-    width: 100%;
-  }
-  .leaderboard-list {
-    max-height: 400px;
-  }
 }
 
 /* ─── Customer stats grid 2x2 ───────────────────────────────────────────────── */
-.customer-stats-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.875rem;
-}
-@media (min-width: 640px) {
-  .customer-stats-grid {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-}
-
-/* ─── Collapse toggle floating outside sidebar ──────────────────────────────── */
-.sidebar-collapse-btn {
-  position: absolute;
-  right: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--white);
-  border: 1.5px solid var(--border);
-  color: var(--primary);
-  cursor: pointer;
-  z-index: 45;
-  box-shadow: var(--shadow-sm);
-  transition: background 0.2s, transform 0.2s;
-}
-.sidebar-collapse-btn:hover {
-  background: var(--cream);
-  transform: translateY(-50%) scale(1.1);
-}
-@media (max-width: 768px) {
-  .sidebar-collapse-btn { display: none !important; }
-}
 
 @theme inline {
-  --font-heading: var(--font-sans);
-  --font-sans: var(--font-sans);
+  /* Inter, loaded by the <link> in app/layout.tsx. This was the circular
+     `--font-sans: var(--font-sans)`, which resolved to the Geist variable
+     next/font puts on <html> — a second typeface nothing asked for. */
+  --font-heading: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, sans-serif;
+
+  /* Elevation, tinted with HNS blue like the legacy --shadow-* tokens. */
+  --shadow-xs: 0 1px 2px rgba(22, 70, 157, 0.06);
+  --shadow-sm: 0 1px 3px rgba(22, 70, 157, 0.08), 0 1px 2px rgba(22, 70, 157, 0.04);
+  --shadow-md: 0 4px 16px rgba(22, 70, 157, 0.12);
+  --shadow-lg: 0 8px 32px rgba(22, 70, 157, 0.16);
+  --shadow-xl: 0 16px 48px rgba(22, 70, 157, 0.2);
+
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-tone-amber-bg: var(--tone-amber-bg);
+  --color-tone-amber-fg: var(--tone-amber-fg);
+  --color-tone-amber-border: var(--tone-amber-border);
+  --color-tone-orange-bg: var(--tone-orange-bg);
+  --color-tone-orange-fg: var(--tone-orange-fg);
+  --color-tone-orange-border: var(--tone-orange-border);
+  --color-tone-blue-bg: var(--tone-blue-bg);
+  --color-tone-blue-fg: var(--tone-blue-fg);
+  --color-tone-blue-border: var(--tone-blue-border);
+  --color-tone-violet-bg: var(--tone-violet-bg);
+  --color-tone-violet-fg: var(--tone-violet-fg);
+  --color-tone-violet-border: var(--tone-violet-border);
+  --color-tone-teal-bg: var(--tone-teal-bg);
+  --color-tone-teal-fg: var(--tone-teal-fg);
+  --color-tone-teal-border: var(--tone-teal-border);
+  --color-tone-cyan-bg: var(--tone-cyan-bg);
+  --color-tone-cyan-fg: var(--tone-cyan-fg);
+  --color-tone-cyan-border: var(--tone-cyan-border);
+  --color-tone-green-bg: var(--tone-green-bg);
+  --color-tone-green-fg: var(--tone-green-fg);
+  --color-tone-green-border: var(--tone-green-border);
+  --color-tone-red-bg: var(--tone-red-bg);
+  --color-tone-red-fg: var(--tone-red-fg);
+  --color-tone-red-border: var(--tone-red-border);
+  --color-tone-gray-bg: var(--tone-gray-bg);
+  --color-tone-gray-fg: var(--tone-gray-fg);
+  --color-tone-gray-border: var(--tone-gray-border);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -1446,40 +861,6 @@ tbody td {
   }
 }
 /* ─── Global Component Primitives ────────────────────────────────────────── */
-@layer components {
-  .radio-card {
-    @apply p-3 md:p-4 border-2 rounded-lg cursor-pointer text-left transition-all flex items-center gap-3 bg-card text-card-foreground border-border hover:border-primary/50;
-  }
-  .radio-card-active {
-    @apply border-primary bg-primary/5;
-  }
-  .radio-card-circle {
-    @apply w-5 h-5 rounded-full border-2 border-border flex-shrink-0 transition-colors;
-  }
-  .radio-card-active .radio-card-circle {
-    @apply border-primary bg-primary;
-  }
-
-  .toggle-container {
-    @apply flex bg-card border-[1.5px] border-border rounded-lg p-1 gap-1;
-  }
-  .toggle-btn {
-    @apply flex-1 flex flex-col items-center justify-center p-2 rounded-[calc(var(--radius-lg)-4px)] border-none cursor-pointer font-semibold text-sm transition-all;
-  }
-  .toggle-btn-active {
-    @apply bg-primary text-primary-foreground;
-  }
-  .toggle-btn-inactive {
-    @apply bg-transparent text-muted-foreground hover:bg-secondary/50;
-  }
-
-  .step-indicator-line {
-    @apply flex-1 h-[2px] transition-colors;
-  }
-  .step-indicator-circle {
-    @apply w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-sm font-bold transition-all;
-  }
-}
 /* ─── RMA ─────────────────────────────────────────────────────────────────── */
 .rma-action-btn {
   display: flex;
@@ -1503,36 +884,3 @@ tbody td {
 }
 .rma-action-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.rma-queue-card {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  padding: 1rem;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  background: var(--white);
-  text-decoration: none;
-  color: inherit;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
-}
-.rma-queue-card:hover {
-  border-color: var(--primary);
-  box-shadow: var(--shadow-sm);
-}
-
-/* ─── RMA activity log ──────────────────────────────────────────────────── */
-/* The grouped log opens a case with <details>, so it needs no client JS at
-   all. Two details follow from that: Safari draws its own disclosure triangle
-   unless this pseudo-element is hidden, and the chevron has to be turned by
-   CSS because there is no state to read in React. */
-.rma-log-summary::-webkit-details-marker {
-  display: none;
-}
-
-.rma-log-chevron {
-  transition: transform 0.15s ease;
-}
-
-.rma-log-case[open] .rma-log-chevron {
-  transform: rotate(180deg);
-}

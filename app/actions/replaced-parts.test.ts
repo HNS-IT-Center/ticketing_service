@@ -387,7 +387,7 @@ describe("addReplacedPartAction — catalogue items", () => {
     unit: "PCS",
     serialized: false,
     stockTotal: 3,
-    warehouses: [],
+    warehouses: [], claimWarehouses: [],
   };
 
   async function addFromCatalog(ticketId: string, extra: Record<string, string>) {

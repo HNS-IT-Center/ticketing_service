@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { updatePickupMethodAction } from "@/app/actions/tickets";
 import toast from "react-hot-toast";
 import { Truck } from "lucide-react";
+import { NativeSelect } from "@/components/ui/native-select";
 
 interface PickupMethodSelectorProps {
   ticketId: string;
@@ -35,16 +36,15 @@ export default function PickupMethodSelector({ ticketId, initialMethod, ticketTy
   };
 
   return (
-    <div>
-      <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-        <Truck size={12} /> Pickup / Delivery
-      </p>
-      <select
+    <div data-slot="pickup-method" className="flex flex-col gap-1">
+      <label htmlFor={`pickup-${ticketId}`} className="flex items-center gap-1 text-xs text-muted-foreground">
+        <Truck aria-hidden="true" className="size-3" /> Pickup / Delivery
+      </label>
+      <NativeSelect
+        id={`pickup-${ticketId}`}
         value={method}
         onChange={handleChange}
         disabled={isPending}
-        className="form-input !py-1 !px-2 !text-sm"
-        style={{ cursor: isPending ? "not-allowed" : "pointer" }}
       >
         <option value="self_pickup">Self Pickup</option>
         <option
@@ -54,9 +54,9 @@ export default function PickupMethodSelector({ ticketId, initialMethod, ticketTy
         >
           Courier{!isCourierAllowed ? " (PC Build only)" : ""}
         </option>
-      </select>
+      </NativeSelect>
       {!isCourierAllowed && (
-        <p className="text-xs text-gray-400 mt-1">
+        <p className="text-xs text-muted-foreground">
           Courier option is only available for PC Build tickets.
         </p>
       )}

@@ -34,6 +34,18 @@ export function uploadBudgetError(files: { name: string; size: number }[]): stri
 }
 
 /**
+ * What to say when the server received the file but could not store it.
+ *
+ * Size is checked in the browser before anything is sent (`uploadBudgetError`),
+ * so a failure here is the file store not answering — on 2026-10-28 local MinIO
+ * answered every upload with "socket hang up". The old wording blamed the file
+ * size, and people re-picked smaller photos for a fault that was not theirs.
+ */
+export function storageFailedMessage(what: string): string {
+  return `Gagal menyimpan ${what}: penyimpanan file sedang tidak bisa dihubungi. Isian Anda tidak hilang — coba kirim lagi sebentar lagi. Bila tetap gagal, hubungi admin.`;
+}
+
+/**
  * What to tell the person when the action itself threw — the request never
  * produced an answer, as opposed to returning `{ error }`.
  *

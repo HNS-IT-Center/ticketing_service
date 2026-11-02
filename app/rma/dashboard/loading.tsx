@@ -1,20 +1,39 @@
+import { Skeleton } from "@/components/ui/skeleton";
+
+// Header, the summary numbers, then queue cards two abreast — the dashboard's
+// own frame, so nothing jumps when it arrives.
 export default function Loading() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div>
-        <div className="skeleton" style={{ height: "1.5rem", width: "12rem", borderRadius: "6px" }} />
-        <div className="skeleton" style={{ height: "0.9rem", width: "18rem", borderRadius: "6px", marginTop: "0.5rem" }} />
+    <div data-slot="rma-dashboard-loading" aria-busy="true" className="flex flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Skeleton className="h-7 w-48" />
+        <Skeleton className="h-4 w-72 max-w-full" />
       </div>
-      {[0, 1, 2].map((section) => (
-        <div key={section} className="card">
-          <div className="skeleton" style={{ height: "1.1rem", width: "14rem", borderRadius: "6px", marginBottom: "1rem" }} />
-          <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-            {[0, 1].map((row) => (
-              <div key={row} className="skeleton" style={{ height: "6rem", width: "100%", borderRadius: "var(--radius-md)" }} />
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
+        {[0, 1, 2, 3].map((i) => (
+          <div key={i} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 md:p-5">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-7 w-12" />
+          </div>
+        ))}
+      </div>
+      <div className="grid gap-4 lg:grid-cols-2">
+        {[0, 1].map((section) => (
+          <div key={section} className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 md:p-5">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-4 w-64 max-w-full" />
+            {[0, 1, 2].map((row) => (
+              <div key={row} className="flex items-center justify-between gap-3 border-t border-border pt-3">
+                <div className="flex flex-col gap-1.5">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3 w-24" />
+                </div>
+                <Skeleton className="h-6 w-16 rounded-full" />
+              </div>
             ))}
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
 }

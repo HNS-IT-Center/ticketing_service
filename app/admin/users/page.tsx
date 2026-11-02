@@ -1,8 +1,15 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
-import Badge from "@/components/ui/Badge";
-import { UserPlus } from "lucide-react";
+import type { Role } from "@prisma/client";
+import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
+import { EmptyState } from "@/components/app/EmptyState";
+import { FilterBar, FilterBarSearch } from "@/components/app/FilterBar";
+import { FilterChips } from "@/components/app/FilterChips";
+import { PageHeader } from "@/components/app/PageHeader";
+import { RoleBadge } from "@/components/app/RoleBadge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { UserPlus, Users } from "lucide-react";
 
 export const metadata = { title: "User Management — HNS IT Center" };
 
@@ -22,7 +29,7 @@ export default async function AdminUsersPage({
   const users = await db.user.findMany({
     where: {
       is_active: true,
-      ...(roleFilter !== "all" ? { role: roleFilter as any } : {}),
+      ...(roleFilter !== "all" ? { role: roleFilter as Role } : {}),
       ...(query ? { OR: [{ name: { contains: query } }, { email: { contains: query } }] } : {}),
     },
     orderBy: { created_at: "desc" },
@@ -31,111 +38,92 @@ export default async function AdminUsersPage({
     },
   });
 
-  return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
-        <div>
-          <h1>User Management</h1>
-          <p style={{ color: "var(--text-muted)", marginTop: "0.25rem" }}>{users.length} users found</p>
-        </div>
-        <Link href="/admin/users/create" className="btn btn-primary">
-          <UserPlus size={16} /> Add User
-        </Link>
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-col md:flex-row gap-3 md:items-center px-4 md:px-0">
-        <div className="flex gap-2 flex-wrap">
-          {ROLES.map((r) => (
-            <Link
-              key={r}
-              href={r === "all" ? "/admin/users" : `/admin/users?role=${r}`}
-              className="btn btn-sm"
-              style={{
-                background: roleFilter === r ? "var(--primary)" : "var(--white)",
-                color: roleFilter === r ? "#fff" : "var(--text-secondary)",
-                border: "1.5px solid",
-                borderColor: roleFilter === r ? "var(--primary)" : "var(--border)",
-              }}
+  type ListUser = (typeof users)[number];
+  const columns: DataTableColumn<ListUser>[] = [
+    { key: "name", header: "Name", cell: (u) => <span className="font-semibold">{u.name}</span>, mobile: "title" },
+    {
+      key: "email",
+      header: "Email",
+      cell: (u) => (
+        <span className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
+          <span className="min-w-0 [overflow-wrap:anywhere]">{u.email}</span>
+          {u.sso_sub && (
+            <span
+              title="Tertaut ke akun SSO HNS"
+              className="rounded-full border border-tone-green-border bg-tone-green-bg px-2 py-0.5 text-xs font-semibold text-tone-green-fg"
             >
-              {r === "all" ? "All Roles" : r === "Pending" ? "Menunggu role" : r}
-            </Link>
-          ))}
-        </div>
-        <form className="w-full md:w-auto md:ml-auto">
-          <input
-            name="q"
-            defaultValue={query}
-            className="form-input w-full md:w-[220px]"
-            placeholder="Search by name or email..."
-          />
-        </form>
-      </div>
+              SSO
+            </span>
+          )}
+        </span>
+      ),
+    },
+    { key: "phone", header: "Phone", cell: (u) => u.phone_number, className: "text-sm text-muted-foreground" },
+    { key: "role", header: "Role", cell: (u) => <RoleBadge role={u.role} />, mobile: "badge" },
+    {
+      key: "active",
+      header: "Active Tickets",
+      cell: (u) =>
+        u.role === "Technician" ? (
+          <span className="rounded-full border border-tone-blue-border bg-tone-blue-bg px-2 py-0.5 text-xs font-semibold whitespace-nowrap text-tone-blue-fg">
+            {u._count.tickets_technician} active
+          </span>
+        ) : (
+          "—"
+        ),
+    },
+    {
+      key: "joined",
+      header: "Joined",
+      cell: (u) => new Date(u.created_at).toLocaleDateString("id-ID"),
+      className: "whitespace-nowrap text-sm text-muted-foreground",
+    },
+    {
+      key: "edit",
+      header: "",
+      cell: () => <span className="text-sm font-medium text-primary">Edit →</span>,
+      className: "hidden text-right xl:table-cell",
+      mobile: "hidden",
+    },
+  ];
 
-      {/* Desktop table */}
-      <div className="admin-ticket-table">
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr><th>Name</th><th>Email</th><th>Phone</th><th>Role</th><th>Active Tickets</th><th>Joined</th><th></th></tr>
-            </thead>
-            <tbody>
-              {users.map((u) => (
-                <tr key={u.id}>
-                  <td style={{ fontWeight: 600 }}>{u.name}</td>
-                  <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                    {u.email}
-                    {u.sso_sub && (
-                      <span className="badge badge-done" style={{ marginLeft: "0.5rem" }} title="Tertaut ke akun SSO HNS">SSO</span>
-                    )}
-                  </td>
-                  <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>{u.phone_number}</td>
-                  <td><Badge variant={u.role} /></td>
-                  <td>
-                    {u.role === "Technician" ? (
-                      <span className="badge badge-technician">
-                        {u._count.tickets_technician} active
-                      </span>
-                    ) : "—"}
-                  </td>
-                  <td style={{ color: "var(--text-muted)", fontSize: "0.875rem" }}>
-                    {new Date(u.created_at).toLocaleDateString("id-ID")}
-                  </td>
-                  <td>
-                    <Link href={`/admin/users/${u.id}`} className="btn btn-secondary btn-sm">Edit</Link>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
+  const chips = ROLES.map((r) => ({
+    key: r,
+    label: r === "all" ? "All Roles" : r === "Pending" ? "Menunggu role" : r,
+    href: r === "all" ? "/admin/users" : `/admin/users?role=${r}`,
+  }));
 
-      {/* Mobile card list */}
-      <div className="admin-ticket-cards">
-        {users.map((u) => (
-          <Link key={u.id} href={`/admin/users/${u.id}`} style={{ textDecoration: "none" }}>
-            <div className="mobile-ticket-card">
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span style={{ fontWeight: 700, color: "var(--text-primary)" }}>{u.name}</span>
-                <Badge variant={u.role} />
-              </div>
-              <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>{u.email}</div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8125rem" }}>
-                <span style={{ color: "var(--text-secondary)" }}>{u.phone_number}</span>
-                {u.role === "Technician" && (
-                  <span className="badge badge-technician text-xs">
-                    {u._count.tickets_technician} active
-                  </span>
-                )}
-              </div>
-              <div style={{ fontSize: "0.75rem", color: "var(--text-muted)" }}>
-                Joined {new Date(u.created_at).toLocaleDateString("id-ID")}
-              </div>
-            </div>
+  return (
+    // Built from components/app and shadcn only, so the page opts into
+    // Tailwind spacing with a data-slot (the UI-1 reset rule).
+    <div data-slot="admin-users" className="flex flex-col gap-5">
+      <PageHeader
+        title="User Management"
+        description={`${users.length} users found`}
+        actions={
+          <Link href="/admin/users/create" className={buttonVariants()}>
+            <UserPlus aria-hidden="true" /> Add User
           </Link>
-        ))}
+        }
+      />
+
+      <div className="flex flex-col gap-3">
+        <FilterBar action="/admin/users">
+          {roleFilter !== "all" && <input type="hidden" name="role" value={roleFilter} />}
+          <FilterBarSearch label="Search users" placeholder="Search by name or email..." defaultValue={query} />
+          <Button type="submit" className="md:w-auto">Search</Button>
+        </FilterBar>
+        <FilterChips label="Role" chips={chips} active={roleFilter} />
       </div>
+
+      <DataTable
+        caption="Users"
+        columns={columns}
+        rows={users}
+        getRowKey={(u) => u.id}
+        rowHref={(u) => `/admin/users/${u.id}`}
+        empty={<EmptyState icon={Users} title="No users found" />}
+      />
     </div>
   );
 }

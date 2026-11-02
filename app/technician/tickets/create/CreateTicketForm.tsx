@@ -1,16 +1,24 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useId, useState, useTransition } from "react";
 import { createTicketAction } from "@/app/actions/tickets";
-import { AlertCircle, ChevronLeft, ChevronRight, Check, Laptop, Monitor, Printer, Settings, Cpu, HardDrive } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Check, History, Laptop, Loader2, Monitor, Printer, Settings, Cpu } from "lucide-react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import FileUpload from "@/components/ui/FileUpload";
-import TagInput from "@/components/ui/TagInput";
-import DraftBanner from "@/components/ui/DraftBanner";
-import { useDraft } from "@/lib/draft";
+import { useDraft, useDraftKey } from "@/lib/draft";
 import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
+import CatalogItemList from "@/components/catalog/CatalogItemList";
+import { MAX_PC_COMPONENTS, restorePickedItems, toPosted, type PickedItem } from "@/lib/catalog/picked-items";
+import { FormField } from "@/components/app/FormField";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { Separator } from "@/components/ui/separator";
+import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 
 type Props = {
   storeLocations: { id: string; name: string; code: string }[];
@@ -32,8 +40,145 @@ const DEVICES = [
   { id: "Build PC", icon: Cpu, label: "Build PC" },
 ];
 
+/** A text button that reads as a link, sized for a thumb on a phone. */
+const LINK_BUTTON =
+  "inline-flex min-h-11 cursor-pointer items-center rounded-sm text-primary underline underline-offset-2 outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-0";
+
+/** A pill toggle: the case chips and the upgrade chips. */
+const CHIP =
+  "inline-flex cursor-pointer items-center rounded-full border text-[0.8125rem] font-semibold whitespace-nowrap transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+const CHIP_ON = "border-primary bg-primary text-primary-foreground shadow-sm";
+const CHIP_OFF = "border-border bg-card text-foreground hover:border-primary hover:text-primary";
+
+const CHECK_LABEL = "inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-foreground md:min-h-0";
+const CHECKBOX = "size-[1.1rem] shrink-0 accent-primary";
+
+/**
+ * Where the wizard is. A phone gets one line and a bar ("Langkah 2 dari 4"),
+ * which fits at 360px; from md up, the four numbered steps with their names.
+ */
+function Stepper({ step }: { step: number }) {
+  return (
+    <nav aria-label="Langkah pembuatan tiket">
+      <div className="flex flex-col gap-2 md:hidden">
+        <p className="text-sm text-muted-foreground">
+          Langkah {step} dari {STEPS.length} ·{" "}
+          <span className="font-semibold text-foreground">{STEPS[step - 1]}</span>
+        </p>
+        <div className="h-1.5 overflow-hidden rounded-full bg-muted">
+          <div
+            className="h-full rounded-full bg-primary transition-[width] duration-200"
+            style={{ width: `${(step / STEPS.length) * 100}%` }}
+          />
+        </div>
+      </div>
+
+      <ol className="hidden md:flex">
+        {STEPS.map((label, i) => {
+          const num = i + 1;
+          const done = step > num;
+          const active = step === num;
+          return (
+            <li
+              key={label}
+              aria-current={active ? "step" : undefined}
+              className="flex min-w-0 flex-1 flex-col items-center gap-1.5"
+            >
+              <div className="flex w-full items-center">
+                <div className={cn("h-0.5 flex-1", i === 0 ? "invisible" : done || active ? "bg-primary" : "bg-border")} />
+                <div
+                  className={cn(
+                    "flex size-8 shrink-0 items-center justify-center rounded-full text-sm font-bold transition-colors",
+                    done || active ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                  )}
+                >
+                  {done ? <Check aria-hidden="true" className="size-4" /> : num}
+                  {done && <span className="sr-only">{num} (selesai)</span>}
+                </div>
+                <div className={cn("h-0.5 flex-1", i === STEPS.length - 1 ? "invisible" : done ? "bg-primary" : "bg-border")} />
+              </div>
+              <span
+                className={cn(
+                  "px-1 text-center text-xs leading-snug",
+                  active ? "font-semibold text-primary" : "text-muted-foreground"
+                )}
+              >
+                {label}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+/** A labelled block for a control with no single input to point at (a file picker, a chip group). */
+function FieldGroup({
+  label,
+  required,
+  hint,
+  help,
+  error,
+  children,
+}: {
+  label: string;
+  required?: boolean;
+  hint?: string;
+  help?: React.ReactNode;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 flex-col gap-1.5">
+      <span className="text-sm font-medium text-foreground">
+        {label}
+        {required && <span aria-hidden="true"> *</span>}
+        {hint && <span className="font-normal text-muted-foreground"> {hint}</span>}
+      </span>
+      {help && <p className="text-xs text-muted-foreground">{help}</p>}
+      {children}
+      {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+/** A set of checkboxes under one name. */
+function CheckGroup({
+  legend,
+  hint,
+  after,
+  children,
+}: {
+  legend: string;
+  hint?: string;
+  after?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <fieldset className="flex min-w-0 flex-col gap-1.5">
+      <legend className="mb-1.5 text-sm font-medium text-foreground">
+        {legend}
+        {hint && <span className="font-normal text-muted-foreground"> {hint}</span>}
+      </legend>
+      <div className="flex flex-wrap gap-x-5 gap-y-1">{children}</div>
+      {after && <div className="mt-1.5">{after}</div>}
+    </fieldset>
+  );
+}
+
+function Uploading({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="flex items-center gap-1.5 text-[0.8125rem] text-primary">
+      <Loader2 aria-hidden="true" className="size-3.5 animate-spin" />
+      {children}
+    </p>
+  );
+}
+
 export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades, defaultStoreLocationId, catalogEnabled = false }: Props) {
   const [step, setStep] = useState(1);
+  const uid = useId();
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
 
@@ -82,8 +227,11 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   const [unitPhotoUrls, setUnitPhotoUrls] = useState<string[]>([]);
   const [isUploadingUnitPhotos, setIsUploadingUnitPhotos] = useState(false);
   const [files, setFiles] = useState<File[]>([]);
-  const [pcComponents, setPcComponents] = useState<string[]>([]);
-  
+  // PC build components and the item fitted for each chosen upgrade, picked
+  // from the Accurate catalogue or typed. An upgrade holds at most one item.
+  const [pcComponents, setPcComponents] = useState<PickedItem[]>([]);
+  const [upgradeItems, setUpgradeItems] = useState<Record<string, PickedItem[]>>({});
+
   // Keep overnight/pickup in case needed later, or default
   const [pickupMethod, setPickupMethod] = useState("self_pickup");
   const [isOvernight, setIsOvernight] = useState(false);
@@ -102,9 +250,9 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     customerName, customerEmail, phone, gridDevice, ticketType, deviceType,
     deviceName, deviceCatalog, deviceSn, purchaseDate, conditions, selectedAccessories,
     customAccessory, notes, checkDiagnosisFee, cleaningPackage, selectedUpgrades,
-    uploadedFileUrls, unitPhotoUrls, pcComponents, pickupMethod, isOvernight,
+    uploadedFileUrls, unitPhotoUrls, pcComponents, upgradeItems, pickupMethod, isOvernight,
   };
-  const draft = useDraft("create-ticket", draftData);
+  const draft = useDraft(useDraftKey("create-ticket"), draftData);
 
   const restoreDraft = () => {
     const d = draft.offer?.data;
@@ -120,19 +268,37 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     setCheckDiagnosisFee(d.checkDiagnosisFee); setCleaningPackage(d.cleaningPackage);
     setSelectedUpgrades(d.selectedUpgrades); setUploadedFileUrls(d.uploadedFileUrls);
     setUnitPhotoUrls(d.unitPhotoUrls ?? []);
-    setPcComponents(d.pcComponents); setPickupMethod(d.pickupMethod); setIsOvernight(d.isOvernight);
+    // Drafts saved before 2026-10-26 hold components as plain strings and no
+    // upgrade items; both come back as what they can be read as.
+    setPcComponents(restorePickedItems(d.pcComponents));
+    setUpgradeItems(
+      Object.fromEntries(Object.entries(d.upgradeItems ?? {}).map(([id, items]) => [id, restorePickedItems(items).slice(0, 1)]))
+    );
+    setPickupMethod(d.pickupMethod); setIsOvernight(d.isOvernight);
+  };
+
+  // Restored on its own, once, as soon as the browser's draft can be read
+  // (after hydration — the server cannot see it). The form autosaves, so asking
+  // first only got in the way (owner, 2026-10-27). It cannot be someone else's
+  // customer: drafts are per account (useDraftKey). Set during render, guarded
+  // to run once — React re-renders straight away, with no effect cascade.
+  const [restoredAt, setRestoredAt] = useState<number | null>(null);
+  if (draft.offer && restoredAt === null) {
+    setRestoredAt(draft.offer.savedAt);
+    restoreDraft();
+  }
+  /** Throw the restored input away and start from an empty form. */
+  const startOver = () => {
+    draft.discard();
+    window.location.reload();
   };
 
   // Shown under the picker when the draft brought back uploads the picker
   // itself cannot list (it only knows File objects, and those are gone).
   const restoredUploads = files.length === 0 && uploadedFileUrls.length > 0 && (
-    <p className="form-help" style={{ marginTop: "0.5rem" }}>
+    <p className="text-xs text-muted-foreground">
       {uploadedFileUrls.length} lampiran dari draft sudah terunggah.{" "}
-      <button
-        type="button"
-        onClick={() => setUploadedFileUrls([])}
-        style={{ background: "none", border: "none", color: "var(--primary)", textDecoration: "underline", cursor: "pointer", padding: 0 }}
-      >
+      <button type="button" onClick={() => setUploadedFileUrls([])} className={LINK_BUTTON}>
         Hapus
       </button>
     </p>
@@ -275,8 +441,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (deviceCatalog) fd.append("device_catalog_item_id", String(deviceCatalog.id));
       if (deviceSn) fd.append("device_sn", deviceSn);
       if (ticketType === "warranty_claim" && purchaseDate) fd.append("purchase_date", purchaseDate);
-      if (pcComponents.length > 0) {
-        pcComponents.forEach((c) => fd.append("pcComponents", c));
+      if (ticketType === "pc_build") {
+        fd.append("pc_components_json", JSON.stringify(pcComponents.map(toPosted)));
       }
       fd.append("device_condition", conditions.join(", ")); // Saved to new field
 
@@ -293,7 +459,15 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
 
       if (ticketType === "cleaning" && cleaningPackage) fd.append("service_package", cleaningPackage);
       if (ticketType === "upgrade") {
-        selectedUpgrades.forEach(id => fd.append("upgrade_ids", id));
+        fd.append(
+          "upgrade_selections_json",
+          JSON.stringify(
+            selectedUpgrades.map((id) => {
+              const item = upgradeItems[id]?.at(0);
+              return { upgradeId: id, item: item ? toPosted(item) : null };
+            })
+          )
+        );
       }
       
       uploadedFileUrls.forEach(url => fd.append("preuploaded_urls", url));
@@ -330,303 +504,266 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   };
 
   const toggleUpgrade = (id: string) => {
+    const deselecting = selectedUpgrades.includes(id);
     setSelectedUpgrades(prev => prev.includes(id) ? prev.filter(u => u !== id) : [...prev, id]);
+    // An item picked for an upgrade that is then deselected must not ride
+    // along unseen if the upgrade is chosen again later.
+    if (deselecting) setUpgradeItems((prev) => Object.fromEntries(Object.entries(prev).filter(([key]) => key !== id)));
   };
 
+  const store = storeLocations.find((s) => s.id === storeLocationId) ?? null;
+
   return (
-    <div style={{ maxWidth: "700px", margin: "0 auto" }}>
-      {draft.offer && (
-        <div style={{ marginBottom: "1.5rem" }}>
-          <DraftBanner
-            savedAt={draft.offer.savedAt}
-            note={draft.offer.data.uploadedFileUrls.length > 0 ? "Lampiran yang sudah terunggah ikut dipulihkan." : undefined}
-            onRestore={restoreDraft}
-            onDiscard={draft.discard}
-          />
+    <div data-slot="create-ticket-form" className="mx-auto flex w-full max-w-[960px] flex-col gap-6">
+      {restoredAt !== null && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+          <History aria-hidden="true" className="size-[15px] shrink-0" />
+          <span>
+            Isian sebelumnya dipulihkan (
+            {new Date(restoredAt).toLocaleString("id-ID", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+            ).
+          </span>
+          <button type="button" onClick={startOver} className={LINK_BUTTON}>
+            Kosongkan
+          </button>
         </div>
       )}
 
-      {/* Progress Steps */}
-      <div style={{ display: "flex", gap: "0", marginBottom: "2rem" }}>
-        {STEPS.map((label, i) => {
-          const num = i + 1;
-          const done = step > num;
-          const active = step === num;
-          return (
-            <div key={label} style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", gap: "0.375rem" }}>
-              <div style={{ display: "flex", alignItems: "center", width: "100%" }}>
-                {i > 0 && <div style={{ flex: 1, height: "2px", background: done ? "var(--primary)" : "var(--border)" }} />}
-                <div style={{
-                  width: "2rem", height: "2rem", borderRadius: "50%", flexShrink: 0,
-                  background: done || active ? "var(--primary)" : "var(--border)",
-                  color: done || active ? "#fff" : "var(--text-muted)",
-                  display: "flex", alignItems: "center", justifyContent: "center",
-                  fontSize: "0.875rem", fontWeight: 700, transition: "all 0.2s",
-                }}>
-                  {done ? <Check size={16} /> : num}
-                </div>
-                {i < STEPS.length - 1 && <div style={{ flex: 1, height: "2px", background: done ? "var(--primary)" : "var(--border)" }} />}
-              </div>
-              <span style={{ fontSize: "0.75rem", color: active ? "var(--primary)" : "var(--text-muted)", fontWeight: active ? 600 : 400, whiteSpace: "nowrap" }}>
-                {label}
-              </span>
+      <Stepper step={step} />
+
+      <Card className="gap-0 py-0">
+        <CardContent className="flex flex-col gap-6 p-5 md:p-8">
+          {errors.submit && (
+            <div
+              role="alert"
+              className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-sm text-destructive"
+            >
+              <AlertCircle aria-hidden="true" className="size-4 shrink-0" /> {errors.submit}
             </div>
-          );
-        })}
-      </div>
+          )}
 
-      <div className="card" style={{ padding: "2rem" }}>
-        {errors.submit && (
-          <div style={{ background: "#fee2e2", border: "1px solid #fca5a5", padding: "1rem", borderRadius: "8px", color: "#991b1b", display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "1.5rem" }}>
-            <AlertCircle size={16} /> {errors.submit}
-          </div>
-        )}
+          {/* Step 1: Intake & Assign */}
+          {step === 1 && (
+            <div className="flex flex-col gap-5">
+              <h2 className="text-lg font-semibold text-foreground">Intake & Assignment</h2>
 
-        {/* Step 1: Intake & Assign */}
-        {step === 1 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <h2 style={{ marginBottom: "0.5rem" }}>Intake & Assignment</h2>
-            
-            <div style={{ display: "flex", gap: "1rem" }}>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">Store Location *</label>
-                <select className={`form-input ${errors.storeLocationId ? "error" : ""}`} value={storeLocationId} onChange={e => setStoreLocationId(e.target.value)}>
+              <FormField label="Store Location" htmlFor={`${uid}-store`} required error={errors.storeLocationId}>
+                <NativeSelect
+                  id={`${uid}-store`}
+                  value={storeLocationId}
+                  onChange={e => setStoreLocationId(e.target.value)}
+                  aria-invalid={errors.storeLocationId ? true : undefined}
+                >
                   <option value="">Select Store</option>
                   {storeLocations.map(s => <option key={s.id} value={s.id}>{s.name} ({s.code})</option>)}
-                </select>
-                {errors.storeLocationId && <span className="form-error"><AlertCircle size={12} />{errors.storeLocationId}</span>}
+                </NativeSelect>
+              </FormField>
+
+              <div className="grid gap-5 sm:grid-cols-2">
+                <FormField label="Assign Technician" htmlFor={`${uid}-tech`}>
+                  <NativeSelect id={`${uid}-tech`} value={technicianId} onChange={e => setTechnicianId(e.target.value)}>
+                    <option value="">(Assign Later)</option>
+                    {technicians
+                      .filter(t => !storeLocationId || t.store_assignments.some(sa => sa.store_id === storeLocationId))
+                      .map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
+                  </NativeSelect>
+                </FormField>
+                <FormField label="Assign Sales" htmlFor={`${uid}-sales`}>
+                  <NativeSelect id={`${uid}-sales`} value={salesId} onChange={e => setSalesId(e.target.value)}>
+                    <option value="">(Assign Later)</option>
+                    {sales.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                  </NativeSelect>
+                </FormField>
               </div>
+
+              <Separator />
+
+              <FieldGroup label="Unit milik" required>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    ["customer", "Customer"],
+                    ["store_stock", "Stok Toko"],
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      aria-pressed={unitOwnership === value}
+                      onClick={() => {
+                        setUnitOwnership(value);
+                        // Stock only ever comes in as a claim; drop a device or
+                        // case chosen earlier that no longer applies.
+                        if (value === "store_stock") {
+                          if (gridDevice === "Build PC") setGridDevice("");
+                          setTicketType(gridDevice && gridDevice !== "Build PC" ? "warranty_claim" : "");
+                        }
+                      }}
+                      className={buttonVariants({
+                        variant: unitOwnership === value ? "default" : "outline",
+                        className: cn("h-11 w-full md:h-10", unitOwnership !== value && "bg-card"),
+                      })}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {isStoreStock && (
+                  <p className="text-xs text-muted-foreground">
+                    Unit stok toko tidak punya customer, dan hanya bisa dibuat sebagai klaim garansi.
+                  </p>
+                )}
+              </FieldGroup>
+
+              {isStoreStock ? (
+                <FormField label="Asal Stok" htmlFor={`${uid}-origin`} required error={errors.stockOrigin}>
+                  <Input
+                    id={`${uid}-origin`}
+                    value={stockOrigin}
+                    onChange={e => setStockOrigin(e.target.value)}
+                    placeholder="Misal: Gudang Nagoya rak B3"
+                    aria-invalid={errors.stockOrigin ? true : undefined}
+                    className="bg-card"
+                  />
+                </FormField>
+              ) : (
+                <>
+                  <h3 className="text-base font-semibold text-foreground">Customer Information</h3>
+
+                  <FormField label="Customer Name" htmlFor={`${uid}-name`} required error={errors.customerName}>
+                    <Input
+                      id={`${uid}-name`}
+                      value={customerName}
+                      onChange={e => setCustomerName(e.target.value)}
+                      placeholder="John Doe"
+                      aria-invalid={errors.customerName ? true : undefined}
+                      className="bg-card"
+                    />
+                  </FormField>
+
+                  <div className="grid gap-5 sm:grid-cols-2">
+                    <FormField label="Nomor HP / WhatsApp" htmlFor={`${uid}-phone`} required error={errors.phone}>
+                      <span className="flex items-stretch">
+                        <span
+                          aria-hidden="true"
+                          className="flex items-center rounded-l-lg border border-r-0 border-input bg-muted px-3 text-sm font-semibold text-muted-foreground"
+                        >
+                          +62
+                        </span>
+                        <Input
+                          id={`${uid}-phone`}
+                          type="tel"
+                          inputMode="numeric"
+                          autoComplete="tel-national"
+                          value={phone}
+                          onFocus={() => setPhoneFocused(true)}
+                          onBlur={() => setPhoneFocused(false)}
+                          onChange={e => {
+                            let val = e.target.value.replace(/\D/g, "");
+                            if (val.startsWith("62")) val = val.substring(2);
+                            else if (val.startsWith("0")) val = val.substring(1);
+                            setPhone(val);
+                          }}
+                          placeholder="8123456789"
+                          aria-invalid={errors.phone ? true : undefined}
+                          className="min-w-0 flex-1 rounded-l-none bg-card"
+                        />
+                      </span>
+                      {phoneFocused && !phone.match(/^\d{9,13}$/) && (
+                        <span className="text-xs text-destructive">Masukkan 9-13 digit angka.</span>
+                      )}
+                    </FormField>
+
+                    <FormField label="Customer Email" htmlFor={`${uid}-email`} hint="(opsional)" error={errors.customerEmail}>
+                      <Input
+                        id={`${uid}-email`}
+                        type="email"
+                        value={customerEmail}
+                        onChange={e => setCustomerEmail(e.target.value)}
+                        placeholder="customer@email.com"
+                        aria-invalid={errors.customerEmail ? true : undefined}
+                        className="bg-card"
+                      />
+                    </FormField>
+                  </div>
+                </>
+              )}
             </div>
+          )}
 
-            <div style={{ display: "flex", gap: "1rem" }}>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">Assign Technician</label>
-                <select className="form-input" value={technicianId} onChange={e => setTechnicianId(e.target.value)}>
-                  <option value="">(Assign Later)</option>
-                  {technicians
-                    .filter(t => !storeLocationId || t.store_assignments.some(sa => sa.store_id === storeLocationId))
-                    .map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
-                </select>
-              </div>
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">Assign Sales</label>
-                <select className="form-input" value={salesId} onChange={e => setSalesId(e.target.value)}>
-                  <option value="">(Assign Later)</option>
-                  {sales.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                </select>
-              </div>
-            </div>
+          {/* Step 2: Choose Device Grid */}
+          {step === 2 && (
+            <div className="flex flex-col gap-5">
+              <h2 className="text-center text-lg font-semibold text-foreground">Choose Device</h2>
+              {errors.gridDevice && (
+                <p role="alert" className="flex items-center justify-center gap-1.5 text-sm text-destructive">
+                  <AlertCircle aria-hidden="true" className="size-3.5" />
+                  {errors.gridDevice}
+                </p>
+              )}
 
-            <hr style={{ margin: "1rem 0", borderColor: "var(--border)" }} />
-
-            <div className="form-group">
-              <label className="form-label">Unit milik *</label>
-              <div style={{ display: "flex", gap: "0.5rem" }}>
-                {([
-                  ["customer", "Customer"],
-                  ["store_stock", "Stok Toko"],
-                ] as const).map(([value, label]) => (
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 md:flex md:flex-wrap md:justify-center md:gap-5">
+                {DEVICES.filter(d => !(isStoreStock && d.id === "Build PC")).map(d => (
                   <button
-                    key={value}
+                    key={d.id}
                     type="button"
+                    aria-pressed={gridDevice === d.id}
                     onClick={() => {
-                      setUnitOwnership(value);
-                      // Stock only ever comes in as a claim; drop a device or
-                      // case chosen earlier that no longer applies.
-                      if (value === "store_stock") {
-                        if (gridDevice === "Build PC") setGridDevice("");
-                        setTicketType(gridDevice && gridDevice !== "Build PC" ? "warranty_claim" : "");
-                      }
+                      setGridDevice(d.id);
+                      // Build PC has exactly one case, so it can be implied.
+                      // Everything else waits for an explicit choice.
+                      setTicketType(d.id === "Build PC" ? "pc_build" : isStoreStock ? "warranty_claim" : "");
                     }}
-                    className={unitOwnership === value ? "btn btn-primary" : "btn btn-outline"}
-                    style={{ flex: 1 }}
+                    className={cn(
+                      "flex cursor-pointer flex-col items-center justify-center gap-3 rounded-2xl border-2 px-3 py-6 transition-colors outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:w-[160px] md:gap-4 md:py-8",
+                      gridDevice === d.id
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-border bg-card text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                    )}
                   >
-                    {label}
+                    <d.icon aria-hidden="true" strokeWidth={1.5} className="size-10 md:size-12" />
+                    <span className="text-base font-semibold">{d.label}</span>
                   </button>
                 ))}
               </div>
-              {isStoreStock && (
-                <p className="form-help">
-                  Unit stok toko tidak punya customer, dan hanya bisa dibuat sebagai klaim garansi.
-                </p>
+            </div>
+          )}
+
+          {/* Step 3: Service Details */}
+          {step === 3 && (
+            <div className="flex flex-col gap-6">
+              <h2 className="text-lg font-semibold text-foreground">Service Details: {gridDevice}</h2>
+
+              {/* Case Selection Tabs */}
+              {gridDevice !== "Build PC" && (
+                <FieldGroup label="Jenis Kasus" required error={errors.ticketType}>
+                  {/* A grid, not a wrapping row: on a phone four buttons wrapped 3 + 1
+                      and left the last one alone; this gives 2 × 2 there, one row here. */}
+                  <div className="grid grid-cols-[repeat(auto-fit,minmax(130px,1fr))] gap-2 border-b border-border pb-4">
+                    {getAvailableCases().map(caseType => {
+                      const labels: Record<string, string> = { service: "Service", cleaning: "Cleaning", upgrade: "Upgrade Part", pc_build: "Build PC", warranty_claim: "Warranty Claim" };
+                      return (
+                        <button
+                          key={caseType}
+                          type="button"
+                          aria-pressed={ticketType === caseType}
+                          onClick={() => setTicketType(caseType)}
+                          className={cn(CHIP, "h-11 justify-center md:h-9", ticketType === caseType ? CHIP_ON : CHIP_OFF)}
+                        >
+                          {labels[caseType]}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </FieldGroup>
               )}
-            </div>
+              {gridDevice === "Build PC" && errors.ticketType && (
+                <p role="alert" className="text-sm text-destructive">{errors.ticketType}</p>
+              )}
 
-            {isStoreStock ? (
-              <div className="form-group">
-                <label className="form-label">Asal Stok *</label>
-                <input
-                  className={`form-input ${errors.stockOrigin ? "error" : ""}`}
-                  value={stockOrigin}
-                  onChange={e => setStockOrigin(e.target.value)}
-                  placeholder="Misal: Gudang Nagoya rak B3"
-                />
-                {errors.stockOrigin && <span className="form-error"><AlertCircle size={12} />{errors.stockOrigin}</span>}
-              </div>
-            ) : (
-            <>
-            <h3 style={{ fontSize: "1.1rem", marginBottom: "0.5rem" }}>Customer Information</h3>
-            
-            <div className="form-group">
-              <label className="form-label">Customer Name *</label>
-              <input className={`form-input ${errors.customerName ? "error" : ""}`} value={customerName} onChange={e => setCustomerName(e.target.value)} placeholder="John Doe" />
-              {errors.customerName && <span className="form-error"><AlertCircle size={12} />{errors.customerName}</span>}
-            </div>
-
-            <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap" }}>
-              <div className="form-group" style={{ flex: "1 1 250px" }}>
-                <label className="form-label">Nomor HP / WhatsApp *</label>
-                <div style={{ display: "flex", alignItems: "center", gap: "0" }}>
-                  <span style={{ padding: "0.625rem 0.75rem", background: "var(--cream-dark)", border: "1.5px solid var(--border)", borderRight: "none", borderRadius: "var(--radius-md) 0 0 var(--radius-md)", fontSize: "0.9375rem", color: "var(--text-secondary)", fontWeight: 600, flexShrink: 0, lineHeight: "1.5" }}>+62</span>
-                  <input
-                    className={`form-input ${errors.phone ? "error" : ""}`}
-                    style={{ borderLeft: "none", borderTopLeftRadius: 0, borderBottomLeftRadius: 0 }}
-                    value={phone}
-                    onFocus={() => setPhoneFocused(true)}
-                    onBlur={() => setPhoneFocused(false)}
-                    onChange={e => {
-                      let val = e.target.value.replace(/\D/g, "");
-                      if (val.startsWith("62")) val = val.substring(2);
-                      else if (val.startsWith("0")) val = val.substring(1);
-                      setPhone(val);
-                    }}
-                    placeholder="8123456789"
-                  />
-                </div>
-                {phoneFocused && !phone.match(/^\d{9,13}$/) && (
-                  <span style={{ fontSize: "0.75rem", color: "var(--accent-brand)", marginTop: "0.25rem", display: "block" }}>
-                    Masukkan 9-13 digit angka.
-                  </span>
-                )}
-                {errors.phone && <span className="form-error"><AlertCircle size={12} />{errors.phone}</span>}
-              </div>
-
-              <div className="form-group" style={{ flex: "1 1 250px" }}>
-                <label className="form-label">Customer Email <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: "0.8rem" }}>(opsional)</span></label>
-                <input
-                  type="email"
-                  className={`form-input ${errors.customerEmail ? "error" : ""}`}
-                  value={customerEmail}
-                  onChange={e => setCustomerEmail(e.target.value)}
-                  placeholder="customer@email.com"
-                />
-                {errors.customerEmail && <span className="form-error"><AlertCircle size={12} />{errors.customerEmail}</span>}
-              </div>
-            </div>
-            </>
-            )}
-          </div>
-        )}
-
-        {/* Step 2: Choose Device Grid */}
-        {step === 2 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <h2 style={{ marginBottom: "0.5rem", textAlign: "center" }}>Choose Device</h2>
-            {errors.gridDevice && <div className="form-error" style={{ textAlign: "center", marginBottom: "1rem" }}><AlertCircle size={12} style={{ display: "inline", verticalAlign: "middle", marginRight: "4px" }}/>{errors.gridDevice}</div>}
-            
-            <div style={{ 
-              display: "flex", 
-              flexWrap: "wrap",
-              justifyContent: "center",
-              gap: "1.25rem",
-              marginTop: "0.5rem",
-              maxWidth: "600px",
-              margin: "0.5rem auto 0"
-            }}>
-              {DEVICES.filter(d => !(isStoreStock && d.id === "Build PC")).map(d => (
-                <button
-                  key={d.id}
-                  type="button"
-                  onClick={() => {
-                    setGridDevice(d.id);
-                    // Build PC has exactly one case, so it can be implied.
-                    // Everything else waits for an explicit choice.
-                    setTicketType(d.id === "Build PC" ? "pc_build" : isStoreStock ? "warranty_claim" : "");
-                  }}
-                  style={{
-                    flex: "1 1 140px",
-                    maxWidth: "180px",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "1rem",
-                    padding: "2rem 1rem",
-                    borderRadius: "16px",
-                    border: `2px solid ${gridDevice === d.id ? "var(--primary)" : "var(--border)"}`,
-                    background: gridDevice === d.id ? "rgba(22,70,157,0.06)" : "var(--white)",
-                    cursor: "pointer",
-                    transition: "all 0.2s",
-                    color: gridDevice === d.id ? "var(--primary)" : "var(--text-secondary)",
-                  }}
-                >
-                  <d.icon size={48} strokeWidth={1.5} />
-                  <span style={{ fontWeight: 600, fontSize: "1.05rem" }}>{d.label}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Step 3: Service Details */}
-        {step === 3 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-            <h2 style={{ marginBottom: "0" }}>Service Details: {gridDevice}</h2>
-            
-            {/* Case Selection Tabs */}
-            {gridDevice !== "Build PC" && (
-              <div>
-                <label className="form-label" style={{ display: "block", marginBottom: "0.5rem" }}>
-                  Jenis Kasus <span style={{ color: "var(--accent)" }}>*</span>
-                </label>
-                <div style={{ display: "flex", gap: "0.5rem", flexWrap: "wrap", borderBottom: "1px solid var(--border)", paddingBottom: "1rem" }}>
-                {getAvailableCases().map(caseType => {
-                  const labels: Record<string, string> = { service: "Service", cleaning: "Cleaning", upgrade: "Upgrade Part", pc_build: "Build PC", warranty_claim: "Warranty Claim" };
-                  return (
-                    <button
-                      key={caseType}
-                      type="button"
-                      onClick={() => setTicketType(caseType)}
-                      style={{
-                        flex: 1,
-                        minWidth: "max-content",
-                        textAlign: "center", 
-                        borderRadius: "20px", 
-                        padding: "0.5rem 0.5rem",
-                        fontSize: "0.85rem",
-                        whiteSpace: "nowrap",
-                        fontWeight: 600,
-                        cursor: "pointer",
-                        transition: "all 0.2s",
-                        border: "none",
-                        background: ticketType === caseType ? "var(--primary)" : "#1e293b",
-                        color: "#fff",
-                        boxShadow: ticketType === caseType ? "0 4px 12px rgba(22, 70, 157, 0.3)" : "none"
-                      }}
-                      onMouseEnter={e => {
-                        if (ticketType !== caseType) {
-                          e.currentTarget.style.background = "var(--primary)";
-                        }
-                      }}
-                      onMouseLeave={e => {
-                        if (ticketType !== caseType) {
-                          e.currentTarget.style.background = "#1e293b";
-                        }
-                      }}
-                    >
-                      {labels[caseType]}
-                    </button>
-                  );
-                })}
-                </div>
-              </div>
-            )}
-            {errors.ticketType && <span className="form-error" style={{ marginTop: "-1rem" }}><AlertCircle size={12} />{errors.ticketType}</span>}
-
-            {/* Warranty Claim */}
-            {ticketType === "warranty_claim" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "1rem" }}>
+              {/* Warranty Claim */}
+              {ticketType === "warranty_claim" && (
+                <div className="flex flex-col gap-5">
+                  {/* Full width: catalogue names run to two lines, and in half a
+                      column the result list became a tall, narrow strip. */}
                   <UnitField
                     catalogEnabled={catalogEnabled}
                     unit={deviceCatalog}
@@ -636,157 +773,178 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     label="Nama Perangkat"
                   />
 
-                  <div className="form-group">
-                    <label className="form-label">
-                      SN <span style={{ color: "var(--accent)" }}>*</span>
-                    </label>
-                    <input
-                      className={`form-input ${errors.deviceSn ? "error" : ""}`}
-                      value={deviceSn}
-                      onChange={e => setDeviceSn(e.target.value)}
-                      placeholder="Misal: 12345ABCD"
+                  {/* The two short fields side by side; stacked on a phone. */}
+                  <div className="grid items-start gap-5 sm:grid-cols-2">
+                    <FormField
+                      label="SN"
+                      htmlFor={`${uid}-sn`}
+                      required
+                      help="Diverifikasi ulang oleh RMA sebelum diajukan ke vendor."
+                      error={errors.deviceSn}
+                    >
+                      <Input
+                        id={`${uid}-sn`}
+                        value={deviceSn}
+                        onChange={e => setDeviceSn(e.target.value)}
+                        placeholder="Misal: 12345ABCD"
+                        aria-invalid={errors.deviceSn ? true : undefined}
+                        className="bg-card"
+                      />
+                    </FormField>
+
+                    <FormField
+                      label="Tanggal Pembelian"
+                      htmlFor={`${uid}-purchase`}
+                      required={!isStoreStock}
+                      hint={isStoreStock ? "(opsional)" : undefined}
+                      help={isStoreStock ? "Kosongkan bila tidak ada." : "Sesuai tanggal pada nota pembelian."}
+                      error={errors.purchaseDate}
+                    >
+                      <Input
+                        id={`${uid}-purchase`}
+                        type="date"
+                        value={purchaseDate}
+                        max={new Date().toISOString().slice(0, 10)}
+                        onChange={e => setPurchaseDate(e.target.value)}
+                        aria-invalid={errors.purchaseDate ? true : undefined}
+                        className="bg-card"
+                      />
+                    </FormField>
+                  </div>
+
+                  <FormField label="Deskripsi Keluhan" htmlFor={`${uid}-notes`} required error={errors.notes}>
+                    <Textarea
+                      id={`${uid}-notes`}
+                      rows={4}
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Jelaskan kerusakan yang diklaim customer..."
+                      aria-invalid={errors.notes ? true : undefined}
+                      className="resize-y bg-card"
                     />
-                    <p className="form-help">Diverifikasi ulang oleh RMA sebelum diajukan ke vendor.</p>
-                    {errors.deviceSn && <span className="form-error"><AlertCircle size={12} />{errors.deviceSn}</span>}
-                  </div>
-                </div>
+                  </FormField>
 
-                <div className="form-group">
-                  <label className="form-label">
-                    Tanggal Pembelian{" "}
-                    {isStoreStock
-                      ? <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span>
-                      : <span style={{ color: "var(--accent)" }}>*</span>}
-                  </label>
-                  <input
-                    type="date"
-                    className={`form-input ${errors.purchaseDate ? "error" : ""}`}
-                    value={purchaseDate}
-                    max={new Date().toISOString().slice(0, 10)}
-                    onChange={e => setPurchaseDate(e.target.value)}
-                  />
-                  <p className="form-help">
-                    {isStoreStock ? "Kosongkan bila tidak ada." : "Sesuai tanggal pada nota pembelian."}
-                  </p>
-                  {errors.purchaseDate && <span className="form-error"><AlertCircle size={12} />{errors.purchaseDate}</span>}
-                </div>
+                  <FieldGroup
+                    label="Nota Pembelian"
+                    hint="(opsional saat intake)"
+                    help={
+                      <>
+                        Unggah foto/scan nota sekarang agar teknisi dapat memilihnya saat menyerahkan
+                        unit ke RMA.{" "}
+                        {isStoreStock
+                          ? "Untuk unit stok toko, nota tidak wajib."
+                          : "Nota wajib ada sebelum klaim unit milik customer diserahkan ke RMA."}
+                      </>
+                    }
+                  >
+                    <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                    {restoredUploads}
+                    {isUploadingFiles && <Uploading>Uploading files…</Uploading>}
+                  </FieldGroup>
 
-                <div className="form-group">
-                  <label className="form-label">
-                    Deskripsi Keluhan <span style={{ color: "var(--accent)" }}>*</span>
-                  </label>
-                  <textarea
-                    className={`form-input ${errors.notes ? "error" : ""}`}
-                    rows={4}
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Jelaskan kerusakan yang diklaim customer..."
-                  />
-                  {errors.notes && <span className="form-error"><AlertCircle size={12} />{errors.notes}</span>}
+                  <FieldGroup
+                    label="Foto Barang yang Diklaim"
+                    hint={`(opsional, maks ${MAX_UNIT_PHOTOS})`}
+                    help={
+                      <>
+                        Foto kondisi unit saat diterima: tampak depan dan belakang, label serial number, dan
+                        bagian yang dikeluhkan. Menjadi catatan kondisi unit saat masuk, terpisah dari nota.
+                      </>
+                    }
+                  >
+                    <FileUpload
+                      value={unitPhotos}
+                      onChange={handleUnitPhotoUpload}
+                      maxFiles={MAX_UNIT_PHOTOS}
+                      accept="image/*,image/heic,image/heif"
+                    />
+                    {unitPhotos.length === 0 && unitPhotoUrls.length > 0 && (
+                      <p className="text-xs text-muted-foreground">
+                        {unitPhotoUrls.length} foto dari draft sudah terunggah.
+                      </p>
+                    )}
+                    {isUploadingUnitPhotos && <Uploading>Mengunggah foto…</Uploading>}
+                  </FieldGroup>
                 </div>
+              )}
 
-                <div className="form-group">
-                  <label className="form-label">
-                    Nota Pembelian{" "}
-                    <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional saat intake)</span>
-                  </label>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                    Unggah foto/scan nota sekarang agar teknisi dapat memilihnya saat menyerahkan
-                    unit ke RMA.{" "}
-                    {isStoreStock
-                      ? "Untuk unit stok toko, nota tidak wajib."
-                      : "Nota wajib ada sebelum klaim unit milik customer diserahkan ke RMA."}
-                  </p>
-                  <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
-                  {restoredUploads}
-                  {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
+              {/* PC Build */}
+              {ticketType === "pc_build" && (
+                <div className="flex flex-col gap-5">
+                  <FieldGroup label="Komponen PC" hint="(opsional)">
+                    <CatalogItemList
+                      items={pcComponents}
+                      onChange={setPcComponents}
+                      catalogEnabled={catalogEnabled}
+                      max={MAX_PC_COMPONENTS}
+                      store={store}
+                      searchPlaceholder="Cari komponen di katalog, mis. rtx 4060"
+                      manualPlaceholder="Nama komponen, mis. i5-13400F"
+                      addAnotherLabel="Tambah komponen"
+                    />
+                    <p className="text-xs text-muted-foreground">Komponen yang dibeli customer atau disiapkan untuk rakitan ini.</p>
+                  </FieldGroup>
+
+                  <FormField label="Notes / Instructions" htmlFor={`${uid}-notes`}>
+                    <Textarea
+                      id={`${uid}-notes`}
+                      rows={4}
+                      value={notes}
+                      onChange={e => setNotes(e.target.value)}
+                      placeholder="Describe any specific instructions or build requirements..."
+                      className="resize-y bg-card"
+                    />
+                  </FormField>
+
+                  <FieldGroup
+                    label="Ticket Attachment"
+                    required
+                    help="Upload any reference pictures or build lists."
+                    error={errors.ticketFiles}
+                  >
+                    <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                    {restoredUploads}
+                    {isUploadingFiles && <Uploading>Uploading files…</Uploading>}
+                  </FieldGroup>
                 </div>
+              )}
 
-                <div className="form-group">
-                  <label className="form-label">
-                    Foto Barang yang Diklaim{" "}
-                    <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional, maks {MAX_UNIT_PHOTOS})</span>
-                  </label>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>
-                    Foto kondisi unit saat diterima: tampak depan dan belakang, label serial number, dan
-                    bagian yang dikeluhkan. Menjadi catatan kondisi unit saat masuk, terpisah dari nota.
-                  </p>
-                  <FileUpload
-                    value={unitPhotos}
-                    onChange={handleUnitPhotoUpload}
-                    maxFiles={MAX_UNIT_PHOTOS}
-                    accept="image/*,image/heic,image/heif"
-                  />
-                  {unitPhotos.length === 0 && unitPhotoUrls.length > 0 && (
-                    <p className="form-help" style={{ marginTop: "0.5rem" }}>
-                      {unitPhotoUrls.length} foto dari draft sudah terunggah.
-                    </p>
+              {/* Service & Cleaning Shared Fields */}
+              {(ticketType === "service" || ticketType === "cleaning") && (
+                <div className="flex flex-col gap-5">
+                  {ticketType === "cleaning" && (
+                    <FormField
+                      label="Cleaning Package"
+                      htmlFor={`${uid}-package`}
+                      required
+                      error={errors.cleaningPackage}
+                      className="rounded-lg bg-muted p-4"
+                    >
+                      <NativeSelect
+                        id={`${uid}-package`}
+                        value={cleaningPackage}
+                        onChange={e => setCleaningPackage(e.target.value)}
+                        aria-invalid={errors.cleaningPackage ? true : undefined}
+                      >
+                        <option value="">Pilih Paket Cleaning</option>
+                        <option value="Basic_Cleaning">Basic Cleaning</option>
+                        {(gridDevice === "Laptop" || gridDevice === "Computer") && (
+                          <option value="Full_Repaste">Full Cleaning + Repaste</option>
+                        )}
+                        {gridDevice === "Computer" && (
+                          <option value="Full_Repaste_CPU_GPU">Full Cleaning + Repaste CPU & GPU</option>
+                        )}
+                      </NativeSelect>
+                    </FormField>
                   )}
-                  {isUploadingUnitPhotos && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Mengunggah foto…</p>}
-                </div>
-              </div>
-            )}
 
-            {/* PC Build */}
-            {ticketType === "pc_build" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                <div className="form-group">
-                  <label className="form-label">PC Components (Optional)</label>
-                  <TagInput
-                    value={pcComponents}
-                    onChange={setPcComponents}
-                    placeholder="Type component name and press Enter (e.g. RTX 4060, i5-13400F)"
-                  />
-                  <p className="form-help">Enter the list of parts needed or provided for this PC Build.</p>
-                </div>
-                
-                <div className="form-group">
-                  <label className="form-label">Notes / Instructions</label>
-                  <textarea
-                    className="form-input"
-                    rows={4}
-                    value={notes}
-                    onChange={e => setNotes(e.target.value)}
-                    placeholder="Describe any specific instructions or build requirements..."
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Ticket Attachment <span style={{ color: "var(--accent)" }}>*</span></label>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Upload any reference pictures or build lists.</p>
-                  <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
-                  {restoredUploads}
-                  {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
-                  {errors.ticketFiles && <span className="form-error"><AlertCircle size={12} />{errors.ticketFiles}</span>}
-                </div>
-              </div>
-            )}
-
-            {/* Service & Cleaning Shared Fields */}
-            {(ticketType === "service" || ticketType === "cleaning") && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                
-                {ticketType === "cleaning" && (
-                  <div className="form-group" style={{ background: "var(--cream-dark)", padding: "1rem", borderRadius: "8px" }}>
-                    <label className="form-label">Cleaning Package *</label>
-                    <select className={`form-input ${errors.cleaningPackage ? "error" : ""}`} value={cleaningPackage} onChange={e => setCleaningPackage(e.target.value)}>
-                      <option value="">Pilih Paket Cleaning</option>
-                      <option value="Basic_Cleaning">Basic Cleaning</option>
-                      {(gridDevice === "Laptop" || gridDevice === "Computer") && (
-                        <option value="Full_Repaste">Full Cleaning + Repaste</option>
-                      )}
-                      {gridDevice === "Computer" && (
-                        <option value="Full_Repaste_CPU_GPU">Full Cleaning + Repaste CPU & GPU</option>
-                      )}
-                    </select>
-                    {errors.cleaningPackage && <span className="form-error"><AlertCircle size={12} />{errors.cleaningPackage}</span>}
-                  </div>
-                )}
-
-                <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-                  <div className="form-group">
-                    <label className="form-label">Device Type *</label>
-                    <select className={`form-input ${errors.deviceType ? "error" : ""}`} value={deviceType} onChange={e => setDeviceType(e.target.value)}>
+                  <FormField label="Device Type" htmlFor={`${uid}-device-type`} required error={errors.deviceType}>
+                    <NativeSelect
+                      id={`${uid}-device-type`}
+                      value={deviceType}
+                      onChange={e => setDeviceType(e.target.value)}
+                      aria-invalid={errors.deviceType ? true : undefined}
+                    >
                       <option value="">Pilih Kategori Spesifik</option>
                       {gridDevice === "Laptop" && (
                         <>
@@ -802,9 +960,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                       )}
                       {gridDevice === "Printer" && <option value="Printer">Printer</option>}
                       {gridDevice === "Others" && <option value="Other_Device">Other Device</option>}
-                    </select>
-                    {errors.deviceType && <span className="form-error"><AlertCircle size={12} />{errors.deviceType}</span>}
-                  </div>
+                    </NativeSelect>
+                  </FormField>
 
                   <UnitField
                     catalogEnabled={catalogEnabled}
@@ -815,170 +972,201 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     label="Nama Unit"
                   />
 
-                  <div className="form-group">
-                    <label className="form-label">SN <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span></label>
-                    <input className="form-input" value={deviceSn} onChange={e => setDeviceSn(e.target.value)} placeholder="Misal: 12345ABCD" />
-                  </div>
-                </div>
+                  <FormField label="SN" htmlFor={`${uid}-sn`} hint="(opsional)">
+                    <Input
+                      id={`${uid}-sn`}
+                      value={deviceSn}
+                      onChange={e => setDeviceSn(e.target.value)}
+                      placeholder="Misal: 12345ABCD"
+                      className="bg-card"
+                    />
+                  </FormField>
 
-                <div className="form-group">
-                  <label className="form-label">Kondisi Perangkat <span style={{ color: "var(--text-muted)", fontWeight: 400 }}>(opsional)</span></label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", marginTop: "0.25rem" }}>
+                  <CheckGroup legend="Kondisi Perangkat" hint="(opsional)">
                     {["Garansi Aktif", "Garansi Habis", "Segel Utuh", "Fisik Mulus"].map(cond => (
-                      <label key={cond} style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.95rem" }}>
-                        <input type="checkbox" checked={conditions.includes(cond)} onChange={() => toggleCondition(cond)} style={{ width: "1.1rem", height: "1.1rem" }} />
+                      <label key={cond} className={CHECK_LABEL}>
+                        <input type="checkbox" checked={conditions.includes(cond)} onChange={() => toggleCondition(cond)} className={CHECKBOX} />
                         {cond}
                       </label>
                     ))}
-                  </div>
-                </div>
+                  </CheckGroup>
 
-                <div className="form-group">
-                  <label className="form-label">Kelengkapan Accessories</label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "1.25rem", marginTop: "0.25rem", marginBottom: "0.75rem" }}>
+                  <CheckGroup
+                    legend="Kelengkapan Accessories"
+                    after={
+                      <Input
+                        value={customAccessory}
+                        onChange={e => setCustomAccessory(e.target.value)}
+                        placeholder="Kelengkapan lain (custom)..."
+                        aria-label="Kelengkapan lain"
+                        className="bg-card"
+                      />
+                    }
+                  >
                     {["Charger", "Kabel", "Bag"].map(acc => (
-                      <label key={acc} style={{ display: "flex", alignItems: "center", gap: "0.4rem", cursor: "pointer", fontSize: "0.95rem" }}>
-                        <input type="checkbox" checked={selectedAccessories.includes(acc)} onChange={() => toggleAccessory(acc)} style={{ width: "1.1rem", height: "1.1rem" }} />
+                      <label key={acc} className={CHECK_LABEL}>
+                        <input type="checkbox" checked={selectedAccessories.includes(acc)} onChange={() => toggleAccessory(acc)} className={CHECKBOX} />
                         {acc}
                       </label>
                     ))}
-                  </div>
-                  <input className="form-input" value={customAccessory} onChange={e => setCustomAccessory(e.target.value)} placeholder="Kelengkapan lain (custom)..." />
-                </div>
+                  </CheckGroup>
 
-                {ticketType === "service" && (
-                  <div className="form-group">
-                    <label className="form-label">Problem Description *</label>
-                    <textarea className={`form-input ${errors.notes ? "error" : ""}`} rows={3} value={notes} onChange={e => setNotes(e.target.value)} placeholder="Provide details of the problem..." />
-                    {errors.notes && <span className="form-error"><AlertCircle size={12} />{errors.notes}</span>}
-                  </div>
-                )}
+                  {ticketType === "service" && (
+                    <FormField label="Problem Description" htmlFor={`${uid}-notes`} required error={errors.notes}>
+                      <Textarea
+                        id={`${uid}-notes`}
+                        rows={3}
+                        value={notes}
+                        onChange={e => setNotes(e.target.value)}
+                        placeholder="Provide details of the problem..."
+                        aria-invalid={errors.notes ? true : undefined}
+                        className="resize-y bg-card"
+                      />
+                    </FormField>
+                  )}
 
-                {ticketType === "service" && (
-                  <div className="form-group" style={{ marginTop: "0.5rem" }}>
-                    <label style={{ display: "flex", alignItems: "center", gap: "0.75rem", cursor: "pointer", background: "var(--cream)", padding: "1rem", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                      <input type="checkbox" checked={checkDiagnosisFee} onChange={e => setCheckDiagnosisFee(e.target.checked)} style={{ width: "1.25rem", height: "1.25rem" }} disabled />
+                  {ticketType === "service" && (
+                    <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-border bg-muted p-4">
+                      <input
+                        type="checkbox"
+                        checked={checkDiagnosisFee}
+                        onChange={e => setCheckDiagnosisFee(e.target.checked)}
+                        className="size-5 shrink-0 accent-primary"
+                        disabled
+                      />
                       <div>
-                        <strong style={{ display: "block" }}>Check & Diagnosis</strong>
-                        <span style={{ fontSize: "0.85rem", color: "var(--text-muted)" }}>Fee of Rp. 50.000 (Automatically Applied)</span>
+                        <strong className="block font-semibold text-foreground">Check & Diagnosis</strong>
+                        <span className="text-[0.8125rem] text-muted-foreground">Fee of Rp. 50.000 (Automatically Applied)</span>
                       </div>
                     </label>
-                  </div>
-                )}
+                  )}
 
-                <div className="form-group">
-                  <label className="form-label">Ticket Attachment</label>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Upload photo/video of the device.</p>
-                  <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
-                  {restoredUploads}
-                  {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
+                  <FieldGroup label="Ticket Attachment" help="Upload photo/video of the device.">
+                    <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                    {restoredUploads}
+                    {isUploadingFiles && <Uploading>Uploading files…</Uploading>}
+                  </FieldGroup>
                 </div>
-              </div>
-            )}
-
-            {/* Upgrade Part */}
-            {ticketType === "upgrade" && (
-              <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-                <div className="form-group">
-                  <label className="form-label">Select Upgrades *</label>
-                  <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                    {upgrades
-                      .filter(u => {
-                        if (gridDevice === "Laptop") return u.name.includes("RAM") || u.name.includes("SSD");
-                        return true;
-                      })
-                      .map(u => (
-                      <button
-                        key={u.id}
-                        type="button"
-                        onClick={() => toggleUpgrade(u.id)}
-                        style={{
-                          padding: "0.5rem 1rem",
-                          borderRadius: "20px",
-                          border: `1.5px solid ${selectedUpgrades.includes(u.id) ? "var(--primary)" : "var(--border)"}`,
-                          background: selectedUpgrades.includes(u.id) ? "var(--primary)" : "var(--white)",
-                          color: selectedUpgrades.includes(u.id) ? "var(--white)" : "var(--text-secondary)",
-                          fontSize: "0.9rem", cursor: "pointer", transition: "all 0.2s"
-                        }}
-                      >
-                        {u.name}
-                      </button>
-                    ))}
-                  </div>
-                  {errors.selectedUpgrades && <span className="form-error"><AlertCircle size={12} />{errors.selectedUpgrades}</span>}
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Attachment (Upgraded Item) *</label>
-                  <p style={{ fontSize: "0.75rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}>Please attach a photo of the item to be upgraded.</p>
-                  <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
-                  {restoredUploads}
-                  {isUploadingFiles && <p style={{ fontSize: "0.8rem", color: "var(--primary)", marginTop: "0.5rem" }}>⏳ Uploading files…</p>}
-                </div>
-              </div>
-            )}
-
-          </div>
-        )}
-
-        {/* Step 4: Confirm */}
-        {step === 4 && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <h2 style={{ marginBottom: "0.5rem" }}>Confirm Ticket Details</h2>
-            <div style={{ background: "var(--cream)", padding: "1.5rem", borderRadius: "12px", fontSize: "0.95rem", lineHeight: "1.6" }}>
-              <p><strong>Store:</strong> {storeLocations.find(s => s.id === storeLocationId)?.name}</p>
-              {isStoreStock
-                ? <p><strong>Unit:</strong> Stok Toko — {stockOrigin}</p>
-                : <p><strong>Customer:</strong> {customerName} - +62{phone}</p>}
-              <p><strong>Device:</strong> {gridDevice} ({deviceType || "N/A"})</p>
-              {deviceName && (
-                <p>
-                  <strong>Unit:</strong> {deviceName}
-                  {deviceCatalog && ` (SKU ${deviceCatalog.sku}, katalog Accurate)`}
-                </p>
               )}
-              <p><strong>Case:</strong> <span style={{ textTransform: "capitalize" }}>{ticketType.replace(/_/g, " ")}</span></p>
-              {ticketType === "cleaning" && <p><strong>Package:</strong> {cleaningPackage.replace(/_/g, " ")}</p>}
-              {ticketType === "service" && <p><strong>Problem:</strong> {notes}</p>}
-              {conditions.length > 0 && <p><strong>Condition:</strong> {conditions.join(", ")}</p>}
-              {(selectedAccessories.length > 0 || customAccessory) && (
-                <p><strong>Accessories:</strong> {[...selectedAccessories, customAccessory].filter(Boolean).join(", ")}</p>
+
+              {/* Upgrade Part */}
+              {ticketType === "upgrade" && (
+                <div className="flex flex-col gap-5">
+                  <FieldGroup label="Select Upgrades" required error={errors.selectedUpgrades}>
+                    <div className="flex flex-wrap gap-2">
+                      {upgrades
+                        .filter(u => {
+                          if (gridDevice === "Laptop") return u.name.includes("RAM") || u.name.includes("SSD");
+                          return true;
+                        })
+                        .map(u => (
+                          <button
+                            key={u.id}
+                            type="button"
+                            aria-pressed={selectedUpgrades.includes(u.id)}
+                            onClick={() => toggleUpgrade(u.id)}
+                            className={cn(CHIP, "min-h-11 px-4 md:min-h-9", selectedUpgrades.includes(u.id) ? CHIP_ON : CHIP_OFF)}
+                          >
+                            {u.name}
+                          </button>
+                        ))}
+                    </div>
+                  </FieldGroup>
+
+                  {/* The item fitted for each chosen upgrade: the type keeps its
+                      points, this records what was actually put in. */}
+                  {upgrades
+                    .filter((u) => selectedUpgrades.includes(u.id))
+                    .map((u) => (
+                      <FieldGroup key={u.id} label={`Barang untuk ${u.name}`} hint="(opsional)">
+                        <CatalogItemList
+                          items={upgradeItems[u.id] ?? []}
+                          onChange={(items) => setUpgradeItems((prev) => ({ ...prev, [u.id]: items }))}
+                          catalogEnabled={catalogEnabled}
+                          max={1}
+                          store={store}
+                          searchPlaceholder="Cari barang di katalog, mis. ram ddr4 8gb"
+                          manualPlaceholder="Nama barang, mis. RAM 8GB DDR4"
+                        />
+                      </FieldGroup>
+                    ))}
+
+                  <FieldGroup
+                    label="Attachment (Upgraded Item)"
+                    required
+                    help="Please attach a photo of the item to be upgraded."
+                  >
+                    <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                    {restoredUploads}
+                    {isUploadingFiles && <Uploading>Uploading files…</Uploading>}
+                  </FieldGroup>
+                </div>
               )}
             </div>
-            
-            <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer", marginTop: "1rem" }}>
-              <input type="checkbox" checked={termsAccepted} onChange={e => setTermsAccepted(e.target.checked)} style={{ width: "1.25rem", height: "1.25rem" }} />
-              <span style={{ fontWeight: 500 }}>I confirm the details above are accurate.</span>
-            </label>
-            {errors.termsAccepted && <span className="form-error"><AlertCircle size={12} />{errors.termsAccepted}</span>}
-          </div>
-        )}
-
-        {/* Navigation Buttons */}
-        <div style={{ display: "flex", justifyContent: "space-between", marginTop: "2rem", gap: "0.75rem" }}>
-          {step > 1 ? (
-            <button type="button" onClick={back} className="btn btn-secondary" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }} disabled={isPending}>
-              <ChevronLeft size={16} /> Back
-            </button>
-          ) : <div />}
-          
-          {step < STEPS.length ? (
-            <button type="button" onClick={next} className="btn btn-primary" style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              Next <ChevronRight size={16} />
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={submit}
-              disabled={isPending}
-              className="btn btn-primary"
-              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
-            >
-              {isPending ? "Creating..." : "Create Ticket"} <Check size={16} />
-            </button>
           )}
-        </div>
-      </div>
+
+          {/* Step 4: Confirm */}
+          {step === 4 && (
+            <div className="flex flex-col gap-5">
+              <h2 className="text-lg font-semibold text-foreground">Confirm Ticket Details</h2>
+              <div className="flex flex-col gap-1.5 rounded-xl bg-muted p-5 text-sm leading-relaxed text-foreground [overflow-wrap:anywhere] md:p-6 [&_strong]:font-semibold">
+                <p><strong>Store:</strong> {storeLocations.find(s => s.id === storeLocationId)?.name}</p>
+                {isStoreStock
+                  ? <p><strong>Unit:</strong> Stok Toko — {stockOrigin}</p>
+                  : <p><strong>Customer:</strong> {customerName} - +62{phone}</p>}
+                <p><strong>Device:</strong> {gridDevice} ({deviceType || "N/A"})</p>
+                {deviceName && (
+                  <p>
+                    <strong>Unit:</strong> {deviceName}
+                    {deviceCatalog && ` (SKU ${deviceCatalog.sku}, katalog Accurate)`}
+                  </p>
+                )}
+                <p><strong>Case:</strong> <span className="capitalize">{ticketType.replace(/_/g, " ")}</span></p>
+                {ticketType === "cleaning" && <p><strong>Package:</strong> {cleaningPackage.replace(/_/g, " ")}</p>}
+                {ticketType === "service" && <p><strong>Problem:</strong> {notes}</p>}
+                {conditions.length > 0 && <p><strong>Condition:</strong> {conditions.join(", ")}</p>}
+                {(selectedAccessories.length > 0 || customAccessory) && (
+                  <p><strong>Accessories:</strong> {[...selectedAccessories, customAccessory].filter(Boolean).join(", ")}</p>
+                )}
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="flex min-h-11 cursor-pointer items-center gap-3">
+                  <input
+                    type="checkbox"
+                    checked={termsAccepted}
+                    onChange={e => setTermsAccepted(e.target.checked)}
+                    aria-invalid={errors.termsAccepted ? true : undefined}
+                    className="size-5 shrink-0 accent-primary"
+                  />
+                  <span className="text-sm font-medium text-foreground">I confirm the details above are accurate.</span>
+                </label>
+                {errors.termsAccepted && <p role="alert" className="text-sm text-destructive">{errors.termsAccepted}</p>}
+              </div>
+            </div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div className="flex justify-between gap-3 border-t border-border pt-5">
+            {step > 1 ? (
+              <Button type="button" variant="outline" onClick={back} disabled={isPending} className="h-11 bg-card md:h-9">
+                <ChevronLeft aria-hidden="true" /> Back
+              </Button>
+            ) : <div />}
+
+            {step < STEPS.length ? (
+              <Button type="button" onClick={next} className="h-11 md:h-9">
+                Next <ChevronRight aria-hidden="true" />
+              </Button>
+            ) : (
+              <Button type="button" onClick={submit} disabled={isPending} className="h-11 md:h-9">
+                {isPending ? "Creating..." : "Create Ticket"}
+                {isPending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Check aria-hidden="true" />}
+              </Button>
+            )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

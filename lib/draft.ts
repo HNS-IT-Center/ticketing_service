@@ -1,4 +1,4 @@
-import { useState, useEffect, useSyncExternalStore } from "react";
+import { createContext, createElement, useContext, useState, useEffect, useSyncExternalStore, type ReactNode } from "react";
 
 /**
  * Unsent form input, kept in the browser so it survives a reload.
@@ -19,6 +19,35 @@ const CHANGE_EVENT = "hns-draft-change";
 export const DRAFT_MAX_AGE_MS = 3 * 24 * 60 * 60 * 1000;
 
 export type Draft<T> = { savedAt: number; data: T };
+
+/**
+ * Whose drafts these are. A shop computer is shared: without this, the next
+ * person to sign in on it was offered the previous one's unsent form — a
+ * customer's name and phone number on the create form. The dashboard shell
+ * provides the signed-in account; `useDraftKey` puts it in every key.
+ */
+const DraftScope = createContext<string>("");
+
+export function DraftScopeProvider({ userId, children }: { userId: string; children: ReactNode }) {
+  // Drafts saved before keys carried the account (2026-10-27) are read by no
+  // form any more, but could still hold a customer's details for three days.
+  useEffect(() => {
+    try {
+      for (const key of Object.keys(window.localStorage)) {
+        if (key.startsWith(PREFIX) && !key.startsWith(`${PREFIX}u:`)) window.localStorage.removeItem(key);
+      }
+    } catch {
+      /* storage unavailable — nothing to clear */
+    }
+  }, []);
+  return createElement(DraftScope.Provider, { value: userId }, children);
+}
+
+/** `key`, private to the signed-in account. */
+export function useDraftKey(key: string): string {
+  const scope = useContext(DraftScope);
+  return scope ? `u:${scope}:${key}` : key;
+}
 
 /**
  * Pure: parse a stored value, or null when absent, corrupt or — when `now` is
@@ -44,6 +73,14 @@ function readRaw(key: string): string | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * The draft stored under `key`, read once — for a form that restores itself
+ * on opening rather than offering to. Client only.
+ */
+export function readDraft<T>(key: string): T | null {
+  return parseDraft<T>(readRaw(key))?.data ?? null;
 }
 
 export function clearDraft(key: string): void {

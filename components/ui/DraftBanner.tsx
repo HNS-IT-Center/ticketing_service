@@ -29,8 +29,9 @@ export default function DraftBanner({
 
   return (
     <div
-      className="flex flex-col gap-3 rounded-lg border p-4"
-      style={{ borderColor: "#bfdbfe", background: "#eff6ff" }}
+      className="flex flex-col gap-3 rounded-lg border"
+      // Padding inline: Tailwind's p-* is dead here (globals.css resets it unlayered).
+      style={{ borderColor: "#bfdbfe", background: "#eff6ff", padding: "0.875rem 1rem" }}
     >
       <div className="flex items-start gap-2">
         <History size={18} style={{ color: "#1d4ed8", flexShrink: 0, marginTop: 2 }} />

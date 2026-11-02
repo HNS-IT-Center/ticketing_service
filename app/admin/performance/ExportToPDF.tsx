@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { FileDown, X, Printer } from "lucide-react";
+import { FileDown, Printer } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 
 interface Row {
   id: string;
@@ -314,51 +316,41 @@ export default function ExportToPDF({ rows, filterMonth, filterYear, monthLabel,
     setOpen(false);
   };
 
+  // Only the dialog around the export is styled here; the report HTML above
+  // is written into its own print window and keeps its own styles.
   return (
-    <>
-      <button className="btn btn-secondary btn-sm" onClick={() => setOpen(true)}>
-        <FileDown size={15} />
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger render={<Button variant="outline" className="bg-card" />}>
+        <FileDown aria-hidden="true" />
         Export PDF
-      </button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[380px]">
+        <DialogHeader>
+          <DialogTitle className="text-lg font-semibold">Export Performance Report</DialogTitle>
+          <DialogDescription>Choose period for the PDF report</DialogDescription>
+        </DialogHeader>
 
-      {open && (
-        <div className="modal-overlay" onClick={() => setOpen(false)}>
-          <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: "380px" }}>
-            <div className="modal-header">
-              <div>
-                <h3 className="modal-title">Export Performance Report</h3>
-                <p style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                  Choose period for the PDF report
-                </p>
-              </div>
-              <button className="modal-close" onClick={() => setOpen(false)}><X size={18}/></button>
-            </div>
-
-            <div style={{ display: "flex", flexDirection: "column", gap: "1.25rem" }}>
-              <div style={{ padding: "1rem", background: "var(--bg-light)", borderRadius: "var(--radius-md)", border: "1px solid var(--border)" }}>
-                <div style={{ fontSize: "0.75rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "0.5rem" }}>Current Selection</div>
-                <div style={{ fontSize: "1.25rem", fontWeight: 700, color: "var(--primary)" }}>
-                  {monthLabel === "All Time" ? "All Time Report" : `Report for ${monthLabel}`}
-                </div>
-                <div style={{ fontSize: "0.875rem", color: "var(--text-muted)", marginTop: "0.25rem" }}>
-                  Includes {rows.length} technicians and {rows.reduce((a, r) => a + r.tickets, 0)} tickets.
-                </div>
-              </div>
-
-              <div style={{ padding: "0.75rem", background: "var(--cream)", borderRadius: "var(--radius-md)", fontSize: "0.8125rem", color: "var(--text-muted)" }}>
-                💡 The PDF will be generated exactly as shown on the performance dashboard. Ensure your filters are correct before exporting.
-              </div>
-
-              <div style={{ display: "flex", gap: "0.75rem" }}>
-                <button className="btn btn-ghost btn-sm" onClick={() => setOpen(false)} style={{ flex: 1 }}>Cancel</button>
-                <button className="btn btn-primary btn-sm" onClick={handlePrint} style={{ flex: 2 }}>
-                  <Printer size={14} /> Generate & Open PDF
-                </button>
-              </div>
-            </div>
+        <div className="rounded-lg border border-border bg-muted/50 p-4">
+          <div className="mb-2 text-xs tracking-wide text-muted-foreground uppercase">Current Selection</div>
+          <div className="text-xl font-bold text-primary">
+            {monthLabel === "All Time" ? "All Time Report" : `Report for ${monthLabel}`}
+          </div>
+          <div className="mt-1 text-sm text-muted-foreground">
+            Includes {rows.length} technicians and {rows.reduce((a, r) => a + r.tickets, 0)} tickets.
           </div>
         </div>
-      )}
-    </>
+
+        <p className="rounded-lg bg-muted p-3 text-[0.8125rem] text-muted-foreground">
+          💡 The PDF will be generated exactly as shown on the performance dashboard. Ensure your filters are correct before exporting.
+        </p>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={handlePrint}>
+            <Printer aria-hidden="true" /> Generate &amp; Open PDF
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

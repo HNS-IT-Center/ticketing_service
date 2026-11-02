@@ -1,7 +1,11 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
-import { Plus, Store, Users, ToggleLeft, ToggleRight } from "lucide-react";
+import { Plus, Store, Ticket, Users } from "lucide-react";
+import { EmptyState } from "@/components/app/EmptyState";
+import { PageHeader } from "@/components/app/PageHeader";
+import { buttonVariants } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Store Locations — HNS IT Center" };
 
@@ -16,73 +20,78 @@ export default async function StoresPage() {
   });
 
   return (
-    <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900">Store Locations</h1>
-          <p className="text-gray-500 text-sm mt-1">Manage operational store locations and technician assignments</p>
-        </div>
-        <Link
-          href="/admin/stores/create"
-          className="btn btn-primary"
-        >
-          <Plus size={16} />
-          Add Store
-        </Link>
-      </div>
+    // Built from components/app and shadcn only, so the page opts into
+    // Tailwind spacing with a data-slot (the UI-1 reset rule).
+    <div data-slot="admin-stores" className="flex flex-col gap-6">
+      <PageHeader
+        title="Store Locations"
+        description="Manage operational store locations and technician assignments"
+        actions={
+          <Link href="/admin/stores/create" className={buttonVariants()}>
+            <Plus aria-hidden="true" /> Add Store
+          </Link>
+        }
+      />
 
       {stores.length === 0 ? (
-        <div className="card text-center py-16">
-          <Store size={48} className="mx-auto text-gray-300 mb-4" />
-          <p className="text-gray-500 font-medium">No stores yet</p>
-          <p className="text-gray-400 text-sm mt-1">Add your first store location to get started.</p>
-          <Link href="/admin/stores/create" className="inline-block mt-4 text-indigo-600 font-medium text-sm hover:underline">
-            + Add Store
-          </Link>
-        </div>
+        <EmptyState
+          icon={Store}
+          title="No stores yet"
+          description="Add your first store location to get started."
+          action={
+            <Link href="/admin/stores/create" className={buttonVariants({ variant: "outline" })}>
+              <Plus aria-hidden="true" /> Add Store
+            </Link>
+          }
+        />
       ) : (
-        <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {stores.map((store) => (
-            <Link
-              key={store.id}
-              href={`/admin/stores/${store.id}`}
-              className="card hover:shadow-md transition-shadow flex flex-col h-full"
-            >
-              <div className="flex items-start justify-between mb-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center">
-                    <Store size={20} className="text-indigo-600" />
-                  </div>
-                  <div>
-                    <div className="font-bold text-gray-900 text-lg">{store.name}</div>
-                    <div className="badge bg-[var(--cream-dark)] text-[var(--text-secondary)] mt-1">
-                      {store.code}
+            <li key={store.id}>
+              <Link
+                href={`/admin/stores/${store.id}`}
+                className="flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xs outline-none transition-shadow hover:border-primary/40 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-secondary text-primary">
+                      <Store aria-hidden="true" className="size-5" />
+                    </span>
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <span className="truncate text-lg font-bold text-foreground">{store.name}</span>
+                      <span className="w-fit rounded-full bg-muted px-2 py-0.5 font-mono text-xs font-semibold text-muted-foreground">
+                        {store.code}
+                      </span>
                     </div>
                   </div>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full border px-2.5 py-0.5 text-xs font-semibold",
+                      store.is_active
+                        ? "border-tone-green-border bg-tone-green-bg text-tone-green-fg"
+                        : "border-tone-red-border bg-tone-red-bg text-tone-red-fg",
+                    )}
+                  >
+                    {store.is_active ? "Active" : "Inactive"}
+                  </span>
                 </div>
-                <span className={`badge ${store.is_active ? "badge-done" : "badge-cancelled"}`}>
-                  {store.is_active ? "Active" : "Inactive"}
-                </span>
-              </div>
 
-              {store.address && (
-                <p className="text-sm text-gray-500 mb-4 line-clamp-1">{store.address}</p>
-              )}
+                {store.address && <p className="line-clamp-1 text-sm text-muted-foreground">{store.address}</p>}
 
-              <div className="flex-1"></div>
-              <div className="flex gap-4 mt-6 border-t border-gray-100 text-sm text-gray-600 pt-4">
-                <span className="flex items-center gap-1.5">
-                  <Users size={14} className="text-gray-400" />
-                  {store._count.technician_stores} technician{store._count.technician_stores !== 1 ? "s" : ""}
-                </span>
-                <span className="flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400"><path d="M15 5.88 14 10h5.83a2 2 0 0 1 1.92 2.56l-2.33 8A2 2 0 0 1 17.5 22H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2h2.76a2 2 0 0 0 1.79-1.11L12 2h0a3.13 3.13 0 0 1 3 3.88Z"/></svg>
-                  {store._count.tickets} ticket{store._count.tickets !== 1 ? "s" : ""}
-                </span>
-              </div>
-            </Link>
+                <div className="mt-auto flex gap-4 border-t border-border pt-4 text-sm text-muted-foreground">
+                  <span className="flex items-center gap-1.5">
+                    <Users aria-hidden="true" className="size-3.5" />
+                    {store._count.technician_stores} technician{store._count.technician_stores !== 1 ? "s" : ""}
+                  </span>
+                  <span className="flex items-center gap-1.5">
+                    <Ticket aria-hidden="true" className="size-3.5" />
+                    {store._count.tickets} ticket{store._count.tickets !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              </Link>
+            </li>
           ))}
-        </div>
+        </ul>
       )}
     </div>
   );

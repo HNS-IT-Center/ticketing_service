@@ -3,6 +3,8 @@ import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import bcrypt from "bcryptjs";
 import { config } from "dotenv";
 import { mariadbPoolConfig, MARIADB_ADAPTER_OPTIONS } from "../lib/mariadb";
+import { importClaimVendors } from "../lib/vendor-import";
+import { CLAIM_VENDORS } from "./data/claim-vendors";
 
 config({ path: ".env.local" });
 
@@ -122,6 +124,12 @@ async function main() {
     });
   }
   console.log("✅ Upgrades seeded");
+
+  // ─── Claim vendors ─────────────────────────────────────────────────────
+  // The same loader as `npm run import:vendors`, which is the one to use on a
+  // shared database.
+  const vendors = await importClaimVendors(db, CLAIM_VENDORS, { apply: true });
+  console.log(`✅ Claim vendors: ${vendors.create.length} added, ${vendors.update.length} updated`);
 
   console.log("\n🎉 Seed complete! Login credentials:");
   console.log("  Admin:      admin@techserve.id    / admin123");

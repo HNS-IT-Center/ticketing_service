@@ -211,6 +211,8 @@ export function vendorMismatchMessage(kind: ChargeKind): string {
 export type ChargePermissions = {
   /** May change this ticket's bill at all. */
   canEdit: boolean;
+  /** May give a part typed by hand its Accurate code — `mayLinkPartCode`. */
+  canLinkPartCode: boolean;
   canEditPrice: boolean;
   canEditCost: boolean;
   canViewCost: boolean;
@@ -240,6 +242,9 @@ export type ChargeRow = {
   /** What this part usually sells for, from past bills — given only to whoever sets prices. */
   price_reference?: PriceReference | null;
   is_part: boolean;
+  /** A part line's category and the name as typed, for editing them before it has a code. */
+  part?: ServicePart | null;
+  part_item_name?: string | null;
   sent_at: string | null;
   returned_at: string | null;
   external_result: ExternalResult | null;
@@ -289,4 +294,18 @@ export function mayEditCharges(input: {
   if (audiences.includes("technician") && ticket.technician_id === userId) return true;
   if (audiences.includes("sales") && ticket.sales_id === userId) return true;
   return false;
+}
+
+/**
+ * Whether this person may give a part typed by hand its Accurate code, once
+ * the item has been received there. Receiving often lags the repair, so the
+ * code can arrive after the customer has collected the unit.
+ *
+ * Whoever may change the bill, plus the technician holding the ticket at any
+ * status: the code changes no amount, and that technician knows which item
+ * was fitted.
+ */
+export function mayLinkPartCode(input: Parameters<typeof mayEditCharges>[0]): boolean {
+  const { userId, audiences, ticket } = input;
+  return mayEditCharges(input) || (audiences.includes("technician") && ticket.technician_id === userId);
 }

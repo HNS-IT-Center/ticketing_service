@@ -93,7 +93,14 @@ export function rankCatalogDemand(rows: readonly PartReportRow[]): DemandRow[] {
     .sort((a, b) => b.uses - a.uses || b.quantity - a.quantity || a.name.localeCompare(b.name, "id"));
 }
 
-export type OutsideRow = { part: string; name: string; uses: number; quantity: number };
+export type OutsideRow = {
+  part: string;
+  name: string;
+  uses: number;
+  quantity: number;
+  /** Where it was fitted, newest first: the tickets still waiting for a code. */
+  tickets: { id: string; code: string }[];
+};
 
 /**
  * Parts typed by hand because the catalogue did not hold them, grouped by
@@ -106,9 +113,10 @@ export function outsideCatalog(rows: readonly PartReportRow[]): OutsideRow[] {
     if (r.sku) continue;
     const typed = r.itemName?.replace(/\s+/g, " ").trim() || "(tanpa nama barang)";
     const key = `${r.part}:${typed.toLowerCase()}`;
-    const row = map.get(key) ?? { part: r.part, name: typed, uses: 0, quantity: 0, spellings: new Map<string, number>() };
+    const row = map.get(key) ?? { part: r.part, name: typed, uses: 0, quantity: 0, tickets: [], spellings: new Map<string, number>() };
     row.uses += 1;
     row.quantity += r.quantity;
+    if (!row.tickets.some((t) => t.id === r.ticketId)) row.tickets.push({ id: r.ticketId, code: r.ticketCode });
     row.spellings.set(typed, (row.spellings.get(typed) ?? 0) + 1);
     map.set(key, row);
   }

@@ -11,7 +11,8 @@ import { nextStoreTicketCode, isTicketCodeCollision } from "@/lib/ticket-code";
 import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { sendTicketStatusEmail } from "@/lib/email";
-import { ticketsListHrefForRoleName } from "@/lib/routes";
+import { publicTicketPath, ticketsListHrefForRoleName } from "@/lib/routes";
+import { newPublicShortCode } from "@/lib/short-code";
 import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
 import type { CatalogItem } from "@/lib/catalog/items";
@@ -195,6 +196,7 @@ export async function createTicketAction(formData: FormData) {
   const ticket_code = await allocateCode();
 
   const public_share_token = randomBytes(24).toString("hex");
+  const public_short_code = newPublicShortCode();
 
   // ── Handle attachments FIRST ──
   // Support two modes:
@@ -285,6 +287,7 @@ export async function createTicketAction(formData: FormData) {
       terms_accepted,
       technician_notes,
       public_share_token,
+      public_short_code,
   };
 
   let ticket: { id: string; public_share_token: string | null } | null = null;
@@ -423,7 +426,7 @@ export async function createTicketAction(formData: FormData) {
       customerName: customer_name || "Customer",
       ticketCode: ticket_code,
       status: "waiting",
-      shareToken: public_share_token,
+      ticketPath: publicTicketPath(new Date(), public_share_token, public_short_code),
       appUrl,
     }).catch((err) => console.error("[EMAIL CREATE ERROR]", err));
   }

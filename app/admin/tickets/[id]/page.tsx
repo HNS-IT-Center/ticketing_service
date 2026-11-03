@@ -236,7 +236,7 @@ export default async function AdminTicketDetailPage({
             {ticket.public_share_token && (
               <>
                 <Link
-                  href={publicTicketPath(ticket.created_at, ticket.public_share_token) ?? "#"}
+                  href={publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code) ?? "#"}
                   target="_blank"
                   className="flex items-center gap-1.5 text-sm font-medium text-indigo-600 hover:text-indigo-700 transition-colors bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100"
                 >
@@ -299,7 +299,7 @@ export default async function AdminTicketDetailPage({
               customerName={(ticketPartyName(ticket)) || "Customer"}
               ticketCode={ticket.ticket_code}
               status={ticket.status}
-              publicLink={publicTicketPath(ticket.created_at, ticket.public_share_token)?.slice(1) ?? null}
+              publicLink={publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code)?.slice(1) ?? null}
             />
           </div>
 

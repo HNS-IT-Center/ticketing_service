@@ -43,7 +43,8 @@ export async function sendTicketStatusEmail(opts: {
   customerName: string;
   ticketCode: string;
   status: string;
-  shareToken?: string | null;
+  /** The public ticket page, from `publicTicketPath` — e.g. "/t/Kx7pQ2mZ9aBc". */
+  ticketPath?: string | null;
   message?: string | null;
   appUrl?: string;
 }): Promise<void> {
@@ -58,9 +59,10 @@ export async function sendTicketStatusEmail(opts: {
 
   const statusLabel = STATUS_LABELS[opts.status] ?? opts.status;
   const baseUrl = opts.appUrl ?? APP_URL;
-  const ticketUrl = opts.shareToken
-    ? `${baseUrl}/ticket/${opts.shareToken}`
-    : null;
+  // Built by the caller with publicTicketPath. This used to be
+  // `/ticket/${token}`, a route that has never existed, so the link in every
+  // status email led to a 404.
+  const ticketUrl = opts.ticketPath ? `${baseUrl}${opts.ticketPath}` : null;
 
   const html = buildStatusEmailHtml({
     customerName: opts.customerName,

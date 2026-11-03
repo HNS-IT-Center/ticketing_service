@@ -6,6 +6,7 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireRole, requireSession } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
+import { publicTicketPath } from "@/lib/routes";
 import {
   EARNING_STATUS_LOG_FILTER,
   PERFORMANCE_FAILURE_STATUSES,
@@ -406,7 +407,7 @@ export async function adminUpdateTicketStatusAction(
       customerName: ticket.customer_name || "Customer",
       ticketCode: ticket.ticket_code,
       status: newStatus,
-      shareToken: ticket.public_share_token,
+      ticketPath: publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code),
     }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
   }
 

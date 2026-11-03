@@ -321,7 +321,10 @@ model Ticket {
 
   // Public access
   public_chat_enabled Boolean @default(false)
-  public_share_token  String? @unique    // secure token for /ticket/[token] public page
+  public_share_token  String? @unique    // secure token for the /[date]/[token] public page
+  // Short public link, /t/[code]: 12 random base62 characters for new tickets,
+  // 16 url-safe base64 ones backfilled by the migration for older tickets.
+  public_short_code   String? @unique @db.VarChar(16)
 
   // Performance tracking timestamps
   work_started_at   DateTime?  // set when technician moves to on_progress

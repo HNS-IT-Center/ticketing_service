@@ -62,9 +62,15 @@ export function TicketHeader({
   warrantyStatus,
   actions,
   publicHref,
+  codeTag,
+  meta,
 }: {
   code: string;
   badge: React.ReactNode;
+  /** Beside the badge, e.g. the store code. */
+  codeTag?: React.ReactNode;
+  /** Muted lines under the unit, e.g. the store and when it was created. */
+  meta?: React.ReactNode;
   /** "Service • Laptop Office". */
   subtitle: string;
   deviceName?: string | null;
@@ -83,6 +89,7 @@ export function TicketHeader({
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="font-mono text-xl font-bold tracking-tight text-foreground md:text-2xl">{code}</h1>
           {badge}
+          {codeTag}
         </div>
         <p className="text-muted-foreground capitalize">{subtitle}</p>
         {deviceName && (
@@ -102,22 +109,31 @@ export function TicketHeader({
             ))}
           </div>
         )}
+        {meta}
       </div>
       {(actions || publicHref) && (
         <div className="flex flex-col items-stretch gap-3 md:items-end">
           {actions}
-          {publicHref && (
-            <Link
-              href={publicHref}
-              target="_blank"
-              className="inline-flex min-h-11 items-center justify-center gap-1.5 self-start rounded-lg border border-tone-blue-border bg-tone-blue-bg px-3 text-sm font-medium text-tone-blue-fg transition-colors outline-none hover:brightness-95 focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-9 md:self-end"
-            >
-              <Link2 aria-hidden="true" className="size-4" /> Public Link
-            </Link>
-          )}
+          {publicHref && <PublicLink href={publicHref} className="self-start md:self-end" />}
         </div>
       )}
     </div>
+  );
+}
+
+/** The link to the customer-facing status page, opened in a new tab. */
+export function PublicLink({ href, className }: { href: string; className?: string }) {
+  return (
+    <Link
+      href={href}
+      target="_blank"
+      className={cn(
+        "inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-tone-blue-border bg-tone-blue-bg px-3 text-sm font-medium text-tone-blue-fg transition-colors outline-none hover:brightness-95 focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-9",
+        className,
+      )}
+    >
+      <Link2 aria-hidden="true" className="size-4" /> Public Link
+    </Link>
   );
 }
 

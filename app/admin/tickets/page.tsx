@@ -1,6 +1,5 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
@@ -10,9 +9,9 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { ADMIN_TICKET_FILTERS, ticketListWhere } from "@/lib/ticket-list-filter";
+import { ADMIN_TICKET_FILTERS, ticketListOrderBy, ticketListWhere, ticketSearchWhere } from "@/lib/ticket-list-filter";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
-import { Plus, Ticket } from "lucide-react";
+import { FileSpreadsheet, Plus, Ticket } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
 
 export const metadata = { title: "All Tickets — HNS IT Center" };
@@ -36,23 +35,9 @@ export default async function AdminTicketsPage({
     // Chip → filter lives in lib/ticket-list-filter.ts so the admin and
     // technician lists cannot offer the same chip and mean different things.
     ...ticketListWhere(statusFilter),
-    ...(query
-      ? {
-          OR: [
-            { ticket_code: { contains: query } },
-            { user: { name: { contains: query } } },
-            { customer_name: { contains: query } },
-          ],
-        }
-      : {}),
+    ...ticketSearchWhere(query),
   };
-
-  let orderBy: Prisma.TicketOrderByWithRelationInput = { created_at: "desc" };
-  if (sortParam === "created_asc") orderBy = { created_at: "asc" };
-  else if (sortParam === "status_asc") orderBy = { status: "asc" };
-  else if (sortParam === "status_desc") orderBy = { status: "desc" };
-  else if (sortParam === "code_asc") orderBy = { ticket_code: "asc" };
-  else if (sortParam === "code_desc") orderBy = { ticket_code: "desc" };
+  const orderBy = ticketListOrderBy(sortParam);
 
   const [tickets, totalCount] = await Promise.all([
     db.ticket.findMany({
@@ -152,6 +137,13 @@ export default async function AdminTicketsPage({
     },
   ];
 
+  // The export carries the same filter, search and sort as the list, all pages.
+  const exportQs = new URLSearchParams();
+  if (statusFilter !== "all") exportQs.set("status", statusFilter);
+  if (query) exportQs.set("q", query);
+  if (sortParam !== "created_desc") exportQs.set("sort", sortParam);
+  const exportHref = `/admin/tickets/export${exportQs.size ? `?${exportQs}` : ""}`;
+
   const chips = ADMIN_TICKET_FILTERS.map(({ key: s, label }) => {
     const qs = new URLSearchParams();
     if (s !== "all") qs.set("status", s);
@@ -169,9 +161,22 @@ export default async function AdminTicketsPage({
         title="All Tickets"
         description={`${totalCount} ticket${totalCount !== 1 ? "s" : ""}`}
         actions={
-          <Link href="/admin/tickets/create" className={buttonVariants()}>
-            <Plus aria-hidden="true" /> New Ticket
-          </Link>
+          <>
+            {session.role === "Administrator" && (
+              // A plain <a>: a file download, not a page for the router to prefetch.
+              <a
+                href={exportHref}
+                download
+                className={buttonVariants({ variant: "outline" })}
+                title="Semua tiket yang cocok dengan filter dan pencarian ini, bukan hanya halaman ini"
+              >
+                <FileSpreadsheet aria-hidden="true" /> Export Excel
+              </a>
+            )}
+            <Link href="/admin/tickets/create" className={buttonVariants()}>
+              <Plus aria-hidden="true" /> New Ticket
+            </Link>
+          </>
         }
       />
 

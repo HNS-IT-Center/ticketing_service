@@ -142,7 +142,8 @@ export default function ChargesPanel({
   };
 
   return (
-    <div className="card flex flex-col gap-4">
+    // `#rincian-biaya` is where the "kode Accurate" reminders link to.
+    <div id="rincian-biaya" className="card flex flex-col gap-4" style={{ scrollMarginTop: "5rem" }}>
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <Receipt size={16} style={{ color: "var(--primary-brand)" }} />

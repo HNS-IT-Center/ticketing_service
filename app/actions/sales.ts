@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
+import { logActivity } from "@/lib/activity";
 
 /** Sanitize a filename: strip extension, replace unsafe chars with dash */
 function sanitizeName(name: string): string {
@@ -69,6 +70,11 @@ export async function uploadFirstBuildAction(formData: FormData) {
       }),
     ]);
 
+    await logActivity(session, "ticket.build_upload", "Mengunggah foto rakitan pertama PC.", {
+      type: "ticket",
+      id: ticketId,
+      label: ticket.ticket_code,
+    });
     revalidatePath(`/admin/tickets/${ticketId}`);
     revalidatePath(`/technician/tickets/${ticketId}`);
     return { success: true };
@@ -147,6 +153,11 @@ export async function uploadRevisionBuildAction(formData: FormData) {
       }),
     ]);
 
+    await logActivity(session, "ticket.build_upload", `Mengunggah revisi rakitan PC #${revisionNumber}.`, {
+      type: "ticket",
+      id: ticketId,
+      label: ticket.ticket_code,
+    });
     revalidatePath(`/admin/tickets/${ticketId}`);
     revalidatePath(`/technician/tickets/${ticketId}`);
     return { success: true, revisionNumber };

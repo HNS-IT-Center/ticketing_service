@@ -2,7 +2,7 @@ import Link from "next/link";
 import { requireRole } from "@/lib/session";
 import { getRmaQueue, RMA_STAGE_SLA, VENDOR_OVERDUE_DAYS } from "@/lib/rma/queue";
 import AttentionCard from "./AttentionCard";
-import { RMA_DECISION_LABELS } from "@/components/rma/RmaStatusCard";
+import { rmaDecisionLabel } from "@/lib/rma/decision";
 import { AlertTriangle, Clock, Factory, CheckCircle2, ListChecks, History, CheckCircle, UserX, Timer, ChevronDown } from "lucide-react";
 import { EmptyState } from "@/components/app/EmptyState";
 import { PageHeader } from "@/components/app/PageHeader";
@@ -226,7 +226,7 @@ export default async function RmaDashboardPage() {
                       : "border-border bg-muted",
                   )}
                 >
-                  {RMA_DECISION_LABELS[decision] ?? decision}
+                  {rmaDecisionLabel(decision)}
                   <strong>{count}</strong>
                 </span>
               ))}

@@ -72,3 +72,36 @@ export function ticketListWhere(filter: string): Prisma.TicketWhereInput {
   // `all`, and anything unrecognised that arrived in the query string.
   return {};
 }
+
+/**
+ * The search box on the All Tickets list: code, account name or customer name.
+ * The spreadsheet export reads the same function, so it exports what is listed.
+ */
+export function ticketSearchWhere(query: string): Prisma.TicketWhereInput {
+  if (!query) return {};
+  return {
+    OR: [
+      { ticket_code: { contains: query } },
+      { user: { name: { contains: query } } },
+      { customer_name: { contains: query } },
+    ],
+  };
+}
+
+/** The All Tickets sort keys; anything unrecognised is newest first. */
+export function ticketListOrderBy(sort: string): Prisma.TicketOrderByWithRelationInput {
+  switch (sort) {
+    case "created_asc":
+      return { created_at: "asc" };
+    case "status_asc":
+      return { status: "asc" };
+    case "status_desc":
+      return { status: "desc" };
+    case "code_asc":
+      return { ticket_code: "asc" };
+    case "code_desc":
+      return { ticket_code: "desc" };
+    default:
+      return { created_at: "desc" };
+  }
+}

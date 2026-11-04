@@ -22,6 +22,8 @@ import { ticketPartyName } from "@/lib/ticket-party";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 import ChargesPanel from "@/components/service/ChargesPanel";
 import { loadChargesPanel } from "@/lib/charges-server";
+import PartCodePendingBanner from "@/components/service/PartCodePendingBanner";
+import { partsAwaitingCodeCount } from "@/lib/part-code-alerts";
 import { PcComponentsCard, UpgradesCard } from "@/components/tickets/IntakeItems";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
@@ -263,6 +265,12 @@ export default async function TechnicianTicketDetailPage({
 
         </div>
       </div>
+
+      {/* Service finished, a fitted part still without its Accurate code. */}
+      <PartCodePendingBanner
+        count={partsAwaitingCodeCount(ticket)}
+        canLink={Boolean(chargesPanel?.perms.canLinkPartCode && chargesPanel.catalogEnabled)}
+      />
 
       <div className="ticket-detail-grid">
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>

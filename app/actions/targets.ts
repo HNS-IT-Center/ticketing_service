@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { monthRange } from "@/lib/reports/parts";
 import { DEFAULT_SCOPE, readTargetForm } from "@/lib/reports/targets";
+import { logActivity } from "@/lib/activity";
 
 /**
  * Set a monthly target, from the month on screen onward.
@@ -41,6 +42,19 @@ export async function saveTargetAction(formData: FormData) {
     create: { scope, effective_month: month, ...values, use_default: useDefault, updated_by_id: session.userId },
     update: { ...values, use_default: useDefault, updated_by_id: session.userId },
   });
+
+  const who =
+    scope === DEFAULT_SCOPE
+      ? "target bawaan"
+      : `target ${(await db.user.findUnique({ where: { id: scope }, select: { name: true } }))?.name ?? "teknisi"}`;
+  await logActivity(
+    session,
+    "target.update",
+    useDefault
+      ? `Mengembalikan ${who} ${month} ke target bawaan.`
+      : `Mengubah ${who} mulai ${month}: ${values.jobs ?? "—"} jasa, omzet ${values.revenue ?? "—"}, ${values.points ?? "—"} poin.`,
+    { type: "target", label: month },
+  );
 
   revalidatePath("/admin/reports/technicians");
   revalidatePath("/technician/dashboard");

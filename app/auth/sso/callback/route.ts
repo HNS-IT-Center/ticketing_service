@@ -8,6 +8,7 @@ import { createSsoSession } from "@/lib/sso/sso-session";
 import { appUrl } from "@/lib/sso/urls";
 import { canEnter, destinationForRoleName, DENIED_DESTINATION } from "@/lib/routes";
 import { encrypt, SESSION_COOKIE, sessionCookieOptions } from "@/lib/session-token";
+import { logActivity } from "@/lib/activity";
 
 /** Constant-time string comparison, as the spec asks for the state check. */
 function sameSecret(a: string | null, b: string): boolean {
@@ -98,6 +99,12 @@ export async function GET(request: NextRequest) {
     sid: typeof claims.sid === "string" ? claims.sid : null,
     tokens,
   });
+
+  await logActivity(
+    { userId: result.user.id, name: result.user.name, role: result.user.role },
+    "auth.login",
+    "Masuk lewat SSO HNS.",
+  );
 
   const destination = destinationForRoleName(result.user.role);
   const target = !destination.allowed

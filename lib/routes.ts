@@ -157,7 +157,15 @@ export function ticketsListHrefForRoleName(role: string): string {
  * portals, and all six are also what goes into the WhatsApp message sent to the
  * customer.
  */
-export function publicTicketPath(createdAt: Date, shareToken: string | null): string | null {
+export function publicTicketPath(
+  createdAt: Date,
+  shareToken: string | null,
+  shortCode?: string | null,
+): string | null {
+  // With a short code (every ticket since the 2026-11-03 migration) the link
+  // is /t/[code], about half the length in a WhatsApp message. The long form
+  // keeps working for the links customers already have.
+  if (shortCode) return `/t/${shortCode}`;
   if (!shareToken) return null;
   return `/${createdAt.toISOString().split("T")[0]}/${shareToken}`;
 }
@@ -176,8 +184,11 @@ export function publicTicketPath(createdAt: Date, shareToken: string | null): st
  */
 const PUBLIC_TICKET_PATH = /^\/\d{4}-\d{2}-\d{2}\/[A-Za-z0-9_-]+\/?$/;
 
+/** The short form, /t/[code]: one code segment of 8–32 url-safe characters. */
+const PUBLIC_TICKET_SHORT_PATH = /^\/t\/[A-Za-z0-9_-]{8,32}\/?$/;
+
 export function isPublicTicketPath(pathname: string): boolean {
-  return PUBLIC_TICKET_PATH.test(pathname);
+  return PUBLIC_TICKET_PATH.test(pathname) || PUBLIC_TICKET_SHORT_PATH.test(pathname);
 }
 
 // ── Where a notification about a ticket should link to ──────────────────────

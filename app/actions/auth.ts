@@ -13,6 +13,7 @@ import { decrypt, SESSION_COOKIE } from "@/lib/session-token";
 import { mayUsePassword } from "@/lib/auth/local-login";
 import { getSsoConfig, ssoEnv } from "@/lib/sso/config";
 import { revokeSsoSession } from "@/lib/sso/sso-session";
+import { logActivity } from "@/lib/activity";
 
 // ─── Schemas ───────────────────────────────────────────────────────────────
 
@@ -62,18 +63,27 @@ export async function loginAction(
     };
   }
 
+  // A failed attempt is logged under the account it named, or under the typed
+  // address when no account has it. The password never is.
+  const attempted = user
+    ? { userId: user.id, name: user.name, role: user.role }
+    : { userId: null, name: String(email), role: "—" };
+
   if (!user || !user.password) {
+    await logActivity(attempted, "auth.login_failed", user ? "Gagal masuk: akun ini tidak memakai password." : `Gagal masuk: email ${email} tidak terdaftar.`);
     return { message: "Invalid email or password", rememberMe };
   }
 
   const passwordMatch = await bcrypt.compare(password as string, user.password);
 
   if (!passwordMatch) {
+    await logActivity(attempted, "auth.login_failed", "Gagal masuk: password salah.");
     return { message: "Invalid email or password", rememberMe };
   }
 
   // Guard: deactivated accounts cannot log in
   if (!user.is_active) {
+    await logActivity(attempted, "auth.login_failed", "Gagal masuk: akun sudah dinonaktifkan.");
     return { message: "This account has been deactivated. Please contact an administrator.", rememberMe };
   }
 
@@ -105,6 +115,7 @@ export async function loginAction(
     await deleteSession();
     return { message: destination.reason, rememberMe };
   }
+  await logActivity(attempted, "auth.login", "Masuk dengan password.");
   redirect(destination.dashboard);
 }
 
@@ -123,6 +134,7 @@ export async function loginAction(
 export async function logoutAction(): Promise<void> {
   const cookieStore = await cookies();
   const payload = await decrypt(cookieStore.get(SESSION_COOKIE)?.value);
+  if (payload) await logActivity(payload, "auth.logout", "Keluar dari aplikasi.");
   await deleteSession();
   revalidatePath("/", "layout");
 

@@ -5,6 +5,8 @@ import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { storageFailedMessage } from "@/lib/upload-limit";
+import { logActivity } from "@/lib/activity";
+import { rmaStatusDisplay } from "@/lib/status-display";
 import { getTicketPoints } from "@/lib/points";
 import { cleanVendorName } from "@/lib/rma/vendor";
 import { RMA_HOLD_REASONS, holdReasonAsksTechnician, isRmaHoldReason } from "@/lib/rma/hold-reason";
@@ -422,6 +424,13 @@ export async function handoverToRmaAction(formData: FormData) {
     revalidatePath(`/sales/tickets/${ticketId}`);
     revalidatePath("/rma/dashboard");
 
+    await logActivity(
+      session,
+      "rma.handover",
+      `Menyerahkan klaim ${ticket.ticket_code} ke RMA sebagai ${created.rma_code}.`,
+      { type: "ticket", id: ticketId, label: ticket.ticket_code },
+    );
+
     // The handover is what puts the claim on the leaderboard, so the cached
     // scores are stale from this moment.
     revalidateTag("leaderboard-techs", "max");
@@ -811,6 +820,20 @@ export async function transitionRmaAction(formData: FormData) {
       }
     }
 
+    const extra = [
+      vendorName && `vendor ${vendorName}`,
+      holdReasonCode && `alasan: ${RMA_HOLD_REASONS[holdReasonCode].label}${input.hold_reason ? ` — ${input.hold_reason}` : ""}`,
+      input.ineligibility_reason && `alasan: ${input.ineligibility_reason}`,
+    ].filter(Boolean);
+    await logActivity(
+      session,
+      "rma.transition",
+      `${rmaCase.rma_code} (${rmaCase.ticket.ticket_code}): ${rmaStatusDisplay(fromStatus).label} → ${rmaStatusDisplay(toStatus).label}${
+        extra.length ? ` (${extra.join("; ")})` : ""
+      }.`,
+      { type: "rma_case", id: rmaCaseId, label: rmaCase.rma_code },
+    );
+
     revalidatePath(`/rma/cases/${rmaCaseId}`);
     revalidatePath("/rma/dashboard");
     revalidatePath(`/technician/tickets/${rmaCase.ticket_id}`);
@@ -961,6 +984,13 @@ export async function submitHoldEvidenceAction(formData: FormData) {
         })),
       });
     }
+
+    await logActivity(
+      session,
+      "rma.hold_evidence",
+      `Mengirim ${uploaded.length} berkas ${RMA_HOLD_REASONS[code].asksTechnicianFor} untuk ${rmaCase.rma_code}.`,
+      { type: "rma_case", id: rmaCase.id, label: rmaCase.rma_code },
+    );
 
     revalidatePath(`/technician/tickets/${ticketId}`);
     revalidatePath(`/admin/tickets/${ticketId}`);

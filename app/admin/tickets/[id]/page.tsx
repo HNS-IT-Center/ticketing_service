@@ -182,7 +182,7 @@ export default async function AdminTicketDetailPage({
       }))
   ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
-  const publicHref = ticket.public_share_token ? publicTicketPath(ticket.created_at, ticket.public_share_token) ?? "#" : null;
+  const publicHref = ticket.public_share_token ? publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code) ?? "#" : null;
   const customerPhone = ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone;
   const isAdmin = session.role === "Administrator";
 
@@ -255,7 +255,7 @@ export default async function AdminTicketDetailPage({
                   customerName={(ticketPartyName(ticket)) || "Customer"}
                   ticketCode={ticket.ticket_code}
                   status={ticket.status}
-                  publicLink={publicTicketPath(ticket.created_at, ticket.public_share_token)?.slice(1) ?? null}
+                  publicLink={publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code)?.slice(1) ?? null}
                 />
               }
             />

@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
+import { publicTicketPath } from "@/lib/routes";
 import { uploadToR2, getExt, getFileType, deleteFromStorage } from "@/lib/r2";
 import { storageFailedMessage } from "@/lib/upload-limit";
 import { performanceEffect } from "@/lib/kpi";
@@ -439,7 +440,7 @@ export async function updateTicketStatusAction(formData: FormData) {
 
     db.ticket.findUnique({
       where: { id: ticketId },
-      select: { customer_email: true, customer_name: true, public_share_token: true },
+      select: { customer_email: true, customer_name: true, public_share_token: true, public_short_code: true, created_at: true },
     }).then(async (fullTicket) => {
       if (!fullTicket?.customer_email) return;
 
@@ -454,7 +455,7 @@ export async function updateTicketStatusAction(formData: FormData) {
         customerName: fullTicket.customer_name || "Customer",
         ticketCode: ticket.ticket_code,
         status: newStatus,
-        shareToken: fullTicket.public_share_token,
+        ticketPath: publicTicketPath(fullTicket.created_at, fullTicket.public_share_token, fullTicket.public_short_code),
         appUrl
       }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
     }).catch(() => { });

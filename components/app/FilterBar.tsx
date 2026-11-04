@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { LiveSearchInput } from "@/components/app/LiveSearchInput";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -39,10 +39,7 @@ export function FilterBar({
   );
 }
 
-/**
- * A search box with a visible-to-screen-readers label and a leading icon. It
- * filters as you type (LiveSearchInput); Enter still submits the form.
- */
+/** A search box with a visible-to-screen-readers label and a leading icon. */
 export function FilterBarSearch({
   name = "q",
   label,
@@ -62,8 +59,15 @@ export function FilterBarSearch({
       <Label htmlFor={id} className="sr-only">
         {label}
       </Label>
-      <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 z-10 size-4 -translate-y-1/2 text-muted-foreground" />
-      <LiveSearchInput id={id} name={name} placeholder={placeholder} defaultValue={defaultValue} className="pl-9" />
+      <Search aria-hidden="true" className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+      <Input
+        id={id}
+        name={name}
+        type="search"
+        placeholder={placeholder}
+        defaultValue={defaultValue}
+        className="bg-card pl-9"
+      />
     </div>
   );
 }

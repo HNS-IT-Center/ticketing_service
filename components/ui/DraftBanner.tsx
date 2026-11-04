@@ -1,9 +1,6 @@
 "use client";
 
 import { History } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { TONE_CLASSES } from "@/lib/status-display";
-import { cn } from "@/lib/utils";
 
 /**
  * "You left something unfinished here — restore it?"
@@ -31,24 +28,30 @@ export default function DraftBanner({
   });
 
   return (
-    <div data-slot="draft-banner" role="status" className={cn("flex flex-col gap-3 rounded-lg border px-4 py-3.5", TONE_CLASSES.blue)}>
+    <div
+      className="flex flex-col gap-3 rounded-lg border"
+      // Padding inline: Tailwind's p-* is dead here (globals.css resets it unlayered).
+      style={{ borderColor: "#bfdbfe", background: "#eff6ff", padding: "0.875rem 1rem" }}
+    >
       <div className="flex items-start gap-2">
-        <History aria-hidden="true" className="mt-0.5 size-[18px] shrink-0" />
+        <History size={18} style={{ color: "#1d4ed8", flexShrink: 0, marginTop: 2 }} />
         <div className="flex flex-col gap-1">
-          <p className="text-sm font-semibold">Ada isian yang belum terkirim ({when})</p>
-          <p className="text-xs">
+          <p className="text-sm font-semibold" style={{ color: "#1e3a8a" }}>
+            Ada isian yang belum terkirim ({when})
+          </p>
+          <p className="text-xs" style={{ color: "#1e40af" }}>
             Pulihkan untuk melanjutkan dari yang terakhir diisi.
             {note ? ` ${note}` : ""}
           </p>
         </div>
       </div>
       <div className="flex gap-2">
-        <Button type="button" size="sm" onClick={onRestore}>
+        <button type="button" className="btn btn-primary btn-sm" onClick={onRestore}>
           Pulihkan
-        </Button>
-        <Button type="button" variant="outline" size="sm" className="bg-card" onClick={onDiscard}>
+        </button>
+        <button type="button" className="btn btn-outline btn-sm" onClick={onDiscard}>
           Mulai baru
-        </Button>
+        </button>
       </div>
     </div>
   );

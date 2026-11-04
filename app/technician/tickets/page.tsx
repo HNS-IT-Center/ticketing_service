@@ -10,7 +10,7 @@ import { Pagination } from "@/components/app/Pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { TECHNICIAN_TICKET_FILTERS, ticketListWhere, ticketSearchWhere } from "@/lib/ticket-list-filter";
+import { TECHNICIAN_TICKET_FILTERS, ticketListWhere } from "@/lib/ticket-list-filter";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { Ticket, Plus } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
@@ -64,8 +64,15 @@ export default async function TechnicianTicketsPage({
     // Chip → filter lives in lib/ticket-list-filter.ts, shared with the admin
     // list so the same chip cannot mean two things.
     ...ticketListWhere(statusFilter),
-    // Shared with the admin list: code, customer, or the unit / parts.
-    ...ticketSearchWhere(query),
+    ...(query
+      ? {
+          OR: [
+            { ticket_code: { contains: query } },
+            { user: { name: { contains: query } } },
+            { customer_name: { contains: query } },
+          ],
+        }
+      : {}),
   };
 
   const STATUS_PRIORITY: Record<string, number> = {
@@ -236,7 +243,7 @@ export default async function TechnicianTicketsPage({
         <FilterBar action="/technician/tickets">
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
           {sortParam !== "priority" && <input type="hidden" name="sort" value={sortParam} />}
-          <FilterBarSearch label="Search tickets" placeholder="Cari kode, customer, atau nama barang…" defaultValue={query} />
+          <FilterBarSearch label="Search tickets" placeholder="Search code or customer..." defaultValue={query} />
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
             <Button type="submit">Search</Button>
             {query && (

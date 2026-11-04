@@ -1,6 +1,5 @@
 import type { ServicePart } from "@prisma/client";
 import { getSession } from "@/lib/session";
-import { logActivity } from "@/lib/activity";
 import { toCsv } from "@/lib/csv";
 import { servicePartLabel } from "@/lib/service-parts";
 import { PART_REPORT_CSV_HEADER } from "@/lib/reports/parts";
@@ -37,8 +36,6 @@ export async function GET(request: Request) {
       r.notes ?? "",
     ]),
   ]);
-
-  await logActivity(session, "export.parts", `Mengekspor laporan part ${month} (${rows.length} baris).`);
 
   // BOM so Excel opens the UTF-8 correctly.
   return new Response("﻿" + csv, {

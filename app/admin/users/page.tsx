@@ -10,7 +10,6 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { RoleBadge } from "@/components/app/RoleBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { UserPlus, Users } from "lucide-react";
-import { DeactivateUserButton } from "@/components/users/DeactivateUserButton";
 
 export const metadata = { title: "User Management — HNS IT Center" };
 
@@ -22,7 +21,7 @@ export default async function AdminUsersPage({
 }: {
   searchParams: Promise<{ role?: string; q?: string }>;
 }) {
-  const session = await requireRole("Administrator");
+  await requireRole("Administrator");
   const params = await searchParams;
   const roleFilter = params.role || "all";
   const query = params.q || "";
@@ -85,16 +84,6 @@ export default async function AdminUsersPage({
       cell: () => <span className="text-sm font-medium text-primary">Edit →</span>,
       className: "hidden text-right xl:table-cell",
       mobile: "hidden",
-    },
-    {
-      key: "delete",
-      header: <span className="sr-only">Hapus</span>,
-      mobileLabel: "Hapus",
-      className: "w-px text-right",
-      mobile: "footer",
-      interactive: true,
-      // Your own account is not offered: the action refuses it anyway.
-      cell: (u) => (u.id === session.userId ? null : <DeactivateUserButton user={{ id: u.id, name: u.name }} compact />),
     },
   ];
 

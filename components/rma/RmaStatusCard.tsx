@@ -11,7 +11,6 @@ import {
   Clock,
   ChevronDown,
 } from "lucide-react";
-import { rmaDecisionLabel } from "@/lib/rma/decision";
 import type { RmaStatus } from "@prisma/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { rmaStatusDisplay, TONE_CLASSES } from "@/lib/status-display";
@@ -99,6 +98,13 @@ export const RMA_STATUS_META: Record<
   cancelled: { label: "Dibatalkan", tone: "red", Icon: XCircle },
 };
 
+export const RMA_DECISION_LABELS: Record<string, string> = {
+  repaired: "Diperbaiki",
+  replaced: "Diganti unit baru",
+  refund: "Dana dikembalikan",
+  rejected: "Ditolak vendor",
+};
+
 export function rmaStatusMeta(status: RmaStatus) {
   const meta = RMA_STATUS_META[status];
   return { ...meta, colors: TONES[meta.tone] };
@@ -167,7 +173,7 @@ export default function RmaStatusCard({ rmaCase }: { rmaCase: RmaCaseView }) {
             label="Keputusan Vendor"
             value={
               rmaCase.decision
-                ? rmaDecisionLabel(rmaCase.decision)
+                ? RMA_DECISION_LABELS[rmaCase.decision] ?? rmaCase.decision
                 : null
             }
           />

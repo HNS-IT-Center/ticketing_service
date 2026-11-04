@@ -321,10 +321,7 @@ model Ticket {
 
   // Public access
   public_chat_enabled Boolean @default(false)
-  public_share_token  String? @unique    // secure token for the /[date]/[token] public page
-  // Short public link, /t/[code]: 12 random base62 characters for new tickets,
-  // 16 url-safe base64 ones backfilled by the migration for older tickets.
-  public_short_code   String? @unique @db.VarChar(16)
+  public_share_token  String? @unique    // secure token for /ticket/[token] public page
 
   // Performance tracking timestamps
   work_started_at   DateTime?  // set when technician moves to on_progress
@@ -1097,36 +1094,4 @@ model TechnicianTarget {
   updated_at      DateTime @updatedAt
 
   @@unique([scope, effective_month])
-}
-
-/// Who did what in the application — one row per user action (login, a
-/// ticket's status, a bill line, a vendor edit, an export …), written by
-/// lib/activity.ts and read on /admin/activity.
-///
-/// No foreign keys on purpose, the DeletedTicketLog rule: the row must outlive
-/// the user and the record it names. The actor's name and role and the
-/// record's label (ticket code, vendor name …) are copied at the time.
-model ActivityLog {
-  id         String   @id @default(cuid())
-  created_at DateTime @default(now())
-
-  /// Null for something done without an account, e.g. a failed login.
-  actor_id   String?
-  actor_name String  @db.Text
-  actor_role String
-
-  /// "<area>.<verb>", e.g. "ticket.status" — the catalogue is lib/activity.ts.
-  action String
-
-  entity_type  String?
-  entity_id    String?
-  entity_label String? @db.Text
-
-  /// The sentence shown in the log, in Indonesian.
-  summary String @db.Text
-
-  @@index([created_at])
-  @@index([actor_id, created_at])
-  @@index([action, created_at])
-  @@index([entity_type, entity_id])
 }

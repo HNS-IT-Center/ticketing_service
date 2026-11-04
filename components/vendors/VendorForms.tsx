@@ -3,7 +3,8 @@
 import { useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { createVendorAction, updateVendorAction } from "@/app/actions/vendors";
+import { createVendorAction, deleteVendorAction, updateVendorAction } from "@/app/actions/vendors";
+import { DeleteEntryButton } from "@/components/app/DeleteEntryButton";
 import {
   VENDOR_LOCATIONS,
   VENDOR_LOCATION_INFO,
@@ -22,7 +23,16 @@ export type VendorRowData = VendorRoles & {
   contact: string | null;
   location: VendorLocation | null;
   is_active: boolean;
+  /** Bill lines and RMA cases that name it — a vendor in use cannot be deleted. */
+  charges: number;
+  cases: number;
 };
+
+function vendorInUse(v: VendorRowData): string | null {
+  if (v.charges + v.cases === 0) return null;
+  const used = [v.charges && `${v.charges} baris tagihan`, v.cases && `${v.cases} case RMA`].filter(Boolean).join(" dan ");
+  return `Sudah tercatat di ${used} — nonaktifkan lewat Ubah, jangan dihapus.`;
+}
 
 const ROLE_STYLE: Record<VendorRole, { bg: string; fg: string; border: string }> = {
   supplies_parts: { bg: "#dbeafe", fg: "#1e40af", border: "#bfdbfe" },
@@ -188,9 +198,17 @@ export function VendorRow({ vendor, canManage }: { vendor: VendorRowData; canMan
         <td>{vendor.is_active ? "Aktif" : "Nonaktif"}</td>
         <td>
           {canManage && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
-              Ubah
-            </button>
+            <span className="flex items-center justify-end gap-2">
+              <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
+                Ubah
+              </button>
+              <DeleteEntryButton
+                name={vendor.name}
+                what="vendor"
+                onDelete={() => deleteVendorAction(vendor.id)}
+                blockedReason={vendorInUse(vendor)}
+              />
+            </span>
           )}
         </td>
       </tr>

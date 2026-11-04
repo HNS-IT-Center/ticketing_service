@@ -21,13 +21,6 @@ export type DataTableColumn<T> = {
    * `hidden` — desktop only.
    */
   mobile?: "title" | "badge" | "detail" | "footer" | "hidden";
-  /**
-   * The cell holds its own controls (a delete button …). On a linked row they
-   * sit above the row's link instead of under it, and on a phone they are put
-   * below the card's link rather than inside it — a button inside a link is
-   * neither valid nor reliably clickable.
-   */
-  interactive?: boolean;
 };
 
 type DataTableProps<T> = {
@@ -121,9 +114,7 @@ export function DataTable<T>({
                     >
                       {columns.map((col) => (
                         <TableCell key={col.key} className={cn("px-4 py-3 whitespace-normal text-foreground [overflow-wrap:anywhere]", col.className)}>
-                          {href && col.interactive ? (
-                            <div className="relative z-10">{col.cell(row)}</div>
-                          ) : href && col.key === linkKey ? (
+                          {href && col.key === linkKey ? (
                             <Link
                               href={href}
                               className="font-semibold text-primary outline-none after:absolute after:inset-0 hover:underline focus-visible:underline"
@@ -183,36 +174,20 @@ export function DataTable<T>({
                       ))}
                     </dl>
                   )}
-                  {footerCols
-                    .filter((col) => !(href && col.interactive))
-                    .map((col) => (
-                      <div key={col.key} className="flex flex-wrap items-center gap-2 *:flex-1">
-                        {col.cell(row)}
-                      </div>
-                    ))}
+                  {footerCols.map((col) => (
+                    <div key={col.key} className="flex flex-wrap items-center gap-2 *:flex-1">
+                      {col.cell(row)}
+                    </div>
+                  ))}
                 </>
               );
-              const controls = href ? footerCols.filter((col) => col.interactive) : [];
               const cardClass = cn(
                 "flex flex-col gap-3 rounded-xl border border-border bg-card p-4 text-card-foreground",
                 rowClassName?.(row),
               );
               return (
                 <li key={getRowKey(row)}>
-                  {href && controls.length > 0 ? (
-                    // The link stretches over the card through its ::after; the
-                    // controls sit above it, outside the link.
-                    <div className={cn(cardClass, "relative transition-colors hover:border-primary/40 focus-within:ring-3 focus-within:ring-ring/50")}>
-                      <Link href={href} className="flex flex-col gap-3 outline-none after:absolute after:inset-0">
-                        {content}
-                      </Link>
-                      {controls.map((col) => (
-                        <div key={col.key} className="relative z-10 flex flex-wrap items-center gap-2 *:flex-1">
-                          {col.cell(row)}
-                        </div>
-                      ))}
-                    </div>
-                  ) : href ? (
+                  {href ? (
                     <Link
                       href={href}
                       className={cn(

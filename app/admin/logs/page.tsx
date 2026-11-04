@@ -36,8 +36,6 @@ export default async function AdminLogsPage({
   if (q) {
     where.OR = [
       { ticket: { ticket_code: { contains: q } } },
-      { ticket: { customer_name: { contains: q } } },
-      { ticket: { device_name: { contains: q } } },
       { changer: { name: { contains: q } } },
     ];
   }
@@ -149,7 +147,7 @@ export default async function AdminLogsPage({
       />
 
       <FilterBar action="/admin/logs">
-        <FilterBarSearch label="Search logs" placeholder="Cari kode tiket, customer, nama barang, atau user…" defaultValue={q} />
+        <FilterBarSearch label="Search logs" placeholder="Search ticket code or user..." defaultValue={q} />
         <div className="grid grid-cols-2 gap-2 md:contents">
           <FilterBarField label="Status" htmlFor="logs-status" className="md:w-44">
             <NativeSelect id="logs-status" name="status" defaultValue={status}>

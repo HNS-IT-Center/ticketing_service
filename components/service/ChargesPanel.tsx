@@ -150,9 +150,8 @@ export default function ChargesPanel({
 
   return (
     // A self-contained card (own data-slot), so it renders the same inside the
-    // legacy ticket pages that still embed it. `#rincian-biaya` is where the
-    // "kode Accurate" reminders link to.
-    <div id="rincian-biaya" data-slot="charges-panel" className="flex scroll-mt-20 flex-col gap-4 rounded-xl border border-border bg-card p-4 text-card-foreground shadow-xs md:p-6">
+    // legacy ticket pages that still embed it.
+    <div data-slot="charges-panel" className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 text-card-foreground shadow-xs md:p-6">
       <div className="flex flex-col gap-1">
         <div className="flex items-center gap-2">
           <Receipt aria-hidden="true" className="size-4 text-primary" />

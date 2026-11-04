@@ -1,7 +1,5 @@
 import { ClipboardList } from "lucide-react";
 import { db } from "@/lib/db";
-import { deleteServiceJobAction } from "@/app/actions/service-jobs";
-import { DeleteEntryButton } from "@/components/app/DeleteEntryButton";
 import { formatRupiah } from "@/lib/charges";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
@@ -72,24 +70,7 @@ export default async function ServiceJobDirectory({ canManage }: { canManage: bo
     { key: "accurate", header: "Kode Accurate", cell: (j) => <AccurateItemCell job={j} canManage={canManage} /> },
     { key: "used", header: "Dipakai", cell: (j) => <span className="text-muted-foreground">{j.used}×</span> },
     ...(canManage
-      ? [
-          {
-            key: "edit",
-            header: "",
-            mobile: "footer" as const,
-            cell: (j: ServiceJobRowData) => (
-              <span className="flex items-center justify-end gap-2">
-                <ServiceJobEditDialog job={j} />
-                <DeleteEntryButton
-                  name={j.name}
-                  what="jasa"
-                  onDelete={deleteServiceJobAction.bind(null, j.id)}
-                  blockedReason={j.used > 0 ? `Sudah dipakai ${j.used}× di tagihan — nonaktifkan lewat Ubah, jangan dihapus.` : null}
-                />
-              </span>
-            ),
-          },
-        ]
+      ? [{ key: "edit", header: "", mobile: "footer" as const, cell: (j: ServiceJobRowData) => <ServiceJobEditDialog job={j} /> }]
       : []),
   ];
 

@@ -5,10 +5,6 @@ import FileUpload from "@/components/ui/FileUpload";
 import FilePreview from "@/components/ui/FilePreview";
 import TagInput from "@/components/ui/TagInput";
 import RupiahInput from "@/components/service/RupiahInput";
-import DraftBanner from "@/components/ui/DraftBanner";
-
-/** A fixed moment, so the demo renders the same on the server and the client. */
-const DEMO_SAVED_AT = Date.UTC(2026, 9, 31, 3, 15);
 
 /**
  * Shared form pieces that only appear deep inside a flow (a wizard step, a
@@ -33,15 +29,6 @@ export function SharedDemos() {
       </div>
       <div className="flex flex-col gap-2">
         <RupiahInput name="demo-rupiah" label="Omzet jasa / bulan" defaultValue={1500000} />
-      </div>
-      <div className="flex flex-col gap-2">
-        <p className="text-sm font-medium text-foreground">DraftBanner — di dialog Serahkan Unit ke RMA</p>
-        <DraftBanner
-          savedAt={DEMO_SAVED_AT}
-          note="Foto/video kerusakan dan nota perlu dipilih ulang."
-          onRestore={() => {}}
-          onDiscard={() => {}}
-        />
       </div>
     </div>
   );

@@ -3,7 +3,6 @@
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { revalidatePath } from "next/cache";
-import { logActivity } from "@/lib/activity";
 
 export async function assignLeaveAction(formData: FormData) {
   const session = await requireRole("Technician");
@@ -39,13 +38,6 @@ export async function assignLeaveAction(formData: FormData) {
       is_off_day: true
     }
   });
-  const onLeave = await db.user.findUnique({ where: { id: technician_id }, select: { name: true } });
-  await logActivity(
-    session,
-    "schedule.leave",
-    `Mencatat cuti ${onLeave?.name ?? "teknisi"} pada ${dateStr}${reason ? ` (${reason})` : ""}.`,
-    { type: "user", id: technician_id, label: onLeave?.name ?? null },
-  );
 
   revalidatePath("/technician/schedule");
   return { success: true };
@@ -87,16 +79,6 @@ export async function overrideShiftAction(formData: FormData) {
       shift
     }
   });
-  const [from, to] = await Promise.all([
-    db.user.findUnique({ where: { id: original_tech_id }, select: { name: true } }),
-    db.user.findUnique({ where: { id: override_tech_id }, select: { name: true } }),
-  ]);
-  await logActivity(
-    session,
-    "schedule.override",
-    `Menukar shift ${shift === "morning" ? "pagi" : "siang"} ${dateStr}: ${from?.name ?? "teknisi"} digantikan ${to?.name ?? "teknisi"}.`,
-    { type: "user", id: original_tech_id, label: from?.name ?? null },
-  );
 
   revalidatePath("/technician/schedule");
   return { success: true };

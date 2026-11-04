@@ -4,7 +4,6 @@ import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { AUDIENCES, CAPABILITIES, CAPABILITY_INFO } from "@/lib/access";
-import { logActivity } from "@/lib/activity";
 
 /**
  * Save the access matrix from Admin → Pengaturan Akses.
@@ -36,13 +35,6 @@ export async function saveAccessRulesAction(formData: FormData) {
     }
   }
   await db.$transaction(writes);
-  const changed = await db.accessRule.count();
-  await logActivity(
-    session,
-    "access.update",
-    `Menyimpan pengaturan akses (${changed} aturan berbeda dari bawaan).`,
-    { type: "access" },
-  );
 
   revalidatePath("/admin/settings/access");
   return { success: true };

@@ -11,10 +11,9 @@ import { StatusBadge } from "@/components/app/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
-import { FileSpreadsheet, Ticket, Plus } from "lucide-react";
+import { Ticket, Plus } from "lucide-react";
 import { getTicketPoints } from "@/lib/points";
 import { ticketPartyName } from "@/lib/ticket-party";
-import { CLAIM_STATUS_FILTERS, claimListOrderBy, claimListWhere } from "@/lib/rma/claim-list";
 
 /**
  * Warranty claims, for the RMA desk.
@@ -45,6 +44,15 @@ import { CLAIM_STATUS_FILTERS, claimListOrderBy, claimListWhere } from "@/lib/rm
  */
 export const metadata = { title: "Klaim Garansi — HNS IT Center" };
 
+const STATUS_FILTERS = [
+  "all",
+  "waiting",
+  "on_progress",
+  "rma_process",
+  "done",
+  "completed",
+  "cancelled",
+] as const;
 const PAGE_SIZE = 10;
 
 export default async function RmaTicketsPage({
@@ -60,10 +68,50 @@ export default async function RmaTicketsPage({
   const skip = (page - 1) * PAGE_SIZE;
   const sortParam = params.sort || "updated_desc";
 
-  // Which claims, what the search reaches, and the sort keys live in
-  // lib/rma/claim-list.ts, shared with the spreadsheet export.
-  const where = claimListWhere(statusFilter, query);
-  const orderBy = claimListOrderBy(sortParam);
+  // Claims only, and of those only the ones this desk has a stake in:
+  //
+  //   has an RmaCase        → always, whatever the ticket status. This is the
+  //                           desk's own work, including cases already closed.
+  //   no case, still open   → the queue heading this way; a technician may hand
+  //                           it over at any moment.
+  //   no case, finished     → hidden. A claim a technician resolved without
+  //                           ever involving RMA is not this desk's history,
+  //                           and three of the nine on record are exactly that.
+  //
+  // Combined with AND because the search below also uses OR, and two OR keys in
+  // one object would overwrite each other rather than both apply.
+  const OPEN_BEFORE_HANDOVER = ["waiting", "on_progress"] as const;
+
+  const where = {
+    ticket_type: "warranty_claim" as const,
+    AND: [
+      {
+        OR: [
+          { rma_case: { isNot: null } },
+          { status: { in: OPEN_BEFORE_HANDOVER as unknown as never } },
+        ],
+      },
+      ...(statusFilter !== "all" ? [{ status: statusFilter as never }] : []),
+      ...(query
+        ? [
+            {
+              OR: [
+                { ticket_code: { contains: query } },
+                { user: { name: { contains: query } } },
+                { customer_name: { contains: query } },
+              ],
+            },
+          ]
+        : []),
+    ],
+  };
+
+  let orderBy: Record<string, "asc" | "desc"> = { updated_at: "desc" };
+  if (sortParam === "updated_asc") orderBy = { updated_at: "asc" };
+  else if (sortParam === "status_asc") orderBy = { status: "asc" };
+  else if (sortParam === "status_desc") orderBy = { status: "desc" };
+  else if (sortParam === "code_asc") orderBy = { ticket_code: "asc" };
+  else if (sortParam === "code_desc") orderBy = { ticket_code: "desc" };
 
   const [tickets, totalCount] = await Promise.all([
     db.ticket.findMany({
@@ -203,20 +251,7 @@ export default async function RmaTicketsPage({
     },
   ];
 
-  // The export carries the same filter, search and sort as the list, all pages.
-  const exportQs = new URLSearchParams();
-  if (statusFilter !== "all") exportQs.set("status", statusFilter);
-  if (query) exportQs.set("q", query);
-  if (sortParam !== "updated_desc") exportQs.set("sort", sortParam);
-  const exportHref = `/rma/tickets/export${exportQs.size ? `?${exportQs}` : ""}`;
-
-  // "Clear" drops the search and keeps the chip and the sort.
-  const clearQs = new URLSearchParams();
-  if (statusFilter !== "all") clearQs.set("status", statusFilter);
-  if (sortParam !== "updated_desc") clearQs.set("sort", sortParam);
-  const clearHref = `/rma/tickets${clearQs.size ? `?${clearQs}` : ""}`;
-
-  const chips = CLAIM_STATUS_FILTERS.map((s) => {
+  const chips = STATUS_FILTERS.map((s) => {
     const qs = new URLSearchParams();
     if (s !== "all") qs.set("status", s);
     if (query) qs.set("q", query);
@@ -233,20 +268,9 @@ export default async function RmaTicketsPage({
         title="Klaim Garansi"
         description={`${totalCount} klaim`}
         actions={
-          <>
-            {/* A plain <a>: a file download, not a page for the router to prefetch. */}
-            <a
-              href={exportHref}
-              download
-              className={buttonVariants({ variant: "outline" })}
-              title="Semua klaim yang cocok dengan filter dan pencarian ini, bukan hanya halaman ini"
-            >
-              <FileSpreadsheet aria-hidden="true" /> Export Excel
-            </a>
-            <Link href="/rma/tickets/create" className={buttonVariants()}>
-              <Plus aria-hidden="true" /> New Ticket
-            </Link>
-          </>
+          <Link href="/rma/tickets/create" className={buttonVariants()}>
+            <Plus aria-hidden="true" /> New Ticket
+          </Link>
         }
       />
 
@@ -254,11 +278,11 @@ export default async function RmaTicketsPage({
         <FilterBar action="/rma/tickets">
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
           {sortParam !== "updated_desc" && <input type="hidden" name="sort" value={sortParam} />}
-          <FilterBarSearch label="Search claims" placeholder="Cari kode, customer, nama barang, SN…" defaultValue={query} />
+          <FilterBarSearch label="Search claims" placeholder="Search code or customer..." defaultValue={query} />
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
             <Button type="submit">Search</Button>
             {query && (
-              <Link href={clearHref} className={buttonVariants({ variant: "ghost" })}>
+              <Link href={buildHref(1, sortParam)} className={buttonVariants({ variant: "ghost" })}>
                 Clear
               </Link>
             )}

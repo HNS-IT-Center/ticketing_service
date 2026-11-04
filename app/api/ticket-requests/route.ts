@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { db } from "@/lib/db";
-import { logActivity } from "@/lib/activity";
 import {
   canActOnAssignmentRequest,
   isUnrestrictedAssignmentRole,
@@ -163,14 +162,6 @@ export async function POST(req: NextRequest) {
       },
     });
   }
-
-  const tech = await db.user.findUnique({ where: { id: request.technician_id }, select: { name: true } });
-  await logActivity(
-    session,
-    "ticket.request_decide",
-    `${action === "accept" ? "Menyetujui" : "Menolak"} permintaan ${tech?.name ?? "teknisi"} atas tiket ${request.ticket.ticket_code}.`,
-    { type: "ticket", id: request.ticket_id, label: request.ticket.ticket_code },
-  );
 
   return NextResponse.json({ success: true });
 }

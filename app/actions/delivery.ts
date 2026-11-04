@@ -5,7 +5,6 @@ import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { adminUpdateTicketStatusAction } from "./admin";
 import { uploadToR2, getExt } from "@/lib/r2";
-import { logActivity } from "@/lib/activity";
 
 export async function uploadDeliveryProofAction(formData: FormData) {
   const session = await requireRole("Sales", "Administrator");
@@ -46,13 +45,6 @@ export async function uploadDeliveryProofAction(formData: FormData) {
         data: { progress_proof_url: publicUrl },
       });
     }
-
-    await logActivity(
-      session,
-      "ticket.delivery_proof",
-      `Mengunggah bukti ${proofType === "payment" ? "pembayaran" : "progres"}.`,
-      { type: "ticket", id: ticketId, label: ticket.ticket_code },
-    );
 
     // Now update status
     await adminUpdateTicketStatusAction(ticketId, status);

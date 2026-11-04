@@ -20,8 +20,6 @@ import { ticketPartyName } from "@/lib/ticket-party";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 import ChargesPanel from "@/components/service/ChargesPanel";
 import { loadChargesPanel } from "@/lib/charges-server";
-import PartCodePendingBanner from "@/components/service/PartCodePendingBanner";
-import { partsAwaitingCodeCount } from "@/lib/part-code-alerts";
 import { PcComponentsCard, UpgradesCard } from "@/components/tickets/IntakeItems";
 import { proofKindOf } from "@/components/tickets/proof";
 import {
@@ -197,7 +195,7 @@ export default async function TechnicianTicketDetailPage({
         deviceSn={ticket.device_sn}
         accessories={ticket.accessories}
         warrantyStatus={ticket.warranty_status}
-        publicHref={ticket.public_share_token ? publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code) ?? "#" : null}
+        publicHref={ticket.public_share_token ? publicTicketPath(ticket.created_at, ticket.public_share_token) ?? "#" : null}
         actions={
           isAssigned && (
             <StatusUpdater
@@ -227,12 +225,6 @@ export default async function TechnicianTicketDetailPage({
         }
       />
 
-      {/* Service finished, a fitted part still without its Accurate code. */}
-      <PartCodePendingBanner
-        count={partsAwaitingCodeCount(ticket)}
-        canLink={Boolean(chargesPanel?.perms.canLinkPartCode && chargesPanel.catalogEnabled)}
-      />
-
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="flex min-w-0 flex-col gap-6">
           <CustomerInfoCard
@@ -248,7 +240,7 @@ export default async function TechnicianTicketDetailPage({
                 customerName={(ticketPartyName(ticket)) || "Customer"}
                 ticketCode={ticket.ticket_code}
                 status={ticket.status}
-                publicLink={publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code)?.slice(1) ?? null}
+                publicLink={publicTicketPath(ticket.created_at, ticket.public_share_token)?.slice(1) ?? null}
               />
             }
           />

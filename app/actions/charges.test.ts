@@ -45,8 +45,6 @@ const { addChargeAction, updateChargeAction, removeChargeAction, receiveExternal
 const { addReplacedPartAction, updateTicketStatusAction } = await import("./technician");
 const { adminUpdateTicketStatusAction } = await import("./admin");
 const { saveAccessRulesAction } = await import("./access");
-const { deleteVendorAction } = await import("./vendors");
-const { deleteServiceJobAction } = await import("./service-jobs");
 const { createServiceJobAction, updateServiceJobAction, setServiceJobAccurateItemAction, applyAccurateItemToUnmappedAction } =
   await import("./service-jobs");
 const { loadChargesPanel, loadTicketCharges, hasExternalWorkOutstanding } = await import("@/lib/charges-server");
@@ -155,10 +153,6 @@ afterAll(async () => {
   await db.ticket.deleteMany({ where: { ticket_code: { startsWith: RUN } } });
   await db.vendor.deleteMany({ where: { name: { startsWith: RUN } } });
   await db.serviceJob.deleteMany({ where: { name: { startsWith: RUN } } });
-  // Marking a ticket done credits its technician (the reminder tests do).
-  await db.technicianPerformance.deleteMany({ where: { technician: { email: { startsWith: RUN } } } });
-  // Lines the activity-log tests wrote under this run's accounts.
-  await db.activityLog.deleteMany({ where: { actor_id: { in: Object.values(ids) } } });
   await db.user.deleteMany({ where: { email: { startsWith: RUN } } });
   await db.storeLocation.deleteMany({ where: { name: { startsWith: RUN } } });
   await db.$disconnect();
@@ -806,120 +800,5 @@ describe("a part's Accurate code, entered once the item is received", () => {
     const t = await makeTicket();
     await add(t, { kind: "other", description: "Kabel", unit_price: "10000" });
     expect(await link((await lines(t))[0].id)).toMatchObject({ error: expect.stringContaining("Part tidak ditemukan") });
-  });
-});
-
-describe("finished with a part still uncoded: the technician holding it is reminded", () => {
-  const reminders = (ticketId: string) =>
-    db.notification.findMany({ where: { ticket_id: ticketId, message: { contains: "kode Accurate" } } });
-
-  /** `done` needs a proof photo; the storage itself is mocked above. */
-  function doneForm(ticketId: string) {
-    const fd = form({ ticketId, newStatus: "done" });
-    fd.append("files", new File(["x"], "proof.jpg", { type: "image/jpeg" }));
-    return fd;
-  }
-
-  async function withPart(sku: string | null) {
-    const t = await makeTicket();
-    as("tech");
-    expect(await addReplacedPartAction(form({ ticket_id: t, part: "battery", item_name: "Baterai", quantity: "1" }))).toEqual({ success: true });
-    if (sku) await db.ticketReplacedPart.updateMany({ where: { ticket_id: t }, data: { sku } });
-    return t;
-  }
-
-  it("when the technician marks it done", async () => {
-    const t = await withPart(null);
-    expect(await updateTicketStatusAction(doneForm(t))).toMatchObject({ success: true });
-    const [n] = await reminders(t);
-    expect(n).toMatchObject({ user_id: ids.tech, type: "status_update", is_read: false });
-    expect(n.message).toContain("1 part belum punya kode Accurate");
-  });
-
-  it("when an administrator marks it done — still to the technician, not the admin", async () => {
-    const t = await withPart(null);
-    as("admin");
-    expect(await adminUpdateTicketStatusAction(t, "done")).not.toHaveProperty("error");
-    expect((await reminders(t)).map((n) => n.user_id)).toEqual([ids.tech]);
-  });
-
-  it("not when every part has its code", async () => {
-    const t = await withPart("2507000123");
-    expect(await updateTicketStatusAction(doneForm(t))).toMatchObject({ success: true });
-    expect(await reminders(t)).toHaveLength(0);
-  });
-});
-
-describe("deleting from Data Master, and the activity log", () => {
-  beforeAll(() => {
-    process.env.ACTIVITY_LOG_IN_TESTS = "1";
-  });
-  afterAll(() => {
-    delete process.env.ACTIVITY_LOG_IN_TESTS;
-  });
-
-  const logged = (actor: string, action: string) =>
-    db.activityLog.findMany({
-      where: { actor_id: ids[actor], action },
-      orderBy: { created_at: "desc" },
-      select: { summary: true, entity_type: true, entity_id: true, entity_label: true },
-    });
-
-  it("refuses to delete a vendor or a job a bill uses, and says to deactivate it", async () => {
-    const t = await makeTicket();
-    as("tech");
-    expect(await add(t, { kind: "external_service", description: "Reball IC", vendor_id: ids.repairer })).toEqual({ success: true });
-    expect(await add(t, { kind: "service_fee", service_job_id: ids.job2 })).toEqual({ success: true });
-
-    as("admin");
-    expect(await deleteVendorAction(ids.repairer)).toMatchObject({ error: expect.stringContaining("Nonaktifkan") });
-    expect(await deleteServiceJobAction(ids.job2)).toMatchObject({ error: expect.stringContaining("Nonaktifkan") });
-    expect(await db.vendor.count({ where: { id: ids.repairer } })).toBe(1);
-    expect(await db.serviceJob.count({ where: { id: ids.job2 } })).toBe(1);
-  });
-
-  it("deletes an unused one for good, and logs who did it", async () => {
-    as("admin");
-    const v = await db.vendor.create({ data: { name: `${RUN} Belum Dipakai`, supplies_parts: true }, select: { id: true } });
-    const j = await db.serviceJob.create({ data: { name: `${RUN} Jasa Baru`, points: 1 }, select: { id: true } });
-    expect(await deleteVendorAction(v.id)).toEqual({ success: true });
-    expect(await deleteServiceJobAction(j.id)).toEqual({ success: true });
-    expect(await db.vendor.count({ where: { id: v.id } })).toBe(0);
-    expect(await db.serviceJob.count({ where: { id: j.id } })).toBe(0);
-
-    expect(await logged("admin", "vendor.delete")).toEqual([
-      expect.objectContaining({ entity_type: "vendor", entity_id: v.id, entity_label: `${RUN} Belum Dipakai` }),
-    ]);
-    expect((await logged("admin", "service_job.delete"))[0].summary).toContain(`${RUN} Jasa Baru`);
-  });
-
-  it("a technician may not delete from the lists", async () => {
-    as("tech");
-    expect(await deleteVendorAction(ids.supplier)).toMatchObject({ error: expect.stringContaining("akses") });
-    expect(await deleteServiceJobAction(ids.oldJob)).toMatchObject({ error: expect.stringContaining("akses") });
-  });
-
-  it("logs a bill line under the ticket, without the cost price", async () => {
-    await grant(["edit_cost:technician", "view_cost:technician"]);
-    const t = await makeTicket();
-    as("tech");
-    expect(await add(t, { kind: "other", description: "Kabel SATA", unit_price: "25000", unit_cost: "9000" })).toEqual({ success: true });
-    const [entry] = await logged("tech", "charge.add");
-    expect(entry).toMatchObject({ entity_type: "ticket", entity_id: t });
-    expect(entry.entity_label).toMatch(new RegExp(`^${RUN}-`));
-    expect(entry.summary).toContain("Kabel SATA");
-    expect(entry.summary).toContain("25.000");
-    expect(entry.summary).not.toContain("9.000");
-  });
-
-  it("logs a status change with both statuses in words", async () => {
-    const t = await makeTicket({ status: "on_progress" });
-    as("admin");
-    expect(await adminUpdateTicketStatusAction(t, "cancelled", "Customer batal")).toMatchObject({ success: true });
-    const [entry] = await logged("admin", "ticket.status");
-    expect(entry.entity_id).toBe(t);
-    expect(entry.summary).toContain("→");
-    expect(entry.summary).toContain("Customer batal");
-    expect(entry.summary).not.toContain("on_progress");
   });
 });

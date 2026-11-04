@@ -10,7 +10,6 @@ import { buttonVariants } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Ticket, CheckCircle, Clock, AlertCircle, ArrowRight, Store, Plus, ChevronDown } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
-import PartCodeAlertCard from "@/components/service/PartCodeAlertCard";
 
 export const metadata = { title: "Dashboard — HNS IT Center" };
 
@@ -142,9 +141,6 @@ export default async function AdminDashboard() {
           <StatCard key={s.label} label={s.label} value={s.value} icon={s.icon} tone={s.tone} href={s.href} />
         ))}
       </div>
-
-      {/* Finished service tickets whose parts still lack an Accurate code. */}
-      <PartCodeAlertCard scope={{}} portal="admin" showTechnician />
 
       <section aria-labelledby="recent-tickets" className="flex flex-col gap-3">
         <div className="flex items-center justify-between gap-2">

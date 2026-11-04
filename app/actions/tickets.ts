@@ -11,10 +11,7 @@ import { nextStoreTicketCode, isTicketCodeCollision } from "@/lib/ticket-code";
 import { requireSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { sendTicketStatusEmail } from "@/lib/email";
-import { publicTicketPath, ticketsListHrefForRoleName } from "@/lib/routes";
-import { newPublicShortCode } from "@/lib/short-code";
-import { logActivity } from "@/lib/activity";
-import { TICKET_TYPE_LABELS } from "@/lib/ticket-export";
+import { ticketsListHrefForRoleName } from "@/lib/routes";
 import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
 import type { CatalogItem } from "@/lib/catalog/items";
@@ -198,7 +195,6 @@ export async function createTicketAction(formData: FormData) {
   const ticket_code = await allocateCode();
 
   const public_share_token = randomBytes(24).toString("hex");
-  const public_short_code = newPublicShortCode();
 
   // ── Handle attachments FIRST ──
   // Support two modes:
@@ -289,7 +285,6 @@ export async function createTicketAction(formData: FormData) {
       terms_accepted,
       technician_notes,
       public_share_token,
-      public_short_code,
   };
 
   let ticket: { id: string; public_share_token: string | null } | null = null;
@@ -416,14 +411,6 @@ export async function createTicketAction(formData: FormData) {
 
   await Promise.all(followUps);
 
-  const typeLabel = TICKET_TYPE_LABELS[ticket_type as keyof typeof TICKET_TYPE_LABELS] ?? ticket_type;
-  await logActivity(
-    session,
-    "ticket.create",
-    `Membuat tiket ${ticketData.ticket_code} (${typeLabel})${customer_name ? ` untuk ${customer_name}` : ""}${device_name ? `, unit ${device_name}` : ""}.`,
-    { type: "ticket", id: ticket.id, label: ticketData.ticket_code },
-  );
-
   if (customer_email) {
     const { headers } = await import("next/headers");
     const headersList = await headers();
@@ -436,7 +423,7 @@ export async function createTicketAction(formData: FormData) {
       customerName: customer_name || "Customer",
       ticketCode: ticket_code,
       status: "waiting",
-      ticketPath: publicTicketPath(new Date(), public_share_token, public_short_code),
+      shareToken: public_share_token,
       appUrl,
     }).catch((err) => console.error("[EMAIL CREATE ERROR]", err));
   }
@@ -486,8 +473,6 @@ export async function sendMessageAction(ticketId: string, message: string) {
       },
     });
   }
-  // The message itself stays in the chat; the log records only that one was sent.
-  await logActivity(session, "ticket.message", "Mengirim pesan di chat tiket.", { type: "ticket", id: ticketId });
 
   revalidatePath(`/customer/tickets/${ticketId}`);
   revalidatePath(`/technician/tickets/${ticketId}`);
@@ -521,10 +506,6 @@ export async function markMessagesReadAction(ticketId: string) {
 
 // ─── Upload Attachments ────────────────────────────────────────────────────
 export async function uploadAttachmentsAction(ticketId: string, files: File[]) {
-  // It had no session check at all: a server action is a public endpoint, so
-  // anyone could store files against any ticket.
-  const session = await requireSession();
-  let stored = 0;
   // Upload all files to R2 in parallel
   await Promise.all(
     files.map(async (file) => {
@@ -538,15 +519,11 @@ export async function uploadAttachmentsAction(ticketId: string, files: File[]) {
         await db.ticketAttachment.create({
           data: { ticket_id: ticketId, file_url: publicUrl, file_type: fileType },
         });
-        stored++;
       } catch (err) {
         console.error("[R2 UPLOAD ERROR]", err);
       }
     })
   );
-  if (stored > 0) {
-    await logActivity(session, "ticket.attachment", `Mengunggah ${stored} lampiran.`, { type: "ticket", id: ticketId });
-  }
 
   revalidatePath(`/customer/tickets/${ticketId}`);
 }
@@ -609,12 +586,6 @@ export async function updatePickupMethodAction(ticketId: string, pickupMethod: "
     where: { id: ticketId },
     data: { pickup_method: pickupMethod },
   });
-  await logActivity(
-    session,
-    "ticket.pickup",
-    `Mengubah cara pengambilan menjadi ${pickupMethod === "courier" ? "kurir" : "ambil sendiri"}.`,
-    { type: "ticket", id: ticketId },
-  );
 
   revalidatePath(`/admin/tickets/${ticketId}`);
   revalidatePath(`/technician/tickets/${ticketId}`);

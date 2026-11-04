@@ -6,8 +6,6 @@ import { EmptyState } from "@/components/app/EmptyState";
 import { PageHeader } from "@/components/app/PageHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { deleteStoreAction } from "@/app/actions/stores";
-import { DeleteEntryButton } from "@/components/app/DeleteEntryButton";
 
 export const metadata = { title: "Store Locations — HNS IT Center" };
 
@@ -49,17 +47,10 @@ export default async function StoresPage() {
       ) : (
         <ul className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
           {stores.map((store) => (
-            <li
-              key={store.id}
-              // The card is not one big link any more: it holds a delete
-              // button, and a button inside a link is not valid. The link
-              // stretches over the card through its ::after instead.
-              className="relative flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xs transition-shadow focus-within:ring-3 focus-within:ring-ring/50 hover:border-primary/40 hover:shadow-md"
-            >
+            <li key={store.id}>
               <Link
                 href={`/admin/stores/${store.id}`}
-                aria-label={`Kelola ${store.name}`}
-                className="flex flex-1 flex-col gap-3 outline-none after:absolute after:inset-0"
+                className="flex h-full flex-col gap-3 rounded-xl border border-border bg-card p-5 text-card-foreground shadow-xs outline-none transition-shadow hover:border-primary/40 hover:shadow-md focus-visible:ring-3 focus-visible:ring-ring/50"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex min-w-0 items-center gap-3">
@@ -98,19 +89,6 @@ export default async function StoresPage() {
                   </span>
                 </div>
               </Link>
-              <div className="relative z-10 flex justify-end">
-                <DeleteEntryButton
-                  name={store.name}
-                  what="toko"
-                  onDelete={deleteStoreAction.bind(null, store.id)}
-                  blockedReason={
-                    store._count.tickets > 0
-                      ? `Sudah punya ${store._count.tickets} tiket — nonaktifkan lewat halaman toko, jangan dihapus.`
-                      : null
-                  }
-                  description={`Toko ${store.name} (${store.code}) dihapus permanen, beserta penugasan teknisinya. Ini tidak bisa dibatalkan.`}
-                />
-              </div>
             </li>
           ))}
         </ul>

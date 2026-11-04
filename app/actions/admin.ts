@@ -6,7 +6,6 @@ import { z } from "zod";
 import { db } from "@/lib/db";
 import { requireRole, requireSession } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
-import { publicTicketPath } from "@/lib/routes";
 import {
   EARNING_STATUS_LOG_FILTER,
   PERFORMANCE_FAILURE_STATUSES,
@@ -16,13 +15,10 @@ import { getTicketPoints } from "@/lib/points";
 import { deleteFromStorage } from "@/lib/r2";
 import { EXTERNAL_WORK_OUTSTANDING } from "@/lib/charges";
 import { hasExternalWorkOutstanding } from "@/lib/charges-server";
-import { notifyPartCodePending } from "@/lib/part-code-notify";
-import { logActivity } from "@/lib/activity";
-import { ticketStatusText } from "@/lib/activity-catalog";
 
 // ─── Create User ───────────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
-  const session = await requireRole("Administrator");
+  await requireRole("Administrator");
 
   const data = {
     name: formData.get("name") as string,
@@ -59,19 +55,13 @@ export async function createUserAction(formData: FormData) {
     });
   }
 
-  await logActivity(
-    session,
-    "user.create",
-    `Menambah pengguna ${user.name} (${user.email}) sebagai ${data.role}${hashedPassword ? "" : ", login lewat SSO"}.`,
-    { type: "user", id: user.id, label: user.name },
-  );
   revalidatePath("/admin/users");
   return { success: true, userId: user.id };
 }
 
 // ─── Update User ───────────────────────────────────────────────────────────
 export async function updateUserAction(userId: string, formData: FormData) {
-  const session = await requireRole("Administrator");
+  await requireRole("Administrator");
 
   const shift = formData.get("shift") as string | null;
   const work_days = formData.get("work_days") as string | null;
@@ -115,16 +105,6 @@ export async function updateUserAction(userId: string, formData: FormData) {
   });
 
   // Workload setting removed
-
-  const name = String(formData.get("name") ?? "");
-  await logActivity(
-    session,
-    "user.update",
-    `Mengubah data pengguna ${name} (role ${formData.get("role")}${is_team_leader ? ", koordinator" : ""}${
-      is_head_technician && formData.get("role") === "Technician" ? ", kepala teknisi" : ""
-    }).`,
-    { type: "user", id: userId, label: name },
-  );
 
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${userId}`);
@@ -175,24 +155,14 @@ export async function deactivateUserAction(
   }
 
   // Step 2: Soft-delete — deactivate the account and free up the email slot
-  const deactivated = await db.user.update({
+  await db.user.update({
     where: { id: userId },
     data: {
       is_active: false,
       // Scramble email so the address can be re-registered if needed
       email: `${userId}__deleted__@deactivated.local`,
     },
-    select: { name: true },
   });
-  const replacement = reassignToTechnicianId
-    ? await db.user.findUnique({ where: { id: reassignToTechnicianId }, select: { name: true } })
-    : null;
-  await logActivity(
-    session,
-    "user.deactivate",
-    `Menonaktifkan pengguna ${deactivated.name}${replacement ? `; tiket aktifnya dialihkan ke ${replacement.name}` : ""}.`,
-    { type: "user", id: userId, label: deactivated.name },
-  );
 
   revalidatePath("/admin/users");
   return { success: true };
@@ -266,17 +236,6 @@ export async function adminAssignTicketAction(
     });
   }
 
-  const [tech, sales] = await Promise.all([
-    technicianId ? db.user.findUnique({ where: { id: technicianId }, select: { name: true } }) : null,
-    salesId ? db.user.findUnique({ where: { id: salesId }, select: { name: true } }) : null,
-  ]);
-  await logActivity(
-    session,
-    "ticket.assign",
-    `Menugaskan tiket ${ticket.ticket_code}: teknisi ${tech?.name ?? "—"}, sales ${sales?.name ?? "—"}.`,
-    { type: "ticket", id: ticketId, label: ticket.ticket_code },
-  );
-
   revalidatePath("/admin/tickets");
   revalidatePath(`/admin/tickets/${ticketId}`);
   return { success: true };
@@ -284,7 +243,7 @@ export async function adminAssignTicketAction(
 
 // ─── Snapshot Leaderboard ──────────────────────────────────────────────────
 export async function snapshotLeaderboardAction(month: number, year: number) {
-  const session = await requireRole("Administrator");
+  await requireRole("Administrator");
 
   // Delete existing snapshot for this month/year
   await db.leaderboard.deleteMany({ where: { month, year } });
@@ -307,7 +266,6 @@ export async function snapshotLeaderboardAction(month: number, year: number) {
     });
   }
 
-  await logActivity(session, "leaderboard.snapshot", `Menyimpan leaderboard ${month}/${year} (${technicians.length} teknisi).`);
   revalidatePath("/admin/leaderboard");
   return { success: true };
 }
@@ -429,18 +387,6 @@ export async function adminUpdateTicketStatusAction(
     revalidateTag(`user-profile:${ticket.technician_id}`, "max");
   }
 
-  // Finished with a part still uncoded: remind the technician holding it.
-  if (newStatus === "done") await notifyPartCodePending(ticketId);
-
-  await logActivity(
-    session,
-    "ticket.status",
-    `Mengubah status ${ticket.ticket_code}: ${ticketStatusText(ticket.status)} → ${ticketStatusText(newStatus)}${
-      reason?.trim() ? ` (alasan: ${reason.trim()})` : ""
-    }.`,
-    { type: "ticket", id: ticketId, label: ticket.ticket_code },
-  );
-
   // Notify customer if they have a user account
   if (ticket.user_id) {
     await db.notification.create({
@@ -460,7 +406,7 @@ export async function adminUpdateTicketStatusAction(
       customerName: ticket.customer_name || "Customer",
       ticketCode: ticket.ticket_code,
       status: newStatus,
-      ticketPath: publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code),
+      shareToken: ticket.public_share_token,
     }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
   }
 
@@ -471,18 +417,11 @@ export async function adminUpdateTicketStatusAction(
 
 // ─── Toggle Public Chat ─────────────────────────────────────────────────────
 export async function togglePublicChatAction(ticketId: string, enabled: boolean) {
-  const session = await requireRole("Administrator", "Sales");
-  const ticket = await db.ticket.update({
+  await requireRole("Administrator", "Sales");
+  await db.ticket.update({
     where: { id: ticketId },
     data: { public_chat_enabled: enabled },
-    select: { ticket_code: true },
   });
-  await logActivity(
-    session,
-    "ticket.public_chat",
-    `${enabled ? "Menyalakan" : "Mematikan"} chat publik ${ticket.ticket_code}.`,
-    { type: "ticket", id: ticketId, label: ticket.ticket_code },
-  );
   revalidatePath(`/admin/tickets/${ticketId}`);
   return { success: true };
 }
@@ -729,14 +668,6 @@ export async function deleteTicketAction(
   }
   revalidatePath("/admin/tickets");
   revalidatePath("/admin/dashboard");
-
-  // No entity id: the ticket is gone, and a link would lead to a 404.
-  await logActivity(
-    session,
-    "ticket.delete",
-    `Menghapus permanen tiket ${ticket.ticket_code}. Alasan: ${trimmedReason}`,
-    { type: "ticket", label: ticket.ticket_code },
-  );
 
   return {
     success: true,

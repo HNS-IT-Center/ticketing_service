@@ -72,3 +72,53 @@ export function ticketListWhere(filter: string): Prisma.TicketWhereInput {
   // `all`, and anything unrecognised that arrived in the query string.
   return {};
 }
+
+/**
+ * The search box on the All Tickets list: code, account name or customer name.
+ * The spreadsheet export reads the same function, so it exports what is listed.
+ */
+export function ticketSearchWhere(query: string): Prisma.TicketWhereInput {
+  const q = query.trim();
+  if (!q) return {};
+  // Code, customer (the account and the name typed at intake), and the unit
+  // or parts — "nama barang" — by name, SKU or serial number.
+  return {
+    OR: [
+      { ticket_code: { contains: q } },
+      { user: { name: { contains: q } } },
+      { customer_name: { contains: q } },
+      { device_name: { contains: q } },
+      { device_sku: { contains: q } },
+      { device_sn: { contains: q } },
+      { replaced_parts: { some: { OR: [{ item_name: { contains: q } }, { sku: { contains: q } }] } } },
+    ],
+  };
+}
+
+/**
+ * The All Tickets sort keys. Anything unrecognised is the most recently
+ * touched first: a new ticket and one whose status just moved both rise to the
+ * top, since creating and every status change write `updated_at`.
+ */
+export const DEFAULT_TICKET_SORT = "updated_desc";
+
+export function ticketListOrderBy(sort: string): Prisma.TicketOrderByWithRelationInput {
+  switch (sort) {
+    case "updated_asc":
+      return { updated_at: "asc" };
+    case "created_desc":
+      return { created_at: "desc" };
+    case "created_asc":
+      return { created_at: "asc" };
+    case "status_asc":
+      return { status: "asc" };
+    case "status_desc":
+      return { status: "desc" };
+    case "code_asc":
+      return { ticket_code: "asc" };
+    case "code_desc":
+      return { ticket_code: "desc" };
+    default:
+      return { updated_at: "desc" };
+  }
+}

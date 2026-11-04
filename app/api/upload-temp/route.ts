@@ -1,6 +1,7 @@
 import { getSession } from "@/lib/session";
 import { uploadToR2, getExt, getFileType } from "@/lib/r2";
 import { customAlphabet } from "nanoid";
+import { storageFailedMessage } from "@/lib/upload-limit";
 
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 10);
 
@@ -45,8 +46,12 @@ export async function POST(req: Request) {
     }
 
     return Response.json({ uploaded });
-  } catch (err: any) {
+  } catch (err) {
+    // The detail is for the server log. It used to go to the screen as is, so a
+    // misconfigured deployment showed staff "R2_ENDPOINT must use https in
+    // production (got http://127.0.0.1:9000)" instead of a sentence they could
+    // act on — the same one every other upload form gives.
     console.error("[upload-temp] Error:", err);
-    return Response.json({ error: err.message ?? "Upload failed" }, { status: 500 });
+    return Response.json({ error: storageFailedMessage("lampiran") }, { status: 500 });
   }
 }

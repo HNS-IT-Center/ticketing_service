@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { logActivity } from "@/lib/activity";
 
 const profileSchema = z.object({
   userId:  z.string().min(1),
@@ -33,6 +34,11 @@ export async function updateTechnicianProfileAction(data: {
       address:      parsed.data.address ?? "",
     },
   });
+  await logActivity(session, "profile.update", "Mengubah profil sendiri (nama, telepon, alamat).", {
+    type: "user",
+    id: session.userId,
+    label: parsed.data.name,
+  });
 
   revalidateTag(`user-profile:${session.userId}`, "max");
   revalidatePath("/technician/profile");
@@ -59,6 +65,11 @@ export async function updateAdminProfileAction(data: {
       address:      parsed.data.address ?? "",
     },
   });
+  await logActivity(session, "profile.update", "Mengubah profil sendiri (nama, telepon, alamat).", {
+    type: "user",
+    id: session.userId,
+    label: parsed.data.name,
+  });
 
   revalidatePath("/admin/profile");
   return { success: true };
@@ -81,6 +92,10 @@ export async function equipTitleAction(titleKey: string | null) {
   await db.user.update({
     where: { id: session.userId },
     data: { active_title: titleKey },
+  });
+  await logActivity(session, "profile.title", titleKey ? `Memasang gelar ${titleKey}.` : "Melepas gelar.", {
+    type: "user",
+    id: session.userId,
   });
 
   // Invalidate all relevant caches
@@ -124,6 +139,7 @@ export async function changePasswordAction(data: {
     where: { id: session.userId },
     data: { password: hashed },
   });
+  await logActivity(session, "profile.password", "Mengganti password sendiri.", { type: "user", id: session.userId });
 
   return { success: true };
 }

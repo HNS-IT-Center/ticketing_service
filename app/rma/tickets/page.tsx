@@ -157,6 +157,7 @@ export default async function RmaTicketsPage({
               "(For Others)" told this table nothing it could act
               on; the device does. */}
           <span className="line-clamp-2 text-[0.7rem] text-muted-foreground">
+            {t.device_brand ? `${t.device_brand} · ` : ""}
             {t.device_name?.trim() || t.device_type.replace(/_/g, " ")}
           </span>
         </span>

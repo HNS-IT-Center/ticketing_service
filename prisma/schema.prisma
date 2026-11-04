@@ -304,6 +304,9 @@ model Ticket {
   device_catalog_item_id  Int?
   device_sku              String?
   device_catalog_category String?
+  // The make, from Accurate's brand field or, when that is empty, the brand
+  // the category is named after (lib/catalog/brand.ts). Null for a typed unit.
+  device_brand            String?
   warranty_status  String?        // 'active' or 'inactive'
   is_overnight     Boolean  @default(false)  // true = multi-day service
   is_overnight_check Boolean @default(false)
@@ -355,6 +358,7 @@ model Ticket {
   @@index([store_location_id])
   @@index([public_share_token])
   @@index([device_sku])
+  @@index([device_brand])
 }
 
 model TicketAssignmentRequest {

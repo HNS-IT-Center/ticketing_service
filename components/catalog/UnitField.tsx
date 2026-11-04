@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { TONE_CLASSES } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
+import { catalogBrand } from "@/lib/catalog/brand";
 
 /** The unit as picked from the catalogue — what the intake form keeps and drafts. */
-export type PickedUnit = { id: number; sku: string; name: string; category: string | null };
+/** `brand` is optional so a draft saved before it existed still restores. */
+export type PickedUnit = { id: number; sku: string; name: string; category: string | null; brand?: string | null };
 
 /**
  * The unit that came in for service, picked from the company catalogue
@@ -67,7 +69,8 @@ export default function UnitField({
             <span className="text-sm font-semibold [overflow-wrap:anywhere]">{unit.name}</span>
             <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
               <PackageCheck aria-hidden="true" className="size-[13px] text-blue-800 dark:text-blue-300" />
-              SKU {unit.sku}
+              {unit.brand ? <span className="font-semibold text-foreground">{unit.brand}</span> : null}
+              {unit.brand ? " · " : ""}SKU {unit.sku}
               {unit.category ? ` · ${unit.category}` : ""} · dari katalog Accurate
             </span>
           </div>
@@ -98,7 +101,7 @@ export default function UnitField({
           showStock={false}
           placeholder="Cari unit di katalog, mis. asus vivobook 14"
           onPick={(item) => {
-            onUnitChange({ id: item.id, sku: item.sku, name: item.name, category: item.category });
+            onUnitChange({ id: item.id, sku: item.sku, name: item.name, category: item.category, brand: catalogBrand(item) });
             onNameChange(item.name);
           }}
         />

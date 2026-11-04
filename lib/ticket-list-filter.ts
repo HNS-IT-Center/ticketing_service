@@ -89,6 +89,7 @@ export function ticketSearchWhere(query: string): Prisma.TicketWhereInput {
       { customer_name: { contains: q } },
       { device_name: { contains: q } },
       { device_sku: { contains: q } },
+      { device_brand: { contains: q } },
       { device_sn: { contains: q } },
       { replaced_parts: { some: { OR: [{ item_name: { contains: q } }, { sku: { contains: q } }] } } },
     ],

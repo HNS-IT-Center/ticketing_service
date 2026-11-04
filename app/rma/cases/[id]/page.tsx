@@ -90,6 +90,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
           customer_phone: true,
           device_name: true,
           device_sku: true,
+          device_brand: true,
           device_catalog_item_id: true,
           device_sn: true,
           device_type: true,
@@ -158,6 +159,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
               <Field label="Customer" value={ticket.customer_name} />
               <Field label="Telepon" value={ticket.customer_phone} />
               <Field label="Perangkat" value={ticket.device_name} />
+              <Field label="Brand" value={ticket.device_brand} />
               {ticket.device_sku && <Field label="SKU (katalog Accurate)" value={ticket.device_sku} mono />}
               <Suspense fallback={<ClaimStockShell value="Memuat…" muted />}>
                 <ClaimStock catalogItemId={ticket.device_catalog_item_id} />
@@ -200,6 +202,8 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                   url={rmaCase.purchase_invoice_url}
                   label="Lihat Nota Pembelian"
                   title={`Nota Pembelian — ${ticket.ticket_code}`}
+                  downloadName={`${rmaCase.rma_code} - Nota Pembelian`}
+                  inlineDownload
                 />
               </div>
             )}
@@ -275,7 +279,9 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                       fileType={a.file_type}
                       label={`${attachmentKindLabel(a.kind) ?? LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`}
                       title={`Lampiran ${i + 1} — ${ticket.ticket_code}`}
+                      downloadName={`${rmaCase.rma_code} - ${attachmentKindLabel(a.kind) ?? LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`}
                       className="btn btn-outline"
+                      inlineDownload
                     />
                   ))}
                 </div>

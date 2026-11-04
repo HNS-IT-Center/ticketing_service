@@ -1,5 +1,5 @@
-import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
-import { mkdir, writeFile, unlink } from "fs/promises";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
+import { mkdir, writeFile, unlink, readFile } from "fs/promises";
 import path from "path";
 
 /**
@@ -237,6 +237,43 @@ export async function deleteFromStorage(url: string): Promise<boolean> {
   } catch (error) {
     console.error(`[storage] could not delete ${key}:`, error);
     return false;
+  }
+}
+
+/**
+ * Read one stored file, for serving it as a download from this app's own
+ * origin (a browser ignores `download` on a link to another host, such as
+ * the R2 custom domain, and opens the file instead).
+ *
+ * Only a URL this application stored resolves — the key comes from
+ * `storageKeyFromUrl` — so the route that calls this cannot be pointed at an
+ * arbitrary address. Null when the URL is not ours or the object is gone.
+ */
+export async function readFromStorage(
+  url: string,
+): Promise<{ body: ReadableStream<Uint8Array>; contentType: string; length: number | null } | null> {
+  const key = storageKeyFromUrl(url);
+  if (!key) return null;
+  try {
+    if (USE_LOCAL_STORAGE) {
+      const data = await readFile(path.join(LOCAL_ROOT, key));
+      return {
+        body: new Blob([new Uint8Array(data)]).stream(),
+        contentType: "application/octet-stream",
+        length: data.length,
+      };
+    }
+    const res = await getR2Client().send(new GetObjectCommand({ Bucket: BUCKET_NAME, Key: key }));
+    if (!res.Body) return null;
+    return {
+      body: res.Body.transformToWebStream() as ReadableStream<Uint8Array>,
+      contentType: res.ContentType || "application/octet-stream",
+      length: typeof res.ContentLength === "number" ? res.ContentLength : null,
+    };
+  } catch (error) {
+    const status = (error as { $metadata?: { httpStatusCode?: number } }).$metadata?.httpStatusCode;
+    if (status === 404) return null;
+    throw error;
   }
 }
 

@@ -39,6 +39,7 @@ export function claimSearchWhere(query: string): Prisma.TicketWhereInput | null 
       { customer_name: { contains: q } },
       { device_name: { contains: q } },
       { device_sku: { contains: q } },
+      { device_brand: { contains: q } },
       { device_sn: { contains: q } },
       { rma_case: { is: { rma_code: { contains: q } } } },
       { rma_case: { is: { vendor_name: { contains: q } } } },

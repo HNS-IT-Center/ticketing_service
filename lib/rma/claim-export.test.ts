@@ -41,6 +41,7 @@ function claim(over: Partial<ClaimExportRow> = {}, rma: Partial<Case> | null = {
     ticket_type: "warranty_claim",
     device_name: "ASUS TUF FA506NFR",
     device_sku: "2503000069",
+    device_brand: "ASUS",
     device_sn: "SN1",
     user: { name: "Admin" },
     technician: { name: "Budi" },
@@ -79,6 +80,7 @@ describe("claimExportSheet", () => {
     expect(String(cell(t, "Lokasi Vendor"))).toContain("LKL");
     expect(cell(t, "Lama Proses (hari)")).toBe(10);
     expect(cell(t, "Nama Barang")).toBe("ASUS TUF FA506NFR");
+    expect(cell(t, "Brand")).toBe("ASUS");
   });
 
   it("marks a claim not yet handed over, and names store stock", () => {

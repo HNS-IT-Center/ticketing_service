@@ -18,6 +18,7 @@ import { TICKET_TYPE_LABELS } from "@/lib/ticket-export";
 import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
 import type { CatalogItem } from "@/lib/catalog/items";
+import { catalogBrand } from "@/lib/catalog/brand";
 import { parsePostedItems, parseUpgradeSelections, typedItems } from "@/lib/catalog/picked-items";
 import { resolvePostedItems, type ResolvedItem } from "@/lib/catalog/resolve-picked";
 
@@ -280,6 +281,7 @@ export async function createTicketAction(formData: FormData) {
       device_catalog_item_id: deviceCatalog?.id ?? null,
       device_sku: deviceCatalog?.sku ?? null,
       device_catalog_category: deviceCatalog?.category ?? null,
+      device_brand: deviceCatalog ? catalogBrand(deviceCatalog) : null,
       device_sn,
       warranty_status,
       is_overnight,

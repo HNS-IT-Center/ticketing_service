@@ -11,6 +11,7 @@ function ticket(over: Partial<TicketExportRow> = {}): TicketExportRow {
     device_type: "Laptop_Office",
     device_name: "NB ASUS VIVOBOOK 14",
     device_sku: "2503000069",
+    device_brand: "ASUS",
     device_sn: "SN123",
     accessories: "Charger",
     device_condition: "Lecet",

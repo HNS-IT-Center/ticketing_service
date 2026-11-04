@@ -4,6 +4,7 @@ import { useState } from "react";
 import Modal from "@/components/ui/Modal";
 import { Eye, ExternalLink, Download, FileText } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import { downloadHref } from "@/lib/download-name";
 
 /**
  * Opens an attachment in a modal instead of a new tab.
@@ -35,6 +36,8 @@ export default function FilePreview({
   title,
   fileType,
   className,
+  inlineDownload = false,
+  downloadName,
 }: {
   url: string;
   label?: string;
@@ -44,21 +47,43 @@ export default function FilePreview({
   fileType?: string;
   /** Overrides the trigger's classes; left out, it is an outline button. */
   className?: string;
+  /**
+   * A download button beside the trigger, so a file can be saved in one tap
+   * without opening it first. The saved name is `downloadName`, else the title.
+   */
+  inlineDownload?: boolean;
+  downloadName?: string;
 }) {
   const [open, setOpen] = useState(false);
   const kind = kindOf(url, fileType);
   const heading = title ?? label;
+  // Through this app's own origin: a browser ignores `download` on a link to
+  // the R2 domain and opens the file instead (see /api/files/download).
+  const saveHref = downloadHref(url, downloadName ?? heading);
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className={className ?? buttonVariants({ variant: "outline", className: "bg-card" })}
-      >
-        <Eye aria-hidden="true" className="size-[15px]" />
-        {label}
-      </button>
+      <span className="inline-flex items-stretch gap-1">
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className={className ?? buttonVariants({ variant: "outline", className: "bg-card" })}
+        >
+          <Eye aria-hidden="true" className="size-[15px]" />
+          {label}
+        </button>
+        {inlineDownload && (
+          <a
+            href={saveHref}
+            download
+            title={`Unduh ${label}`}
+            aria-label={`Unduh ${label}`}
+            className={buttonVariants({ variant: "outline", size: "icon", className: "bg-card" })}
+          >
+            <Download aria-hidden="true" className="size-[15px]" />
+          </a>
+        )}
+      </span>
 
       <Modal open={open} onClose={() => setOpen(false)} title={heading} maxWidth="900px">
         <div className="flex flex-col gap-4">
@@ -85,7 +110,7 @@ export default function FilePreview({
           </div>
 
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
-            <a href={url} download className={buttonVariants({ variant: "ghost" })}>
+            <a href={saveHref} download className={buttonVariants({ variant: "ghost" })}>
               <Download aria-hidden="true" /> Unduh
             </a>
             <a

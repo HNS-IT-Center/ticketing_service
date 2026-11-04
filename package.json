@@ -14,6 +14,7 @@
     "create-user": "tsx scripts/create-user.ts",
     "set-password": "tsx scripts/set-password.ts",
     "import:vendors": "tsx scripts/import-vendors.ts",
+    "backfill:device-brand": "tsx --conditions=react-server scripts/backfill-device-brand.ts",
     "sso:export-users": "tsx scripts/sso-export-users.ts",
     "sso:link-users": "tsx scripts/sso-link-users.ts",
     "migrate:from-supabase": "tsx scripts/migrate-from-supabase.ts",

@@ -24,6 +24,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { StatusBadge } from "@/components/app/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { LiveSearchInput } from "@/components/app/LiveSearchInput";
 import { NativeSelect } from "@/components/ui/native-select";
 import { rmaStatusDisplay, TONE_CLASSES } from "@/lib/status-display";
 
@@ -216,13 +217,10 @@ export default async function RmaLogsPage({
               bounce the reader back to the grouped view. */}
           <input type="hidden" name="view" value={view} />
           <FilterBarField label="Cari" htmlFor="log-q" className="md:w-auto md:min-w-64 md:flex-1">
-            <Input
+            <LiveSearchInput
               id="log-q"
-              type="search"
-              name="q"
               defaultValue={filters.q}
-              placeholder="Kode RMA, tiket, nama, atau isi catatan"
-              className="bg-card"
+              placeholder="Kode RMA, tiket, customer, nama barang, atau catatan"
             />
           </FilterBarField>
           <FilterBarField label="Tahapan tujuan" htmlFor="log-status">

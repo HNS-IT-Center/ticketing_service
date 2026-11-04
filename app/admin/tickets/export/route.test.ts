@@ -9,6 +9,7 @@ const findMany = vi.fn<(args: unknown) => Promise<unknown[]>>(async () => []);
 vi.mock("@/lib/db", () => ({ db: { ticket: { findMany: (args: unknown) => findMany(args) } } }));
 
 import { GET } from "./route";
+import { ticketSearchWhere } from "@/lib/ticket-list-filter";
 
 afterEach(() => {
   session = null;
@@ -40,14 +41,7 @@ describe("GET /admin/tickets/export", () => {
 
     // Same filter as the list, and no page size: every matching ticket.
     const args = findMany.mock.calls[0][0] as Record<string, unknown>;
-    expect(args.where).toEqual({
-      status: "done",
-      OR: [
-        { ticket_code: { contains: "NGW" } },
-        { user: { name: { contains: "NGW" } } },
-        { customer_name: { contains: "NGW" } },
-      ],
-    });
+    expect(args.where).toEqual({ status: "done", ...ticketSearchWhere("NGW") });
     expect(args.orderBy).toEqual({ ticket_code: "asc" });
     expect(args).not.toHaveProperty("take");
   });

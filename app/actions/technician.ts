@@ -4,6 +4,7 @@ import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import { sendTicketStatusEmail } from "@/lib/email";
+import { publicTicketPath } from "@/lib/routes";
 import { uploadToR2, getExt, getFileType, deleteFromStorage } from "@/lib/r2";
 import { storageFailedMessage } from "@/lib/upload-limit";
 import { performanceEffect } from "@/lib/kpi";
@@ -12,6 +13,10 @@ import { isServicePart, MAX_PART_PHOTOS } from "@/lib/service-parts";
 import { readPartInput } from "@/lib/replaced-part-input";
 import { EXTERNAL_WORK_OUTSTANDING, partChargeDescription } from "@/lib/charges";
 import { hasExternalWorkOutstanding } from "@/lib/charges-server";
+import { notifyPartCodePending } from "@/lib/part-code-notify";
+import { logActivity } from "@/lib/activity";
+import { ticketStatusText } from "@/lib/activity-catalog";
+import { describeReplacedPart } from "@/lib/service-parts";
 
 
 // ─── Request Ticket Assignment (Technician) ────────────────────────────────
@@ -47,6 +52,11 @@ export async function requestTicketAssignmentAction(ticketId: string) {
         reason: "Auto-assigned by Store Coordinator",
         changed_by: session.userId,
       },
+    });
+    await logActivity(session, "ticket.assign", `Mengambil tiket ${ticket.ticket_code} sebagai koordinator toko.`, {
+      type: "ticket",
+      id: ticketId,
+      label: ticket.ticket_code,
     });
     revalidatePath("/technician/dashboard");
     revalidatePath(`/technician/tickets/${ticketId}`);
@@ -142,6 +152,11 @@ export async function requestTicketAssignmentAction(ticketId: string) {
     });
   }
 
+  await logActivity(session, "ticket.request", `Meminta tiket ${ticket.ticket_code}.`, {
+    type: "ticket",
+    id: ticketId,
+    label: ticket.ticket_code,
+  });
   revalidatePath("/technician/dashboard");
   return { success: true };
 }
@@ -160,6 +175,7 @@ export async function cancelTicketRequestAction(ticketId: string) {
   await db.ticketAssignmentRequest.delete({
     where: { id: request.id },
   });
+  await logActivity(session, "ticket.request_cancel", "Membatalkan permintaan tiket.", { type: "ticket", id: ticketId });
 
   revalidatePath("/technician/dashboard");
   return { success: true };
@@ -383,6 +399,16 @@ export async function updateTicketStatusAction(formData: FormData) {
       });
     }
 
+    // Finished with a part still uncoded: remind the technician holding it.
+    if (newStatus === "done") await notifyPartCodePending(ticketId);
+
+    await logActivity(
+      session,
+      "ticket.status",
+      technicianStatusSummary(ticket.ticket_code, oldStatus, newStatus, eventAction, reason, uploadedFiles.length),
+      { type: "ticket", id: ticketId, label: ticket.ticket_code },
+    );
+
     if (ticket.user_id && ticket.user_id !== session.userId) {
       await db.notification.create({
         data: {
@@ -414,7 +440,7 @@ export async function updateTicketStatusAction(formData: FormData) {
 
     db.ticket.findUnique({
       where: { id: ticketId },
-      select: { customer_email: true, customer_name: true, public_share_token: true },
+      select: { customer_email: true, customer_name: true, public_share_token: true, public_short_code: true, created_at: true },
     }).then(async (fullTicket) => {
       if (!fullTicket?.customer_email) return;
 
@@ -429,7 +455,7 @@ export async function updateTicketStatusAction(formData: FormData) {
         customerName: fullTicket.customer_name || "Customer",
         ticketCode: ticket.ticket_code,
         status: newStatus,
-        shareToken: fullTicket.public_share_token,
+        ticketPath: publicTicketPath(fullTicket.created_at, fullTicket.public_share_token, fullTicket.public_short_code),
         appUrl
       }).catch((err) => console.error("[EMAIL FIRE-AND-FORGET ERROR]", err));
     }).catch(() => { });
@@ -443,6 +469,25 @@ export async function updateTicketStatusAction(formData: FormData) {
   }
 }
 
+const WORK_EVENT_TEXT = { START: "Mulai mengerjakan", PAUSE: "Menjeda", RESUME: "Melanjutkan", DONE: "Menyelesaikan" } as const;
+
+/** One sentence for the activity log: a status move, or a pause/resume within one. */
+function technicianStatusSummary(
+  code: string,
+  from: string,
+  to: string,
+  event: keyof typeof WORK_EVENT_TEXT | null,
+  reason: string | null,
+  files: number,
+): string {
+  const head =
+    from === to && event
+      ? `${WORK_EVENT_TEXT[event]} pengerjaan ${code}`
+      : `Mengubah status ${code}: ${ticketStatusText(from)} → ${ticketStatusText(to)}`;
+  const extra = [reason?.trim() && `alasan: ${reason.trim()}`, files > 0 && `${files} lampiran bukti`].filter(Boolean);
+  return `${head}${extra.length ? ` (${extra.join("; ")})` : ""}.`;
+}
+
 // ─── Update Ticket Notes ───────────────────────────────────────────────────
 export async function updateTicketNotesAction(ticketId: string, notes: string) {
   const session = await requireRole("Technician");
@@ -453,6 +498,11 @@ export async function updateTicketNotesAction(ticketId: string, notes: string) {
   }
 
   await db.ticket.update({ where: { id: ticketId }, data: { notes } });
+  await logActivity(session, "ticket.notes", `Mengubah catatan ${ticket.ticket_code}.`, {
+    type: "ticket",
+    id: ticketId,
+    label: ticket.ticket_code,
+  });
   revalidatePath(`/technician/tickets/${ticketId}`);
   return { success: true };
 }
@@ -550,6 +600,14 @@ export async function addReplacedPartAction(formData: FormData) {
       },
     },
   });
+  await logActivity(
+    session,
+    "part.add",
+    `Mencatat part ${describeReplacedPart(part, name)} ×${quantity} di ${ticket.ticket_code}${
+      catalog?.sku ? ` (kode ${catalog.sku})` : " (belum ada kode Accurate)"
+    }.`,
+    { type: "ticket", id: ticketId, label: ticket.ticket_code },
+  );
 
   revalidatePath(`/technician/tickets/${ticketId}`);
   revalidatePath(`/admin/tickets/${ticketId}`);
@@ -571,7 +629,9 @@ export async function removeReplacedPartAction(partId: string) {
       id: true,
       recorded_by_id: true,
       ticket_id: true,
-      ticket: { select: { technician_id: true } },
+      part: true,
+      item_name: true,
+      ticket: { select: { technician_id: true, ticket_code: true } },
       photos: { select: { file_url: true } },
     },
   });
@@ -589,6 +649,12 @@ export async function removeReplacedPartAction(partId: string) {
   // already gone, and a storage error must not make a completed removal look
   // like it failed.
   await db.ticketReplacedPart.delete({ where: { id: partId } });
+  await logActivity(
+    session,
+    "part.remove",
+    `Menghapus part ${describeReplacedPart(existing.part, existing.item_name)} dari ${existing.ticket.ticket_code}.`,
+    { type: "ticket", id: existing.ticket_id, label: existing.ticket.ticket_code },
+  );
 
   for (const photo of existing.photos) {
     if (!(await deleteFromStorage(photo.file_url))) {

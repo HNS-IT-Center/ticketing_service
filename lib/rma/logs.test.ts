@@ -34,8 +34,10 @@ describe("buildEventWhere", () => {
     expect(buildEventWhere(NONE)).toEqual({});
   });
 
-  it("searches the RMA code, the ticket, the customer, the actor and the note", () => {
-    expect(buildEventWhere({ ...NONE, q: "ngh" }).OR).toHaveLength(5);
+  it("searches the RMA code, the ticket, the customer, the unit, the actor and the note", () => {
+    const where = buildEventWhere({ ...NONE, q: "ngh" });
+    expect(where.OR).toHaveLength(7);
+    expect(JSON.stringify(where)).toContain("device_name");
   });
 
   it("keeps a known stage and drops anything else", () => {

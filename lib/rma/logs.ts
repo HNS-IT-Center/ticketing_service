@@ -75,6 +75,8 @@ export function buildEventWhere(f: RmaLogFilters): Prisma.RmaEventWhereInput {
       { rma_case: { rma_code: { contains: f.q } } },
       { rma_case: { ticket: { ticket_code: { contains: f.q } } } },
       { rma_case: { ticket: { customer_name: { contains: f.q } } } },
+      { rma_case: { ticket: { device_name: { contains: f.q } } } },
+      { rma_case: { ticket: { device_sn: { contains: f.q } } } },
       { actor: { name: { contains: f.q } } },
       { note: { contains: f.q } },
     ];

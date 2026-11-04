@@ -1,9 +1,11 @@
 "use client";
 
-import { useState, useTransition, type FormEvent } from "react";
+import { useId, useState, useTransition, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { createVendorAction, updateVendorAction } from "@/app/actions/vendors";
+import { Loader2, Plus } from "lucide-react";
+import { createVendorAction, deleteVendorAction, updateVendorAction } from "@/app/actions/vendors";
+import { DeleteEntryButton } from "@/components/app/DeleteEntryButton";
 import {
   VENDOR_LOCATIONS,
   VENDOR_LOCATION_INFO,
@@ -15,6 +17,20 @@ import {
   type VendorRole,
   type VendorRoles,
 } from "@/lib/vendors";
+import { FormField } from "@/components/app/FormField";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
+import { TONE_CLASSES, type StatusTone } from "@/lib/status-display";
+import { cn } from "@/lib/utils";
 
 export type VendorRowData = VendorRoles & {
   id: string;
@@ -22,28 +38,31 @@ export type VendorRowData = VendorRoles & {
   contact: string | null;
   location: VendorLocation | null;
   is_active: boolean;
+  /** Bill lines and RMA cases that name it — a vendor in use cannot be deleted. */
+  charges: number;
+  cases: number;
 };
 
-const ROLE_STYLE: Record<VendorRole, { bg: string; fg: string; border: string }> = {
-  supplies_parts: { bg: "#dbeafe", fg: "#1e40af", border: "#bfdbfe" },
-  repairs: { bg: "#f3e8ff", fg: "#6b21a8", border: "#e9d5ff" },
-  handles_claims: { bg: "#fef3c7", fg: "#92400e", border: "#fde68a" },
+function vendorInUse(v: VendorRowData): string | null {
+  if (v.charges + v.cases === 0) return null;
+  const used = [v.charges && `${v.charges} baris tagihan`, v.cases && `${v.cases} case RMA`].filter(Boolean).join(" dan ");
+  return `Sudah tercatat di ${used} — nonaktifkan lewat Ubah, jangan dihapus.`;
+}
+
+const PILL = "rounded-full border px-2.5 py-0.5 text-[0.71875rem] font-bold whitespace-nowrap";
+
+/** The same hues the role pills had, as tones. */
+const ROLE_TONE: Record<VendorRole, StatusTone> = {
+  supplies_parts: "blue",
+  repairs: "violet",
+  handles_claims: "amber",
 };
 
 export function RolePills({ vendor }: { vendor: VendorRoles }) {
   return (
     <span className="flex flex-wrap gap-1.5">
       {vendorRolesOf(vendor).map((role) => (
-        <span
-          key={role}
-          className="whitespace-nowrap rounded-full text-[0.71875rem] font-bold"
-          style={{
-            background: ROLE_STYLE[role].bg,
-            color: ROLE_STYLE[role].fg,
-            border: `1px solid ${ROLE_STYLE[role].border}`,
-            padding: "0.1rem 0.6rem",
-          }}
-        >
+        <span key={role} className={cn(PILL, TONE_CLASSES[ROLE_TONE[role]])}>
           {VENDOR_ROLE_INFO[role].label}
         </span>
       ))}
@@ -52,33 +71,24 @@ export function RolePills({ vendor }: { vendor: VendorRoles }) {
 }
 
 /** Dalam kota (LKL) / luar kota (ITR), as the shop's supplier list codes it. */
-function LocationSelect({ value }: { value?: VendorLocation | null }) {
+function LocationSelect({ id, value }: { id: string; value?: VendorLocation | null }) {
   return (
-    <select name="location" defaultValue={value ?? ""} className="form-input" aria-label="Lokasi vendor">
+    <NativeSelect id={id} name="location" defaultValue={value ?? ""}>
       <option value="">Lokasi belum diisi</option>
       {VENDOR_LOCATIONS.map((l) => (
         <option key={l} value={l}>
           {vendorLocationText(l)}
         </option>
       ))}
-    </select>
+    </NativeSelect>
   );
 }
 
-function LocationPill({ location }: { location: VendorLocation | null }) {
-  if (!location) return <span style={{ color: "var(--text-muted)" }}>—</span>;
+export function LocationPill({ location }: { location: VendorLocation | null }) {
+  if (!location) return <span className="text-muted-foreground">—</span>;
   const far = location === "out_of_town";
   return (
-    <span
-      className="whitespace-nowrap rounded-full text-[0.71875rem] font-bold"
-      title={vendorLocationText(location) ?? undefined}
-      style={{
-        background: far ? "#ffedd5" : "#dcfce7",
-        color: far ? "#9a3412" : "#166534",
-        border: `1px solid ${far ? "#fed7aa" : "#bbf7d0"}`,
-        padding: "0.1rem 0.6rem",
-      }}
-    >
+    <span className={cn(PILL, TONE_CLASSES[far ? "orange" : "green"])} title={vendorLocationText(location) ?? undefined}>
       {VENDOR_LOCATION_INFO[location].code} · {VENDOR_LOCATION_INFO[location].label}
     </span>
   );
@@ -86,22 +96,20 @@ function LocationPill({ location }: { location: VendorLocation | null }) {
 
 function RoleChecks({ checked }: { checked: Partial<VendorRoles> }) {
   return (
-    <fieldset className="flex flex-col gap-1.5 border-0">
-      <legend className="text-sm font-semibold" style={{ marginBottom: "0.35rem" }}>
-        Peran
-      </legend>
+    <fieldset className="flex min-w-0 flex-col gap-1">
+      <legend className="mb-1.5 text-sm font-medium text-foreground">Peran</legend>
       {VENDOR_ROLES.map((role) => (
-        <label key={role} className="flex items-start gap-2 text-sm">
+        <label key={role} className="flex min-h-11 cursor-pointer items-start gap-2.5 py-1.5 text-sm md:min-h-0">
           <input
             type="checkbox"
             name={role}
             value="1"
             defaultChecked={checked[role] ?? false}
-            style={{ marginTop: "0.2rem" }}
+            className="mt-0.5 size-4 shrink-0 accent-primary"
           />
           <span>
-            <strong>{VENDOR_ROLE_INFO[role].label}</strong>{" "}
-            <span style={{ color: "var(--text-muted)" }}>— {VENDOR_ROLE_INFO[role].hint}</span>
+            <strong className="font-semibold">{VENDOR_ROLE_INFO[role].label}</strong>{" "}
+            <span className="text-muted-foreground">— {VENDOR_ROLE_INFO[role].hint}</span>
           </span>
         </label>
       ))}
@@ -139,93 +147,94 @@ function useVendorSubmit() {
 
 export function NewVendorForm({ defaultRoles = {} }: { defaultRoles?: Partial<VendorRoles> }) {
   const { pending, submit } = useVendorSubmit();
+  const id = useId();
   return (
     <form
+      data-slot="new-vendor"
       onSubmit={(e) => submit(e, createVendorAction, "Vendor ditambahkan.", (form) => form.reset())}
-      className="card flex flex-col gap-4"
+      className="flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-xs md:p-5"
     >
       <div className="grid gap-3 md:grid-cols-2">
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold">Nama vendor</span>
-          <input name="name" required minLength={2} className="form-input" placeholder="mis. Asus Service Center" />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold">
-            Kontak <span className="font-normal" style={{ color: "var(--text-muted)" }}>(opsional)</span>
-          </span>
-          <input name="contact" className="form-input" placeholder="No. WA / alamat" />
-        </label>
-        <label className="flex flex-col gap-1">
-          <span className="text-sm font-semibold">
-            Lokasi <span className="font-normal" style={{ color: "var(--text-muted)" }}>(opsional)</span>
-          </span>
-          <LocationSelect />
-        </label>
+        <FormField label="Nama vendor" htmlFor={`${id}-name`}>
+          <Input id={`${id}-name`} name="name" required minLength={2} className="bg-card" placeholder="mis. Asus Service Center" />
+        </FormField>
+        <FormField label="Kontak" htmlFor={`${id}-contact`} hint="(opsional)">
+          <Input id={`${id}-contact`} name="contact" className="bg-card" placeholder="No. WA / alamat" />
+        </FormField>
+        <FormField label="Lokasi" htmlFor={`${id}-location`} hint="(opsional)">
+          <LocationSelect id={`${id}-location`} />
+        </FormField>
       </div>
       <RoleChecks checked={defaultRoles} />
-      <button type="submit" className="btn btn-primary self-start" disabled={pending}>
+      <Button type="submit" disabled={pending} className="self-start">
+        {pending ? <Loader2 aria-hidden="true" className="animate-spin" /> : <Plus aria-hidden="true" />}
         {pending ? "Menyimpan…" : "Tambah vendor"}
-      </button>
+      </Button>
     </form>
   );
 }
 
-export function VendorRow({ vendor, canManage }: { vendor: VendorRowData; canManage: boolean }) {
-  const [editing, setEditing] = useState(false);
+/** "Ubah" on a vendor: the same fields as before, in a dialog instead of the table row. */
+export function VendorEditDialog({ vendor }: { vendor: VendorRowData }) {
+  const [open, setOpen] = useState(false);
   const { pending, submit } = useVendorSubmit();
-
-  if (!editing) {
-    return (
-      <tr style={{ opacity: vendor.is_active ? 1 : 0.55 }}>
-        <td style={{ fontWeight: 600 }}>{vendor.name}</td>
-        <td>
-          <RolePills vendor={vendor} />
-        </td>
-        <td>
-          <LocationPill location={vendor.location} />
-        </td>
-        <td style={{ color: "var(--text-muted)" }}>{vendor.contact ?? "—"}</td>
-        <td>{vendor.is_active ? "Aktif" : "Nonaktif"}</td>
-        <td>
-          {canManage && (
-            <button type="button" className="btn btn-secondary btn-sm" onClick={() => setEditing(true)}>
-              Ubah
-            </button>
-          )}
-        </td>
-      </tr>
-    );
-  }
+  const id = useId();
 
   return (
-    <tr>
-      <td colSpan={6}>
+    <Dialog open={open} onOpenChange={(next) => !pending && setOpen(next)}>
+      <DialogTrigger render={<Button variant="outline" size="sm" className="bg-card" />}>Ubah</DialogTrigger>
+      <DialogContent className="max-h-[calc(100svh-2rem)] overflow-y-auto sm:max-w-lg">
         <form
           onSubmit={(e) =>
-            submit(e, (fd) => updateVendorAction(vendor.id, fd), "Vendor diperbarui.", () => setEditing(false))
+            submit(e, (fd) => updateVendorAction(vendor.id, fd), "Vendor diperbarui.", () => setOpen(false))
           }
-          className="flex flex-col gap-3"
-          style={{ padding: "0.5rem 0" }}
+          className="flex flex-col gap-4"
         >
-          <div className="grid gap-3 md:grid-cols-2">
-            <input name="name" defaultValue={vendor.name} required minLength={2} className="form-input" />
-            <input name="contact" defaultValue={vendor.contact ?? ""} className="form-input" placeholder="Kontak" />
-            <LocationSelect value={vendor.location} />
-          </div>
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold">Ubah vendor</DialogTitle>
+          </DialogHeader>
+
+          <FormField label="Nama vendor" htmlFor={`${id}-name`}>
+            <Input id={`${id}-name`} name="name" defaultValue={vendor.name} required minLength={2} className="bg-card" />
+          </FormField>
+          <FormField label="Kontak" htmlFor={`${id}-contact`}>
+            <Input id={`${id}-contact`} name="contact" defaultValue={vendor.contact ?? ""} className="bg-card" placeholder="Kontak" />
+          </FormField>
+          <FormField label="Lokasi" htmlFor={`${id}-location`}>
+            <LocationSelect id={`${id}-location`} value={vendor.location} />
+          </FormField>
           <RoleChecks checked={vendor} />
-          <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" name="is_active" value="1" defaultChecked={vendor.is_active} /> Aktif
+          <label className="flex min-h-11 cursor-pointer items-center gap-2.5 text-sm md:min-h-9">
+            <input type="checkbox" name="is_active" value="1" defaultChecked={vendor.is_active} className="size-5 accent-primary md:size-4" />
+            Aktif
           </label>
-          <div className="flex gap-2">
-            <button type="submit" className="btn btn-primary btn-sm" disabled={pending}>
-              Simpan
-            </button>
-            <button type="button" className="btn btn-ghost btn-sm" disabled={pending} onClick={() => setEditing(false)}>
+
+          <DialogFooter>
+            <Button type="button" variant="outline" disabled={pending} onClick={() => setOpen(false)}>
               Batal
-            </button>
-          </div>
+            </Button>
+            <Button type="submit" disabled={pending}>
+              {pending && <Loader2 aria-hidden="true" className="animate-spin" />}
+              Simpan
+            </Button>
+          </DialogFooter>
         </form>
-      </td>
-    </tr>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/** A row's controls: "Ubah", and delete for a vendor nothing names yet. */
+export function VendorRowActions({ vendor }: { vendor: VendorRowData }) {
+  return (
+    <span className="flex items-center justify-end gap-2">
+      <VendorEditDialog vendor={vendor} />
+      <DeleteEntryButton
+        name={vendor.name}
+        what="vendor"
+        onDelete={() => deleteVendorAction(vendor.id)}
+        blockedReason={vendorInUse(vendor)}
+      />
+    </span>
   );
 }

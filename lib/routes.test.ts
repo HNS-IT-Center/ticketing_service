@@ -251,6 +251,14 @@ describe("public ticket page", () => {
     expect(path).toBe("/2026-09-28/e28ea366608aa378cc56b7288df67769");
   });
 
+  it("prefers the short link when the ticket has a short code", () => {
+    expect(publicTicketPath(created, "e28ea366608aa378cc56b7288df67769", "Kx7pQ2mZ9aBc")).toBe("/t/Kx7pQ2mZ9aBc");
+  });
+
+  it("falls back to the long link without a short code", () => {
+    expect(publicTicketPath(created, "tok3n", null)).toBe("/2026-09-28/tok3n");
+  });
+
   it("offers no link when the ticket has no token", () => {
     // The caller renders nothing rather than a link that cannot resolve.
     expect(publicTicketPath(created, null)).toBeNull();
@@ -269,6 +277,9 @@ describe("public ticket page", () => {
       "/2026-09-28/e28ea366608aa378cc56b7288df67769",
       "/2026-01-01/abc-DEF_123",
       "/2026-09-28/tok3n/",
+      "/t/Kx7pQ2mZ9aBc",
+      "/t/AbC-dEf_GhIjKlMn",
+      "/t/Kx7pQ2mZ9aBc/",
     ])("lets %s through", (p) => {
       expect(isPublicTicketPath(p)).toBe(true);
     });
@@ -284,6 +295,11 @@ describe("public ticket page", () => {
       "/2026-09-28/a/b",
       "/not-a-date/token",
       "/",
+      "/t",
+      "/t/",
+      "/t/short",
+      "/t/Kx7pQ2mZ9aBc/extra",
+      "/t/has.dot.inside",
     ])("keeps %s behind the guard", (p) => {
       expect(isPublicTicketPath(p)).toBe(false);
     });

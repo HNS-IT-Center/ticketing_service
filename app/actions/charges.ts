@@ -8,8 +8,11 @@ import { chargePermissions } from "@/lib/charges-server";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
 import { readPartInput } from "@/lib/replaced-part-input";
 import { deleteFromStorage } from "@/lib/r2";
+import { logActivity, type ActivityActor } from "@/lib/activity";
 import { isServicePart, requiresItemName } from "@/lib/service-parts";
 import {
+  chargeKindLabel,
+  formatRupiah,
   MAX_CHARGE_QUANTITY,
   MAX_DESCRIPTION,
   isAddableChargeKind,
@@ -53,14 +56,22 @@ function revalidateTicket(ticketId: string) {
   revalidatePath(`/sales/tickets/${ticketId}`);
 }
 
-async function guardTicket(ticketId: string): Promise<Fail | { userId: string; perms: ChargePermissions }> {
+async function guardTicket(
+  ticketId: string,
+): Promise<Fail | { userId: string; actor: ActivityActor; perms: ChargePermissions }> {
   const session = await requireSession();
   const ticket = await db.ticket.findUnique({ where: { id: ticketId }, select: TICKET_SCOPE });
   if (!ticket) return { error: "Tiket tidak ditemukan." };
   if (ticket.ticket_type !== "service") return { error: "Rincian biaya hanya ada pada tiket service." };
   const perms = await chargePermissions(session.userId, ticket);
   if (!perms.canEdit) return { error: "Anda tidak dapat mengubah rincian biaya tiket ini." };
-  return { userId: session.userId, perms };
+  return { userId: session.userId, actor: session, perms };
+}
+
+/** "Jasa service: Ganti LCD ×1, harga jual Rp 350.000" — the cost is never written to the log. */
+function lineText(kind: ChargeKind, description: string, quantity: number, unitPrice?: number | null): string {
+  const price = typeof unitPrice === "number" ? `, harga jual ${formatRupiah(unitPrice)}` : "";
+  return `${chargeKindLabel(kind)}: ${description} ×${quantity}${price}`;
 }
 
 /**
@@ -198,6 +209,10 @@ export async function addChargeAction(formData: FormData): Promise<Fail | Ok> {
       created_by_id: guard.userId,
     },
   });
+  await logActivity(guard.actor, "charge.add", `Menambah biaya ${lineText(kind, description, quantity, prices.unit_price)}.`, {
+    type: "ticket",
+    id: ticketId,
+  });
 
   revalidateTicket(ticketId);
   return { success: true };
@@ -249,6 +264,14 @@ export async function addPartChargeAction(formData: FormData): Promise<Fail | Ok
       },
     },
   });
+  await logActivity(
+    guard.actor,
+    "part.add",
+    `Mencatat part dari Rincian Biaya: ${lineText("part", partChargeDescription(input.part, input.name), input.quantity, prices.unit_price)}${
+      input.catalog?.sku ? ` (kode ${input.catalog.sku})` : " (belum ada kode Accurate)"
+    }.`,
+    { type: "ticket", id: ticketId },
+  );
 
   revalidateTicket(ticketId);
   return { success: true };
@@ -264,6 +287,8 @@ export async function updateChargeAction(chargeId: string, formData: FormData): 
     select: {
       ticket_id: true,
       kind: true,
+      description: true,
+      quantity: true,
       vendor_id: true,
       service_job_id: true,
       replaced_part: { select: { id: true, part: true, item_name: true, sku: true } },
@@ -355,6 +380,19 @@ export async function updateChargeAction(chargeId: string, formData: FormData): 
     return true;
   });
   if (!saved) return { error: "Part ini baru saja diberi kode Accurate. Muat ulang halaman, lalu coba lagi." };
+  const changed = [
+    typeof data.description === "string" && data.description !== charge.description && `nama → ${data.description}`,
+    typeof data.quantity === "number" && data.quantity !== charge.quantity && `jumlah → ${data.quantity}`,
+    "unit_price" in prices && `harga jual → ${prices.unit_price === null || prices.unit_price === undefined ? "kosong" : formatRupiah(prices.unit_price)}`,
+    "unit_cost" in prices && "harga modal diubah",
+    vendor && vendor.vendor_id !== charge.vendor_id && "vendor diganti",
+  ].filter(Boolean);
+  await logActivity(
+    guard.actor,
+    "charge.update",
+    `Mengubah biaya ${chargeKindLabel(charge.kind)}: ${charge.description}${changed.length ? ` (${changed.join(", ")})` : ""}.`,
+    { type: "ticket", id: charge.ticket_id },
+  );
   revalidateTicket(charge.ticket_id);
   return { success: true };
 }
@@ -363,7 +401,7 @@ export async function updateChargeAction(chargeId: string, formData: FormData): 
 export async function removeChargeAction(chargeId: string): Promise<Fail | Ok> {
   const charge = await db.ticketCharge.findUnique({
     where: { id: chargeId },
-    select: { ticket_id: true, replaced_part_id: true },
+    select: { ticket_id: true, replaced_part_id: true, kind: true, description: true, quantity: true },
   });
   if (!charge) return { error: "Baris biaya tidak ditemukan." };
   const guard = await guardTicket(charge.ticket_id);
@@ -387,6 +425,12 @@ export async function removeChargeAction(chargeId: string): Promise<Fail | Ok> {
   } else {
     await db.ticketCharge.delete({ where: { id: chargeId } });
   }
+  await logActivity(
+    guard.actor,
+    charge.replaced_part_id ? "part.remove" : "charge.remove",
+    `Menghapus biaya ${lineText(charge.kind, charge.description, charge.quantity)}.`,
+    { type: "ticket", id: charge.ticket_id },
+  );
   revalidateTicket(charge.ticket_id);
   return { success: true };
 }
@@ -400,7 +444,7 @@ export async function removeChargeAction(chargeId: string): Promise<Fail | Ok> {
 export async function receiveExternalAction(chargeId: string, formData: FormData): Promise<Fail | Ok> {
   const charge = await db.ticketCharge.findUnique({
     where: { id: chargeId },
-    select: { ticket_id: true, kind: true, sent_at: true, returned_at: true },
+    select: { ticket_id: true, kind: true, description: true, sent_at: true, returned_at: true, vendor: { select: { name: true } } },
   });
   if (!charge || charge.kind !== "external_service") return { error: "Service eksternal tidak ditemukan." };
   const guard = await guardTicket(charge.ticket_id);
@@ -429,6 +473,14 @@ export async function receiveExternalAction(chargeId: string, formData: FormData
     },
   });
   if (updated.count === 0) return { error: "Pekerjaan ini sudah dicatat kembali dari vendor." };
+  await logActivity(
+    guard.actor,
+    "charge.receive_external",
+    `Menerima kembali service eksternal "${charge.description}"${charge.vendor ? ` dari ${charge.vendor.name}` : ""}: ${
+      result === "repaired" ? "berhasil diperbaiki" : "tidak bisa diperbaiki"
+    }${note ? ` (${note})` : ""}.`,
+    { type: "ticket", id: charge.ticket_id },
+  );
 
   revalidateTicket(charge.ticket_id);
   return { success: true };
@@ -487,6 +539,10 @@ export async function linkPartCatalogAction(chargeId: string, catalogItemId: num
     return true;
   });
   if (!linked) return { error: "Part ini sudah punya kode Accurate." };
+  await logActivity(session, "part.link_code", `Mengisi kode Accurate part: ${item.sku} — ${item.name}.`, {
+    type: "ticket",
+    id: charge.ticket_id,
+  });
 
   revalidateTicket(charge.ticket_id);
   return { success: true };

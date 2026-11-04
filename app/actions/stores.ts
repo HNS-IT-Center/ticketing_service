@@ -3,10 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
+import { logActivity } from "@/lib/activity";
 
 // ─── Create Store ─────────────────────────────────────────────────────────────
 export async function createStoreAction(formData: FormData) {
-  await requireRole("Administrator");
+  const session = await requireRole("Administrator");
 
   const name = (formData.get("name") as string).trim();
   const code = (formData.get("code") as string).trim().toUpperCase();
@@ -22,7 +23,12 @@ export async function createStoreAction(formData: FormData) {
   if (existing)
     return { error: "A store with this name or code already exists" };
 
-  await db.storeLocation.create({ data: { name, code, address } });
+  const store = await db.storeLocation.create({ data: { name, code, address }, select: { id: true } });
+  await logActivity(session, "store.create", `Menambah toko ${name} (${code}).`, {
+    type: "store",
+    id: store.id,
+    label: `${name} (${code})`,
+  });
 
   revalidatePath("/admin/stores");
   return { success: true };
@@ -30,7 +36,7 @@ export async function createStoreAction(formData: FormData) {
 
 // ─── Update Store ─────────────────────────────────────────────────────────────
 export async function updateStoreAction(storeId: string, formData: FormData) {
-  await requireRole("Administrator");
+  const session = await requireRole("Administrator");
 
   const name = (formData.get("name") as string).trim();
   const address = (formData.get("address") as string | null)?.trim() || null;
@@ -40,6 +46,11 @@ export async function updateStoreAction(storeId: string, formData: FormData) {
     where: { id: storeId },
     data: { name, address, is_active },
   });
+  await logActivity(session, "store.update", `Mengubah toko ${name} (${is_active ? "aktif" : "nonaktif"}).`, {
+    type: "store",
+    id: storeId,
+    label: name,
+  });
 
   revalidatePath("/admin/stores");
   revalidatePath(`/admin/stores/${storeId}`);
@@ -48,7 +59,7 @@ export async function updateStoreAction(storeId: string, formData: FormData) {
 
 // ─── Delete Store ─────────────────────────────────────────────────────────────
 export async function deleteStoreAction(storeId: string) {
-  await requireRole("Administrator");
+  const session = await requireRole("Administrator");
 
   // Check if any tickets reference this store before deleting
   const ticketCount = await db.ticket.count({
@@ -59,7 +70,12 @@ export async function deleteStoreAction(storeId: string) {
       error: `Cannot delete — ${ticketCount} ticket(s) are linked to this store. Deactivate it instead.`,
     };
 
-  await db.storeLocation.delete({ where: { id: storeId } });
+  const store = await db.storeLocation.delete({ where: { id: storeId }, select: { name: true, code: true } });
+  await logActivity(session, "store.delete", `Menghapus toko ${store.name} (${store.code}).`, {
+    type: "store",
+    id: storeId,
+    label: `${store.name} (${store.code})`,
+  });
 
   revalidatePath("/admin/stores");
   return { success: true };
@@ -70,13 +86,14 @@ export async function assignTechnicianToStoreAction(
   technicianId: string,
   storeId: string
 ) {
-  await requireRole("Administrator");
+  const session = await requireRole("Administrator");
 
   await db.technicianStoreAssignment.upsert({
     where: { technician_id_store_id: { technician_id: technicianId, store_id: storeId } },
     create: { technician_id: technicianId, store_id: storeId },
     update: {},
   });
+  await logStoreAssignment(session, "store.assign", technicianId, storeId);
 
   revalidatePath(`/admin/users/${technicianId}`);
   revalidatePath(`/admin/stores/${storeId}`);
@@ -88,15 +105,36 @@ export async function removeTechnicianFromStoreAction(
   technicianId: string,
   storeId: string
 ) {
-  await requireRole("Administrator");
+  const session = await requireRole("Administrator");
 
   await db.technicianStoreAssignment.deleteMany({
     where: { technician_id: technicianId, store_id: storeId },
   });
+  await logStoreAssignment(session, "store.unassign", technicianId, storeId);
 
   revalidatePath(`/admin/users/${technicianId}`);
   revalidatePath(`/admin/stores/${storeId}`);
   return { success: true };
+}
+
+async function logStoreAssignment(
+  session: { userId: string; name: string; role: string },
+  action: "store.assign" | "store.unassign",
+  technicianId: string,
+  storeId: string,
+) {
+  const [tech, store] = await Promise.all([
+    db.user.findUnique({ where: { id: technicianId }, select: { name: true } }),
+    db.storeLocation.findUnique({ where: { id: storeId }, select: { name: true } }),
+  ]);
+  const who = tech?.name ?? "teknisi";
+  const where = store?.name ?? "toko";
+  await logActivity(
+    session,
+    action,
+    action === "store.assign" ? `Menugaskan ${who} ke toko ${where}.` : `Melepas ${who} dari toko ${where}.`,
+    { type: "store", id: storeId, label: where },
+  );
 }
 
 // ─── Get All Active Stores (for dropdowns) ────────────────────────────────────

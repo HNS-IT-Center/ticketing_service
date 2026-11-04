@@ -15,6 +15,7 @@ import {
   TrendingUp,
   Settings,
   Activity,
+  History,
   Store,
   ShieldCheck,
   Package,
@@ -149,6 +150,7 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
         { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
         { href: "/admin/reports/parts", label: "Laporan Part", icon: <Package size={18} /> },
         { href: "/admin/logs", label: "Log Tiket", icon: <Activity size={18} /> },
+        { href: "/admin/activity", label: "Log Aktivitas", icon: <History size={18} /> },
       ],
     },
     {

@@ -20,6 +20,8 @@ import { ticketPartyName } from "@/lib/ticket-party";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 import ChargesPanel from "@/components/service/ChargesPanel";
 import { loadChargesPanel } from "@/lib/charges-server";
+import PartCodePendingBanner from "@/components/service/PartCodePendingBanner";
+import { partsAwaitingCodeCount } from "@/lib/part-code-alerts";
 import { PcComponentsCard, UpgradesCard } from "@/components/tickets/IntakeItems";
 import { proofKindOf } from "@/components/tickets/proof";
 import {
@@ -223,6 +225,12 @@ export default async function TechnicianTicketDetailPage({
             />
           )
         }
+      />
+
+      {/* Service finished, a fitted part still without its Accurate code. */}
+      <PartCodePendingBanner
+        count={partsAwaitingCodeCount(ticket)}
+        canLink={Boolean(chargesPanel?.perms.canLinkPartCode && chargesPanel.catalogEnabled)}
       />
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">

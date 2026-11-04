@@ -13,6 +13,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Ticket, Plus } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
+import { ticketSearchWhere } from "@/lib/ticket-list-filter";
 
 function getTicketPoints(type: string, deviceType?: string | null, extraServices?: string[]): number {
   let base = 2;
@@ -43,15 +44,8 @@ export default async function SalesTicketsPage({
   const where = {
     sales_id: session.userId,
     ...(statusFilter !== "all" ? { status: statusFilter as TicketStatus } : {}),
-    ...(query
-      ? {
-          OR: [
-            { ticket_code: { contains: query } },
-            { user: { name: { contains: query } } },
-            { customer_name: { contains: query } },
-          ],
-        }
-      : {}),
+    // Shared with the admin list: code, customer, or the unit / parts.
+    ...ticketSearchWhere(query),
   };
 
   const STATUS_PRIORITY: Record<string, number> = {
@@ -215,7 +209,7 @@ export default async function SalesTicketsPage({
         <FilterBar action="/sales/tickets">
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
           {sortParam !== "priority" && <input type="hidden" name="sort" value={sortParam} />}
-          <FilterBarSearch label="Search tickets" placeholder="Search code or customer..." defaultValue={query} />
+          <FilterBarSearch label="Search tickets" placeholder="Cari kode, customer, atau nama barang…" defaultValue={query} />
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
             <Button type="submit">Search</Button>
             {query && (

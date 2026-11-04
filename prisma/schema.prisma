@@ -1095,3 +1095,35 @@ model TechnicianTarget {
 
   @@unique([scope, effective_month])
 }
+
+/// Who did what in the application — one row per user action (login, a
+/// ticket's status, a bill line, a vendor edit, an export …), written by
+/// lib/activity.ts and read on /admin/activity.
+///
+/// No foreign keys on purpose, the DeletedTicketLog rule: the row must outlive
+/// the user and the record it names. The actor's name and role and the
+/// record's label (ticket code, vendor name …) are copied at the time.
+model ActivityLog {
+  id         String   @id @default(cuid())
+  created_at DateTime @default(now())
+
+  /// Null for something done without an account, e.g. a failed login.
+  actor_id   String?
+  actor_name String  @db.Text
+  actor_role String
+
+  /// "<area>.<verb>", e.g. "ticket.status" — the catalogue is lib/activity.ts.
+  action String
+
+  entity_type  String?
+  entity_id    String?
+  entity_label String? @db.Text
+
+  /// The sentence shown in the log, in Indonesian.
+  summary String @db.Text
+
+  @@index([created_at])
+  @@index([actor_id, created_at])
+  @@index([action, created_at])
+  @@index([entity_type, entity_id])
+}

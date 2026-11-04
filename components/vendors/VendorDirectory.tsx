@@ -26,6 +26,7 @@ export default async function VendorDirectory({
       repairs: true,
       handles_claims: true,
       location: true,
+      _count: { select: { charges: true, rma_cases: true } },
     },
   });
 
@@ -63,8 +64,8 @@ export default async function VendorDirectory({
                 </tr>
               </thead>
               <tbody>
-                {vendors.map((v) => (
-                  <VendorRow key={v.id} vendor={v} canManage={canManage} />
+                {vendors.map(({ _count, ...v }) => (
+                  <VendorRow key={v.id} vendor={{ ...v, charges: _count.charges, cases: _count.rma_cases }} canManage={canManage} />
                 ))}
               </tbody>
             </table>

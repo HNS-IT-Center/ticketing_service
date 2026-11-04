@@ -1,6 +1,5 @@
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
-import type { Prisma } from "@prisma/client";
 import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
@@ -10,9 +9,16 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { ADMIN_TICKET_FILTERS, ticketListWhere } from "@/lib/ticket-list-filter";
+import {
+  ADMIN_TICKET_FILTERS,
+  DEFAULT_TICKET_SORT,
+  ticketListOrderBy,
+  ticketListWhere,
+  ticketSearchWhere,
+} from "@/lib/ticket-list-filter";
+import { relativeTimeId, ticketRecency } from "@/lib/ticket-recency";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
-import { Plus, Ticket } from "lucide-react";
+import { FileSpreadsheet, Plus, Ticket } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
 
 export const metadata = { title: "All Tickets — HNS IT Center" };
@@ -29,30 +35,18 @@ export default async function AdminTicketsPage({
   const query = params.q || "";
   const page = Math.max(1, parseInt(params.page || "1") || 1);
   const skip = (page - 1) * PAGE_SIZE;
-  const sortParam = params.sort || "created_desc";
+  const sortParam = params.sort || DEFAULT_TICKET_SORT;
+  // One clock for the whole render, so every "x jam lalu" agrees.
+  const now = new Date();
 
   const where = {
     ...(session.role === "Sales" ? { sales_id: session.userId } : {}),
     // Chip → filter lives in lib/ticket-list-filter.ts so the admin and
     // technician lists cannot offer the same chip and mean different things.
     ...ticketListWhere(statusFilter),
-    ...(query
-      ? {
-          OR: [
-            { ticket_code: { contains: query } },
-            { user: { name: { contains: query } } },
-            { customer_name: { contains: query } },
-          ],
-        }
-      : {}),
+    ...ticketSearchWhere(query),
   };
-
-  let orderBy: Prisma.TicketOrderByWithRelationInput = { created_at: "desc" };
-  if (sortParam === "created_asc") orderBy = { created_at: "asc" };
-  else if (sortParam === "status_asc") orderBy = { status: "asc" };
-  else if (sortParam === "status_desc") orderBy = { status: "desc" };
-  else if (sortParam === "code_asc") orderBy = { ticket_code: "asc" };
-  else if (sortParam === "code_desc") orderBy = { ticket_code: "desc" };
+  const orderBy = ticketListOrderBy(sortParam);
 
   const [tickets, totalCount] = await Promise.all([
     db.ticket.findMany({
@@ -66,6 +60,8 @@ export default async function AdminTicketsPage({
         // `rma_process` is one ticket status covering nine RMA ones; the list
         // shows the informative one. See lib/rma/ticket-status-badge.ts.
         rma_case: { select: { status: true } },
+        // When the status last moved, for the "Update" mark.
+        status_logs: { orderBy: { created_at: "desc" }, take: 1, select: { created_at: true } },
       },
     }),
     db.ticket.count({ where }),
@@ -77,7 +73,7 @@ export default async function AdminTicketsPage({
     const qs = new URLSearchParams();
     if (statusFilter !== "all") qs.set("status", statusFilter);
     if (query) qs.set("q", query);
-    if (currentSort !== "created_desc") qs.set("sort", currentSort);
+    if (currentSort !== DEFAULT_TICKET_SORT) qs.set("sort", currentSort);
     if (p > 1) qs.set("page", String(p));
     const str = qs.toString();
     return `/admin/tickets${str ? `?${str}` : ""}`;
@@ -104,7 +100,7 @@ export default async function AdminTicketsPage({
       key: "code",
       header: renderSortableHeader("Code", "code_asc", "code_desc"),
       mobileLabel: "Code",
-      cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>,
+      cell: (t) => <RecencyCode ticket={t} now={now} />,
       mobile: "title",
     },
     { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span>, className: "hidden xl:table-cell" },
@@ -138,9 +134,17 @@ export default async function AdminTicketsPage({
     },
     {
       key: "date",
-      header: renderSortableHeader("Date", "created_asc", "created_desc"),
-      mobileLabel: "Date",
-      cell: (t) => new Date(t.created_at).toLocaleDateString("id-ID"),
+      header: renderSortableHeader("Update terakhir", "updated_asc", "updated_desc"),
+      mobileLabel: "Update terakhir",
+      cell: (t) => {
+        const last = t.status_logs[0]?.created_at ?? t.updated_at;
+        return (
+          <span className="flex flex-col whitespace-nowrap">
+            <span>{relativeTimeId(last > t.updated_at ? last : t.updated_at, now)}</span>
+            <span className="text-[0.7rem]">dibuat {new Date(t.created_at).toLocaleDateString("id-ID")}</span>
+          </span>
+        );
+      },
       className: "whitespace-nowrap text-muted-foreground",
     },
     {
@@ -152,11 +156,18 @@ export default async function AdminTicketsPage({
     },
   ];
 
+  // The export carries the same filter, search and sort as the list, all pages.
+  const exportQs = new URLSearchParams();
+  if (statusFilter !== "all") exportQs.set("status", statusFilter);
+  if (query) exportQs.set("q", query);
+  if (sortParam !== DEFAULT_TICKET_SORT) exportQs.set("sort", sortParam);
+  const exportHref = `/admin/tickets/export${exportQs.size ? `?${exportQs}` : ""}`;
+
   const chips = ADMIN_TICKET_FILTERS.map(({ key: s, label }) => {
     const qs = new URLSearchParams();
     if (s !== "all") qs.set("status", s);
     if (query) qs.set("q", query);
-    if (sortParam !== "created_desc") qs.set("sort", sortParam);
+    if (sortParam !== DEFAULT_TICKET_SORT) qs.set("sort", sortParam);
     const str = qs.toString();
     return { key: s, label, href: `/admin/tickets${str ? `?${str}` : ""}` };
   });
@@ -169,17 +180,30 @@ export default async function AdminTicketsPage({
         title="All Tickets"
         description={`${totalCount} ticket${totalCount !== 1 ? "s" : ""}`}
         actions={
-          <Link href="/admin/tickets/create" className={buttonVariants()}>
-            <Plus aria-hidden="true" /> New Ticket
-          </Link>
+          <>
+            {session.role === "Administrator" && (
+              // A plain <a>: a file download, not a page for the router to prefetch.
+              <a
+                href={exportHref}
+                download
+                className={buttonVariants({ variant: "outline" })}
+                title="Semua tiket yang cocok dengan filter dan pencarian ini, bukan hanya halaman ini"
+              >
+                <FileSpreadsheet aria-hidden="true" /> Export Excel
+              </a>
+            )}
+            <Link href="/admin/tickets/create" className={buttonVariants()}>
+              <Plus aria-hidden="true" /> New Ticket
+            </Link>
+          </>
         }
       />
 
       <div className="flex flex-col gap-3">
         <FilterBar action="/admin/tickets">
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
-          {sortParam !== "created_desc" && <input type="hidden" name="sort" value={sortParam} />}
-          <FilterBarSearch label="Search tickets" placeholder="Search by code or customer..." defaultValue={query} />
+          {sortParam !== DEFAULT_TICKET_SORT && <input type="hidden" name="sort" value={sortParam} />}
+          <FilterBarSearch label="Search tickets" placeholder="Cari kode, customer, atau nama barang…" defaultValue={query} />
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
             <Button type="submit">Search</Button>
             {query && (
@@ -219,5 +243,39 @@ export default async function AdminTicketsPage({
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * The ticket code, with a mark when it was created or its status moved in the
+ * last 24 hours — what the list now sorts by, so the marked rows sit on top.
+ */
+function RecencyCode({
+  ticket,
+  now,
+}: {
+  ticket: { ticket_code: string; created_at: Date; updated_at: Date; status_logs: { created_at: Date }[] };
+  now: Date;
+}) {
+  const recency = ticketRecency({ ...ticket, last_status_at: ticket.status_logs[0]?.created_at ?? null }, now);
+  return (
+    <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+      <span title={ticket.ticket_code} className="block max-w-32 truncate font-mono">
+        {ticket.ticket_code}
+      </span>
+      {recency && (
+        <span
+          title={`${recency.kind === "new" ? "Dibuat" : "Status diperbarui"} ${relativeTimeId(recency.at, now)}`}
+          className={
+            recency.kind === "new"
+              ? "rounded-full border border-tone-green-border bg-tone-green-bg px-1.5 py-px font-sans text-[0.65rem] font-bold tracking-wide text-tone-green-fg uppercase"
+              : "rounded-full border border-tone-blue-border bg-tone-blue-bg px-1.5 py-px font-sans text-[0.65rem] font-bold tracking-wide text-tone-blue-fg uppercase"
+          }
+        >
+          <span aria-hidden="true">● </span>
+          {recency.kind === "new" ? "Baru" : "Update"}
+        </span>
+      )}
+    </span>
   );
 }

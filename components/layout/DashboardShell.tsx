@@ -138,6 +138,7 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
         { href: "/rma/dashboard", label: "Dashboard RMA", icon: <LayoutDashboard size={18} />, also: ["/rma/cases"] },
         { href: "/rma/tickets", label: "Tiket Klaim", icon: <Ticket size={18} /> },
         { href: "/rma/logs", label: "Log RMA", icon: <Activity size={18} /> },
+        { href: "/rma/analisa", label: "Analisa Klaim", icon: <BarChart3 size={18} /> },
       ],
     },
     {
@@ -189,7 +190,10 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
     {
       key: "reports",
       title: "Laporan",
-      items: [{ href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> }],
+      items: [
+        { href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> },
+        { href: "/rma/analisa", label: "Analisa Klaim", icon: <BarChart3 size={18} /> },
+      ],
     },
     {
       key: "master",

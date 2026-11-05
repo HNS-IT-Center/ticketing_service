@@ -7,6 +7,8 @@ import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarField, FilterBarSearch } from "@/components/app/FilterBar";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
+import { PageSizePicker } from "@/components/app/PageSizePicker";
+import { parsePageSize } from "@/lib/pagination";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -33,22 +35,23 @@ const AREA_TONE: Record<keyof typeof ACTIVITY_AREAS, string> = {
 export default async function AdminActivityPage({
   searchParams,
 }: {
-  searchParams: Promise<ActivityFilter & { page?: string }>;
+  searchParams: Promise<ActivityFilter & { page?: string; per?: string }>;
 }) {
   await requireRole("Administrator");
   const params = await searchParams;
   const { where, isFiltered } = activityWhere(params);
 
+  const pageSize = parsePageSize(params.per, PAGE_SIZE);
   const total = await db.activityLog.count({ where });
-  const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const page = Math.min(Math.max(1, Number.parseInt(params.page || "1", 10) || 1), pageCount);
 
   const [entries, actors] = await Promise.all([
     db.activityLog.findMany({
       where,
       orderBy: { created_at: "desc" },
-      take: PAGE_SIZE,
-      skip: (page - 1) * PAGE_SIZE,
+      take: pageSize,
+      skip: (page - 1) * pageSize,
     }),
     // Everyone who appears in the log, for the person filter — a deactivated
     // account included, since what they did is still on record.
@@ -62,14 +65,16 @@ export default async function AdminActivityPage({
   // One option per account, under the name it last used.
   const actorOptions = [...new Map(actors.map((a) => [a.actor_id as string, a.actor_name])).entries()];
 
-  const hrefForPage = (p: number) => {
+  const hrefForPage = (p: number, size: number = pageSize) => {
     const qs = new URLSearchParams();
     for (const key of ["q", "area", "actor", "from", "to"] as const) {
       const value = params[key];
       if (value) qs.set(key, value);
     }
-    qs.set("page", String(p));
-    return `/admin/activity?${qs.toString()}`;
+    if (size !== PAGE_SIZE) qs.set("per", String(size));
+    if (p > 1) qs.set("page", String(p));
+    const str = qs.toString();
+    return `/admin/activity${str ? `?${str}` : ""}`;
   };
 
   type Entry = (typeof entries)[number];
@@ -149,6 +154,7 @@ export default async function AdminActivityPage({
       />
 
       <FilterBar action="/admin/activity">
+        {pageSize !== PAGE_SIZE && <input type="hidden" name="per" value={pageSize} />}
         <FilterBarSearch
           label="Cari aktivitas"
           placeholder="Cari kode tiket, nama, atau keterangan…"
@@ -209,15 +215,18 @@ export default async function AdminActivityPage({
         }
       />
 
-      {pageCount > 1 && (
-        <Pagination
-          page={page}
-          pageCount={pageCount}
-          hrefForPage={hrefForPage}
-          labels={{ previous: "Sebelumnya", next: "Berikutnya", pageOf: (p, n) => `Halaman ${p} dari ${n}` }}
-          className="sm:justify-center"
-        />
-      )}
+      <div className="flex flex-col gap-2">
+        {pageCount > 1 && (
+          <Pagination
+            page={page}
+            pageCount={pageCount}
+            hrefForPage={(p) => hrefForPage(p)}
+            labels={{ previous: "Sebelumnya", next: "Berikutnya", pageOf: (p, n) => `Halaman ${p} dari ${n}` }}
+            className="sm:justify-center"
+          />
+        )}
+        <PageSizePicker value={pageSize} totalItems={total} hrefForSize={(n) => hrefForPage(1, n)} className="self-center sm:self-end" />
+      </div>
     </div>
   );
 }

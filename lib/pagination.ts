@@ -29,3 +29,16 @@ export function previousPage(page: number, pageCount: number): number | null {
 export function nextPage(page: number, pageCount: number): number | null {
   return page < pageCount ? page + 1 : null;
 }
+
+/** The page sizes a list offers ("Tampilkan 10 / 25 / 50 per halaman"). */
+export const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
+
+/**
+ * The page size asked for in `?per=`, or the list's own default. Only the
+ * offered sizes are accepted, so `?per=100000` cannot make one page load the
+ * whole table.
+ */
+export function parsePageSize(raw: string | undefined, fallback: number): number {
+  const n = Number(raw);
+  return (PAGE_SIZE_OPTIONS as readonly number[]).includes(n) ? n : fallback;
+}

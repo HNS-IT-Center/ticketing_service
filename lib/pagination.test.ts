@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { nextPage, pageWindow, previousPage } from "./pagination";
+import { nextPage, pageWindow, parsePageSize, previousPage } from "./pagination";
 
 describe("pageWindow", () => {
   it("shows every page when there are few", () => {
@@ -37,5 +37,20 @@ describe("previousPage / nextPage", () => {
 
   it("has nowhere to go in an empty list", () => {
     expect(previousPage(4, 0)).toBeNull();
+  });
+});
+
+describe("parsePageSize", () => {
+  it("accepts only the offered sizes", () => {
+    expect(parsePageSize("25", 10)).toBe(25);
+    expect(parsePageSize("50", 10)).toBe(50);
+    expect(parsePageSize("10", 50)).toBe(10);
+  });
+
+  it("falls back to the list's default for anything else", () => {
+    expect(parsePageSize(undefined, 10)).toBe(10);
+    expect(parsePageSize("100000", 10)).toBe(10);
+    expect(parsePageSize("abc", 50)).toBe(50);
+    expect(parsePageSize("-25", 25)).toBe(25);
   });
 });

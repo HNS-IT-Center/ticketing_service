@@ -7,6 +7,8 @@ import { FilterBar, FilterBarSearch } from "@/components/app/FilterBar";
 import { FilterChips } from "@/components/app/FilterChips";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
+import { PageSizePicker } from "@/components/app/PageSizePicker";
+import { parsePageSize } from "@/lib/pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
@@ -27,14 +29,15 @@ const PAGE_SIZE = 10;
 export default async function AdminTicketsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string; page?: string; sort?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string; sort?: string; per?: string }>;
 }) {
   const session = await requireRole("Administrator", "Sales");
   const params = await searchParams;
   const statusFilter = params.status || "all";
   const query = params.q || "";
   const page = Math.max(1, parseInt(params.page || "1") || 1);
-  const skip = (page - 1) * PAGE_SIZE;
+  const pageSize = parsePageSize(params.per, PAGE_SIZE);
+  const skip = (page - 1) * pageSize;
   const sortParam = params.sort || DEFAULT_TICKET_SORT;
   // One clock for the whole render, so every "x jam lalu" agrees.
   const now = new Date();
@@ -52,7 +55,7 @@ export default async function AdminTicketsPage({
     db.ticket.findMany({
       where,
       orderBy,
-      take: PAGE_SIZE,
+      take: pageSize,
       skip,
       include: {
         user: { select: { name: true } },
@@ -67,13 +70,14 @@ export default async function AdminTicketsPage({
     db.ticket.count({ where }),
   ]);
 
-  const totalPages = Math.ceil(totalCount / PAGE_SIZE);
+  const totalPages = Math.ceil(totalCount / pageSize);
 
-  const buildHref = (p: number, currentSort: string = sortParam) => {
+  const buildHref = (p: number, currentSort: string = sortParam, size: number = pageSize) => {
     const qs = new URLSearchParams();
     if (statusFilter !== "all") qs.set("status", statusFilter);
     if (query) qs.set("q", query);
     if (currentSort !== DEFAULT_TICKET_SORT) qs.set("sort", currentSort);
+    if (size !== PAGE_SIZE) qs.set("per", String(size));
     if (p > 1) qs.set("page", String(p));
     const str = qs.toString();
     return `/admin/tickets${str ? `?${str}` : ""}`;
@@ -168,6 +172,7 @@ export default async function AdminTicketsPage({
     if (s !== "all") qs.set("status", s);
     if (query) qs.set("q", query);
     if (sortParam !== DEFAULT_TICKET_SORT) qs.set("sort", sortParam);
+    if (pageSize !== PAGE_SIZE) qs.set("per", String(pageSize));
     const str = qs.toString();
     return { key: s, label, href: `/admin/tickets${str ? `?${str}` : ""}` };
   });
@@ -203,6 +208,7 @@ export default async function AdminTicketsPage({
         <FilterBar action="/admin/tickets">
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
           {sortParam !== DEFAULT_TICKET_SORT && <input type="hidden" name="sort" value={sortParam} />}
+          {pageSize !== PAGE_SIZE && <input type="hidden" name="per" value={pageSize} />}
           <FilterBarSearch label="Search tickets" placeholder="Cari kode, customer, atau nama barang…" defaultValue={query} />
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
             <Button type="submit">Search</Button>
@@ -238,9 +244,12 @@ export default async function AdminTicketsPage({
             className="sm:justify-center"
           />
         )}
-        <p className="text-center text-[0.8125rem] text-muted-foreground">
-          Showing {tickets.length > 0 ? skip + 1 : 0}–{Math.min(skip + tickets.length, totalCount)} of {totalCount} tickets
-        </p>
+        <div className="flex flex-col items-center gap-2 sm:flex-row sm:justify-between">
+          <p className="text-center text-[0.8125rem] text-muted-foreground">
+            Showing {tickets.length > 0 ? skip + 1 : 0}–{Math.min(skip + tickets.length, totalCount)} of {totalCount} tickets
+          </p>
+          <PageSizePicker value={pageSize} totalItems={totalCount} hrefForSize={(n) => buildHref(1, sortParam, n)} />
+        </div>
       </div>
     </div>
   );

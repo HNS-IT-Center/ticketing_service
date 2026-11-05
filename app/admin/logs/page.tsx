@@ -8,6 +8,8 @@ import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarField, FilterBarSearch } from "@/components/app/FilterBar";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
+import { PageSizePicker } from "@/components/app/PageSizePicker";
+import { parsePageSize } from "@/lib/pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,10 +18,12 @@ import { formatDateTime } from "@/lib/utils";
 
 export const metadata = { title: "Logs — HNS IT Center" };
 
+const PAGE_SIZE = 25;
+
 export default async function AdminLogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string; status?: string; date?: string; page?: string }>;
+  searchParams: Promise<{ q?: string; status?: string; date?: string; page?: string; per?: string }>;
 }) {
   await requireRole("Administrator");
   const params = await searchParams;
@@ -27,8 +31,8 @@ export default async function AdminLogsPage({
   const q = params.q || "";
   const status = params.status || "";
   const date = params.date || "";
-  const page = parseInt(params.page || "1");
-  const take = 20;
+  const page = Math.max(1, parseInt(params.page || "1") || 1);
+  const take = parsePageSize(params.per, PAGE_SIZE);
   const skip = (page - 1) * take;
 
   const where: Prisma.TicketStatusLogWhereInput = {};
@@ -78,13 +82,15 @@ export default async function AdminLogsPage({
     "rejected",
   ];
 
-  const hrefForPage = (p: number) => {
+  const hrefForPage = (p: number, size: number = take) => {
     const qs = new URLSearchParams();
     if (q) qs.set("q", q);
     if (status) qs.set("status", status);
     if (date) qs.set("date", date);
-    qs.set("page", p.toString());
-    return `/admin/logs?${qs.toString()}`;
+    if (size !== PAGE_SIZE) qs.set("per", String(size));
+    if (p > 1) qs.set("page", p.toString());
+    const str = qs.toString();
+    return `/admin/logs${str ? `?${str}` : ""}`;
   };
 
   type Log = (typeof logs)[number];
@@ -149,6 +155,7 @@ export default async function AdminLogsPage({
       />
 
       <FilterBar action="/admin/logs">
+        {take !== PAGE_SIZE && <input type="hidden" name="per" value={take} />}
         <FilterBarSearch label="Search logs" placeholder="Cari kode tiket, customer, nama barang, atau user…" defaultValue={q} />
         <div className="grid grid-cols-2 gap-2 md:contents">
           <FilterBarField label="Status" htmlFor="logs-status" className="md:w-44">
@@ -182,15 +189,18 @@ export default async function AdminLogsPage({
         empty={<EmptyState icon={Activity} title="No logs found matching your criteria." />}
       />
 
-      {totalPages > 1 && (
-        <Pagination
-          page={page}
-          pageCount={totalPages}
-          hrefForPage={hrefForPage}
-          labels={{ previous: "Prev", next: "Next", pageOf: (p, n) => `Page ${p} of ${n}` }}
-          className="sm:justify-center"
-        />
-      )}
+      <div className="flex flex-col gap-2">
+        {totalPages > 1 && (
+          <Pagination
+            page={page}
+            pageCount={totalPages}
+            hrefForPage={(p) => hrefForPage(p)}
+            labels={{ previous: "Prev", next: "Next", pageOf: (p, n) => `Page ${p} of ${n}` }}
+            className="sm:justify-center"
+          />
+        )}
+        <PageSizePicker value={take} totalItems={total} hrefForSize={(n) => hrefForPage(1, n)} className="self-center sm:self-end" />
+      </div>
     </div>
   );
 }

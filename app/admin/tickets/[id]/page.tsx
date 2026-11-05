@@ -110,7 +110,7 @@ export default async function AdminTicketDetailPage({
         },
         cleaning_detail: true,
         upgrade_details: { include: { upgrade: true } },
-        pc_components: true,
+        pc_components: { orderBy: { id: "asc" } },
         attachments: true,
         pc_build_detail: true,
         time_logs: { orderBy: { created_at: "asc" } },
@@ -363,7 +363,7 @@ export default async function AdminTicketDetailPage({
 
           {/* What came in: upgrades with the item fitted, PC build components */}
           <UpgradesCard details={ticket.upgrade_details} />
-          <PcComponentsCard components={ticket.pc_components} />
+          <PcComponentsCard components={ticket.pc_components} detail={ticket.pc_build_detail} />
 
           {/* PC Build Handover Verification */}
           {ticket.ticket_type === "pc_build" && (

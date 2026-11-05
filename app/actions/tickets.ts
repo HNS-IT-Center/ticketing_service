@@ -15,7 +15,11 @@ import { publicTicketPath, ticketsListHrefForRoleName } from "@/lib/routes";
 import { newPublicShortCode } from "@/lib/short-code";
 import { logActivity } from "@/lib/activity";
 import { TICKET_TYPE_LABELS } from "@/lib/ticket-export";
-import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
+import { MAX_BUILD_PHOTOS, MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
+import { readStoredQuote } from "@/lib/pc-build-quote/read";
+import { findQuoteSales, matchQuoteToCatalog, ticketUsingQuote } from "@/lib/pc-build-quote/resolve";
+import type { ParsedQuote, QuoteItem } from "@/lib/pc-build-quote/parse";
+import { notifyNewTicket } from "@/lib/new-ticket-notify";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
 import type { CatalogItem } from "@/lib/catalog/items";
 import { catalogBrand } from "@/lib/catalog/brand";
@@ -60,7 +64,9 @@ export async function createTicketAction(formData: FormData) {
   const customer_address = isStoreStock ? null : (formData.get("customer_address") as string | null);
   const customer_phone = isStoreStock ? null : (formData.get("phone") as string | null);
   const technician_id = (formData.get("technician_id") as string | null) || null;
-  const sales_id = (formData.get("sales_id") as string | null) || null;
+  // `let`: a PC build opened from a quotation takes the sales printed on it
+  // when none was picked (below).
+  let sales_id = (formData.get("sales_id") as string | null) || null;
 
   // New CS intake fields
   const store_location_id = (formData.get("store_location_id") as string | null) || null;
@@ -167,6 +173,40 @@ export async function createTicketAction(formData: FormData) {
     const resolved = await resolvePostedItems(posted.value);
     if (!resolved.ok) return { error: resolved.error };
     pcComponents = resolved.items;
+  }
+
+  // A PC build opened from its e-commerce quotation (lib/pc-build-quote). The
+  // stored PDF is read again here rather than trusting the list the browser
+  // showed; every line must have been ticked as matching what was brought in,
+  // and the components must be photographed. A mismatch is not recorded: the
+  // form sends the person back to have the quotation revised and re-uploaded.
+  let quote: { head: Omit<ParsedQuote, "lines">; items: QuoteItem[]; url: string } | null = null;
+  let buildPhotoUrls: string[] = [];
+  const quoteUrl = ((formData.get("quote_url") as string | null) || "").trim();
+  if (quoteUrl) {
+    if (ticket_type !== "pc_build") return { error: "Quotation rakitan hanya untuk tiket Build PC." };
+    const read = await readStoredQuote(quoteUrl);
+    if (!read.ok) return { error: read.error };
+    const { lines, ...head } = read.quote;
+    if (Number(formData.get("quote_checked_count")) !== lines.length) {
+      return {
+        error:
+          "Semua komponen di quotation harus dicentang sesuai sebelum tiket dibuat. Bila ada yang tidak sesuai, " +
+          "minta sales merevisi quotation lalu unggah PDF terbarunya.",
+      };
+    }
+    const used = await ticketUsingQuote(head.code);
+    if (used) return { error: `Quotation ${head.code} sudah dibuat tiketnya: ${used.ticket_code}.` };
+    buildPhotoUrls = (formData.getAll("build_photo_urls") as string[]).filter(Boolean);
+    if (buildPhotoUrls.length === 0) {
+      return { error: "Lampirkan foto komponen rakitan yang dibawa sebelum tiket dibuat." };
+    }
+    if (buildPhotoUrls.length > MAX_BUILD_PHOTOS) return { error: `Maksimal ${MAX_BUILD_PHOTOS} foto komponen rakitan.` };
+    if (buildPhotoUrls.some((u) => !IMAGE_URL.test(u))) return { error: "Foto komponen rakitan harus berupa gambar." };
+    const [matched, quoteSales] = await Promise.all([matchQuoteToCatalog(lines), findQuoteSales(head.salesName)]);
+    quote = { head, items: matched.items, url: quoteUrl };
+    // The quotation names its sales; a sales picked by hand on the form wins.
+    if (!sales_id && quoteSales) sales_id = quoteSales.id;
   }
   if (ticket_type === "upgrade") {
     const selections = formData.has("upgrade_selections_json")
@@ -332,6 +372,13 @@ export async function createTicketAction(formData: FormData) {
       file_type: "image" as const,
       kind: "unit_photo" as const,
     })),
+    ...(quote ? [{ ticket_id: ticket.id, file_url: quote.url, file_type: "pdf" as const, kind: "quotation" as const }] : []),
+    ...buildPhotoUrls.map((url) => ({
+      ticket_id: ticket.id,
+      file_url: url,
+      file_type: "image" as const,
+      kind: "build_photo" as const,
+    })),
   ];
   if (attachmentRows.length > 0) {
     followUps.push(db.ticketAttachment.createMany({ data: attachmentRows }));
@@ -395,21 +442,49 @@ export async function createTicketAction(formData: FormData) {
     }
     case "pc_build": {
       const pcOps: Promise<unknown>[] = [
-        db.ticketPcBuildDetail.create({ data: { ticket_id: ticket.id, first_build_url: firstUploadedUrl } }),
+        db.ticketPcBuildDetail.create({
+          data: {
+            ticket_id: ticket.id,
+            // "First Build" is the technician's photo of the finished build; a
+            // quotation ticket's intake files are the PDF and component photos.
+            first_build_url: quote ? null : firstUploadedUrl,
+            ...(quote
+              ? {
+                  quote_code: quote.head.code,
+                  quote_url: quote.url,
+                  quote_customer: quote.head.customer,
+                  quote_sales_name: quote.head.salesName,
+                  quote_total: quote.head.total,
+                  verified_at: new Date(),
+                  verified_by_id: session.userId,
+                  verified_by_name: session.name,
+                }
+              : {}),
+          },
+        }),
       ];
-      if (pcComponents.length > 0) {
-        pcOps.push(
-          db.ticketPcBuildComponent.createMany({
-            data: pcComponents.map((c) => ({
-              ticket_id: ticket.id,
-              component_name: c.name,
-              catalog_item_id: c.catalog_item_id,
-              sku: c.sku,
-              catalog_category: c.catalog_category,
-              quantity: c.quantity,
-            })),
-          })
-        );
+      // The quotation's lines first, in its order, then anything added by hand.
+      const componentRows = [
+        ...(quote?.items ?? []).map((i) => ({
+          ticket_id: ticket.id,
+          component_name: i.name,
+          catalog_item_id: i.catalogItemId,
+          sku: i.sku,
+          catalog_category: i.catalogCategory,
+          quantity: i.quantity,
+          quote_label: i.label,
+        })),
+        ...pcComponents.map((c) => ({
+          ticket_id: ticket.id,
+          component_name: c.name,
+          catalog_item_id: c.catalog_item_id,
+          sku: c.sku,
+          catalog_category: c.catalog_category,
+          quantity: c.quantity,
+        })),
+      ];
+      if (componentRows.length > 0) {
+        pcOps.push(db.ticketPcBuildComponent.createMany({ data: componentRows }));
       }
       followUps.push(Promise.all(pcOps));
       break;
@@ -422,9 +497,19 @@ export async function createTicketAction(formData: FormData) {
   await logActivity(
     session,
     "ticket.create",
-    `Membuat tiket ${ticketData.ticket_code} (${typeLabel})${customer_name ? ` untuk ${customer_name}` : ""}${device_name ? `, unit ${device_name}` : ""}.`,
+    `Membuat tiket ${ticketData.ticket_code} (${typeLabel})${customer_name ? ` untuk ${customer_name}` : ""}${device_name ? `, unit ${device_name}` : ""}` +
+      `${quote ? ` dari quotation ${quote.head.code} (${quote.items.length} komponen dicek sesuai, ${buildPhotoUrls.length} foto)` : ""}.`,
     { type: "ticket", id: ticket.id, label: ticketData.ticket_code },
   );
+
+  await notifyNewTicket({
+    ticketId: ticket.id,
+    ticketCode: ticketData.ticket_code,
+    typeLabel,
+    storeId: store_location_id,
+    technicianId: technician_id,
+    creatorId: session.userId,
+  });
 
   if (customer_email) {
     const { headers } = await import("next/headers");

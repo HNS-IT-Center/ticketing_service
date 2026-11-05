@@ -1,4 +1,5 @@
-import { PackageCheck, PenLine } from "lucide-react";
+import { ExternalLink, FileCheck2, PackageCheck, PenLine } from "lucide-react";
+import { formatDateTime } from "@/lib/utils";
 import { DetailCard } from "./TicketSections";
 
 /**
@@ -45,14 +46,71 @@ function ItemRow({ item, title }: { item: ItemLine; title?: string }) {
 
 export function PcComponentsCard({
   components,
+  detail,
 }: {
-  components: { id: string; component_name: string; sku: string | null; catalog_category: string | null; quantity: number }[];
+  components: {
+    id: string;
+    component_name: string;
+    sku: string | null;
+    catalog_category: string | null;
+    quantity: number;
+    quote_label?: string | null;
+  }[];
+  /** The build's header: which quotation the list came from and who checked it. */
+  detail?: {
+    quote_code: string | null;
+    quote_url: string | null;
+    quote_sales_name?: string | null;
+    verified_at: Date | null;
+    verified_by_name: string | null;
+  } | null;
 }) {
   if (components.length === 0) return null;
+  const fromQuote = components.filter((c) => c.quote_label);
+  const added = components.filter((c) => !c.quote_label);
   return (
     <DetailCard title="Komponen PC">
+      {detail?.quote_code && (
+        <div className="mb-3 flex flex-col gap-1.5 rounded-lg border border-tone-green-border bg-tone-green-bg px-3 py-2.5 text-sm text-tone-green-fg">
+          <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <FileCheck2 aria-hidden="true" className="size-4 shrink-0" />
+            <span>
+              Dari quotation <span className="font-mono font-semibold">{detail.quote_code}</span>
+            </span>
+            {detail.quote_url && (
+              <a
+                href={detail.quote_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
+              >
+                Lihat PDF <ExternalLink aria-hidden="true" className="size-3.5" />
+              </a>
+            )}
+          </span>
+          {detail.quote_sales_name && (
+            <span className="text-xs">
+              Sales di quotation: <span className="font-semibold">{detail.quote_sales_name}</span>
+            </span>
+          )}
+          {detail.verified_at && (
+            <span className="text-xs">
+              {fromQuote.length} komponen dicek sesuai dengan barang yang dibawa
+              {detail.verified_by_name ? ` oleh ${detail.verified_by_name}` : ""}, {formatDateTime(detail.verified_at)}.
+            </span>
+          )}
+        </div>
+      )}
       <ul>
-        {components.map((c) => (
+        {fromQuote.map((c) => (
+          <ItemRow key={c.id} title={c.quote_label ?? undefined} item={{ ...c, name: c.component_name }} />
+        ))}
+        {added.length > 0 && fromQuote.length > 0 && (
+          <li className="border-t border-border pt-3 pb-1 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Komponen tambahan (di luar quotation)
+          </li>
+        )}
+        {added.map((c) => (
           <ItemRow key={c.id} item={{ ...c, name: c.component_name }} />
         ))}
       </ul>

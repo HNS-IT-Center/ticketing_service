@@ -8,9 +8,11 @@ import RmaStatusCard, { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import RmaActionPanel from "./RmaActionPanel";
 import ClaimStock, { ClaimStockShell } from "./ClaimStock";
 import FilePreview from "@/components/ui/FilePreview";
+import { GalleryTrigger, MediaGallery } from "@/components/app/MediaGallery";
+import { downloadHref } from "@/lib/download-name";
 import { attachmentKindLabel } from "@/lib/attachment-kind";
 import { vendorLocationText } from "@/lib/vendors";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Download, FileText, Film } from "lucide-react";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
 
@@ -271,20 +273,61 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                 <div style={{ fontSize: "0.8125rem", fontWeight: 600, marginBottom: "0.5rem" }}>
                   Lampiran Tiket ({otherAttachments.length})
                 </div>
-                <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-                  {otherAttachments.map((a, i) => (
-                    <FilePreview
-                      key={a.id}
-                      url={a.file_url}
-                      fileType={a.file_type}
-                      label={`${attachmentKindLabel(a.kind) ?? LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`}
-                      title={`Lampiran ${i + 1} — ${ticket.ticket_code}`}
-                      downloadName={`${rmaCase.rma_code} - ${attachmentKindLabel(a.kind) ?? LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`}
-                      className="btn btn-outline"
-                      inlineDownload
-                    />
-                  ))}
-                </div>
+                <MediaGallery
+                  items={otherAttachments.map((a, i) => {
+                    const label = `${attachmentKindLabel(a.kind) ?? LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`;
+                    return {
+                      url: a.file_url,
+                      fileType: a.file_type,
+                      title: `${label} — ${rmaCase.rma_code}`,
+                      meta: formatDateTime(a.created_at),
+                      downloadName: `${rmaCase.rma_code} - ${label}`,
+                    };
+                  })}
+                >
+                  <ul style={{ display: "flex", flexWrap: "wrap", gap: "0.75rem", listStyle: "none", margin: 0, padding: 0 }}>
+                    {otherAttachments.map((a, i) => {
+                      const label = `${attachmentKindLabel(a.kind) ?? LAMPIRAN_LABEL[a.file_type] ?? "Lampiran"} ${i + 1}`;
+                      return (
+                        <li key={a.id} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "0.35rem", width: 104 }}>
+                          <GalleryTrigger index={i} title={`Lihat ${label}`}>
+                            <span
+                              style={{
+                                display: "flex",
+                                width: 104,
+                                height: 80,
+                                alignItems: "center",
+                                justifyContent: "center",
+                                overflow: "hidden",
+                                borderRadius: 8,
+                                border: "1px solid var(--border)",
+                                background: a.file_type === "image" ? "var(--muted)" : "#111",
+                                color: "#fff",
+                              }}
+                            >
+                              {a.file_type === "image" ? (
+                                // eslint-disable-next-line @next/next/no-img-element
+                                <img src={a.file_url} alt={label} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                              ) : a.file_type === "video" ? (
+                                <Film aria-hidden="true" size={26} />
+                              ) : (
+                                <FileText aria-hidden="true" size={26} />
+                              )}
+                            </span>
+                          </GalleryTrigger>
+                          <span style={{ fontSize: "0.72rem", textAlign: "center", lineHeight: 1.25 }}>{label}</span>
+                          <a
+                            href={downloadHref(a.file_url, `${rmaCase.rma_code} - ${label}`)}
+                            download
+                            style={{ fontSize: "0.72rem", display: "inline-flex", alignItems: "center", gap: 4, color: "var(--primary)" }}
+                          >
+                            <Download aria-hidden="true" size={12} /> Unduh
+                          </a>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </MediaGallery>
               </div>
             )}
           </div>

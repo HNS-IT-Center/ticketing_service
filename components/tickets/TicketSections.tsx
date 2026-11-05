@@ -17,6 +17,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { TONE_CLASSES, type StatusTone } from "@/lib/status-display";
 import { cn, formatDateTime } from "@/lib/utils";
 import { fileNameOf, proofKindOf, type ProofKind } from "./proof";
+import { GalleryTrigger, MediaGallery, type MediaItem } from "@/components/app/MediaGallery";
 
 /*
  * The sections every ticket detail page shows — technician, admin, sales —
@@ -215,24 +216,33 @@ export function CustomerInfoCard({
   );
 }
 
-type AttachmentLike = { id: string; file_url: string; file_type: string };
+type AttachmentLike = { id: string; file_url: string; file_type: string; created_at?: Date | string };
+
+/** The gallery's entries for a list of attachments, titled by `title`. */
+function mediaItems(attachments: AttachmentLike[], title: (a: AttachmentLike, i: number) => string): MediaItem[] {
+  return attachments.map((a, i) => ({
+    url: a.file_url,
+    fileType: a.file_type,
+    title: title(a, i),
+    meta: a.created_at ? formatDateTime(a.created_at) : undefined,
+  }));
+}
 
 /** Ordinary attachments, as thumbnails that open the file. */
 export function AttachmentsCard({ attachments }: { attachments: AttachmentLike[] }) {
   if (attachments.length === 0) return null;
   return (
     <DetailCard title={`Attachments (${attachments.length})`}>
+      <MediaGallery items={mediaItems(attachments, (a) => fileNameOf(a.file_url))}>
       <ul className="flex flex-wrap gap-3">
-        {attachments.map((a) => {
+        {attachments.map((a, index) => {
           const filename = fileNameOf(a.file_url);
           const isImage = a.file_type === "image";
           const Icon = a.file_type === "video" ? Film : a.file_type === "pdf" ? FileText : File;
           return (
             <li key={a.id}>
-              <a
-                href={a.file_url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <GalleryTrigger
+                index={index}
                 title={filename}
                 className={cn(
                   "flex flex-col items-center gap-1.5 rounded-lg outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
@@ -258,11 +268,12 @@ export function AttachmentsCard({ attachments }: { attachments: AttachmentLike[]
                 <span className="max-w-[100px] text-center text-[0.7rem] leading-tight break-all text-muted-foreground">
                   {filename.length > 20 ? filename.slice(0, 17) + "..." : filename}
                 </span>
-              </a>
+              </GalleryTrigger>
             </li>
           );
         })}
       </ul>
+      </MediaGallery>
     </DetailCard>
   );
 }
@@ -344,19 +355,23 @@ export function ProofAttachmentsCard({ attachments }: { attachments: AttachmentL
   if (attachments.length === 0) return null;
   return (
     <DetailCard title="Proof Attachments">
+      <MediaGallery
+        items={mediaItems(
+          attachments,
+          (a) => `${PROOF_META[proofKindOf(a.file_url) ?? "work-proof"].label} — ${fileNameOf(a.file_url)}`,
+        )}
+      >
       <ul className="flex flex-col gap-3">
-        {attachments.map((a) => {
+        {attachments.map((a, index) => {
           const meta = PROOF_META[proofKindOf(a.file_url) ?? "work-proof"];
           const filename = fileNameOf(a.file_url);
           const FileIcon = a.file_type === "video" ? Film : FileText;
           return (
             <li key={a.id}>
-              <a
-                href={a.file_url}
-                target="_blank"
-                rel="noopener noreferrer"
+              <GalleryTrigger
+                index={index}
                 className={cn(
-                  "flex items-center gap-3 rounded-[0.625rem] border px-3 py-2.5 outline-none transition-opacity hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50",
+                  "flex w-full items-center gap-3 rounded-[0.625rem] border px-3 py-2.5 outline-none transition-opacity hover:opacity-90 focus-visible:ring-3 focus-visible:ring-ring/50",
                   TONE_CLASSES[meta.tone],
                 )}
               >
@@ -376,11 +391,12 @@ export function ProofAttachmentsCard({ attachments }: { attachments: AttachmentL
                     {filename.length > 36 ? filename.slice(0, 33) + "..." : filename}
                   </span>
                 </span>
-              </a>
+              </GalleryTrigger>
             </li>
           );
         })}
       </ul>
+      </MediaGallery>
     </DetailCard>
   );
 }

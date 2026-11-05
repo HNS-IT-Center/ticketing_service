@@ -204,6 +204,8 @@ export default function NotificationBell({ role }: { role: string }) {
                     ? "💬 New message on your ticket"
                     : n.type === "assigned"
                     ? "📋 You have been assigned a ticket"
+                    : n.type === "needs_assignment"
+                    ? "🆕 Tiket baru belum ada teknisi"
                     : n.type === "completed"
                     ? "🎉 Ticket completed — points earned!"
                     : "📋 Ticket status updated";

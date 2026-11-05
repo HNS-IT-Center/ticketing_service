@@ -89,7 +89,7 @@ export default async function SalesTicketDetailPage({
       },
       cleaning_detail: true,
       upgrade_details: { include: { upgrade: true } },
-      pc_components: true,
+      pc_components: { orderBy: { id: "asc" } },
       pc_build_detail: true,
       time_logs: { orderBy: { created_at: "asc" } },
     },
@@ -284,7 +284,7 @@ export default async function SalesTicketDetailPage({
 
           {/* What came in: upgrades with the item fitted, PC build components */}
           <UpgradesCard details={ticket.upgrade_details} />
-          <PcComponentsCard components={ticket.pc_components} />
+          <PcComponentsCard components={ticket.pc_components} detail={ticket.pc_build_detail} />
 
           {/* PC Build Handover Verification */}
           {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} />}

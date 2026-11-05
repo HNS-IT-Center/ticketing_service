@@ -7,7 +7,9 @@ import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import FileUpload from "@/components/ui/FileUpload";
 import { useDraft, useDraftKey } from "@/lib/draft";
-import { MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
+import { MAX_BUILD_PHOTOS, MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
+import { QuoteChecklist } from "@/components/pc-build/QuoteChecklist";
+import type { UploadedQuote } from "@/lib/pc-build-quote/parse";
 import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
 import CatalogItemList from "@/components/catalog/CatalogItemList";
 import { MAX_PC_COMPONENTS, restorePickedItems, toPosted, type PickedItem } from "@/lib/catalog/picked-items";
@@ -231,6 +233,14 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
   // from the Accurate catalogue or typed. An upgrade holds at most one item.
   const [pcComponents, setPcComponents] = useState<PickedItem[]>([]);
   const [upgradeItems, setUpgradeItems] = useState<Record<string, PickedItem[]>>({});
+  // A PC build opened from its e-commerce quotation: the PDF as read, which of
+  // its lines were ticked as matching what was brought in, and photos of the
+  // components. The ticks are not drafted — after a reload they are given again.
+  const [quote, setQuote] = useState<UploadedQuote | null>(null);
+  const [quoteChecked, setQuoteChecked] = useState<number[]>([]);
+  const [buildPhotos, setBuildPhotos] = useState<File[]>([]);
+  const [buildPhotoUrls, setBuildPhotoUrls] = useState<string[]>([]);
+  const [isUploadingBuildPhotos, setIsUploadingBuildPhotos] = useState(false);
 
   // Keep overnight/pickup in case needed later, or default
   const [pickupMethod, setPickupMethod] = useState("self_pickup");
@@ -251,6 +261,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
     deviceName, deviceCatalog, deviceSn, purchaseDate, conditions, selectedAccessories,
     customAccessory, notes, checkDiagnosisFee, cleaningPackage, selectedUpgrades,
     uploadedFileUrls, unitPhotoUrls, pcComponents, upgradeItems, pickupMethod, isOvernight,
+    quote, buildPhotoUrls,
   };
   const draft = useDraft(useDraftKey("create-ticket"), draftData);
 
@@ -275,6 +286,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       Object.fromEntries(Object.entries(d.upgradeItems ?? {}).map(([id, items]) => [id, restorePickedItems(items).slice(0, 1)]))
     );
     setPickupMethod(d.pickupMethod); setIsOvernight(d.isOvernight);
+    setQuote(d.quote ?? null); setBuildPhotoUrls(d.buildPhotoUrls ?? []);
   };
 
   // Restored on its own, once, as soon as the browser's draft can be read
@@ -348,6 +360,13 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       }
       if (ticketType === "cleaning" && !cleaningPackage) errs.cleaningPackage = "Cleaning package is required.";
       if (ticketType === "upgrade" && selectedUpgrades.length === 0) errs.selectedUpgrades = "Please select at least one upgrade.";
+      if (ticketType === "pc_build" && quote) {
+        if (quoteChecked.length !== quote.items.length) {
+          errs.quote = "Centang setiap komponen yang sesuai dengan barang yang dibawa. Bila ada yang tidak sesuai, tekan \u201cAda yang tidak sesuai?\u201d.";
+        }
+        if (isUploadingBuildPhotos) errs.buildPhotos = "Tunggu sampai foto selesai terunggah.";
+        else if (buildPhotoUrls.length === 0) errs.buildPhotos = "Lampirkan foto komponen rakitan yang dibawa.";
+      }
     }
     if (step === 4) {
       if (!termsAccepted) errs.termsAccepted = "You must confirm the details.";
@@ -378,6 +397,44 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       toast.error("Upload foto gagal. Coba lagi.");
     } finally {
       setIsUploadingUnitPhotos(false);
+    }
+  };
+
+  /**
+   * A quotation names the sales who issued it. When it matches a Sales account
+   * and none was picked on step 1, that sales is assigned; a sales picked by
+   * hand is kept, and the mismatch is pointed out under the checklist.
+   */
+  const handleQuoteChange = (next: UploadedQuote | null) => {
+    setQuote(next);
+    if (next?.sales && !salesId) {
+      setSalesId(next.sales.id);
+      toast.success(`Sales diisi dari quotation: ${next.sales.name}`);
+    }
+  };
+
+  /** Photos of the components brought for a quotation build, pre-uploaded like the others. */
+  const handleBuildPhotoUpload = async (picked: File[]) => {
+    setBuildPhotos(picked);
+    if (picked.length === 0) {
+      setBuildPhotoUrls([]);
+      return;
+    }
+    setIsUploadingBuildPhotos(true);
+    try {
+      const fd = new FormData();
+      picked.forEach((f) => fd.append("files", f));
+      const res = await fetch("/api/upload-temp", { method: "POST", body: fd });
+      const json = (await res.json()) as { uploaded?: { url: string }[]; error?: string };
+      if (json.error) toast.error(`Upload foto gagal: ${json.error}`);
+      else {
+        setBuildPhotoUrls((json.uploaded ?? []).map((u) => u.url));
+        setErrors((prev) => Object.fromEntries(Object.entries(prev).filter(([k]) => k !== "buildPhotos")));
+      }
+    } catch {
+      toast.error("Upload foto gagal. Coba lagi.");
+    } finally {
+      setIsUploadingBuildPhotos(false);
     }
   };
 
@@ -443,6 +500,11 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (ticketType === "warranty_claim" && purchaseDate) fd.append("purchase_date", purchaseDate);
       if (ticketType === "pc_build") {
         fd.append("pc_components_json", JSON.stringify(pcComponents.map(toPosted)));
+        if (quote) {
+          fd.append("quote_url", quote.url);
+          fd.append("quote_checked_count", String(quoteChecked.length));
+          buildPhotoUrls.forEach((url) => fd.append("build_photo_urls", url));
+        }
       }
       fd.append("device_condition", conditions.join(", ")); // Saved to new field
 
@@ -871,7 +933,47 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
               {/* PC Build */}
               {ticketType === "pc_build" && (
                 <div className="flex flex-col gap-5">
-                  <FieldGroup label="Komponen PC" hint="(opsional)">
+                  <FieldGroup
+                    label="Quotation Rakitan"
+                    hint={quote ? undefined : "(bila ada)"}
+                    help={
+                      quote
+                        ? "Centang setiap komponen yang memang dibawa dan sesuai. Tiket baru bisa dibuat bila semuanya sesuai."
+                        : "Untuk rakitan dari quotation web, unggah PDF-nya. Tanpa quotation, isi komponen di bawah secara manual."
+                    }
+                  >
+                    <QuoteChecklist
+                      quote={quote}
+                      onQuoteChange={handleQuoteChange}
+                      checked={quoteChecked}
+                      onCheckedChange={setQuoteChecked}
+                      error={errors.quote}
+                    />
+                    {quote?.sales && salesId === quote.sales.id && (
+                      <p className="text-xs text-tone-green-fg">
+                        Sales tiket ini: <span className="font-semibold">{quote.sales.name}</span> (dari quotation).
+                      </p>
+                    )}
+                    {quote?.sales && salesId && salesId !== quote.sales.id && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-tone-amber-border bg-tone-amber-bg px-3 py-2 text-sm text-tone-amber-fg">
+                        <span>
+                          Quotation diterbitkan oleh <span className="font-semibold">{quote.sales.name}</span>, tetapi di langkah 1
+                          dipilih <span className="font-semibold">{sales.find((s) => s.id === salesId)?.name ?? "sales lain"}</span>.
+                        </span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setSalesId(quote.sales!.id)} className="h-11 bg-card md:h-8">
+                          Pakai {quote.sales.name}
+                        </Button>
+                      </div>
+                    )}
+                    {quote?.salesName && !quote.sales && (
+                      <p className="text-xs text-muted-foreground">
+                        Sales di quotation: <span className="font-semibold">{quote.salesName}</span> — tidak ada akun Sales dengan nama
+                        itu di sistem tiket. Pilih sales di langkah 1 bila perlu.
+                      </p>
+                    )}
+                  </FieldGroup>
+
+                  <FieldGroup label={quote ? "Komponen Tambahan" : "Komponen PC"} hint="(opsional)">
                     <CatalogItemList
                       items={pcComponents}
                       onChange={setPcComponents}
@@ -882,7 +984,11 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                       manualPlaceholder="Nama komponen, mis. i5-13400F"
                       addAnotherLabel="Tambah komponen"
                     />
-                    <p className="text-xs text-muted-foreground">Komponen yang dibeli customer atau disiapkan untuk rakitan ini.</p>
+                    <p className="text-xs text-muted-foreground">
+                      {quote
+                        ? "Barang yang dibawa tetapi tidak ada di quotation, mis. komponen milik customer sendiri."
+                        : "Komponen yang dibeli customer atau disiapkan untuk rakitan ini."}
+                    </p>
                   </FieldGroup>
 
                   <FormField label="Notes / Instructions" htmlFor={`${uid}-notes`}>
@@ -896,16 +1002,42 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     />
                   </FormField>
 
-                  <FieldGroup
-                    label="Ticket Attachment"
-                    required
-                    help="Upload any reference pictures or build lists."
-                    error={errors.ticketFiles}
-                  >
-                    <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
-                    {restoredUploads}
-                    {isUploadingFiles && <Uploading>Uploading files…</Uploading>}
-                  </FieldGroup>
+                  {quote ? (
+                    <FieldGroup
+                      label="Foto Komponen Rakitan"
+                      required
+                      hint={`(maks ${MAX_BUILD_PHOTOS})`}
+                      help="Foto semua komponen yang dibawa, sebagai bukti barang yang diterima sesuai quotation."
+                      error={errors.buildPhotos}
+                    >
+                      <FileUpload
+                        value={buildPhotos}
+                        onChange={handleBuildPhotoUpload}
+                        maxFiles={MAX_BUILD_PHOTOS}
+                        accept="image/*,image/heic,image/heif"
+                      />
+                      {buildPhotos.length === 0 && buildPhotoUrls.length > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          {buildPhotoUrls.length} foto dari draft sudah terunggah.{" "}
+                          <button type="button" onClick={() => setBuildPhotoUrls([])} className={LINK_BUTTON}>
+                            Hapus
+                          </button>
+                        </p>
+                      )}
+                      {isUploadingBuildPhotos && <Uploading>Mengunggah foto…</Uploading>}
+                    </FieldGroup>
+                  ) : (
+                    <FieldGroup
+                      label="Ticket Attachment"
+                      required
+                      help="Upload any reference pictures or build lists."
+                      error={errors.ticketFiles}
+                    >
+                      <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
+                      {restoredUploads}
+                      {isUploadingFiles && <Uploading>Uploading files…</Uploading>}
+                    </FieldGroup>
+                  )}
                 </div>
               )}
 
@@ -1122,6 +1254,16 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                   </p>
                 )}
                 <p><strong>Case:</strong> <span className="capitalize">{ticketType.replace(/_/g, " ")}</span></p>
+                {salesId && <p><strong>Sales:</strong> {sales.find((s) => s.id === salesId)?.name ?? quote?.sales?.name}</p>}
+                {ticketType === "pc_build" && quote && (
+                  <p>
+                    <strong>Quotation:</strong> {quote.code} · {quoteChecked.length}/{quote.items.length} komponen dicek sesuai ·{" "}
+                    {buildPhotoUrls.length} foto komponen
+                  </p>
+                )}
+                {ticketType === "pc_build" && pcComponents.length > 0 && (
+                  <p><strong>{quote ? "Komponen tambahan" : "Komponen"}:</strong> {pcComponents.map((c) => `${c.name} ×${c.quantity}`).join(", ")}</p>
+                )}
                 {ticketType === "cleaning" && <p><strong>Package:</strong> {cleaningPackage.replace(/_/g, " ")}</p>}
                 {ticketType === "service" && <p><strong>Problem:</strong> {notes}</p>}
                 {conditions.length > 0 && <p><strong>Condition:</strong> {conditions.join(", ")}</p>}

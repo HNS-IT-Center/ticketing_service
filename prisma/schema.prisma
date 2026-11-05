@@ -102,6 +102,7 @@ enum NotificationType {
   assigned    // Technician was assigned a ticket
   completed   // Technician completed a ticket (includes points earned)
   rma_update  // RMA case moved to a new state
+  needs_assignment // A new ticket has no technician yet; sent to the store's coordinators
 }
 
 enum CleaningPackage {
@@ -449,6 +450,25 @@ model TicketPcBuildDetail {
   ticket             Ticket  @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
   first_build_url    String? @db.Text // Uploaded by technician upon marking done
   revision_build_url String? @db.Text // Uploaded by assigned Sales
+
+  // The e-commerce quotation the components were read from, when one was
+  // uploaded at intake (lib/pc-build-quote). The PDF itself is also a
+  // TicketAttachment of kind `quotation`; the URL is kept here so the ticket
+  // can say which file its checklist came from.
+  quote_code     String?
+  quote_url      String?   @db.Text
+  quote_customer String?
+  // The "Sales: …" line of the PDF as printed, kept even when no ticketing
+  // account matched it (then sales_id is whatever was picked by hand).
+  quote_sales_name String?
+  quote_total    Int?
+  // Who ticked every component of the quotation against what was brought in,
+  // and when. Copied, not related: the record outlives the account.
+  verified_at      DateTime?
+  verified_by_id   String?
+  verified_by_name String?
+
+  @@index([quote_code])
 }
 
 model TicketPcBuildComponent {
@@ -466,6 +486,10 @@ model TicketPcBuildComponent {
   catalog_category String?
   quantity         Int     @default(1)
 
+  // The component's group as the quotation names it ("PROCESSOR", "RAM"),
+  // for a line read from an uploaded quotation; null for one added by hand.
+  quote_label String?
+
   @@index([sku])
 }
 
@@ -480,6 +504,8 @@ model TicketPcBuildComponent {
 enum AttachmentKind {
   invoice
   unit_photo
+  quotation   // A PC build's e-commerce quotation PDF
+  build_photo // Photos of a PC build's components as they were brought in
 }
 
 model TicketAttachment {

@@ -107,7 +107,7 @@ export default async function TechnicianTicketDetailPage({
         },
         cleaning_detail: true,
         upgrade_details: { include: { upgrade: true } },
-        pc_components: true,
+        pc_components: { orderBy: { id: "asc" } },
         pc_build_detail: true,
         time_logs: { orderBy: { created_at: "asc" } },
         replaced_parts: {
@@ -263,7 +263,7 @@ export default async function TechnicianTicketDetailPage({
 
           {/* What came in: upgrades with the item fitted, PC build components */}
           <UpgradesCard details={ticket.upgrade_details} />
-          <PcComponentsCard components={ticket.pc_components} />
+          <PcComponentsCard components={ticket.pc_components} detail={ticket.pc_build_detail} />
 
           {/* What the desk is waiting for, above the read-only case card: the
               technician is the only one who can answer it. */}

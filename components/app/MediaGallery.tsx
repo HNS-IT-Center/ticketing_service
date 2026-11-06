@@ -1,7 +1,8 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
-import { ChevronLeft, ChevronRight, Download, ExternalLink, FileText } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, FileText } from "lucide-react";
+import { PdfViewer } from "@/components/app/PdfViewer";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buttonVariants } from "@/components/ui/button";
 import { downloadHref } from "@/lib/download-name";
@@ -110,7 +111,10 @@ function MediaViewer({
             </DialogHeader>
 
             <div
-              className="relative flex min-h-64 items-center justify-center overflow-hidden rounded-lg bg-black"
+              className={cn(
+                "relative flex min-h-64 items-center justify-center overflow-hidden rounded-lg",
+                kind === "pdf" ? "bg-muted p-2" : "bg-black",
+              )}
               onTouchStart={(e) => (touchX.current = e.touches[0]?.clientX ?? null)}
               onTouchEnd={(e) => {
                 const start = touchX.current;
@@ -127,7 +131,7 @@ function MediaViewer({
               {kind === "video" && (
                 <video key={item.url} src={item.url} controls playsInline preload="metadata" className="max-h-[70svh] w-full" />
               )}
-              {kind === "pdf" && <iframe key={item.url} src={item.url} title={item.title} className="h-[70svh] w-full border-0 bg-white" />}
+              {kind === "pdf" && <PdfViewer key={item.url} url={item.url} title={item.title} />}
               {kind === "other" && (
                 <div className="flex flex-col items-center gap-3 px-6 py-12 text-center text-white/70">
                   <FileText aria-hidden="true" className="size-10" />
@@ -158,14 +162,6 @@ function MediaViewer({
             </div>
 
             <div className="flex flex-wrap justify-end gap-2">
-              <a
-                href={item.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className={buttonVariants({ variant: "ghost", size: "sm" })}
-              >
-                <ExternalLink aria-hidden="true" /> Buka di tab baru
-              </a>
               {/* Through this app's own origin: `download` is ignored for the R2 domain. */}
               <a href={downloadHref(item.url, item.downloadName ?? item.title)} download className={buttonVariants({ variant: "outline", size: "sm", className: "bg-card" })}>
                 <Download aria-hidden="true" /> Unduh

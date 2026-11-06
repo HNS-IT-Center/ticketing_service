@@ -508,6 +508,30 @@ describe("store-stock transfer number", () => {
     if (!r.ok) expect(r.missing).toContain("stock_transfer_number");
   });
 
+  // Owner, 2026-11-06: the number entered at verification was asked for again
+  // at "Vendor Memproses". A case that already carries it is not asked twice.
+  it("does not ask again once the case carries the number", () => {
+    const r = validateRmaTransition({
+      role: "RMA",
+      from: "submitted_to_vendor",
+      to: "in_vendor_process",
+      unitOwnership: "store_stock",
+      recordedStockTransferNumber: "IT.2026.11.00143",
+    });
+    expect(r.ok).toBe(true);
+  });
+
+  it("still asks when the recorded number is blank", () => {
+    const r = validateRmaTransition({
+      role: "RMA",
+      from: "on_hold",
+      to: "in_vendor_process",
+      unitOwnership: "store_stock",
+      recordedStockTransferNumber: "  ",
+    });
+    expect(r.ok).toBe(false);
+  });
+
   it("leaves that same bypass open for a customer's unit", () => {
     const r = validateRmaTransition({
       role: "RMA",

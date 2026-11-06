@@ -164,6 +164,13 @@ export default async function RmaTicketsPage({
             {t.device_brand ? `${t.device_brand} · ` : ""}
             {t.device_name?.trim() || t.device_type.replace(/_/g, " ")}
           </span>
+          {/* The serial number is what the desk matches against the unit and
+              the vendor's paperwork (owner, 2026-11-06). Searchable too. */}
+          {t.device_sn?.trim() && (
+            <span className="text-[0.7rem] text-muted-foreground">
+              SN <span className="font-mono font-medium text-foreground">{t.device_sn.trim()}</span>
+            </span>
+          )}
         </span>
       ),
     },

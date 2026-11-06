@@ -181,6 +181,7 @@ export default function RmaActionPanel({
   role,
   unitOwnership,
   claimVendors = [],
+  recordedStockTransferNumber = null,
 }: {
   rmaCaseId: string;
   currentStatus: RmaStatus;
@@ -191,6 +192,8 @@ export default function RmaActionPanel({
   /** Active claim vendors from the vendor list. A name typed instead joins the
    *  list on the server, matched to an existing vendor case-insensitively. */
   claimVendors?: ClaimVendorOption[];
+  /** The stock transfer number already on the case; when set it is not asked again. */
+  recordedStockTransferNumber?: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [active, setActive] = useState<RmaTransition | null>(null);
@@ -225,6 +228,7 @@ export default function RmaActionPanel({
       to: active.to,
       input: values,
       unitOwnership,
+      recordedStockTransferNumber,
     });
     if (!check.ok) {
       toast.error(check.error);
@@ -314,7 +318,8 @@ export default function RmaActionPanel({
           ? (["hold_reason"] as RmaTransitionField[])
           : []),
         ...(unitOwnership === "store_stock" &&
-        (active.to === "verified" || active.to === "in_vendor_process")
+        (active.to === "verified" || active.to === "in_vendor_process") &&
+        !recordedStockTransferNumber?.trim()
           ? (["stock_transfer_number"] as RmaTransitionField[])
           : []),
         ...(unitOwnership === "store_stock" && active.to === "submitted_to_vendor"
@@ -363,6 +368,15 @@ export default function RmaActionPanel({
             <p style={{ background: "var(--cream)", borderRadius: "var(--radius-md)", padding: "0.75rem 1rem", fontSize: "0.875rem", color: "var(--text-secondary)", margin: 0 }}>
               {active.description}
             </p>
+
+            {unitOwnership === "store_stock" &&
+              (active.to === "verified" || active.to === "in_vendor_process") &&
+              recordedStockTransferNumber?.trim() && (
+                <p style={{ fontSize: "0.875rem", margin: 0 }}>
+                  Nomor Pemindahan Stok: <strong>{recordedStockTransferNumber}</strong>{" "}
+                  <span style={{ color: "var(--text-muted)" }}>(sudah tercatat)</span>
+                </p>
+              )}
 
             {requiredFields.map((field) =>
               field === "hold_reason_code" ? (

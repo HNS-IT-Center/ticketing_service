@@ -342,6 +342,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             role={session.role}
             unitOwnership={rmaCase.unit_ownership}
             claimVendors={claimVendors}
+            recordedStockTransferNumber={rmaCase.stock_transfer_number}
           />
         </div>
       </div>

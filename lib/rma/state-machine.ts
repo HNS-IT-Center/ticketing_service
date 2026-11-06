@@ -265,8 +265,14 @@ export function validateRmaTransition(args: {
    * store-stock requirement simply does not apply.
    */
   unitOwnership?: UnitOwnership | null;
+  /**
+   * The stock transfer number already on the case. A requirement the case
+   * already meets is not asked again: the number entered at verification
+   * carries the case through to the vendor (owner, 2026-11-06).
+   */
+  recordedStockTransferNumber?: string | null;
 }): RmaValidationResult {
-  const { role, from, to, input = {}, unitOwnership = null } = args;
+  const { role, from, to, input = {}, unitOwnership = null, recordedStockTransferNumber = null } = args;
 
   if (!canActOnRma(role)) {
     return {
@@ -307,9 +313,13 @@ export function validateRmaTransition(args: {
   // path can walk around is worse than none: it reads as enforced.
   //
   // A customer's own unit is never transferred, so nothing is demanded of it.
+  //
+  // Asked once: when the case already carries the number (entered on the way
+  // to `verified`), the later move does not ask for it again.
   if (
     unitOwnership === "store_stock" &&
-    (to === "verified" || to === "in_vendor_process")
+    (to === "verified" || to === "in_vendor_process") &&
+    isBlank(recordedStockTransferNumber)
   ) {
     required.push("stock_transfer_number");
   }

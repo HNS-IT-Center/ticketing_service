@@ -571,6 +571,7 @@ export async function transitionRmaAction(formData: FormData) {
         status: true,
         ticket_id: true,
         unit_ownership: true,
+        stock_transfer_number: true,
         ticket: {
           select: { id: true, ticket_code: true, status: true, technician_id: true },
         },
@@ -587,6 +588,7 @@ export async function transitionRmaAction(formData: FormData) {
       to: toStatus,
       input,
       unitOwnership: rmaCase.unit_ownership,
+      recordedStockTransferNumber: rmaCase.stock_transfer_number,
     });
     if (!check.ok) return { error: check.error };
 

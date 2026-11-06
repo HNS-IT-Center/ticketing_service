@@ -1,4 +1,5 @@
-import { ExternalLink, FileCheck2, PackageCheck, PenLine } from "lucide-react";
+import { FileCheck2, PackageCheck, PenLine } from "lucide-react";
+import FilePreview from "@/components/ui/FilePreview";
 import { formatDateTime } from "@/lib/utils";
 import { DetailCard } from "./TicketSections";
 
@@ -78,14 +79,13 @@ export function PcComponentsCard({
               Dari quotation <span className="font-mono font-semibold">{detail.quote_code}</span>
             </span>
             {detail.quote_url && (
-              <a
-                href={detail.quote_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 font-medium underline underline-offset-2"
-              >
-                Lihat PDF <ExternalLink aria-hidden="true" className="size-3.5" />
-              </a>
+              <FilePreview
+                url={detail.quote_url}
+                fileType="pdf"
+                label="Lihat PDF"
+                title={`Quotation ${detail.quote_code}`}
+                className="inline-flex min-h-11 cursor-pointer items-center gap-1 font-medium underline underline-offset-2 md:min-h-0"
+              />
             )}
           </span>
           {detail.quote_sales_name && (

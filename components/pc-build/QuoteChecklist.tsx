@@ -7,7 +7,6 @@ import {
   Check,
   CircuitBoard,
   Cpu,
-  ExternalLink,
   Fan,
   FileText,
   Gpu,
@@ -24,6 +23,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
+import FilePreview from "@/components/ui/FilePreview";
 import { cn } from "@/lib/utils";
 import type { QuoteItem, UploadedQuote } from "@/lib/pc-build-quote/parse";
 
@@ -190,14 +190,13 @@ export function QuoteChecklist({
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
-          <a
-            href={quote.url}
-            target="_blank"
-            rel="noopener noreferrer"
+          <FilePreview
+            url={quote.url}
+            fileType="pdf"
+            label="Lihat PDF"
+            title={`Quotation ${quote.code}`}
             className={buttonVariants({ variant: "ghost", size: "sm", className: "h-11 md:h-8" })}
-          >
-            <ExternalLink aria-hidden="true" /> Lihat PDF
-          </a>
+          />
           <Button type="button" variant="outline" size="sm" onClick={pick} disabled={uploading} className="h-11 bg-card md:h-8">
             {uploading ? <Loader2 aria-hidden="true" className="animate-spin" /> : <RefreshCw aria-hidden="true" />} Ganti PDF
           </Button>

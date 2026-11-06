@@ -2,7 +2,8 @@
 
 import { useState } from "react";
 import Modal from "@/components/ui/Modal";
-import { Eye, ExternalLink, Download, FileText } from "lucide-react";
+import { Eye, Download, FileText } from "lucide-react";
+import { PdfViewer } from "@/components/app/PdfViewer";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { downloadHref } from "@/lib/download-name";
 
@@ -88,9 +89,7 @@ export default function FilePreview({
       <Modal open={open} onClose={() => setOpen(false)} title={heading} maxWidth="900px">
         <div className="flex flex-col gap-4">
           <div className="flex min-h-80 items-center justify-center overflow-hidden rounded-lg border border-border bg-muted">
-            {kind === "pdf" && (
-              <iframe src={url} title={heading} className="h-[70vh] w-full border-0 bg-white" />
-            )}
+            {kind === "pdf" && <div className="w-full p-2"><PdfViewer url={url} title={heading} /></div>}
 
             {kind === "image" && (
               // eslint-disable-next-line @next/next/no-img-element
@@ -112,14 +111,6 @@ export default function FilePreview({
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
             <a href={saveHref} download className={buttonVariants({ variant: "ghost" })}>
               <Download aria-hidden="true" /> Unduh
-            </a>
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className={buttonVariants({ variant: "outline", className: "bg-card" })}
-            >
-              <ExternalLink aria-hidden="true" /> Buka di Tab Baru
             </a>
             <Button type="button" onClick={() => setOpen(false)}>
               Tutup

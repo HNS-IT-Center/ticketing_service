@@ -22,6 +22,29 @@ export { encrypt, decrypt, type SessionPayload };
  */
 export const SESSION_ENDED_PATH = "/auth/session-ended";
 
+/** The sign-in page, saying the login ran out ("Sesi Anda telah berakhir"). */
+export const LOGIN_SESSION_ENDED = "/login?ended=1";
+
+/**
+ * Send someone whose login no longer holds to the sign-in page, saying why.
+ *
+ * In a server action the cookie can be cleared right here and the browser sent
+ * straight to the sign-in page. Going through SESSION_ENDED_PATH instead made
+ * the client router follow a route handler's redirect, which dropped the
+ * `?ended=1` and with it the notice. While a page renders a cookie cannot be
+ * changed, and that is what the route handler is for.
+ */
+async function sendToSignIn(): Promise<never> {
+  let cleared = false;
+  try {
+    (await cookies()).delete(SESSION_COOKIE);
+    cleared = true;
+  } catch {
+    // Rendering a page: cookies are read-only here.
+  }
+  redirect(cleared ? LOGIN_SESSION_ENDED : SESSION_ENDED_PATH);
+}
+
 export async function createSession(
   userId: string,
   role: string,
@@ -100,9 +123,13 @@ export async function getSession(): Promise<SessionPayload | null> {
 
 export async function requireSession(): Promise<SessionPayload> {
   const token = await readCookie();
-  if (!token || !(await decrypt(token))) redirect("/login");
+  // A missing or expired cookie on a request that needs one means the login ran
+  // out while the page was open (a page without one never gets past proxy.ts),
+  // so it gets the same "Sesi Anda telah berakhir. Silakan masuk lagi." as a
+  // session ended at SSO — not a bare login page with no word of why.
+  if (!token || !(await decrypt(token))) return sendToSignIn();
   const session = await checkToken(token);
-  if (!session) redirect(SESSION_ENDED_PATH);
+  if (!session) return sendToSignIn();
   return session;
 }
 

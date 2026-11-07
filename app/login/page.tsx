@@ -1,6 +1,7 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import toast from "react-hot-toast";
 import { useSearchParams } from "next/navigation";
 import { loginAction, type FormState } from "@/app/actions/auth";
 import { AlertCircle, Info, KeyRound, Loader2 } from "lucide-react";
@@ -18,6 +19,12 @@ export default function LoginPage() {
   const searchParams = useSearchParams();
   const ended = searchParams.get("ended") === "1";
   const ssoOff = searchParams.get("sso") === "off";
+
+  // Sent here because the login ran out mid-task: whatever the page left behind
+  // ("Pengiriman gagal…") is not the story — the notice below is.
+  useEffect(() => {
+    if (ended) toast.dismiss();
+  }, [ended]);
 
   return (
     <AuthShell>

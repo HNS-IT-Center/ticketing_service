@@ -31,6 +31,7 @@ import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { TONE_CLASSES, type StatusTone } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
+import { isNavigationSignal } from "@/lib/navigation-signal";
 
 export type VendorRowData = VendorRoles & {
   id: string;
@@ -137,7 +138,9 @@ function useVendorSubmit() {
         toast.success(done);
         after(form);
         router.refresh();
-      } catch {
+      } catch (err) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         toast.error("Gagal menyimpan. Periksa koneksi lalu coba lagi.");
       }
     });

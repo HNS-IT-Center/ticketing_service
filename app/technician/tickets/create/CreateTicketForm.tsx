@@ -21,6 +21,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { isNavigationSignal } from "@/lib/navigation-signal";
 
 type Props = {
   storeLocations: { id: string; name: string; code: string }[];
@@ -549,6 +550,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
           router.push(result.redirectUrl);
         }
       } catch (err: any) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         console.error("Action error:", err);
         const errMsg = err.message ? `Error: ${err.message}` : "An unexpected error occurred.";
         toast.error(errMsg + " (Please try again)");

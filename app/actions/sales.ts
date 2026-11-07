@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
@@ -79,6 +81,7 @@ export async function uploadFirstBuildAction(formData: FormData) {
     revalidatePath(`/technician/tickets/${ticketId}`);
     return { success: true };
   } catch (err: any) {
+    unstable_rethrow(err);
     return { error: err.message || "Unexpected error during upload" };
   }
 }
@@ -162,6 +165,7 @@ export async function uploadRevisionBuildAction(formData: FormData) {
     revalidatePath(`/technician/tickets/${ticketId}`);
     return { success: true, revisionNumber };
   } catch (err: any) {
+    unstable_rethrow(err);
     return { error: err.message || "Unexpected error during upload" };
   }
 }

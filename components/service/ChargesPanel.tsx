@@ -41,6 +41,7 @@ import { SERVICE_PART_ORDER, isServicePart, requiresItemName, servicePartLabel }
 import { clearDraft, readDraft, useDraft, useDraftKey } from "@/lib/draft";
 import type { ServiceJobOption } from "@/lib/service-jobs";
 import type { PriceReference } from "@/lib/price-reference";
+import { isNavigationSignal } from "@/lib/navigation-signal";
 
 type ActionResult = { error: string } | { success: true };
 
@@ -128,7 +129,9 @@ export default function ChargesPanel({
         toast.success(done);
         after();
         router.refresh();
-      } catch {
+      } catch (err) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         toast.error("Gagal menyimpan. Periksa koneksi lalu coba lagi.");
       }
     });

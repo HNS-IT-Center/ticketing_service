@@ -26,6 +26,7 @@ import { Input } from "@/components/ui/input";
 import { MAX_JOB_POINTS } from "@/lib/service-jobs";
 import { cn } from "@/lib/utils";
 import RupiahInput from "@/components/service/RupiahInput";
+import { isNavigationSignal } from "@/lib/navigation-signal";
 
 export type ServiceJobRowData = {
   id: string;
@@ -59,7 +60,9 @@ function useAccuratePick() {
         toast.success(done(r as { count?: number }));
         after();
         router.refresh();
-      } catch {
+      } catch (err) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         toast.error("Gagal menyimpan. Periksa koneksi lalu coba lagi.");
       }
     });
@@ -164,7 +167,9 @@ function useJobSubmit() {
         toast.success(done);
         after(form);
         router.refresh();
-      } catch {
+      } catch (err) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         toast.error("Gagal menyimpan. Periksa koneksi lalu coba lagi.");
       }
     });

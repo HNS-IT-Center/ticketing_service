@@ -27,6 +27,8 @@ const h = vi.hoisted(() => ({
   localKeys: null as unknown,
   tokenBody: (() => ({ body: {} })) as (form: URLSearchParams) => { status?: number; body: object },
   tokenRequests: [] as { auth: string | null; form: URLSearchParams }[],
+  /** How long the token endpoint takes to answer, to let two requests overlap. */
+  tokenDelayMs: 0,
   cookies: new Map<string, string>(),
 }));
 
@@ -157,6 +159,7 @@ beforeAll(async () => {
       const form = new URLSearchParams(String(init.body));
       h.tokenRequests.push({ auth: new Headers(init.headers as HeadersInit).get("authorization"), form });
       const { status = 200, body } = h.tokenBody(form);
+      if (h.tokenDelayMs) await new Promise((r) => setTimeout(r, h.tokenDelayMs));
       return Response.json(body, { status });
     }
     if (url.endsWith("/.well-known/jwks.json")) return Response.json(jwks);
@@ -340,6 +343,35 @@ describe("session checks and back-channel logout", () => {
     expect(await ensureSsoSessionActive(sso)).toBe(true);
     const row = await db.ssoSession.findUnique({ where: { id: sso } });
     expect(row).toMatchObject({ access_token: "at-new", refresh_token: "rt-rotated", refresh_locked_until: null });
+  });
+
+  it("two requests on an expired token: one refreshes, the other waits for it instead of ending the session", async () => {
+    // A phone idle past the token's lifetime sends the action and the bells'
+    // polling at once; the loser used to be told the session was over.
+    const sso = await ssoSessionFor(`${RUN}-sid-race`, -60_000);
+    h.tokenRequests.length = 0;
+    h.tokenDelayMs = 400;
+    h.tokenBody = () => ({ body: { access_token: "at-race", token_type: "Bearer", expires_in: 600, refresh_token: "rt-race-2" } });
+    try {
+      const results = await Promise.all([ensureSsoSessionActive(sso), ensureSsoSessionActive(sso)]);
+      expect(results).toEqual([true, true]);
+      // The refresh token is sent once: a second use would end the chain at SSO.
+      expect(h.tokenRequests.filter((r) => r.form.get("grant_type") === "refresh_token")).toHaveLength(1);
+      expect(await db.ssoSession.findUnique({ where: { id: sso } })).toMatchObject({ refresh_token: "rt-race-2", revoked_at: null });
+    } finally {
+      h.tokenDelayMs = 0;
+    }
+  });
+
+  it("the waiting request still sees a session ended by the other refresh", async () => {
+    const sso = await ssoSessionFor(`${RUN}-sid-race-ig`, -60_000);
+    h.tokenDelayMs = 400;
+    h.tokenBody = () => ({ status: 400, body: { error: "invalid_grant", error_description: "session ended" } });
+    try {
+      expect(await Promise.all([ensureSsoSessionActive(sso), ensureSsoSessionActive(sso)])).toEqual([false, false]);
+    } finally {
+      h.tokenDelayMs = 0;
+    }
   });
 
   it("ends the session when SSO answers invalid_grant", async () => {

@@ -15,6 +15,7 @@ import {
   type Audience,
   type Capability,
 } from "@/lib/access";
+import { isNavigationSignal } from "@/lib/navigation-signal";
 
 export default function AccessMatrixForm({
   allowed,
@@ -32,7 +33,9 @@ export default function AccessMatrixForm({
         await saveAccessRulesAction(formData);
         toast.success("Pengaturan akses disimpan.");
         router.refresh();
-      } catch {
+      } catch (err) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         toast.error("Gagal menyimpan pengaturan akses.");
       }
     });

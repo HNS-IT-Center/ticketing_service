@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
@@ -464,6 +466,7 @@ export async function updateTicketStatusAction(formData: FormData) {
     revalidatePath(`/customer/tickets/${ticketId}`);
     return { success: true };
   } catch (err: any) {
+    unstable_rethrow(err);
     console.error("[updateTicketStatusAction Error]:", err);
     return { error: err.message || "An internal server error occurred" };
   }

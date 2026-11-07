@@ -27,6 +27,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { TONE_CLASSES } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
+import { isNavigationSignal } from "@/lib/navigation-signal";
 
 export type ReplacedPartRow = {
   id: string;
@@ -109,6 +110,8 @@ export default function ReplacedPartsPanel({
       try {
         result = await addReplacedPartAction(formData);
       } catch (err) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         console.error("[replaced part] send failed:", err);
         toast.error(uploadFailureMessage(err));
         return;

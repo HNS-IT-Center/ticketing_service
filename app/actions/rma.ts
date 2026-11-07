@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
@@ -870,6 +872,8 @@ export async function transitionRmaAction(formData: FormData) {
  * only covers the ones nobody planned for.
  */
 function unexpectedFailure(err: unknown, context: string): { error: string } {
+  // A redirect (session over) or notFound is Next's to handle, not a failure.
+  unstable_rethrow(err);
   console.error(`[${context}]`, err);
   return {
     error:
@@ -1001,6 +1005,7 @@ export async function submitHoldEvidenceAction(formData: FormData) {
 
     return { success: true, count: uploaded.length };
   } catch (err) {
+    unstable_rethrow(err);
     console.error("[RMA HOLD EVIDENCE ERROR]", err);
     return { error: "Gagal mengirim bukti. Coba lagi." };
   }

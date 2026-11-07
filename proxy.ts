@@ -56,6 +56,21 @@ export async function proxy(request: NextRequest) {
   const session = await decrypt(sessionCookie);
 
   if (!session) {
+    // A server action sent after the login ran out (the cookie lives one
+    // shift). Redirected here, the browser got the login page's HTML where it
+    // expected the action's answer, and the technician read "Pengiriman
+    // gagal, kemungkinan koneksi terputus" — blaming the signal (2026-11-07).
+    // Let it through: every action checks its own session and sends the
+    // browser to "Sesi Anda telah berakhir. Silakan masuk lagi." This guards
+    // nothing away — an action posted to /login or /api never passed here.
+    if (request.headers.has("next-action")) {
+      return NextResponse.next();
+    }
+    // A cookie that is there but no longer opens: say why on the login page
+    // (the route clears it, so this cannot loop).
+    if (sessionCookie) {
+      return NextResponse.redirect(new URL("/auth/session-ended", baseUrl));
+    }
     return NextResponse.redirect(new URL("/login", baseUrl));
   }
 

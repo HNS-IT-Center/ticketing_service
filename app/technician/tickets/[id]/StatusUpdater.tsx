@@ -22,6 +22,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { TONE_CLASSES, type StatusTone } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
+import { isNavigationSignal } from "@/lib/navigation-signal";
 
 /** Matches MAX_DAMAGE_PHOTOS in app/actions/rma.ts. */
 const MAX_DAMAGE_PHOTOS = 5;
@@ -246,6 +247,8 @@ export default function StatusUpdater({
       try {
         result = await handoverToRmaAction(fd);
       } catch (err) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         console.error("[handover] send failed:", err);
         toast.error(uploadFailureMessage(err));
         return;
@@ -313,6 +316,8 @@ export default function StatusUpdater({
           closeDialog();
         }
       } catch (err) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         console.error("Action error:", err);
         toast.error(uploadFailureMessage(err));
       }

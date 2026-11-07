@@ -72,6 +72,30 @@ export async function revokeSsoSessionsFor(
   return result.count;
 }
 
+/** How long a request waits for another request's refresh, and how often it looks. */
+export const REFRESH_WAIT_MS = 8_000;
+const REFRESH_POLL_MS = 200;
+
+/**
+ * Another request holds the refresh lock and the access token has run out:
+ * wait for its outcome. Alive once the row carries a new refresh token or an
+ * expiry in the future; over once it is revoked; still unknown after
+ * `REFRESH_WAIT_MS` — the other refresh hung — counts as over, fail closed.
+ */
+async function waitForConcurrentRefresh(id: string, staleRefreshToken: string): Promise<boolean> {
+  const deadline = Date.now() + REFRESH_WAIT_MS;
+  for (;;) {
+    const row = await db.ssoSession.findUnique({
+      where: { id },
+      select: { revoked_at: true, refresh_token: true, access_expires_at: true },
+    });
+    if (!row || row.revoked_at) return false;
+    if (row.refresh_token !== staleRefreshToken || row.access_expires_at.getTime() > Date.now()) return true;
+    if (Date.now() >= deadline) return false;
+    await new Promise((resolve) => setTimeout(resolve, REFRESH_POLL_MS));
+  }
+}
+
 /**
  * Whether the SSO session behind a cookie is still alive, refreshing it when
  * the access token is about to run out.
@@ -105,9 +129,15 @@ export async function ensureSsoSessionActive(id: string, now = Date.now()): Prom
     data: { refresh_locked_until: new Date(now + REFRESH_LOCK_MS) },
   });
   if (lock.count === 0) {
-    // Someone else is refreshing. The access token has up to a minute left,
-    // which is all this request needs.
-    return s.access_expires_at.getTime() > now;
+    // Someone else is refreshing — or has just finished. While the token still
+    // has time left, that is all this request needs. Once it has run out, this
+    // request waits for the other one's result instead of failing: a phone
+    // left idle past the token's ten minutes (a photo being taken) sends the
+    // user's action and the bells' polling at the same moment, and answering
+    // the loser "session over" signed technicians out mid-task — the
+    // NEXT_REDIRECT toast on "Confirm Work Done" (2026-11-07).
+    if (s.access_expires_at.getTime() > now) return true;
+    return waitForConcurrentRefresh(id, s.refresh_token);
   }
 
   try {

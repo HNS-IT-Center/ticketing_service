@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { sendMessageAction } from "@/app/actions/tickets";
 import toast from "react-hot-toast";
+import { isNavigationSignal } from "@/lib/navigation-signal";
 
 interface Message {
   id: string;
@@ -44,6 +45,8 @@ export default function TicketChat({ ticketId, messages, currentUserId, customer
         await sendMessageAction(ticketId, newMessage);
         setNewMessage("");
       } catch (err) {
+        // Next moving the page (e.g. the login ran out) is not a failure.
+        if (isNavigationSignal(err)) return;
         toast.error((err instanceof Error && err.message) || "Failed to send message");
       }
     });

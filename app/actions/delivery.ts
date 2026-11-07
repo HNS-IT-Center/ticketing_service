@@ -1,5 +1,7 @@
 "use server";
 
+import { unstable_rethrow } from "next/navigation";
+
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
@@ -59,6 +61,7 @@ export async function uploadDeliveryProofAction(formData: FormData) {
 
     return { success: true };
   } catch (err: any) {
+    unstable_rethrow(err);
     return { error: err.message || "An unexpected error occurred during upload" };
   }
 }

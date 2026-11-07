@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { redirect } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 import { revalidatePath } from "next/cache";
 import { customAlphabet } from "nanoid";
 import { randomBytes } from "crypto";
@@ -536,6 +536,7 @@ export async function createTicketAction(formData: FormData) {
 
     return { success: true, redirectUrl };
   } catch (err: any) {
+    unstable_rethrow(err);
     console.error("[createTicketAction Error]:", err);
     return { error: err.message || "An internal server error occurred" };
   }

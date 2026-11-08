@@ -12,9 +12,14 @@ import {
   AUDIENCE_LABELS,
   CAPABILITIES,
   CAPABILITY_INFO,
+  CAPABILITY_SECTIONS,
   type Audience,
   type Capability,
+  type CapabilitySection,
 } from "@/lib/access";
+
+const SECTION_ORDER: CapabilitySection[] = ["pricing", "ticket", "stock"];
+const sectionOf = (c: Capability): CapabilitySection => CAPABILITY_INFO[c].section ?? "pricing";
 import { isNavigationSignal } from "@/lib/navigation-signal";
 
 export default function AccessMatrixForm({
@@ -69,23 +74,33 @@ export default function AccessMatrixForm({
   };
 
   return (
-    <form action={submit} data-slot="access-matrix" className="flex flex-col gap-4">
-      <ul className="flex flex-col gap-3">
-        {CAPABILITIES.map((c) => (
-          <li key={c}>
-            <fieldset className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
-              <legend className="sr-only">{CAPABILITY_INFO[c].label}</legend>
-              <div className="flex flex-col gap-0.5" aria-hidden="true">
-                <span className="font-semibold text-foreground">{CAPABILITY_INFO[c].label}</span>
-                <span className="text-xs text-muted-foreground">{CAPABILITY_INFO[c].hint}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
-                {AUDIENCES.map((a) => cell(c, a))}
-              </div>
-            </fieldset>
-          </li>
-        ))}
-      </ul>
+    <form action={submit} data-slot="access-matrix" className="flex flex-col gap-6">
+      {SECTION_ORDER.map((section) => (
+        <section key={section} aria-labelledby={`akses-${section}`} className="flex flex-col gap-3">
+          <div className="flex flex-col gap-0.5">
+            <h2 id={`akses-${section}`} className="text-base font-semibold text-foreground">
+              {CAPABILITY_SECTIONS[section].title}
+            </h2>
+            <p className="text-sm text-muted-foreground">{CAPABILITY_SECTIONS[section].hint}</p>
+          </div>
+          <ul className="flex flex-col gap-3">
+            {CAPABILITIES.filter((c) => sectionOf(c) === section).map((c) => (
+              <li key={c}>
+                <fieldset className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4">
+                  <legend className="sr-only">{CAPABILITY_INFO[c].label}</legend>
+                  <div className="flex flex-col gap-0.5" aria-hidden="true">
+                    <span className="font-semibold text-foreground">{CAPABILITY_INFO[c].label}</span>
+                    <span className="text-xs text-muted-foreground">{CAPABILITY_INFO[c].hint}</span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-6">
+                    {AUDIENCES.map((a) => cell(c, a))}
+                  </div>
+                </fieldset>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ))}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
         <Button type="submit" disabled={pending}>
           {pending && <Loader2 aria-hidden="true" className="animate-spin" />}

@@ -7,6 +7,7 @@ import { requireSession } from "@/lib/session";
 import { accessFor } from "@/lib/access-server";
 import { readServiceJob } from "@/lib/service-jobs";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
+import { NO_STOCK } from "@/lib/catalog/items";
 import { logActivity } from "@/lib/activity";
 import { formatRupiah } from "@/lib/charges";
 
@@ -124,7 +125,7 @@ async function readAccurateItem(formData: FormData): Promise<{ error: string } |
   if (!Number.isInteger(id) || id <= 0) return { error: "Item Accurate tidak valid." };
   let item: Awaited<ReturnType<typeof getCatalogItem>>;
   try {
-    item = await getCatalogItem(id);
+    item = await getCatalogItem(id, NO_STOCK);
   } catch (err) {
     if (!(err instanceof CatalogUnavailableError)) throw err;
     console.error("[CATALOG LOOKUP]", err.message);

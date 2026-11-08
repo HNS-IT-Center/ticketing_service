@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
 import { chargePermissions } from "@/lib/charges-server";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
+import { NO_STOCK } from "@/lib/catalog/items";
 import { readPartInput } from "@/lib/replaced-part-input";
 import { deleteFromStorage } from "@/lib/r2";
 import { logActivity, type ActivityActor } from "@/lib/activity";
@@ -518,7 +519,7 @@ export async function linkPartCatalogAction(chargeId: string, catalogItemId: num
   // whatever the browser sent.
   let item;
   try {
-    item = await getCatalogItem(catalogItemId);
+    item = await getCatalogItem(catalogItemId, NO_STOCK);
   } catch (err) {
     if (!(err instanceof CatalogUnavailableError)) throw err;
     console.error("[LINK PART CODE]", err.message);

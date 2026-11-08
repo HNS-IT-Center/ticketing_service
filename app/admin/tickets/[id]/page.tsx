@@ -1,3 +1,5 @@
+import EditTicketButton from "@/components/tickets/EditTicketButton";
+import { loadTicketEdit } from "@/lib/ticket-edit-server";
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { publicTicketPath } from "@/lib/routes";
@@ -148,6 +150,7 @@ export default async function AdminTicketDetailPage({
   // The bill — service tickets only. A cost the viewer may not see is removed
   // on the server, before anything reaches the browser.
   const chargesPanel = await loadChargesPanel(session.userId, ticket);
+  const ticketEdit = await loadTicketEdit(session.userId, ticket.id);
 
   const isPaused = ticket.time_logs.length > 0 && ticket.time_logs[ticket.time_logs.length - 1].event === "PAUSE";
   const workingTimeMs = calculateWorkingTimeMs(ticket.time_logs);
@@ -204,6 +207,7 @@ export default async function AdminTicketDetailPage({
         deviceSn={ticket.device_sn}
         accessories={ticket.accessories}
         warrantyStatus={ticket.warranty_status}
+        edit={ticketEdit && <EditTicketButton {...ticketEdit} />}
         meta={
           <>
             {ticket.store_location && (

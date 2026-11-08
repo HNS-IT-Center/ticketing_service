@@ -34,6 +34,7 @@ export const ACTIVITY_ACTIONS = {
   "ticket.request_cancel": { area: "ticket", label: "Batal minta tiket" },
   "ticket.request_decide": { area: "ticket", label: "Putuskan permintaan" },
   "ticket.notes": { area: "ticket", label: "Ubah catatan" },
+  "ticket.edit": { area: "ticket", label: "Ubah data tiket" },
   "ticket.pickup": { area: "ticket", label: "Ubah pengambilan" },
   "ticket.message": { area: "ticket", label: "Kirim pesan" },
   "ticket.attachment": { area: "ticket", label: "Unggah lampiran" },

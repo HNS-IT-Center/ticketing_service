@@ -22,7 +22,7 @@ export default async function AccessSettingsPage() {
             <ShieldCheck aria-hidden="true" className="size-6" /> Pengaturan Akses
           </span>
         }
-        description="Siapa yang boleh melihat dan mengubah harga service. Head Teknisi ditandai di halaman Users; Koordinator Toko adalah teknisi bertanda Team Leader."
+        description="Siapa yang boleh melihat dan mengubah harga service, memperbaiki data tiket, dan melihat stok gudang mana. Head Teknisi ditandai di halaman Users; Koordinator Toko adalah teknisi bertanda Team Leader."
       />
       <AccessMatrixForm allowed={allowed} />
     </div>

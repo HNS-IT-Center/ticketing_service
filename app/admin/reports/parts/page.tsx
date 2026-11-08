@@ -26,7 +26,8 @@ import {
   type OutsideRow,
 } from "@/lib/reports/part-demand";
 import { CatalogUnavailableError, getCatalogItem, isCatalogConfigured } from "@/lib/catalog/hns-data";
-import { stockAtStore, type StoreRef } from "@/lib/catalog/items";
+import { stockAtStore, type StockVisibility, type StoreRef } from "@/lib/catalog/items";
+import { stockVisibilityFor } from "@/lib/access-server";
 
 export const metadata = { title: "Laporan Pergantian Part — HNS IT Center" };
 
@@ -41,7 +42,11 @@ type StockNow = { here: number | null; total: number };
  * What the catalogue holds now for the most-used items. One lookup each, in
  * parallel; a lookup that fails shows as unknown rather than failing the page.
  */
-async function stockFor(rows: DemandRow[], store: StoreRef | null): Promise<{ stock: Map<string, StockNow>; unavailable: boolean }> {
+async function stockFor(
+  rows: DemandRow[],
+  store: StoreRef | null,
+  visible: StockVisibility
+): Promise<{ stock: Map<string, StockNow>; unavailable: boolean }> {
   const stock = new Map<string, StockNow>();
   if (!isCatalogConfigured()) return { stock, unavailable: true };
   let unavailable = false;
@@ -49,7 +54,7 @@ async function stockFor(rows: DemandRow[], store: StoreRef | null): Promise<{ st
     rows.map(async (r) => {
       if (!r.catalogItemId) return;
       try {
-        const item = await getCatalogItem(r.catalogItemId);
+        const item = await getCatalogItem(r.catalogItemId, visible);
         if (item) stock.set(r.sku, { here: stockAtStore(item, store), total: item.stockTotal });
       } catch (err) {
         if (!(err instanceof CatalogUnavailableError)) throw err;
@@ -65,7 +70,7 @@ export default async function PartsReportPage({
 }: {
   searchParams: Promise<{ month?: string; store?: string }>;
 }) {
-  await requireRole("Administrator");
+  const session = await requireRole("Administrator");
   const params = await searchParams;
   const month = resolveReportMonth(params.month);
   const storeId = params.store || null;
@@ -84,7 +89,7 @@ export default async function PartsReportPage({
   const outside = outsideCatalog(demandRows);
   const store = storeId ? (stores.find((s) => s.id === storeId) ?? null) : null;
   const storeName = store?.name ?? null;
-  const { stock, unavailable: stockUnavailable } = await stockFor(demand, store);
+  const { stock, unavailable: stockUnavailable } = await stockFor(demand, store, await stockVisibilityFor(session.userId));
   const windowLabel = `${monthLabel(span.firstMonth)} – ${monthLabel(month)}`;
   const exportHref = `/admin/reports/parts/export?month=${month}${storeId ? `&store=${storeId}` : ""}`;
   const catalogShare = summary.entries ? Math.round((summary.fromCatalog / summary.entries) * 100) : 0;

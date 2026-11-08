@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { CLAIM_WAREHOUSE_IDS, STOCK_WAREHOUSE_IDS, stockAtStore, toCatalogItem } from "./items";
+import { NO_STOCK, stockAtStore, toCatalogItem, type StockVisibility } from "./items";
+import { STOCK_CAPABILITIES, type StockCapability } from "../access";
 import { currentMonth, monthRange, summarizeParts, type PartReportRow } from "../reports/parts";
 
 // A real answer from data.hnsitcenter.id, 2026-10-26, for a client that is
@@ -32,9 +33,15 @@ const apiItem = {
   },
 };
 
+// What each group sees by default (lib/access.ts): every staff member the
+// shop's three warehouses, the RMA desk the claim ones too, Admin everything.
+const STAFF: StockVisibility = new Set<StockCapability>(["view_stock_utama", "view_stock_nagoyahill", "view_stock_gateway"]);
+const RMA: StockVisibility = new Set<StockCapability>([...STAFF, "view_stock_klaim"]);
+const ADMIN: StockVisibility = new Set<StockCapability>(STOCK_CAPABILITIES);
+
 describe("toCatalogItem", () => {
-  it("keeps what a part record needs, and only the warehouses this app reads", () => {
-    expect(toCatalogItem(apiItem)).toEqual({
+  it("keeps what a part record needs, and only the warehouses the viewer may see", () => {
+    expect(toCatalogItem(apiItem, STAFF)).toEqual({
       id: 7311,
       sku: "2503000069",
       name: "NEW BACKPACK LENOVO BP210 15.6 GREY",
@@ -49,29 +56,63 @@ describe("toCatalogItem", () => {
         { id: 50, name: "GUDANG UTAMA", quantity: 29 },
         { id: 400, name: "NAGOYAHILL", quantity: 27 },
       ],
-      claimWarehouses: [{ id: 450, name: "KLAIM GARANSI", quantity: 1 }],
+      claimWarehouses: [],
     });
   });
 
-  it("keeps claim stock apart: out of the total, the store figures and the store list", () => {
-    const item = toCatalogItem(apiItem)!;
-    expect(CLAIM_WAREHOUSE_IDS.has(350)).toBe(false);
-    expect(item.warehouses.some((w) => CLAIM_WAREHOUSE_IDS.has(w.id))).toBe(false);
-    expect(item.claimWarehouses.map((w) => w.id)).toEqual([450]);
+  it("never sends Griya or Gudang Batam to a viewer not given them — not a row, a name, or a share of the total", () => {
+    const withBatam = {
+      ...apiItem,
+      stock: { ...apiItem.stock, warehouses: [...apiItem.stock.warehouses, { id: 100, name: "GUDANG BATAM", quantity: 5, countsInTotal: true }] },
+    };
+    for (const visible of [STAFF, RMA, NO_STOCK]) {
+      const item = toCatalogItem(withBatam, visible)!;
+      expect(JSON.stringify(item)).not.toMatch(/griya|batam|"id":350|"id":100/i);
+    }
+    // 172 from the API, less GRIYA's 88, display's 3 and inventaris' 1.
+    expect(toCatalogItem(withBatam, STAFF)!.stockTotal).toBe(172 - 88 - 3 - 1);
   });
 
-  it("takes KLAIM PEMASOK by name the day it appears, under any id but Griya's", () => {
-    const item = toCatalogItem({
-      ...apiItem,
-      stock: {
-        total: 0,
-        warehouses: [
-          { id: 450, name: "KLAIM GARANSI", quantity: 1, countsInTotal: false },
-          { id: 9001, name: "Klaim  Pemasok", quantity: 2, countsInTotal: false },
-          { id: 350, name: "KLAIM PEMASOK", quantity: 7, countsInTotal: true },
-        ],
+  it("gives Admin Griya and Gudang Batam, in the list and the total", () => {
+    const item = toCatalogItem(
+      { ...apiItem, stock: { ...apiItem.stock, warehouses: [...apiItem.stock.warehouses, { id: 100, name: "GUDANG BATAM", quantity: 5, countsInTotal: true }] } },
+      ADMIN,
+    )!;
+    expect(item.warehouses.map((w) => w.id).sort((a, b) => a - b)).toEqual([50, 100, 250, 350, 400]);
+    expect(item.stockTotal).toBe(80 + 88 + 5);
+    // Still not the display, inventaris or transit warehouses: not listed at all.
+    expect(JSON.stringify(item)).not.toMatch(/DISPLAY|INVENTARIS|Transit/);
+  });
+
+  it("gives one warehouse without the others when only that one is granted", () => {
+    const item = toCatalogItem(apiItem, new Set<StockCapability>(["view_stock_griya"]))!;
+    expect(item.warehouses).toEqual([{ id: 350, name: "GRIYA", quantity: 88 }]);
+    expect(item.stockTotal).toBe(88);
+  });
+
+  it("keeps claim stock apart, and only for whoever may see it", () => {
+    const item = toCatalogItem(apiItem, RMA)!;
+    expect(item.claimWarehouses).toEqual([{ id: 450, name: "KLAIM GARANSI", quantity: 1 }]);
+    expect(item.warehouses.some((w) => w.id === 450)).toBe(false);
+    expect(item.stockTotal).toBe(80);
+    expect(toCatalogItem(apiItem, STAFF)!.claimWarehouses).toEqual([]);
+  });
+
+  it("takes KLAIM PEMASOK by name the day it appears, but never under Griya's id", () => {
+    const item = toCatalogItem(
+      {
+        ...apiItem,
+        stock: {
+          total: 0,
+          warehouses: [
+            { id: 450, name: "KLAIM GARANSI", quantity: 1, countsInTotal: false },
+            { id: 9001, name: "Klaim  Pemasok", quantity: 2, countsInTotal: false },
+            { id: 350, name: "KLAIM PEMASOK", quantity: 7, countsInTotal: true },
+          ],
+        },
       },
-    })!;
+      RMA,
+    )!;
     expect(item.claimWarehouses).toEqual([
       { id: 450, name: "KLAIM GARANSI", quantity: 1 },
       { id: 9001, name: "Klaim  Pemasok", quantity: 2 },
@@ -80,38 +121,46 @@ describe("toCatalogItem", () => {
     expect(item.stockTotal).toBe(0);
   });
 
-  it("never lets Griya through — not as a row, a name, or a share of the total", () => {
-    expect(STOCK_WAREHOUSE_IDS.has(350)).toBe(false);
-    const item = toCatalogItem(apiItem)!;
-    expect(JSON.stringify(item)).not.toMatch(/griya|350/i);
-    // 172 from the API, less GRIYA's 88, display's 3 and inventaris' 1.
-    expect(item.stockTotal).toBe(172 - 88 - 3 - 1);
+  it("treats a restricted name under another id as restricted", () => {
+    const item = toCatalogItem(
+      { ...apiItem, stock: { total: 9, warehouses: [{ id: 50, name: "GRIYA", quantity: 9, countsInTotal: true }] } },
+      STAFF,
+    )!;
+    expect(item.warehouses).toEqual([]);
   });
 
   it("drops a warehouse row whose id is missing or not a number", () => {
-    const item = toCatalogItem({
-      ...apiItem,
-      stock: {
-        total: 9,
-        warehouses: [
-          { id: "350", name: "GRIYA", quantity: 5, countsInTotal: true },
-          { name: "GATEWAY", quantity: 4, countsInTotal: true },
-        ],
+    const item = toCatalogItem(
+      {
+        ...apiItem,
+        stock: {
+          total: 9,
+          warehouses: [
+            { id: "350", name: "GRIYA", quantity: 5, countsInTotal: true },
+            { name: "GATEWAY", quantity: 4, countsInTotal: true },
+          ],
+        },
       },
-    })!;
+      ADMIN,
+    )!;
     expect(item.warehouses).toEqual([]);
     expect(item.stockTotal).toBe(0);
   });
 
   it("drops an item with no id, SKU or name", () => {
-    expect(toCatalogItem({ ...apiItem, sku: null })).toBeNull();
-    expect(toCatalogItem({ ...apiItem, id: "7311" })).toBeNull();
-    expect(toCatalogItem({ ...apiItem, name: "  " })).toBeNull();
+    expect(toCatalogItem({ ...apiItem, sku: null }, STAFF)).toBeNull();
+    expect(toCatalogItem({ ...apiItem, id: "7311" }, STAFF)).toBeNull();
+    expect(toCatalogItem({ ...apiItem, name: "  " }, STAFF)).toBeNull();
+  });
+
+  it("names no stock at all for NO_STOCK", () => {
+    const item = toCatalogItem(apiItem, NO_STOCK)!;
+    expect(item).toMatchObject({ warehouses: [], claimWarehouses: [], stockTotal: 0, sku: "2503000069" });
   });
 });
 
 describe("stockAtStore", () => {
-  const item = toCatalogItem(apiItem)!;
+  const item = toCatalogItem(apiItem, STAFF)!;
 
   it("reads a known store's own warehouses by id", () => {
     expect(stockAtStore(item, { code: "NGH", name: "Nagoya Hill" })).toBe(27);
@@ -121,7 +170,7 @@ describe("stockAtStore", () => {
   });
 
   it("knows a known store with no row holds none", () => {
-    const empty = toCatalogItem({ ...apiItem, stock: { total: 0, warehouses: [] } })!;
+    const empty = toCatalogItem({ ...apiItem, stock: { total: 0, warehouses: [] } }, STAFF)!;
     expect(stockAtStore(empty, { code: "NGW", name: "Nagoya Gateway" })).toBe(0);
   });
 

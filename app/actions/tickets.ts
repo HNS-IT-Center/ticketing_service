@@ -21,6 +21,7 @@ import { findQuoteSales, matchQuoteToCatalog, ticketUsingQuote } from "@/lib/pc-
 import type { ParsedQuote, QuoteItem } from "@/lib/pc-build-quote/parse";
 import { notifyNewTicket } from "@/lib/new-ticket-notify";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
+import { NO_STOCK } from "@/lib/catalog/items";
 import type { CatalogItem } from "@/lib/catalog/items";
 import { catalogBrand } from "@/lib/catalog/brand";
 import { parsePostedItems, parseUpgradeSelections, typedItems } from "@/lib/catalog/picked-items";
@@ -147,7 +148,7 @@ export async function createTicketAction(formData: FormData) {
       return { error: "Unit dari katalog tidak valid." };
     }
     try {
-      deviceCatalog = await getCatalogItem(catalogId);
+      deviceCatalog = await getCatalogItem(catalogId, NO_STOCK);
     } catch (err) {
       if (!(err instanceof CatalogUnavailableError)) throw err;
       console.error("[CATALOG LOOKUP]", err.message);

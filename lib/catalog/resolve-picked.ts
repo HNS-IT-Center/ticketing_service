@@ -1,5 +1,5 @@
 import { CatalogUnavailableError, getCatalogItem } from "./hns-data";
-import type { CatalogItem } from "./items";
+import { NO_STOCK, type CatalogItem } from "./items";
 import type { PostedItem } from "./picked-items";
 
 /** A posted line made ready for the database: the catalogue's own name and SKU. */
@@ -24,7 +24,7 @@ export async function resolvePostedItems(items: readonly PostedItem[]): Promise<
   const ids = [...new Set(items.flatMap((i) => (i.catalogItemId === null ? [] : [i.catalogItemId])))];
   const found = new Map<number, CatalogItem>();
   try {
-    const fetched = await Promise.all(ids.map((id) => getCatalogItem(id)));
+    const fetched = await Promise.all(ids.map((id) => getCatalogItem(id, NO_STOCK)));
     for (const [n, item] of fetched.entries()) {
       const id = ids.at(n)!;
       if (!item) return { ok: false, error: `Barang dengan id ${id} tidak ditemukan di katalog.` };

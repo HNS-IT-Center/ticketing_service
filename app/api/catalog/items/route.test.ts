@@ -5,6 +5,18 @@ vi.mock("server-only", () => ({}));
 let session: { userId: string; role: string; name: string } | null = null;
 vi.mock("@/lib/session", () => ({ getSession: async () => session }));
 
+// The defaults of Pengaturan Akses, with no changes saved: the real rule, no database.
+let overrides = new Map<string, boolean>();
+vi.mock("@/lib/access-server", async () => {
+  const access = await import("@/lib/access");
+  return {
+    stockVisibilityFor: async () => {
+      const audiences = access.audiencesOf({ role: session!.role });
+      return new Set(access.STOCK_CAPABILITIES.filter((c) => access.isAllowed(c, audiences, overrides)));
+    },
+  };
+});
+
 import { GET } from "./route";
 
 // What data.hnsitcenter.id answers for a client given every warehouse — the
@@ -29,6 +41,8 @@ const apiBody = {
           { id: 50, name: "GUDANG UTAMA", quantity: 29, countsInTotal: true },
           { id: 150, name: "INVENTARIS NAGOYA GATEWAY", quantity: 1, countsInTotal: true },
           { id: 400, name: "NAGOYAHILL", quantity: 27, countsInTotal: true },
+          { id: 100, name: "GUDANG BATAM", quantity: 6, countsInTotal: true },
+          { id: 450, name: "KLAIM GARANSI", quantity: 2, countsInTotal: false },
         ],
       },
     },
@@ -51,6 +65,7 @@ afterEach(() => {
   vi.unstubAllEnvs();
   vi.unstubAllGlobals();
   session = null;
+  overrides = new Map();
 });
 
 describe("GET /api/catalog/items", () => {
@@ -73,14 +88,39 @@ describe("GET /api/catalog/items", () => {
     expect(res.status).toBe(200);
   });
 
-  it("sends the browser no Griya stock, and a total without it", async () => {
-    session = { userId: "u1", role: "Technician", name: "X" };
+  it.each(["Technician", "Sales", "RMA"])("sends a %s browser no Griya or Gudang Batam stock, and a total without them", async (role) => {
+    session = { userId: "u1", role, name: "X" };
     const res = await search();
     const text = await res.text();
-    expect(text).not.toMatch(/griya/i);
+    expect(text).not.toMatch(/griya|batam/i);
     const { items } = JSON.parse(text) as { items: { stockTotal: number; warehouses: { id: number }[] }[] };
     expect(items[0].warehouses.map((w) => w.id)).toEqual([250, 50, 400]);
-    expect(items[0].stockTotal).toBe(169 - 88 - 1); // less GRIYA and INVENTARIS
+    expect(items[0].stockTotal).toBe(80); // GATEWAY + GUDANG UTAMA + NAGOYAHILL
+  });
+
+  it("sends Admin every warehouse the app reads", async () => {
+    session = { userId: "u1", role: "Administrator", name: "X" };
+    const { items } = (await (await search()).json()) as { items: { stockTotal: number; warehouses: { id: number }[]; claimWarehouses: { id: number }[] }[] };
+    expect(items[0].warehouses.map((w) => w.id)).toEqual([250, 350, 50, 400, 100]);
+    expect(items[0].claimWarehouses.map((w) => w.id)).toEqual([450]);
+    expect(items[0].stockTotal).toBe(80 + 88 + 6);
+  });
+
+  it("gives Griya to a group only once the owner ticks it", async () => {
+    session = { userId: "u1", role: "Technician", name: "X" };
+    overrides = new Map([["view_stock_griya:technician", true]]);
+    const text = await (await search()).text();
+    expect(text).toMatch(/GRIYA/);
+    expect(text).not.toMatch(/BATAM/);
+  });
+
+  it("shows claim stock to the RMA desk only", async () => {
+    session = { userId: "u1", role: "RMA", name: "X" };
+    const rma = (await (await search()).json()) as { items: { claimWarehouses: { id: number }[] }[] };
+    expect(rma.items[0].claimWarehouses.map((w) => w.id)).toEqual([450]);
+    session = { userId: "u1", role: "Technician", name: "X" };
+    const tech = (await (await search()).json()) as { items: { claimWarehouses: { id: number }[] }[] };
+    expect(tech.items[0].claimWarehouses).toEqual([]);
   });
 
   it("keeps the token on the server", async () => {

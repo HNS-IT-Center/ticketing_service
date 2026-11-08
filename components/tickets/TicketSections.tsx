@@ -65,6 +65,7 @@ export function TicketHeader({
   publicHref,
   codeTag,
   meta,
+  edit,
 }: {
   code: string;
   badge: React.ReactNode;
@@ -72,6 +73,8 @@ export function TicketHeader({
   codeTag?: React.ReactNode;
   /** Muted lines under the unit, e.g. the store and when it was created. */
   meta?: React.ReactNode;
+  /** "Ubah data tiket", for whoever may correct the intake data. */
+  edit?: React.ReactNode;
   /** "Service • Laptop Office". */
   subtitle: string;
   deviceName?: string | null;
@@ -111,6 +114,7 @@ export function TicketHeader({
           </div>
         )}
         {meta}
+        {edit && <div className="mt-2">{edit}</div>}
       </div>
       {(actions || publicHref) && (
         <div className="flex flex-col items-stretch gap-3 md:items-end">

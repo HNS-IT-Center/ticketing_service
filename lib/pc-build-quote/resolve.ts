@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { CatalogUnavailableError, isCatalogConfigured, searchCatalog } from "@/lib/catalog/hns-data";
+import { NO_STOCK } from "@/lib/catalog/items";
 import type { QuoteItem, QuoteLine } from "./parse";
 import { matchSalesName } from "./sales";
 
@@ -20,7 +21,7 @@ export async function matchQuoteToCatalog(lines: QuoteLine[]): Promise<{ items: 
     const items = await Promise.all(
       lines.map(async (line): Promise<QuoteItem> => {
         if (!line.sku) return { ...line, catalogItemId: null, catalogCategory: null };
-        const hits = await searchCatalog(line.sku, 10);
+        const hits = await searchCatalog(line.sku, NO_STOCK, 10);
         const hit = hits.find((h) => h.sku.trim().toUpperCase() === line.sku!.trim().toUpperCase());
         return { ...line, catalogItemId: hit?.id ?? null, catalogCategory: hit?.category ?? null };
       }),

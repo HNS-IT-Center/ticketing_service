@@ -17,6 +17,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaMariaDb } from "@prisma/adapter-mariadb";
 import { mariadbPoolConfig, MARIADB_ADAPTER_OPTIONS } from "../lib/mariadb";
 import { getCatalogItem, isCatalogConfigured } from "../lib/catalog/hns-data";
+import { NO_STOCK } from "../lib/catalog/items";
 import { catalogBrand } from "../lib/catalog/brand";
 import { databaseHost } from "./lib/prompt";
 
@@ -37,7 +38,7 @@ async function main() {
 
     const brandOf = new Map<number, string | null>();
     for (const id of ids) {
-      const item = await getCatalogItem(id);
+      const item = await getCatalogItem(id, NO_STOCK);
       brandOf.set(id, item ? catalogBrand(item) : null);
     }
 

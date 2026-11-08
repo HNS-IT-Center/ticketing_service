@@ -1,5 +1,5 @@
 import "server-only";
-import { toCatalogItem, type CatalogItem } from "./items";
+import { toCatalogItem, type CatalogItem, type StockVisibility } from "./items";
 
 /**
  * Reading the item catalogue from data.hnsitcenter.id.
@@ -56,16 +56,21 @@ async function getJson(path: string): Promise<{ status: number; body: unknown }>
   return { status: 200, body };
 }
 
-export async function searchCatalog(query: string, limit = 20): Promise<CatalogItem[]> {
+/**
+ * `visible` is the viewer's warehouse settings (`stockVisibilityFor`), or
+ * NO_STOCK where only an item's name, code or category is wanted. Required, so
+ * no caller can forget it and hand a browser every warehouse.
+ */
+export async function searchCatalog(query: string, visible: StockVisibility, limit = 20): Promise<CatalogItem[]> {
   const { body } = await getJson(`/items?q=${encodeURIComponent(query)}&limit=${limit}`);
   const data = (body as { data?: unknown[] } | null)?.data ?? [];
-  return data.map((d) => toCatalogItem(d as never)).filter((i): i is CatalogItem => i !== null);
+  return data.map((d) => toCatalogItem(d as never, visible)).filter((i): i is CatalogItem => i !== null);
 }
 
 /** One item by its catalogue id, or null when it does not exist. */
-export async function getCatalogItem(id: number): Promise<CatalogItem | null> {
+export async function getCatalogItem(id: number, visible: StockVisibility): Promise<CatalogItem | null> {
   const { status, body } = await getJson(`/items/${id}`);
   if (status === 404) return null;
   const data = (body as { data?: unknown } | null)?.data;
-  return data ? toCatalogItem(data as never) : null;
+  return data ? toCatalogItem(data as never, visible) : null;
 }

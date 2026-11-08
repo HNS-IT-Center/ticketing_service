@@ -1,3 +1,5 @@
+import EditTicketButton from "@/components/tickets/EditTicketButton";
+import { loadTicketEdit } from "@/lib/ticket-edit-server";
 import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
@@ -124,6 +126,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
   if (!rmaCase) notFound();
 
   const { ticket } = rmaCase;
+  const ticketEdit = await loadTicketEdit(session.userId, ticket.id);
 
   // The invoice is rendered on its own above; showing it again in the list
   // would just be the same file twice.
@@ -154,7 +157,10 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
       <div className="ticket-detail-grid">
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           <div className="card">
-            <h3 style={{ margin: "0 0 1rem" }}>Tiket Asal</h3>
+            <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: "0.75rem", marginBottom: "1rem" }}>
+              <h3 style={{ margin: 0 }}>Tiket Asal</h3>
+              {ticketEdit && <EditTicketButton {...ticketEdit} />}
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: "1rem" }}>
               <Field label="Kode Tiket" value={ticket.ticket_code} mono />
               <Field label="Status Tiket" value={ticket.status.replace(/_/g, " ")} />
@@ -164,7 +170,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
               <Field label="Brand" value={ticket.device_brand} />
               {ticket.device_sku && <Field label="SKU (katalog Accurate)" value={ticket.device_sku} mono />}
               <Suspense fallback={<ClaimStockShell value="Memuat…" muted />}>
-                <ClaimStock catalogItemId={ticket.device_catalog_item_id} />
+                <ClaimStock catalogItemId={ticket.device_catalog_item_id} userId={session.userId} />
               </Suspense>
               <Field label="Kategori" value={ticket.device_type.replace(/_/g, " ")} />
               <Field label="Serial Number" value={ticket.device_sn} mono />

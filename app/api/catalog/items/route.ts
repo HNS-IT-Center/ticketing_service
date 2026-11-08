@@ -2,6 +2,7 @@ import type { Role } from "@prisma/client";
 import { getSession } from "@/lib/session";
 import { CatalogUnavailableError, isCatalogConfigured, searchCatalog } from "@/lib/catalog/hns-data";
 import { MAX_QUERY, MIN_QUERY } from "@/lib/catalog/items";
+import { stockVisibilityFor } from "@/lib/access-server";
 
 // Typed against the enum, so a misspelt role fails tsc instead of locking it out.
 const STAFF: ReadonlySet<string> = new Set<Role>(["Administrator", "Technician", "Sales", "RMA"]);
@@ -25,7 +26,9 @@ export async function GET(request: Request) {
   if (q.length < MIN_QUERY) return Response.json({ items: [] });
 
   try {
-    const items = await searchCatalog(q, 20);
+    // Only the warehouses this viewer may see leave the server (Pengaturan
+    // Akses → Stok Gudang): Griya and Gudang Batam are Admin only by default.
+    const items = await searchCatalog(q, await stockVisibilityFor(session.userId), 20);
     return Response.json({ items }, { headers: { "Cache-Control": "no-store" } });
   } catch (err) {
     if (err instanceof CatalogUnavailableError) {

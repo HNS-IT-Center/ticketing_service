@@ -3,10 +3,13 @@
  *
  * Source: data.hnsitcenter.id `/api/v1/items`, a mirror of Accurate. Read only —
  * purchasing, stock and prices are managed there, never from here. Stock is
- * read from STOCK_WAREHOUSE_IDS only; see there for why. Pure: no
+ * read from the warehouses in WAREHOUSE_ACCESS only, and only those the viewer
+ * may see (Admin → Pengaturan Akses → Stok Gudang). Pure: no
  * fetch, no server imports, so it is shared by the API route, the server action
  * that records a part, the technician's panel, and the tests.
  */
+
+import type { StockCapability } from "@/lib/access";
 
 export type CatalogItem = {
   id: number;
@@ -18,53 +21,63 @@ export type CatalogItem = {
   type: string;
   unit: string | null;
   serialized: boolean;
-  /** Sum over STOCK_WAREHOUSE_IDS — never the API's own `stock.total`. */
+  /** Sum over the store warehouses the viewer may see — never the API's own `stock.total`. */
   stockTotal: number;
-  /** Only warehouses in STOCK_WAREHOUSE_IDS; every other row is dropped on arrival. */
+  /** Store warehouses the viewer may see; every other row is dropped on arrival. */
   warehouses: CatalogWarehouse[];
-  /** Only warehouses in CLAIM_WAREHOUSE_IDS, for the RMA desk. Never in stockTotal. */
+  /** Claim warehouses, when the viewer may see them (the RMA desk). Never in stockTotal. */
   claimWarehouses: CatalogWarehouse[];
 };
 
 export type CatalogWarehouse = { id: number; name: string; quantity: number };
 
 /**
- * The warehouses whose stock this app reads (owner, 2026-10-26). An allowlist,
- * not a denylist, because the "Ticketing HNS" client on data.hnsitcenter.id is
- * given every warehouse (`warehouseIds: null`). That includes GRIYA (id 350), a
- * restricted store whose stock must never be read or shown through the API, and
- * display, exhibition, gift and transit stock that says nothing about what a
- * technician can fit. A row outside this list never reaches a browser, a total
- * or a report, and a warehouse Accurate adds later stays out until listed here.
+ * Every warehouse this app reads, each behind its own setting in Admin →
+ * Pengaturan Akses → Stok Gudang (owner, 2026-11-07). An allowlist, not a
+ * denylist, because the "Ticketing HNS" client on data.hnsitcenter.id is given
+ * every warehouse (`warehouseIds: null`): display, exhibition, gift, inventory
+ * and transit stock says nothing about what a technician can fit, so a
+ * warehouse not named here never reaches a browser, a total or a report — and
+ * one Accurate adds later stays out until it is listed.
+ *
+ * GRIYA (350) and GUDANG BATAM (100) are restricted: Admin only unless the
+ * owner grants a group. Matched by id and, for the restricted two, by name too,
+ * so a renumbered warehouse cannot slip into an unrestricted setting.
  */
-export const STOCK_WAREHOUSE_IDS: ReadonlySet<number> = new Set([
-  50, //  GUDANG UTAMA
-  400, // NAGOYAHILL
-  250, // GATEWAY
-  // Not INVENTARIS NAGOYA GATEWAY (150): left out by the owner, 2026-10-27.
-]);
+export const WAREHOUSE_ACCESS: Readonly<
+  Record<StockCapability, { ids: readonly number[]; names?: readonly string[]; claim?: true }>
+> = {
+  view_stock_utama: { ids: [50] }, // GUDANG UTAMA
+  view_stock_nagoyahill: { ids: [400] }, // NAGOYAHILL
+  view_stock_gateway: { ids: [250] }, // GATEWAY — not INVENTARIS NAGOYA GATEWAY (150), left out 2026-10-27
+  // KLAIM PEMASOK is not on data.hnsitcenter.id yet; by name it appears the day it is.
+  view_stock_klaim: { ids: [450], names: ["klaimpemasok"], claim: true }, // KLAIM GARANSI
+  view_stock_batam: { ids: [100], names: ["gudangbatam"] }, // GUDANG BATAM
+  view_stock_griya: { ids: [350], names: ["griya"] }, // GRIYA
+};
 
-/**
- * Where units under claim are kept, shown on the RMA case page and nowhere
- * else (owner, 2026-10-27): KLAIM GARANSI and KLAIM PEMASOK. Like the list
- * above, anything not named here is dropped.
- */
-export const CLAIM_WAREHOUSE_IDS: ReadonlySet<number> = new Set([
-  450, // KLAIM GARANSI
-]);
-
-/**
- * Claim warehouses known only by name, compared without case or spacing.
- * KLAIM PEMASOK does not exist on data.hnsitcenter.id yet (13 warehouses,
- * checked 2026-10-27); matching its name lets it appear the day Accurate has it,
- * with no release. Once it does, its id can join the list above.
- */
-const CLAIM_WAREHOUSE_NAMES: ReadonlySet<string> = new Set(["klaimpemasok"]);
-
-/** Restricted stores, refused whatever list or name would let them in. */
-const RESTRICTED_WAREHOUSE_IDS: ReadonlySet<number> = new Set([350]); // GRIYA
+/** Which warehouses a viewer may see — the stock settings they hold. */
+export type StockVisibility = ReadonlySet<StockCapability>;
+/** For callers that only need an item's name, code or category. */
+export const NO_STOCK: StockVisibility = new Set();
 
 const squash = (s: string) => s.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** The setting a warehouse row belongs to, or null when the app does not read it. */
+function warehouseSetting(w: { id?: unknown; name?: unknown }): StockCapability | null {
+  if (typeof w.id !== "number") return null; // cannot be shown not to be a restricted one
+  const name = typeof w.name === "string" ? squash(w.name) : "";
+  // Restricted ones first, by id or by name, so a name never lands elsewhere.
+  for (const key of ["view_stock_griya", "view_stock_batam"] as const) {
+    const rule = WAREHOUSE_ACCESS[key];
+    if (rule.ids.includes(w.id) || (name && rule.names?.includes(name))) return key;
+  }
+  for (const key of Object.keys(WAREHOUSE_ACCESS) as StockCapability[]) {
+    const rule = WAREHOUSE_ACCESS[key];
+    if (rule.ids.includes(w.id) || (name && rule.names?.includes(name))) return key;
+  }
+  return null;
+}
 
 /**
  * A store's own warehouses, by store code. Gudang Utama belongs to no store: it
@@ -100,32 +113,28 @@ const num = (v: unknown): number => (typeof v === "number" && Number.isFinite(v)
 const round = (n: number) => Math.round(n * 10_000) / 10_000;
 
 /** One item from the API, or null when it lacks what a record needs. */
-export function toCatalogItem(raw: ApiItem): CatalogItem | null {
+export function toCatalogItem(raw: ApiItem, visible: StockVisibility): CatalogItem | null {
   const id = typeof raw.id === "number" ? raw.id : null;
   const sku = str(raw.sku);
   const name = str(raw.name);
   if (id === null || !sku || !name) return null;
   const brand = typeof raw.brand === "string" ? str(raw.brand) : str(raw.brand?.name);
 
-  // A row without a numeric id cannot be shown not to be Griya, so it goes too.
+  // Only warehouses this app reads, and of those only what the viewer may see.
   const all = raw.stock?.warehouses ?? [];
-  const rows = all.filter((w) => typeof w.id === "number" && STOCK_WAREHOUSE_IDS.has(w.id));
   const toWarehouse = (w: (typeof all)[number]): CatalogWarehouse => ({
     id: w.id as number,
     name: str(w.name) ?? `#${w.id}`,
     quantity: num(w.quantity),
   });
+  const seen = all
+    .map((w) => ({ w, setting: warehouseSetting(w) }))
+    .filter((x): x is { w: (typeof all)[number]; setting: StockCapability } => x.setting !== null && visible.has(x.setting));
+  const rows = seen.filter((x) => !WAREHOUSE_ACCESS[x.setting].claim).map((x) => x.w);
   const warehouses = rows.map(toWarehouse);
-  const claimWarehouses = all
-    .filter(
-      (w) =>
-        typeof w.id === "number" &&
-        !RESTRICTED_WAREHOUSE_IDS.has(w.id) &&
-        (CLAIM_WAREHOUSE_IDS.has(w.id) || (typeof w.name === "string" && CLAIM_WAREHOUSE_NAMES.has(squash(w.name))))
-    )
-    .map(toWarehouse);
+  const claimWarehouses = seen.filter((x) => WAREHOUSE_ACCESS[x.setting].claim).map((x) => toWarehouse(x.w));
   // Recomputed rather than read: `stock.total` covers every warehouse the
-  // client may see, Griya included (data API docs, "Data yang bisa ditarik").
+  // client may see, the restricted ones included.
   const stockTotal = round(
     rows.reduce((sum, w) => (w.countsInTotal === false ? sum : sum + num(w.quantity)), 0)
   );

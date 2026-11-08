@@ -1,6 +1,7 @@
 import "server-only";
 import type { ServicePart } from "@prisma/client";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
+import { NO_STOCK } from "@/lib/catalog/items";
 import { MAX_QUANTITY, type CatalogItem } from "@/lib/catalog/items";
 import { isServicePart, requiresItemName } from "@/lib/service-parts";
 
@@ -35,7 +36,7 @@ export async function readPartInput(formData: FormData): Promise<{ error: string
     const catalogId = Number(catalogIdRaw);
     if (!Number.isInteger(catalogId) || catalogId <= 0) return { error: "Barang katalog tidak valid." };
     try {
-      catalog = await getCatalogItem(catalogId);
+      catalog = await getCatalogItem(catalogId, NO_STOCK);
     } catch (err) {
       if (!(err instanceof CatalogUnavailableError)) throw err;
       console.error("[CATALOG LOOKUP]", err.message);

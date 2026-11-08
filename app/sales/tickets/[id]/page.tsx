@@ -1,3 +1,5 @@
+import EditTicketButton from "@/components/tickets/EditTicketButton";
+import { loadTicketEdit } from "@/lib/ticket-edit-server";
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { publicTicketPath } from "@/lib/routes";
@@ -108,6 +110,7 @@ export default async function SalesTicketDetailPage({
   // The bill — service tickets only. A cost the viewer may not see is removed
   // on the server, before anything reaches the browser.
   const chargesPanel = await loadChargesPanel(session.userId, ticket);
+  const ticketEdit = await loadTicketEdit(session.userId, ticket.id);
 
   const isPaused = ticket.time_logs.length > 0 && ticket.time_logs[ticket.time_logs.length - 1].event === "PAUSE";
   const isDone = ["completed", "cancelled", "rejected"].includes(ticket.status);
@@ -167,6 +170,11 @@ export default async function SalesTicketDetailPage({
             <p style={{ fontSize: "0.8125rem", color: "var(--text-primary)", marginTop: "0.15rem", fontWeight: 500 }}>
               Kelengkapan: {ticket.accessories}
             </p>
+          )}
+          {ticketEdit && (
+            <div style={{ marginTop: "0.5rem" }}>
+              <EditTicketButton {...ticketEdit} />
+            </div>
           )}
           {ticket.warranty_status && (
             <div style={{ display: "flex", gap: "0.25rem", flexWrap: "wrap", marginTop: "0.35rem" }}>

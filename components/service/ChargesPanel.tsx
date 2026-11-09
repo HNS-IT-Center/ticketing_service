@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useTransition, type FormEvent } from "react";
+import { createContext, useContext, useEffect, useState, useTransition, type FormEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -36,8 +36,9 @@ import RupiahInput from "./RupiahInput";
 import CatalogItemPicker from "@/components/catalog/CatalogItemPicker";
 import CatalogEntryToggle from "@/components/catalog/CatalogEntryToggle";
 import Modal from "@/components/ui/Modal";
+import FileUpload from "@/components/ui/FileUpload";
 import type { CatalogItem } from "@/lib/catalog/items";
-import { SERVICE_PART_ORDER, isServicePart, requiresItemName, servicePartLabel } from "@/lib/service-parts";
+import { MAX_PART_PHOTOS, SERVICE_PART_ORDER, isServicePart, requiresItemName, servicePartLabel } from "@/lib/service-parts";
 import { clearDraft, readDraft, useDraft, useDraftKey } from "@/lib/draft";
 import type { ServiceJobOption } from "@/lib/service-jobs";
 import type { PriceReference } from "@/lib/price-reference";
@@ -88,8 +89,9 @@ function Missing({ children }: { children: React.ReactNode }) {
  *
  * Shows what the viewer may see and offers what they may change; both are
  * decided on the server (`chargePermissions`), and a cost the viewer may not
- * see is never in `lines` to begin with. Part lines come from the "Part yang
- * Diganti" panel; here they only get a supplier and their prices.
+ * see is never in `lines` to begin with. A fitted part is entered here, once,
+ * with its price, supplier and photos; the "Part yang Diganti" panel only lists
+ * them, and its button opens this form on "Part" (`openAddPartForm`).
  */
 export default function ChargesPanel({
   ticketId,
@@ -114,7 +116,21 @@ export default function ChargesPanel({
   const [receiving, setReceiving] = useState<string | null>(null);
   const [linking, setLinking] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
+  // Bumped when the parts panel asks for the form, so it remounts on "Part".
+  const [partRequest, setPartRequest] = useState(0);
   const [pending, start] = useTransition();
+
+  useEffect(() => {
+    const open = () => {
+      setAdding(true);
+      setPartRequest((n) => n + 1);
+      requestAnimationFrame(() =>
+        document.getElementById("rincian-biaya")?.scrollIntoView({ behavior: "smooth", block: "start" })
+      );
+    };
+    window.addEventListener(ADD_PART_EVENT, open);
+    return () => window.removeEventListener(ADD_PART_EVENT, open);
+  }, []);
   const summary = summarizeCharges(lines);
 
   /** Runs an action; the form stays filled when it fails, so nothing is typed twice. */
@@ -277,6 +293,8 @@ export default function ChargesPanel({
       {perms.canEdit &&
         (adding ? (
           <AddForm
+            key={partRequest}
+            startOnPart={partRequest > 0}
             draftKey={addKey}
             perms={perms}
             vendors={vendors}
@@ -284,12 +302,14 @@ export default function ChargesPanel({
             catalogEnabled={catalogEnabled}
             pending={pending}
             onCancel={() => setAdding(false)}
-            onSubmit={(e) =>
+            onSubmit={(e, photos) =>
               submit(
                 e,
                 (fd) => {
                   fd.set("ticket_id", ticketId);
-                  return fd.get("kind") === "part" ? addPartChargeAction(fd) : addChargeAction(fd);
+                  if (fd.get("kind") !== "part") return addChargeAction(fd);
+                  photos.forEach((photo) => fd.append("photos", photo));
+                  return addPartChargeAction(fd);
                 },
                 "Biaya ditambahkan.",
                 // Saved: only now is the typed input let go of.
@@ -901,6 +921,8 @@ function PartFields({
   onPick: setPicked,
   typing,
   onTyping: setTyping,
+  photos,
+  onPhotos,
 }: {
   perms: ChargePermissions;
   vendors: VendorOption[];
@@ -910,6 +932,8 @@ function PartFields({
   onPick: (item: CatalogItem | null) => void;
   typing: boolean;
   onTyping: (typing: boolean) => void;
+  photos: File[];
+  onPhotos: (photos: File[]) => void;
 }) {
   const draft = useContext(DraftValues);
   const [part, setPart] = useState<ServicePart>(
@@ -1003,8 +1027,35 @@ function PartFields({
 
       <VendorSelect kind="part" vendors={vendors} />
       <PriceFields perms={perms} />
+
+      <label className="flex flex-col gap-1">
+        <span className={LABEL}>
+          Catatan <span className="font-normal">(opsional)</span>
+        </span>
+        <textarea
+          name="notes"
+          rows={2}
+          maxLength={MAX_DESCRIPTION}
+          defaultValue={draft.notes ?? ""}
+          placeholder="Kenapa diganti, kondisi part lamanya"
+          className={TEXTAREA}
+        />
+      </label>
+
+      <div className="flex flex-col gap-1">
+        <span className={LABEL}>
+          Foto part <span className="font-normal">(opsional, maks {MAX_PART_PHOTOS}) — biasanya dus dan label namanya</span>
+        </span>
+        <FileUpload value={photos} onChange={onPhotos} maxFiles={MAX_PART_PHOTOS} accept="image/*,image/heic,image/heif" />
+      </div>
     </>
   );
+}
+
+/** Fired by the "Part yang Diganti" panel to open this form on "Part". */
+const ADD_PART_EVENT = "charges:add-part";
+export function openAddPartForm() {
+  window.dispatchEvent(new Event(ADD_PART_EVENT));
 }
 
 type AddDraft = {
@@ -1027,6 +1078,7 @@ export function addDraftKey(ticketId: string) {
  * device. Only a successful save, or "Kosongkan", clears it.
  */
 function AddForm({
+  startOnPart = false,
   draftKey,
   perms,
   vendors,
@@ -1036,6 +1088,8 @@ function AddForm({
   onCancel,
   onSubmit,
 }: {
+  /** Opened from the parts panel's button: start on "Part" whatever the draft says. */
+  startOnPart?: boolean;
   draftKey: string;
   perms: ChargePermissions;
   vendors: VendorOption[];
@@ -1043,12 +1097,14 @@ function AddForm({
   catalogEnabled: boolean;
   pending: boolean;
   onCancel: () => void;
-  onSubmit: (e: FormEvent<HTMLFormElement>) => void;
+  /** The part's photos travel beside the form's own fields; files are not drafted. */
+  onSubmit: (e: FormEvent<HTMLFormElement>, photos: File[]) => void;
 }) {
   // Read once, on opening. The form only mounts after a click, so this never
   // runs on the server and cannot disagree with it.
   const [initial] = useState(() => readDraft<AddDraft>(draftKey));
-  const [kind, setKind] = useState<ChargeKind>(initial?.kind ?? "service_fee");
+  const [kind, setKind] = useState<ChargeKind>(startOnPart ? "part" : (initial?.kind ?? "service_fee"));
+  const [photos, setPhotos] = useState<File[]>([]);
   const [values, setValues] = useState<Record<string, string>>(initial?.values ?? {});
   const [picked, setPicked] = useState<CatalogItem | null>(initial?.picked ?? null);
   const [typing, setTyping] = useState(initial?.typing ?? !catalogEnabled);
@@ -1064,14 +1120,15 @@ function AddForm({
     setValues({});
     setPicked(null);
     setTyping(!catalogEnabled);
+    setPhotos([]);
     setGeneration((g) => g + 1);
   };
 
-  const hasInput = Object.values(values).some((v) => v.trim() !== "") || picked !== null;
+  const hasInput = Object.values(values).some((v) => v.trim() !== "") || picked !== null || photos.length > 0;
 
   return (
     <form
-      onSubmit={onSubmit}
+      onSubmit={(e) => onSubmit(e, kind === "part" ? photos : [])}
       onChange={(e) => {
         // React types the target as the form; the event comes from a field in it.
         const field: EventTarget = e.target;
@@ -1079,7 +1136,8 @@ function AddForm({
           !(field instanceof HTMLInputElement || field instanceof HTMLSelectElement || field instanceof HTMLTextAreaElement) ||
           !field.name ||
           field.name === "kind" ||
-          field.type === "hidden"
+          field.type === "hidden" ||
+          field.type === "file"
         ) {
           return;
         }
@@ -1133,6 +1191,8 @@ function AddForm({
             onPick={setPicked}
             typing={typing}
             onTyping={setTyping}
+            photos={photos}
+            onPhotos={setPhotos}
           />
         ) : (
           <LineFields key={`${kind}:${generation}`} kind={kind} perms={perms} vendors={vendors} serviceJobs={serviceJobs} />

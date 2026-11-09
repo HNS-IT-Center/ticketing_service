@@ -802,6 +802,35 @@ describe("a part's Accurate code, entered once the item is received", () => {
     expect(await db.ticketReplacedPart.count({ where: { ticket_id: t } })).toBe(0);
   });
 
+  it("the technician enters a part once — item, price, supplier, note and photos in one form", async () => {
+    const { addPartChargeAction } = await import("./charges");
+    const t = await makeTicket();
+    as("tech");
+    const fd = form({ ticket_id: t, part: "battery", item_name: "Baterai", quantity: "1", unit_price: "450000", vendor_id: ids.supplier, notes: "baterai lama kembung" });
+    fd.append("photos", new File([new Uint8Array([1, 2, 3])], "dus.jpg", { type: "image/jpeg" }));
+    fd.append("photos", new File([new Uint8Array([4, 5, 6])], "label.jpg", { type: "image/jpeg" }));
+    expect(await addPartChargeAction(fd)).toEqual({ success: true });
+
+    const part = await db.ticketReplacedPart.findFirstOrThrow({ where: { ticket_id: t }, include: { charge: true, photos: true } });
+    expect(part).toMatchObject({ part: "battery", item_name: "Baterai", notes: "baterai lama kembung", recorded_by_id: ids.tech });
+    expect(part.photos).toHaveLength(2);
+    // Priced on the way in: nothing left to fill in on the bill afterwards.
+    expect(part.charge).toMatchObject({ unit_price: 450000, vendor_id: ids.supplier });
+  });
+
+  it("refuses part photos that are not images, or too many, and records nothing", async () => {
+    const { addPartChargeAction } = await import("./charges");
+    const t = await makeTicket();
+    as("tech");
+    const video = form({ ticket_id: t, part: "lcd" });
+    video.append("photos", new File([new Uint8Array([1])], "clip.mp4", { type: "video/mp4" }));
+    expect(await addPartChargeAction(video)).toMatchObject({ error: expect.stringContaining("gambar") });
+    const many = form({ ticket_id: t, part: "lcd" });
+    for (let i = 0; i < 6; i++) many.append("photos", new File([new Uint8Array([i])], `${i}.jpg`, { type: "image/jpeg" }));
+    expect(await addPartChargeAction(many)).toMatchObject({ error: expect.stringContaining("Maksimal") });
+    expect(await db.ticketReplacedPart.count({ where: { ticket_id: t } })).toBe(0);
+  });
+
   it("is only for part lines", async () => {
     const t = await makeTicket();
     await add(t, { kind: "other", description: "Kabel", unit_price: "10000" });

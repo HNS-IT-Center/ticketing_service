@@ -7,6 +7,7 @@ import { loadTicketCharges } from "@/lib/charges-server";
 import { formatRupiah } from "@/lib/charges";
 import { ticketPartyName } from "@/lib/ticket-party";
 import { buildInvoice, invoiceDate, invoiceFormat, printedAt } from "@/lib/invoice";
+import { CHECK_FEE_JOB_NAME } from "@/lib/check-fee";
 import PrintButton from "./PrintButton";
 
 export const metadata = { title: "Faktur Service — HNS IT Center" };
@@ -70,6 +71,10 @@ export default async function InvoicePage({
     }),
   ]);
   const invoice = buildInvoice(rows);
+  // Since 2026-11-08 the fee is put on the bill at intake; older tickets only recorded it.
+  const feeNotBilled =
+    ticket.checking_fee !== null &&
+    !rows.some((r) => r.kind === "service_fee" && (r.service_job?.name ?? r.description) === CHECK_FEE_JOB_NAME);
   const customer = ticketPartyName(ticket) ?? "—";
   const phone = ticket.customer_phone || (ticket.is_for_self ? ticket.user?.phone_number : null) || null;
   const struk = format === "struk";
@@ -99,7 +104,7 @@ export default async function InvoicePage({
         <PrintButton />
       </div>
 
-      {(invoice.isDraft || invoice.awaitingCode > 0 || ticket.checking_fee !== null) && (
+      {(invoice.isDraft || invoice.awaitingCode > 0 || feeNotBilled) && (
         <div className="inv-notes no-print">
           {invoice.reasons.map((r) => (
             <p key={r}>⚠ {r} Faktur tercetak sebagai DRAF sampai dilengkapi di Rincian Biaya.</p>
@@ -110,7 +115,7 @@ export default async function InvoicePage({
               memilihnya manual, atau tunggu kodenya dimasukkan lewat &ldquo;Masukkan kode&rdquo; di Rincian Biaya.
             </p>
           )}
-          {ticket.checking_fee !== null && (
+          {feeNotBilled && (
             <p>
               ℹ Tiket ini mencatat biaya cek {formatRupiah(Number(ticket.checking_fee))} saat intake. Biaya itu tidak otomatis
               masuk faktur — tambahkan jasa &ldquo;Diagnosa / Pengecekan&rdquo; di Rincian Biaya bila ditagihkan.

@@ -130,6 +130,7 @@ export default function StatusUpdater({
   ticketType = "service",
   attachments = [],
   intakeOwnership = null,
+  intakeComplaint = null,
 }: {
   ticketId: string;
   currentStatus: Status;
@@ -138,9 +139,11 @@ export default function StatusUpdater({
   isSalesMode?: boolean;
   ticketType?: string;
   /** Existing ticket attachments, so the handover form can reuse the intake invoice. */
-  attachments?: { id: string; file_url: string; file_type: string }[];
+  attachments?: { id: string; file_url: string; file_type: string; kind?: string | null }[];
   /** Ownership recorded at intake. When present the handover shows it instead of asking. */
   intakeOwnership?: { unit_ownership: "customer" | "store_stock"; stock_origin: string | null } | null;
+  /** The complaint typed at intake, as plain text: the handover starts from it. */
+  intakeComplaint?: string | null;
 }) {
   const [isPending, startTransition] = useTransition();
   const [activeDialog, setActiveDialog] = useState<
@@ -164,9 +167,14 @@ export default function StatusUpdater({
   const [stockOrigin, setStockOrigin] = useState(intakeOwnership?.stock_origin ?? "");
   const [snVerified, setSnVerified] = useState(false);
   const [physicalCondition, setPhysicalCondition] = useState("");
-  const [faultDescription, setFaultDescription] = useState("");
+  // Starts from the complaint typed at intake, so it is not typed a second time;
+  // the technician corrects or adds what the examination found.
+  const [faultDescription, setFaultDescription] = useState(intakeComplaint ?? "");
   const [testResult, setTestResult] = useState("");
-  const [invoiceUrl, setInvoiceUrl] = useState("");
+  // The invoice attached at intake is marked as one; it is chosen already.
+  const intakeInvoice = attachments.find((a) => a.kind === "invoice") ?? null;
+  const [invoiceUrl, setInvoiceUrl] = useState(intakeInvoice?.file_url ?? "");
+  const [choosingInvoice, setChoosingInvoice] = useState(false);
   // Evidence and advice the RMA desk needs to rule on the claim.
   const [damagePhotos, setDamagePhotos] = useState<File[]>([]);
   const [recommendEligible, setRecommendEligible] = useState<"" | "yes" | "no">("");
@@ -186,7 +194,7 @@ export default function StatusUpdater({
     if (!intakeOwnership) setUnitOwnership(d.unitOwnership);
     setStockOrigin(d.stockOrigin); setSnVerified(d.snVerified);
     setPhysicalCondition(d.physicalCondition); setFaultDescription(d.faultDescription);
-    setTestResult(d.testResult); setInvoiceUrl(d.invoiceUrl);
+    setTestResult(d.testResult); setInvoiceUrl(d.invoiceUrl || intakeInvoice?.file_url || "");
     setRecommendEligible(d.recommendEligible); setRecommendNote(d.recommendNote);
   };
 
@@ -657,12 +665,24 @@ export default function StatusUpdater({
           </FormField>
         ) : (
           <FormField label="Nota Pembelian" htmlFor="rma-invoice" required>
-            {attachments.length > 0 ? (
+            {intakeInvoice && invoiceUrl === intakeInvoice.file_url && !choosingInvoice ? (
+              // Attached at the counter: shown, not asked again.
+              <div id="rma-invoice" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-input bg-muted px-3 py-2.5 text-sm">
+                <span>
+                  <FileText aria-hidden="true" className="mr-1.5 inline size-3.5" />
+                  Nota pembelian
+                  <span className="text-[0.8125rem] text-muted-foreground"> — dilampirkan saat intake</span>
+                </span>
+                <Button type="button" variant="ghost" size="sm" onClick={() => setChoosingInvoice(true)}>
+                  Ganti
+                </Button>
+              </div>
+            ) : attachments.length > 0 ? (
               <NativeSelect id="rma-invoice" value={invoiceUrl} onChange={(e) => setInvoiceUrl(e.target.value)}>
                 <option value="">Pilih lampiran tiket</option>
                 {attachments.map((a, i) => (
                   <option key={a.id} value={a.file_url}>
-                    {"Lampiran " + (i + 1) + " (" + a.file_type + ")"}
+                    {(a.kind === "invoice" ? "Nota pembelian (intake)" : "Lampiran " + (i + 1)) + " (" + a.file_type + ")"}
                   </option>
                 ))}
               </NativeSelect>

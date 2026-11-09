@@ -60,6 +60,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
       recommended_eligible: true,
       recommendation_note: true,
       vendor_name: true,
+      vendor_id: true,
       vendor: { select: { location: true } },
       vendor_rma_number: true,
       shipping_tracking: true,
@@ -349,6 +350,13 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             unitOwnership={rmaCase.unit_ownership}
             claimVendors={claimVendors}
             recordedStockTransferNumber={rmaCase.stock_transfer_number}
+            recorded={{
+              vendor_id: rmaCase.vendor_id,
+              vendor_name: rmaCase.vendor_name,
+              vendor_rma_number: rmaCase.vendor_rma_number,
+              shipping_tracking: rmaCase.shipping_tracking,
+              customer_ticket_number: rmaCase.customer_ticket_number,
+            }}
           />
         </div>
       </div>

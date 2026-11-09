@@ -661,6 +661,11 @@ export async function transitionRmaAction(formData: FormData) {
     if (toStatus === "in_vendor_process" && input.shipping_tracking) {
       data.shipping_tracking = input.shipping_tracking;
     }
+    // A customer's unit is often given its reference only once the vendor has
+    // it; filled in here when it was not known at submission.
+    if (toStatus === "in_vendor_process" && input.customer_ticket_number) {
+      data.customer_ticket_number = input.customer_ticket_number;
+    }
     if (toStatus === "vendor_decided") {
       data.decision = input.decision;
       data.decision_notes = input.decision_notes;

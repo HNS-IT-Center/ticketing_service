@@ -23,6 +23,9 @@ enum Role {
   // may enter the app at all; what they may do inside it is this app's call,
   // and every other role opens customer data, so none is a safe default.
   Pending
+  // Kepala toko: sees the progress of the stores assigned to them
+  // (TechnicianStoreAssignment), and changes nothing.
+  StoreSupervisor
 }
 
 enum Shift {
@@ -176,6 +179,7 @@ model StoreLocation {
 
   tickets           Ticket[]
   technician_stores TechnicianStoreAssignment[]
+  supervisors       StoreSupervisorAssignment[]
 }
 
 model TechnicianStoreAssignment {
@@ -188,6 +192,20 @@ model TechnicianStoreAssignment {
 
   @@unique([technician_id, store_id])
   @@index([technician_id])
+}
+
+// The stores a kepala toko (Role StoreSupervisor) oversees. Kept apart from
+// TechnicianStoreAssignment, which every "technicians of this store" query reads.
+model StoreSupervisorAssignment {
+  id          String        @id @default(cuid())
+  user_id     String
+  user        User          @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  store_id    String
+  store       StoreLocation @relation(fields: [store_id], references: [id], onDelete: Cascade)
+  assigned_at DateTime      @default(now())
+
+  @@unique([user_id, store_id])
+  @@index([store_id])
 }
 
 // ─────────────────────────────────────────────
@@ -238,6 +256,7 @@ model User {
   performance        TechnicianPerformance?
   leaderboards       Leaderboard[]
   store_assignments  TechnicianStoreAssignment[]
+  supervised_stores  StoreSupervisorAssignment[]
   leaves             TechnicianLeave[]
   overridden_shifts  ShiftOverride[]       @relation("OriginalShift")
   overriding_shifts  ShiftOverride[]       @relation("OverrideShift")

@@ -141,6 +141,8 @@ export function roleDisplay(role: Role): StatusDisplay {
       return { label: "RMA", tone: "green" };
     case "Pending":
       return { label: "Menunggu role", tone: "amber" };
+    case "StoreSupervisor":
+      return { label: "Kepala Toko", tone: "violet" };
     default: {
       const _exhaustive: never = role;
       return _exhaustive;

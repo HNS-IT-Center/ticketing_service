@@ -26,6 +26,7 @@ import {
   CalendarDays,
   ClipboardList,
   Target,
+  Gauge,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -146,6 +147,7 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
       title: "Laporan",
       icon: <BarChart3 size={18} />,
       items: [
+        { href: "/toko/dashboard", label: "Dashboard Toko", icon: <Gauge size={18} /> },
         { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
         { href: "/admin/reports/technicians", label: "Target Teknisi", icon: <Target size={18} /> },
         { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
@@ -201,6 +203,13 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
       items: [{ href: "/rma/vendors", label: "Vendor", icon: <Truck size={18} /> }],
     },
   ],
+  // Kepala toko: one page, read only — their stores' tickets and technicians.
+  toko: [
+    {
+      key: "home",
+      items: [{ href: "/toko/dashboard", label: "Dashboard Toko", icon: <Gauge size={18} /> }],
+    },
+  ],
   sales: [
     {
       key: "home",
@@ -254,11 +263,12 @@ const ROLE_LABELS: Record<string, string> = {
   admin: "Administrator",
   sales: "Sales",
   rma: "RMA",
+  toko: "Kepala Toko",
 };
 
 interface DashboardShellProps {
   children: React.ReactNode;
-  role: "customer" | "technician" | "admin" | "sales" | "rma";
+  role: "customer" | "technician" | "admin" | "sales" | "rma" | "toko";
   userName: string;
   userId: string;
   isCoordinator?: boolean;

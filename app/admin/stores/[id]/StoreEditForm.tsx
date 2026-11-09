@@ -35,9 +35,12 @@ interface Store {
 export default function StoreEditForm({
   store,
   allTechnicians,
+  children,
 }: {
   store: Store;
   allTechnicians: Technician[];
+  /** Further cards, shown after the technicians (the kepala toko). */
+  children?: React.ReactNode;
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
@@ -238,6 +241,8 @@ export default function StoreEditForm({
           )}
         </CardContent>
       </Card>
+
+      {children}
     </div>
   );
 }

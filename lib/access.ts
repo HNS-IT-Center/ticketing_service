@@ -18,6 +18,7 @@ export const AUDIENCES = [
   "technician",
   "sales",
   "rma",
+  "store_supervisor",
 ] as const;
 export type Audience = (typeof AUDIENCES)[number];
 
@@ -28,6 +29,7 @@ export const AUDIENCE_LABELS: Record<Audience, string> = {
   technician: "Teknisi",
   sales: "Sales",
   rma: "RMA",
+  store_supervisor: "Kepala Toko",
 };
 
 /**
@@ -64,7 +66,7 @@ export const CAPABILITIES = [
 export type Capability = (typeof CAPABILITIES)[number];
 
 const SENIOR: Audience[] = ["administrator", "coordinator", "head_technician"];
-const ALL_STAFF: Audience[] = ["administrator", "coordinator", "head_technician", "technician", "sales", "rma"];
+const ALL_STAFF: Audience[] = ["administrator", "coordinator", "head_technician", "technician", "sales", "rma", "store_supervisor"];
 
 export type CapabilitySection = "pricing" | "ticket" | "stock";
 export const CAPABILITY_SECTIONS: Record<CapabilitySection, { title: string; hint: string }> = {
@@ -179,6 +181,8 @@ export function audiencesOf(user: {
       return ["sales"];
     case "RMA":
       return ["rma"];
+    case "StoreSupervisor":
+      return ["store_supervisor"];
     default:
       return [];
   }

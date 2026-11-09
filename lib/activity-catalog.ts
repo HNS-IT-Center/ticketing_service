@@ -67,6 +67,8 @@ export const ACTIVITY_ACTIONS = {
   "store.delete": { area: "master", label: "Hapus toko" },
   "store.assign": { area: "master", label: "Teknisi ke toko" },
   "store.unassign": { area: "master", label: "Teknisi dari toko" },
+  "store.supervisor_assign": { area: "master", label: "Kepala toko ke toko" },
+  "store.supervisor_unassign": { area: "master", label: "Kepala toko dari toko" },
 
   "user.create": { area: "user", label: "Tambah pengguna" },
   "user.update": { area: "user", label: "Ubah pengguna" },

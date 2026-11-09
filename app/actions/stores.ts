@@ -117,6 +117,48 @@ export async function removeTechnicianFromStoreAction(
   return { success: true };
 }
 
+// ─── Kepala toko (StoreSupervisor) of a store ────────────────────────────────
+/** Puts a kepala toko on a store. Only an account with that role can be one. */
+export async function assignSupervisorToStoreAction(userId: string, storeId: string) {
+  const session = await requireRole("Administrator");
+  const user = await db.user.findUnique({ where: { id: userId }, select: { name: true, role: true } });
+  if (!user || user.role !== "StoreSupervisor") return { error: "Akun ini bukan kepala toko. Ubah role-nya di halaman Users." };
+  const store = await db.storeLocation.findUnique({ where: { id: storeId }, select: { name: true } });
+  if (!store) return { error: "Toko tidak ditemukan." };
+
+  await db.storeSupervisorAssignment.upsert({
+    where: { user_id_store_id: { user_id: userId, store_id: storeId } },
+    create: { user_id: userId, store_id: storeId },
+    update: {},
+  });
+  await logActivity(session, "store.supervisor_assign", `Menjadikan ${user.name} kepala toko ${store.name}.`, {
+    type: "store",
+    id: storeId,
+    label: store.name,
+  });
+  revalidatePath(`/admin/stores/${storeId}`);
+  revalidatePath("/toko/dashboard");
+  return { success: true };
+}
+
+export async function removeSupervisorFromStoreAction(userId: string, storeId: string) {
+  const session = await requireRole("Administrator");
+  const [user, store] = await Promise.all([
+    db.user.findUnique({ where: { id: userId }, select: { name: true } }),
+    db.storeLocation.findUnique({ where: { id: storeId }, select: { name: true } }),
+  ]);
+  await db.storeSupervisorAssignment.deleteMany({ where: { user_id: userId, store_id: storeId } });
+  await logActivity(
+    session,
+    "store.supervisor_unassign",
+    `Melepas ${user?.name ?? "kepala toko"} dari toko ${store?.name ?? "toko"}.`,
+    { type: "store", id: storeId, label: store?.name ?? "toko" },
+  );
+  revalidatePath(`/admin/stores/${storeId}`);
+  revalidatePath("/toko/dashboard");
+  return { success: true };
+}
+
 async function logStoreAssignment(
   session: { userId: string; name: string; role: string },
   action: "store.assign" | "store.unassign",

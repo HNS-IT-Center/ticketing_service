@@ -15,7 +15,7 @@ import { DeactivateUserButton } from "@/components/users/DeactivateUserButton";
 export const metadata = { title: "User Management — HNS IT Center" };
 
 // "Pending" are accounts that signed in through HNS SSO and still need a role.
-const ROLES = ["all", "Pending", "Administrator", "Technician", "Sales", "RMA", "Customer"] as const;
+const ROLES = ["all", "Pending", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "Customer"] as const;
 
 export default async function AdminUsersPage({
   searchParams,
@@ -100,7 +100,7 @@ export default async function AdminUsersPage({
 
   const chips = ROLES.map((r) => ({
     key: r,
-    label: r === "all" ? "All Roles" : r === "Pending" ? "Menunggu role" : r,
+    label: r === "all" ? "All Roles" : r === "Pending" ? "Menunggu role" : r === "StoreSupervisor" ? "Kepala Toko" : r,
     href: r === "all" ? "/admin/users" : `/admin/users?role=${r}`,
   }));
 

@@ -96,8 +96,8 @@ export default function EditUserForm({ user }: { user: User }) {
               </FormField>
               <FormField label="Role" htmlFor="eu-role">
                 <NativeSelect id="eu-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
-                  {["Pending", "Administrator", "Technician", "Sales", "RMA", "Customer"].map((r) => (
-                    <option key={r} value={r}>{r}</option>
+                  {["Pending", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "Customer"].map((r) => (
+                    <option key={r} value={r}>{r === "StoreSupervisor" ? "Kepala Toko" : r}</option>
                   ))}
                 </NativeSelect>
               </FormField>

@@ -76,7 +76,10 @@ function ClaimVendorField({
   vendorName: string;
   onChange: (vendorId: string, vendorName: string) => void;
 }) {
-  const [typing, setTyping] = useState(vendors.length === 0);
+  // A vendor recorded by name only (typed, or no longer listed) opens as typed.
+  const [typing, setTyping] = useState(
+    vendors.length === 0 || (vendorName.trim() !== "" && !vendors.some((v) => v.id === vendorId)),
+  );
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
       <label htmlFor="rma-vendor" style={{ fontSize: "0.875rem", fontWeight: 600 }}>
@@ -164,9 +167,37 @@ function optionalFieldsFor(
   if (to === "submitted_to_vendor") {
     return unitOwnership === "store_stock" ? ["shipping_tracking"] : ["customer_ticket_number"];
   }
-  if (to === "in_vendor_process") return ["shipping_tracking"];
+  // The reference a customer's unit gets is often issued only once the vendor
+  // has it, so it can be filled in here too.
+  if (to === "in_vendor_process") {
+    return unitOwnership === "customer" ? ["shipping_tracking", "customer_ticket_number"] : ["shipping_tracking"];
+  }
   if (to === "vendor_decided") return ["decision_notes"];
   return [];
+}
+
+/**
+ * The dialog's starting values. Sending a case to the vendor again — after a
+ * hold and a re-verification — starts from what it was sent with the first
+ * time, instead of an empty form (owner, 2026-11-06: nothing asked twice).
+ */
+function prefillFor(
+  to: RmaStatus,
+  recorded: Partial<Record<string, string | null>>,
+  claimVendors: ClaimVendorOption[],
+): Record<string, string> {
+  if (to !== "submitted_to_vendor") return {};
+  const out: Record<string, string> = {};
+  for (const key of ["vendor_name", "vendor_rma_number", "shipping_tracking", "customer_ticket_number"]) {
+    const value = recorded[key]?.trim();
+    if (value) out[key] = value;
+  }
+  // The id only while that vendor can still be picked; otherwise the name
+  // goes as typed, and the server matches it to the list again.
+  if (recorded.vendor_id && claimVendors.some((v) => v.id === recorded.vendor_id)) {
+    out.vendor_id = recorded.vendor_id;
+  }
+  return out;
 }
 
 const DECISION_OPTIONS = [
@@ -183,6 +214,7 @@ export default function RmaActionPanel({
   unitOwnership,
   claimVendors = [],
   recordedStockTransferNumber = null,
+  recorded = {},
 }: {
   rmaCaseId: string;
   currentStatus: RmaStatus;
@@ -195,6 +227,10 @@ export default function RmaActionPanel({
   claimVendors?: ClaimVendorOption[];
   /** The stock transfer number already on the case; when set it is not asked again. */
   recordedStockTransferNumber?: string | null;
+  /** What the case already holds from an earlier step. Asked once: a recorded
+   *  optional field is shown instead of asked, and a case sent to the vendor
+   *  again (after a hold and a re-verification) starts from what it was sent with. */
+  recorded?: Partial<Record<"vendor_id" | "vendor_name" | "vendor_rma_number" | "shipping_tracking" | "customer_ticket_number", string | null>>;
 }) {
   const [isPending, startTransition] = useTransition();
   const [active, setActive] = useState<RmaTransition | null>(null);
@@ -331,9 +367,13 @@ export default function RmaActionPanel({
       ]
     : [];
 
-  const optionalFields: readonly OptionalField[] = active
-    ? optionalFieldsFor(active.to, unitOwnership)
-    : [];
+  // On the way to the vendor the fields are filled from the case and stay
+  // editable; on the later step a field already recorded is only shown.
+  const optionalAll: readonly OptionalField[] = active ? optionalFieldsFor(active.to, unitOwnership) : [];
+  const recordedValue = (f: OptionalField) => (f === "decision_notes" ? null : recorded[f]?.trim() || null);
+  const alreadyRecorded = (f: OptionalField) => active?.to !== "submitted_to_vendor" && recordedValue(f) !== null;
+  const optionalFields = optionalAll.filter((f) => !alreadyRecorded(f));
+  const recordedShown = optionalAll.filter(alreadyRecorded);
 
   return (
     <div className="card">
@@ -349,7 +389,7 @@ export default function RmaActionPanel({
             type="button"
             onClick={() => {
               setActive(transition);
-              setValues({});
+              setValues(prefillFor(transition.to, recorded, claimVendors));
             }}
             disabled={isPending}
             className="rma-action-btn"
@@ -380,6 +420,13 @@ export default function RmaActionPanel({
                   <span style={{ color: "var(--text-muted)" }}>(sudah tercatat)</span>
                 </p>
               )}
+
+            {recordedShown.map((f) => (
+              <p key={f} style={{ fontSize: "0.875rem", margin: 0 }}>
+                {f === "shipping_tracking" ? "Resi Pengiriman" : "Nomor Tiket User"}: <strong>{recordedValue(f)}</strong>{" "}
+                <span style={{ color: "var(--text-muted)" }}>(sudah tercatat)</span>
+              </p>
+            ))}
 
             {requiredFields.map((field) =>
               field === "hold_reason_code" ? (

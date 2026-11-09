@@ -19,7 +19,7 @@ import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import HoldEvidencePanel from "./HoldEvidencePanel";
 import { holdReasonAsksTechnician } from "@/lib/rma/hold-reason";
 import { ticketPartyName } from "@/lib/ticket-party";
-import { isCatalogConfigured } from "@/lib/catalog/hns-data";
+import { notesToPlainText } from "@/lib/plain-text";
 import ChargesPanel from "@/components/service/ChargesPanel";
 import { loadChargesPanel } from "@/lib/charges-server";
 import PartCodePendingBanner from "@/components/service/PartCodePendingBanner";
@@ -219,13 +219,16 @@ export default async function TechnicianTicketDetailPage({
                   : null
               }
               // The handover's invoice picker: never offer a photo of the unit.
+              // `kind` lets it choose the invoice attached at intake by itself.
               attachments={regularAttachments
                 .filter((a) => a.kind !== "unit_photo")
                 .map((a) => ({
                   id: a.id,
                   file_url: a.file_url,
                   file_type: a.file_type,
+                  kind: a.kind,
                 }))}
+              intakeComplaint={ticket.ticket_type === "warranty_claim" ? notesToPlainText(ticket.notes) : null}
             />
           )
         }
@@ -327,10 +330,9 @@ export default async function TechnicianTicketDetailPage({
               own detail tables and none of them means "a part was fitted". */}
           {ticket.ticket_type === "service" && (
             <ReplacedPartsPanel
-              ticketId={ticket.id}
               canEdit={isAssigned}
-              catalogEnabled={isCatalogConfigured()}
-              store={ticket.store_location ?? null}
+              // A part is entered in Rincian Biaya, once, with its price.
+              canAdd={Boolean(chargesPanel?.perms.canEdit)}
               parts={ticket.replaced_parts.map((p) => ({
                 id: p.id,
                 part: p.part,

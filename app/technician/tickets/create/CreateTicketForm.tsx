@@ -10,6 +10,7 @@ import { useDraft, useDraftKey } from "@/lib/draft";
 import { MAX_BUILD_PHOTOS, MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import { QuoteChecklist } from "@/components/pc-build/QuoteChecklist";
 import type { UploadedQuote } from "@/lib/pc-build-quote/parse";
+import { normalizeName } from "@/lib/pc-build-quote/sales";
 import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
 import CatalogItemList from "@/components/catalog/CatalogItemList";
 import { MAX_PC_COMPONENTS, restorePickedItems, toPosted, type PickedItem } from "@/lib/catalog/picked-items";
@@ -968,6 +969,19 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                         </Button>
                       </div>
                     )}
+                    {/* The customer was typed in step 1 and is printed on the quotation:
+                        the same name is not asked twice, but a different one is pointed out. */}
+                    {quote?.customer && customerName.trim() && normalizeName(customerName) !== normalizeName(quote.customer) && (
+                      <div className="flex flex-wrap items-center gap-2 rounded-lg border border-tone-amber-border bg-tone-amber-bg px-3 py-2 text-sm text-tone-amber-fg">
+                        <span>
+                          Pelanggan di quotation: <span className="font-semibold">{quote.customer}</span>, tetapi di langkah 1
+                          tertulis <span className="font-semibold">{customerName.trim()}</span>.
+                        </span>
+                        <Button type="button" size="sm" variant="outline" onClick={() => setCustomerName(quote.customer!)} className="h-11 bg-card md:h-8">
+                          Pakai nama dari quotation
+                        </Button>
+                      </div>
+                    )}
                     {quote?.salesName && !quote.sales && (
                       <p className="text-xs text-muted-foreground">
                         Sales di quotation: <span className="font-semibold">{quote.salesName}</span> — tidak ada akun Sales dengan nama
@@ -1171,7 +1185,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                       />
                       <div>
                         <strong className="block font-semibold text-foreground">Check & Diagnosis</strong>
-                        <span className="text-[0.8125rem] text-muted-foreground">Fee of Rp. 50.000 (Automatically Applied)</span>
+                        <span className="text-[0.8125rem] text-muted-foreground">Fee of Rp. 50.000 — added to Rincian Biaya automatically (can be removed there)</span>
                       </div>
                     </label>
                   )}

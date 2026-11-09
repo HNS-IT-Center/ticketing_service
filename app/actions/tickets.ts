@@ -20,6 +20,7 @@ import { readStoredQuote } from "@/lib/pc-build-quote/read";
 import { findQuoteSales, matchQuoteToCatalog, ticketUsingQuote } from "@/lib/pc-build-quote/resolve";
 import type { ParsedQuote, QuoteItem } from "@/lib/pc-build-quote/parse";
 import { notifyNewTicket } from "@/lib/new-ticket-notify";
+import { CHECK_FEE_JOB_NAME, checkFeeCharge } from "@/lib/check-fee";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
 import { NO_STOCK } from "@/lib/catalog/items";
 import type { CatalogItem } from "@/lib/catalog/items";
@@ -397,9 +398,18 @@ export async function createTicketAction(formData: FormData) {
   );
 
   switch (ticket_type) {
-    case "service":
+    case "service": {
       followUps.push(db.ticketServiceDetail.create({ data: { ticket_id: ticket.id } }));
+      const job = checking_fee
+        ? await db.serviceJob.findFirst({
+            where: { name: CHECK_FEE_JOB_NAME },
+            select: { id: true, name: true, points: true, is_active: true },
+          })
+        : null;
+      const feeLine = checkFeeCharge(ticket.id, checking_fee, job, session.userId);
+      if (feeLine) followUps.push(db.ticketCharge.create({ data: feeLine }));
       break;
+    }
     case "warranty_claim": {
       const purchaseDate = ((formData.get("purchase_date") as string | null) || "").trim();
       followUps.push(

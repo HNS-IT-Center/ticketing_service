@@ -8,9 +8,10 @@ import { chargePermissions } from "@/lib/charges-server";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
 import { NO_STOCK } from "@/lib/catalog/items";
 import { readPartInput } from "@/lib/replaced-part-input";
-import { deleteFromStorage } from "@/lib/r2";
+import { deleteFromStorage, getExt, uploadToR2 } from "@/lib/r2";
+import { storageFailedMessage } from "@/lib/upload-limit";
 import { logActivity, type ActivityActor } from "@/lib/activity";
-import { isServicePart, requiresItemName } from "@/lib/service-parts";
+import { isServicePart, MAX_PART_PHOTOS, requiresItemName } from "@/lib/service-parts";
 import {
   chargeKindLabel,
   formatRupiah,
@@ -223,9 +224,11 @@ export async function addChargeAction(formData: FormData): Promise<Fail | Ok> {
  * Add a fitted part from Rincian Biaya — for whoever may change the bill, an
  * administrator included, not only the technician holding the ticket.
  *
- * It records exactly what the "Part yang Diganti" panel records: the part, and
- * its line of the bill created with it, so the two cannot disagree. Here the
- * line can carry its prices and supplier at once. Photos stay with the panel.
+ * This is the one place a part is entered (owner, 2026-11-06: no input twice).
+ * It records the part and its line of the bill together, so the two cannot
+ * disagree, and the line carries its prices and supplier at once — before,
+ * the technician recorded the part in the "Part yang Diganti" panel and then
+ * opened the bill again to price it. The panel now only lists what is here.
  * A part typed by hand because Accurate has not received it yet gets its code
  * later through `linkPartCatalogAction`.
  */
@@ -241,6 +244,24 @@ export async function addPartChargeAction(formData: FormData): Promise<Fail | Ok
   const vendor = await readVendor(formData, "part", null);
   if (vendor && "error" in vendor) return vendor;
 
+  // The box and its label, as the panel took them. Images only: the panel
+  // shows them as thumbnails, and a clip there would not preview.
+  const photos = (formData.getAll("photos") as File[]).filter((f) => typeof f === "object" && f.size > 0);
+  if (photos.length > MAX_PART_PHOTOS) return { error: `Maksimal ${MAX_PART_PHOTOS} foto per part.` };
+  if (photos.some((f) => !f.type.startsWith("image/"))) return { error: "Foto part harus berupa gambar." };
+
+  // Uploaded before the row exists: a failed upload leaves nothing behind.
+  const photoUrls: string[] = [];
+  for (const [i, file] of photos.entries()) {
+    const path = `tickets/${ticketId}/part-${input.part}_${Date.now()}_${i + 1}.${getExt(file.type, file.name)}`;
+    try {
+      photoUrls.push(await uploadToR2(file, path));
+    } catch (err) {
+      console.error("[PART PHOTO UPLOAD ERROR]", err);
+      return { error: storageFailedMessage("foto part") };
+    }
+  }
+
   await db.ticketReplacedPart.create({
     data: {
       ticket_id: ticketId,
@@ -252,6 +273,7 @@ export async function addPartChargeAction(formData: FormData): Promise<Fail | Ok
       catalog_category: input.catalog?.category ?? null,
       quantity: input.quantity,
       recorded_by_id: guard.userId,
+      photos: { create: photoUrls.map((file_url) => ({ file_url })) },
       charge: {
         create: {
           ticket_id: ticketId,
@@ -268,9 +290,9 @@ export async function addPartChargeAction(formData: FormData): Promise<Fail | Ok
   await logActivity(
     guard.actor,
     "part.add",
-    `Mencatat part dari Rincian Biaya: ${lineText("part", partChargeDescription(input.part, input.name), input.quantity, prices.unit_price)}${
+    `Mencatat part: ${lineText("part", partChargeDescription(input.part, input.name), input.quantity, prices.unit_price)}${
       input.catalog?.sku ? ` (kode ${input.catalog.sku})` : " (belum ada kode Accurate)"
-    }.`,
+    }${photoUrls.length ? `, ${photoUrls.length} foto` : ""}.`,
     { type: "ticket", id: ticketId },
   );
 

@@ -120,6 +120,8 @@ afterAll(async () => {
     await db.ticketStatusLog.deleteMany({ where: { ticket_id: { in: ids } } });
     await db.ticketAttachment.deleteMany({ where: { ticket_id: { in: ids } } });
     await db.ticketWarrantyDetail.deleteMany({ where: { ticket_id: { in: ids } } });
+    // created_by references the test user, so the lines go before it does.
+    await db.ticketCharge.deleteMany({ where: { ticket_id: { in: ids } } });
     await db.ticket.deleteMany({ where: { id: { in: ids } } });
   }
   await db.technicianPerformance.deleteMany({ where: { technician_id: technicianId } });
@@ -572,5 +574,40 @@ describe("createTicketAction — PC build components and upgrade items from the 
       error: expect.stringMatching(/dua kali/),
     });
     expect(await ticketBySn("SN-UPG-TWICE")).toBeNull();
+  });
+});
+
+describe("createTicketAction — the check fee goes on the bill", () => {
+  const serviceForm = (overrides: Record<string, string | null> = {}) =>
+    claimForm({ ticket_type: "service", device_sn: null, purchase_date: null, ...overrides });
+  const chargesOf = async (sn: string) => {
+    const t = await db.ticket.findFirst({ where: { store_location_id: storeId, device_sn: sn }, select: { id: true } });
+    return db.ticketCharge.findMany({
+      where: { ticket_id: t!.id },
+      select: { kind: true, description: true, quantity: true, unit_price: true, service_job: { select: { name: true } }, created_by_id: true },
+    });
+  };
+
+  it("adds one Diagnosa / Pengecekan line priced at the recorded fee", async () => {
+    expect(await createTicketAction(serviceForm({ device_sn: "SN-FEE-1", is_overnight_check: "1" }))).toMatchObject({ success: true });
+    const lines = await chargesOf("SN-FEE-1");
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toMatchObject({
+      kind: "service_fee",
+      description: "Diagnosa / Pengecekan",
+      quantity: 1,
+      unit_price: 50000,
+      created_by_id: technicianId,
+    });
+  });
+
+  it("adds nothing when no fee was recorded", async () => {
+    expect(await createTicketAction(serviceForm({ device_sn: "SN-FEE-0" }))).toMatchObject({ success: true });
+    expect(await chargesOf("SN-FEE-0")).toEqual([]);
+  });
+
+  it("does not bill a claim that was sent the flag", async () => {
+    expect(await createTicketAction(claimForm({ device_sn: "SN-FEE-CLAIM", is_overnight_check: "1" }))).toMatchObject({ success: true });
+    expect(await chargesOf("SN-FEE-CLAIM")).toEqual([]);
   });
 });

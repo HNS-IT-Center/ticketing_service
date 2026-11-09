@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
  * move over one by one. Same props as before; delete once nothing imports it.
  */
 
-const ROLES: readonly string[] = ["Administrator", "Technician", "Sales", "Customer", "RMA", "Pending"];
+const ROLES: readonly string[] = ["Administrator", "Technician", "Sales", "Customer", "RMA", "Pending", "StoreSupervisor"];
 const TICKET_STATUSES: readonly string[] = [
   "waiting",
   "on_progress",

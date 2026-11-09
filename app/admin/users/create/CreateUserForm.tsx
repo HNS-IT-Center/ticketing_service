@@ -58,8 +58,8 @@ export default function CreateUserForm() {
             </FormField>
             <FormField label="Role" htmlFor="cu-role">
               <NativeSelect id="cu-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
-                {["Administrator", "Technician", "Sales", "RMA", "Customer"].map((r) => (
-                  <option key={r} value={r}>{r}</option>
+                {["Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "Customer"].map((r) => (
+                  <option key={r} value={r}>{r === "StoreSupervisor" ? "Kepala Toko" : r}</option>
                 ))}
               </NativeSelect>
             </FormField>

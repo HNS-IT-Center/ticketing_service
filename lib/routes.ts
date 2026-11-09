@@ -15,7 +15,7 @@
 import type { Role } from "@prisma/client";
 
 /** Portal segment each role lands in; also the DashboardShell `role` prop. */
-export type Portal = "admin" | "technician" | "sales" | "rma" | "customer";
+export type Portal = "admin" | "technician" | "sales" | "rma" | "toko" | "customer";
 
 export type RoleDestination =
   | { allowed: true; dashboard: string; portal: Portal }
@@ -40,6 +40,9 @@ export function destinationForRole(role: Role): RoleDestination {
       return { allowed: true, dashboard: "/sales/dashboard", portal: "sales" };
     case "RMA":
       return { allowed: true, dashboard: "/rma/dashboard", portal: "rma" };
+    case "StoreSupervisor":
+      // Kepala toko: their stores' progress, read only.
+      return { allowed: true, dashboard: "/toko/dashboard", portal: "toko" };
     case "Customer":
       // Customers have no login; they track a ticket through its public link.
       return {
@@ -60,7 +63,7 @@ export function destinationForRole(role: Role): RoleDestination {
   }
 }
 
-const ROLE_NAMES = ["Administrator", "Technician", "Sales", "RMA", "Customer", "Pending"] as const;
+const ROLE_NAMES = ["Administrator", "Technician", "Sales", "RMA", "Customer", "Pending", "StoreSupervisor"] as const;
 
 export function isRole(value: string): value is Role {
   return (ROLE_NAMES as readonly string[]).includes(value);
@@ -88,6 +91,7 @@ export const PORTAL_ROUTES: { prefix: string; allowed: readonly Role[] }[] = [
   { prefix: "/technician", allowed: ["Technician"] },
   { prefix: "/sales", allowed: ["Sales"] },
   { prefix: "/rma", allowed: ["RMA", "Administrator"] },
+  { prefix: "/toko", allowed: ["StoreSupervisor", "Administrator"] },
 ];
 
 /** True when `role` may open `pathname`. Paths owned by no portal are open to any session. */
@@ -122,6 +126,9 @@ export function ticketsListHrefForPortal(portal: Portal): string {
       return "/sales/tickets";
     case "rma":
       return "/rma/tickets";
+    case "toko":
+      // A kepala toko creates no tickets and has no list of their own.
+      return "/toko/dashboard";
     case "customer":
       return "/customer/tickets";
     default: {
@@ -201,6 +208,9 @@ export function ticketHrefForPortal(portal: Portal, ticketId: string): string {
     case "rma":
       // Notifications only carry ticket_id, so this route resolves the RmaCase.
       return `/rma/tickets/${ticketId}`;
+    case "toko":
+      // No ticket pages in this portal: the dashboard is the whole of it.
+      return "/toko/dashboard";
     case "sales":
       // Left as-is on purpose: this is wrong (the customer portal has no routes)
       // but fixing it belongs to the separate fix/sales-redirect PR, not here.

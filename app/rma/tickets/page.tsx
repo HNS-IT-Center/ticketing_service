@@ -16,7 +16,14 @@ import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { FileSpreadsheet, Ticket, Plus } from "lucide-react";
 import { getTicketPoints } from "@/lib/points";
 import { ticketPartyName } from "@/lib/ticket-party";
-import { CLAIM_STATUS_FILTERS, claimListOrderBy, claimListWhere } from "@/lib/rma/claim-list";
+import {
+  CLAIM_OWNER_FILTERS,
+  CLAIM_OWNER_LABELS,
+  CLAIM_STATUS_FILTERS,
+  claimListOrderBy,
+  claimListWhere,
+  readClaimOwner,
+} from "@/lib/rma/claim-list";
 
 /**
  * Warranty claims, for the RMA desk.
@@ -52,7 +59,7 @@ const PAGE_SIZE = 10;
 export default async function RmaTicketsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; q?: string; page?: string; sort?: string; per?: string }>;
+  searchParams: Promise<{ status?: string; q?: string; page?: string; sort?: string; per?: string; owner?: string }>;
 }) {
   await requireRole("RMA", "Administrator");
   const params = await searchParams;
@@ -62,13 +69,15 @@ export default async function RmaTicketsPage({
   const pageSize = parsePageSize(params.per, PAGE_SIZE);
   const skip = (page - 1) * pageSize;
   const sortParam = params.sort || "updated_desc";
+  // Klaim User / Klaim Toko — whose unit it is (lib/rma/claim-list.ts).
+  const owner = readClaimOwner(params.owner);
 
   // Which claims, what the search reaches, and the sort keys live in
   // lib/rma/claim-list.ts, shared with the spreadsheet export.
-  const where = claimListWhere(statusFilter, query);
+  const where = claimListWhere(statusFilter, query, owner);
   const orderBy = claimListOrderBy(sortParam);
 
-  const [tickets, totalCount] = await Promise.all([
+  const [tickets, totalCount, ...ownerCounts] = await Promise.all([
     db.ticket.findMany({
       where,
       orderBy,
@@ -83,10 +92,13 @@ export default async function RmaTicketsPage({
         // Only a claim that reached this desk has a case, and only a case has a
         // page in this portal. Without this the Manage link would point at
         // /rma/tickets/{id}, which resolves a case and 404s when there is none.
-        rma_case: { select: { id: true, rma_code: true, status: true } },
+        rma_case: { select: { id: true, rma_code: true, status: true, unit_ownership: true } },
+        warranty_detail: { select: { unit_ownership: true } },
       },
     }),
     db.ticket.count({ where }),
+    // What each ownership chip would show under the current status and search.
+    ...CLAIM_OWNER_FILTERS.map((o) => db.ticket.count({ where: claimListWhere(statusFilter, query, o) })),
   ]);
 
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -95,6 +107,7 @@ export default async function RmaTicketsPage({
     const qs = new URLSearchParams();
     if (statusFilter !== "all") qs.set("status", statusFilter);
     if (query) qs.set("q", query);
+    if (owner !== "all") qs.set("owner", owner);
     if (currentSort !== "updated_desc") qs.set("sort", currentSort);
     if (size !== PAGE_SIZE) qs.set("per", String(size));
     if (p > 1) qs.set("page", String(p));
@@ -156,7 +169,14 @@ export default async function RmaTicketsPage({
       header: "Customer",
       cell: (t) => (
         <span className="flex flex-col">
-          <span className="font-medium">{ticketPartyName(t)}</span>
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="font-medium">{ticketPartyName(t)}</span>
+            {(t.rma_case?.unit_ownership ?? t.warranty_detail?.unit_ownership) === "store_stock" && (
+              <span className="rounded-full border border-tone-violet-border bg-tone-violet-bg px-1.5 py-px text-[0.65rem] font-semibold whitespace-nowrap text-tone-violet-fg">
+                Stok toko
+              </span>
+            )}
+          </span>
           {/* The RMA desk works on units, not on who booked them.
               "(For Others)" told this table nothing it could act
               on; the device does. */}
@@ -219,12 +239,14 @@ export default async function RmaTicketsPage({
   const exportQs = new URLSearchParams();
   if (statusFilter !== "all") exportQs.set("status", statusFilter);
   if (query) exportQs.set("q", query);
+  if (owner !== "all") exportQs.set("owner", owner);
   if (sortParam !== "updated_desc") exportQs.set("sort", sortParam);
   const exportHref = `/rma/tickets/export${exportQs.size ? `?${exportQs}` : ""}`;
 
   // "Clear" drops the search and keeps the chip and the sort.
   const clearQs = new URLSearchParams();
   if (statusFilter !== "all") clearQs.set("status", statusFilter);
+  if (owner !== "all") clearQs.set("owner", owner);
   if (sortParam !== "updated_desc") clearQs.set("sort", sortParam);
   if (pageSize !== PAGE_SIZE) clearQs.set("per", String(pageSize));
   const clearHref = `/rma/tickets${clearQs.size ? `?${clearQs}` : ""}`;
@@ -233,11 +255,23 @@ export default async function RmaTicketsPage({
     const qs = new URLSearchParams();
     if (s !== "all") qs.set("status", s);
     if (query) qs.set("q", query);
+    if (owner !== "all") qs.set("owner", owner);
     if (sortParam !== "updated_desc") qs.set("sort", sortParam);
     if (pageSize !== PAGE_SIZE) qs.set("per", String(pageSize));
     const str = qs.toString();
     const label = s === "all" ? "All" : s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     return { key: s, label, href: `/rma/tickets${str ? `?${str}` : ""}` };
+  });
+
+  const ownerChips = CLAIM_OWNER_FILTERS.map((o, i) => {
+    const qs = new URLSearchParams();
+    if (statusFilter !== "all") qs.set("status", statusFilter);
+    if (query) qs.set("q", query);
+    if (o !== "all") qs.set("owner", o);
+    if (sortParam !== "updated_desc") qs.set("sort", sortParam);
+    if (pageSize !== PAGE_SIZE) qs.set("per", String(pageSize));
+    const str = qs.toString();
+    return { key: o, label: `${CLAIM_OWNER_LABELS[o]} (${ownerCounts[i]})`, href: `/rma/tickets${str ? `?${str}` : ""}` };
   });
 
   return (
@@ -267,6 +301,7 @@ export default async function RmaTicketsPage({
       <div className="flex flex-col gap-3">
         <FilterBar action="/rma/tickets">
           {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
+          {owner !== "all" && <input type="hidden" name="owner" value={owner} />}
           {sortParam !== "updated_desc" && <input type="hidden" name="sort" value={sortParam} />}
           {pageSize !== PAGE_SIZE && <input type="hidden" name="per" value={pageSize} />}
           <FilterBarSearch label="Search claims" placeholder="Cari kode, customer, nama barang, SN…" defaultValue={query} />
@@ -279,6 +314,7 @@ export default async function RmaTicketsPage({
             )}
           </div>
         </FilterBar>
+        <FilterChips label="Milik unit" chips={ownerChips} active={owner} />
         <FilterChips label="Status" chips={chips} active={statusFilter} />
       </div>
 

@@ -35,7 +35,7 @@ export function HeldValue({ held, compact = false }: { held: HeldMoney; compact?
  * viewer without `view_cost` render nothing — the page says nothing about costs
  * to someone who may not see them.
  */
-export function CostNotice({ cost }: { cost: CostAccess | "hidden" }) {
+export function CostNotice({ cost, withCode, total }: { cost: CostAccess | "hidden"; withCode: number; total: number }) {
   if (cost === "ok" || cost === "hidden") return null;
   const text =
     cost === "no_scope"
@@ -47,7 +47,15 @@ export function CostNotice({ cost }: { cost: CostAccess | "hidden" }) {
     <Alert variant="warning">
       <CircleDollarSign aria-hidden />
       <AlertTitle>Harga modal belum bisa dibaca</AlertTitle>
-      <AlertDescription>{text}</AlertDescription>
+      <AlertDescription>
+        <p>{text}</p>
+        {total > 0 && (
+          <p className="mt-1">
+            {withCode} dari {total} unit di sini sudah punya kode Accurate dan akan langsung dapat harga modal.
+            {total - withCode > 0 && ` ${total - withCode} unit diketik manual saat intake (tanpa kode); pilih unitnya dari katalog lewat “Ubah data tiket” supaya ikut terhitung.`}
+          </p>
+        )}
+      </AlertDescription>
     </Alert>
   );
 }

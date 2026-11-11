@@ -47,6 +47,8 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
   const loaded = await loadStoreClaims({ storeId: p.storeId, q: p.q, createdStart: p.period.start, createdEnd: p.period.end }, now);
   const seesCost = (await accessFor(session.userId)).can("view_cost");
   const { rows: inPeriod, cost } = seesCost ? await withUnitCosts(loaded) : { rows: loaded, cost: "hidden" as const };
+  // Figures only once the catalogue actually gives costs; until then a notice.
+  const showMoney = cost === "ok";
   const vendors = [...new Map(inPeriod.filter((r) => r.vendorName).map((r) => [r.vendorKey, r.vendorName!])).entries()].sort((a, b) =>
     a[1].localeCompare(b[1]),
   );
@@ -94,7 +96,7 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
         </span>
       ),
     },
-    ...(seesCost
+    ...(showMoney
       ? [
           {
             key: "cost",
@@ -227,8 +229,8 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
         />
       </div>
 
-      <CostNotice cost={cost} />
-      {seesCost && heldTotal.units > 0 && (
+      <CostNotice cost={cost} withCode={inPeriod.filter((c) => c.catalogItemId !== null).length} total={inPeriod.length} />
+      {showMoney && heldTotal.units > 0 && (
         <section aria-label="Uang tertahan" className="grid grid-cols-1 gap-3 rounded-xl border bg-card p-4 sm:grid-cols-3">
           <div className="flex flex-col gap-1">
             <span className="text-xs font-medium text-muted-foreground">Uang tertahan (belum kembali)</span>

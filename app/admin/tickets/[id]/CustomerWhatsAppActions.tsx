@@ -1,5 +1,7 @@
 "use client";
 
+import { readyForPickupText } from "@/lib/whatsapp";
+
 
 const WhatsAppIcon = ({ size = 16 }: { size?: number }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
@@ -35,7 +37,7 @@ export default function CustomerWhatsAppActions({ customerPhone, customerName, t
     },
     {
       label: "Tunggu Diambil",
-      text: `Halo kak ${customerName}, perangkat kakak dengan nomor tiket ${ticketCode} sudah selesai dikerjakan dan siap diambil di toko. Terima kasih!\n\nCek detail: ${publicLink ? `${appUrl}/${publicLink}` : ''}`
+      text: readyForPickupText(customerName, ticketCode, publicLink ? `${appUrl}/${publicLink}` : null),
     },
     {
       label: "Dikirim Kurir",

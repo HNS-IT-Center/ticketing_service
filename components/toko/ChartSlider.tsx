@@ -142,7 +142,7 @@ export default function ChartSlider({ slides }: { slides: Slide[] }) {
         else if (end - start > SWIPE_PX) go(current - 1);
       }}
       className={cn(
-        "flex flex-col gap-4 rounded-xl border border-border bg-card p-4 shadow-sm outline-none md:p-5",
+        "flex flex-col gap-3 rounded-xl border border-border bg-card p-4 shadow-sm outline-none md:p-5",
         fullscreen && "h-full justify-center overflow-auto rounded-none border-0 p-8 md:p-10",
       )}
     >
@@ -174,12 +174,19 @@ export default function ChartSlider({ slides }: { slides: Slide[] }) {
         </div>
       </header>
 
-      <div aria-live={running ? "off" : "polite"} className={cn("min-h-64", fullscreen && "min-h-[60vh]")}>
+      <div aria-live={running ? "off" : "polite"} className={cn("min-h-56", fullscreen && "min-h-[60vh]")}>
         {slide.content}
       </div>
 
-      <footer className="flex flex-col gap-3 border-t border-border pt-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap items-center gap-1" role="group" aria-label="Pilih grafik">
+      {/* The countdown as a line across the top of the controls. */}
+      <div className="h-1 w-full overflow-hidden rounded-full bg-muted" aria-hidden>
+        <div
+          className="h-full rounded-full bg-primary transition-[width] duration-200 ease-linear motion-reduce:transition-none"
+          style={{ width: `${running ? Math.min(100, (elapsed / (seconds * 1000)) * 100) : 0}%` }}
+        />
+      </div>
+      <footer className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex shrink-0 flex-wrap items-center gap-1 xl:flex-nowrap" role="group" aria-label="Pilih grafik">
           {slides.map((s, i) => (
             <button
               key={s.key}
@@ -194,7 +201,7 @@ export default function ChartSlider({ slides }: { slides: Slide[] }) {
           ))}
         </div>
 
-        <div className="flex flex-col gap-2 md:items-end">
+        <div className="flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-4">
           <div className="flex items-center gap-3">
             <Button
               type="button"
@@ -206,15 +213,9 @@ export default function ChartSlider({ slides }: { slides: Slide[] }) {
               {stopped ? <Play aria-hidden /> : <Pause aria-hidden />}
               {stopped ? "Lanjut" : "Jeda"}
             </Button>
-            <p className="min-w-40 text-sm text-muted-foreground tabular-nums" aria-live="off">
+            <p className="min-w-44 text-sm text-muted-foreground tabular-nums" aria-live="off">
               {stopped ? "Pergantian dihentikan" : held ? "Ditahan selama dilihat" : `Berikutnya dalam ${left} detik`}
             </p>
-          </div>
-          <div className="h-1 w-full overflow-hidden rounded-full bg-muted md:w-64" aria-hidden>
-            <div
-              className="h-full rounded-full bg-primary transition-[width] duration-200 ease-linear motion-reduce:transition-none"
-              style={{ width: `${running ? Math.min(100, (elapsed / (seconds * 1000)) * 100) : 0}%` }}
-            />
           </div>
           <div className="flex items-center gap-1" role="group" aria-label="Ganti setiap">
             <span className="text-xs text-muted-foreground">Ganti setiap</span>

@@ -26,6 +26,13 @@ enum Role {
   // Kepala toko: sees the progress of the stores assigned to them
   // (TechnicianStoreAssignment), and changes nothing.
   StoreSupervisor
+  // Admin stok: watches PC builds and the parts that go out on tickets, every
+  // store. Read only (owner, 2026-11-10): the work itself stays with the
+  // technicians and the RMA desk.
+  StockAdmin
+  // Finance: how long each vendor holds the shop's own claimed stock, to
+  // weigh payment terms. Every store, read only (owner, 2026-11-10).
+  Finance
 }
 
 enum Shift {

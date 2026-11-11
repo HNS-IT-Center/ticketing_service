@@ -8,7 +8,7 @@ import { parseCsv } from "../csv";
  */
 
 /** Roles that are staff. Customers are never exported to SSO and never linked. */
-export const STAFF_ROLES = ["Administrator", "Technician", "Sales", "RMA"] as const;
+export const STAFF_ROLES = ["Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance"] as const;
 
 export type LocalAccount = {
   id: string;

@@ -50,7 +50,7 @@ export function StackedColumns({ series, buckets }: { series: StackedSeries[]; b
           </li>
         ))}
       </ul>
-      <div className="relative flex h-56 gap-2 md:h-64">
+      <div className="relative flex h-52 gap-2 md:h-56">
         <div className="flex w-7 flex-col-reverse justify-between text-right text-[0.6875rem] text-muted-foreground tabular-nums">
           {ticks.map((t) => (
             <span key={t} className="leading-none">{nf.format(t)}</span>

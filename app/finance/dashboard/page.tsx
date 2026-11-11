@@ -41,6 +41,8 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
   // Harga modal only for a viewer allowed it (Pengaturan Akses → Lihat harga modal).
   const seesCost = (await accessFor(session.userId)).can("view_cost");
   const { rows: claims, cost } = seesCost ? await withUnitCosts(loaded) : { rows: loaded, cost: "hidden" as const };
+  // Figures only once the catalogue actually gives costs; until then a notice.
+  const showMoney = cost === "ok";
   // Still at the vendor: the shop's stock is out and nothing has come back yet.
   const atVendor = claims.filter((c) => c.span?.open);
   const held = heldMoney(atVendor);
@@ -90,7 +92,7 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
         </span>
       ),
     },
-    ...(seesCost
+    ...(showMoney
       ? [
           {
             key: "held",
@@ -160,13 +162,13 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
         <Button type="submit">Terapkan</Button>
       </FilterBar>
 
-      <CostNotice cost={cost} />
+      <CostNotice cost={cost} withCode={claims.filter((c) => c.catalogItemId !== null).length} total={claims.length} />
 
-      <div className={seesCost ? "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" : "grid grid-cols-2 gap-3 md:grid-cols-4"}>
+      <div className={showMoney ? "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5" : "grid grid-cols-2 gap-3 md:grid-cols-4"}>
         <StatCard label="Klaim dikirim ke vendor" value={sent} icon={Send} />
         <StatCard label="Masih di vendor" value={open} icon={PackageOpen} tone={open ? "warning" : "default"} href={`/finance/klaim?stage=at_vendor`} />
         <StatCard label={`Lewat ${SLOW_DAYS} hari di vendor`} value={openSlow} icon={Clock} tone="attention" href={`/finance/klaim?stage=at_vendor`} />
-        {seesCost && (
+        {showMoney && (
           <StatCard
             label="Uang tertahan di vendor"
             value={held.units > held.unpriced ? formatRupiahCompact(held.value) : "—"}
@@ -195,7 +197,7 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
       <p className="text-xs text-muted-foreground">
         Lama di vendor dihitung dari klaim dikirim ke vendor sampai unit, penggantinya, atau refund kembali; yang belum kembali dihitung sampai
         hari ini. Kuning: {SLOW_DAYS} hari atau lebih · merah: {VERY_SLOW_DAYS} hari atau lebih.
-        {seesCost && " Uang tertahan: harga modal (HPP Accurate) per unit dari klaim yang masih di vendor, satu unit per klaim."} Klik vendor
+        {showMoney && " Uang tertahan: harga modal (HPP Accurate) per unit dari klaim yang masih di vendor, satu unit per klaim."} Klik vendor
         untuk melihat klaimnya.{" "}
         <Link href="/finance/klaim" className="font-medium text-primary hover:underline">
           Semua klaim stok toko

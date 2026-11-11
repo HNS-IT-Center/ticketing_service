@@ -26,7 +26,10 @@ export async function GET(request: Request) {
   const loaded = (await loadStoreClaims({ storeId: p.storeId, q: p.q, createdStart: p.period.start, createdEnd: p.period.end }, now))
     .filter((r) => !p.vendorKey || r.vendorKey === p.vendorKey)
     .filter((r) => p.stage === "all" || stageOfClaim(r) === p.stage);
-  const claims = seesCost ? (await withUnitCosts(loaded)).rows : loaded;
+  const priced = seesCost ? await withUnitCosts(loaded) : null;
+  const claims = priced?.rows ?? loaded;
+  // Cost columns only when there are costs to put in them.
+  const showMoney = priced?.cost === "ok";
 
   const file = buildXlsx({
     name: "Klaim Stok Toko",
@@ -53,7 +56,7 @@ export async function GET(request: Request) {
       { header: "Lama di Vendor (hari)", width: 12 },
       { header: "Posisi", width: 22 },
       // Harga modal only for a viewer allowed it, as on screen.
-      ...(seesCost
+      ...(showMoney
         ? [
             { header: "Harga Modal / Unit (HPP)", width: 18, format: "rupiah" as const },
             { header: "Uang Tertahan", width: 16, format: "rupiah" as const },
@@ -82,7 +85,7 @@ export async function GET(request: Request) {
       r.closedAt,
       r.span ? r.span.days : null,
       CLAIM_STAGE_LABELS[stageOfClaim(r)],
-      ...(seesCost ? [r.unitCost, stageOfClaim(r) !== "back" ? r.unitCost : null] : []),
+      ...(showMoney ? [r.unitCost, stageOfClaim(r) !== "back" ? r.unitCost : null] : []),
     ]),
   });
   await logActivity(session, "export.claims", `Mengekspor ${claims.length} klaim stok toko (${p.period.label}) ke Excel.`);

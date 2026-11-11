@@ -2,7 +2,7 @@ import { getSession } from "@/lib/session";
 import { readFromStorage } from "@/lib/r2";
 import { attachmentDisposition, downloadFileName } from "@/lib/download-name";
 
-const STAFF = new Set(["Administrator", "Technician", "Sales", "RMA"]);
+const STAFF = new Set(["Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance"]);
 
 /**
  * GET /api/files/download?url=<stored url>&name=<optional file name>

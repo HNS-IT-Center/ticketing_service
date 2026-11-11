@@ -8,6 +8,7 @@ import {
   LayoutDashboard,
   Ticket,
   PlusCircle,
+  Cpu,
   User,
   LogOut,
   Users,
@@ -27,6 +28,10 @@ import {
   ClipboardList,
   Target,
   Gauge,
+  ClipboardCheck,
+  PackageSearch,
+  Landmark,
+  Contact,
 } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -148,6 +153,10 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
       icon: <BarChart3 size={18} />,
       items: [
         { href: "/toko/dashboard", label: "Dashboard Toko", icon: <Gauge size={18} /> },
+        { href: "/stok/dashboard", label: "Dashboard Stok", icon: <ClipboardCheck size={18} /> },
+        { href: "/stok/rakitan", label: "Rakitan PC", icon: <Cpu size={18} />, also: ["/stok/tickets"] },
+        { href: "/stok/part", label: "Part Keluar", icon: <PackageSearch size={18} /> },
+        { href: "/finance/dashboard", label: "Vendor Klaim (Finance)", icon: <Landmark size={18} />, also: ["/finance/klaim", "/finance/tickets"] },
         { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
         { href: "/admin/reports/technicians", label: "Target Teknisi", icon: <Target size={18} /> },
         { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
@@ -203,11 +212,64 @@ const NAV_SECTIONS: Record<string, NavSection[]> = {
       items: [{ href: "/rma/vendors", label: "Vendor", icon: <Truck size={18} /> }],
     },
   ],
-  // Kepala toko: one page, read only — their stores' tickets and technicians.
+  // Kepala toko: read only — their stores' tickets, claims and technicians.
   toko: [
     {
       key: "home",
-      items: [{ href: "/toko/dashboard", label: "Dashboard Toko", icon: <Gauge size={18} /> }],
+      items: [{ href: "/toko/dashboard", label: "Dashboard", icon: <Gauge size={18} /> }],
+    },
+    {
+      key: "tickets",
+      title: "Tiket",
+      icon: <Ticket size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/toko/tickets", label: "Tiket Toko", icon: <Ticket size={18} /> },
+        { href: "/toko/tindak-lanjut", label: "Tindak Lanjut", icon: <ClipboardList size={18} /> },
+        { href: "/toko/klaim", label: "Klaim Garansi", icon: <ShieldCheck size={18} /> },
+      ],
+    },
+    {
+      key: "team",
+      title: "Tim",
+      icon: <Users size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/toko/teknisi", label: "Kinerja Teknisi", icon: <TrendingUp size={18} /> },
+        { href: "/toko/jadwal", label: "Jadwal Teknisi", icon: <CalendarDays size={18} /> },
+        { href: "/toko/tim", label: "Daftar User", icon: <Contact size={18} /> },
+      ],
+    },
+  ],
+  // Admin stok: PC builds checked against their quotation, parts going out.
+  stok: [
+    {
+      key: "home",
+      items: [{ href: "/stok/dashboard", label: "Dashboard", icon: <Gauge size={18} /> }],
+    },
+    {
+      key: "work",
+      title: "Pantau",
+      icon: <ClipboardCheck size={18} />,
+      defaultOpen: true,
+      items: [
+        { href: "/stok/rakitan", label: "Rakitan PC", icon: <Cpu size={18} />, also: ["/stok/tickets"] },
+        { href: "/stok/part", label: "Part Keluar", icon: <PackageSearch size={18} /> },
+      ],
+    },
+  ],
+  // Finance: store-stock claims and how long each vendor takes, read only.
+  finance: [
+    {
+      key: "home",
+      items: [{ href: "/finance/dashboard", label: "Kinerja Vendor", icon: <Landmark size={18} /> }],
+    },
+    {
+      key: "claims",
+      title: "Klaim",
+      icon: <ShieldCheck size={18} />,
+      defaultOpen: true,
+      items: [{ href: "/finance/klaim", label: "Klaim Stok Toko", icon: <ShieldCheck size={18} />, also: ["/finance/tickets"] }],
     },
   ],
   sales: [
@@ -264,11 +326,13 @@ const ROLE_LABELS: Record<string, string> = {
   sales: "Sales",
   rma: "RMA",
   toko: "Kepala Toko",
+  stok: "Admin Stok",
+  finance: "Finance",
 };
 
 interface DashboardShellProps {
   children: React.ReactNode;
-  role: "customer" | "technician" | "admin" | "sales" | "rma" | "toko";
+  role: "customer" | "technician" | "admin" | "sales" | "rma" | "toko" | "stok" | "finance";
   userName: string;
   userId: string;
   isCoordinator?: boolean;
@@ -288,6 +352,9 @@ const TICKETS_HREF: Partial<Record<DashboardShellProps["role"], string>> = {
   admin: "/admin/tickets",
   technician: "/technician/tickets",
   sales: "/sales/tickets",
+  toko: "/toko/tickets",
+  stok: "/stok/rakitan",
+  finance: "/finance/klaim",
 };
 
 /**

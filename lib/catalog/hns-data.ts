@@ -74,3 +74,36 @@ export async function getCatalogItem(id: number, visible: StockVisibility): Prom
   const data = (body as { data?: unknown } | null)?.data;
   return data ? toCatalogItem(data as never, visible) : null;
 }
+
+/**
+ * Whether this client may read an item's harga modal (HPP — Accurate's
+ * average cost). The data API gives each client its own scopes; "Ticketing
+ * HNS" was created without `cost`, and the owner turns it on in Data Accurate →
+ * Pengaturan → API & Integrasi. Until then items arrive without the field.
+ */
+export type CostAccess = "ok" | "no_scope" | "off" | "unavailable";
+
+export async function catalogCostAccess(): Promise<CostAccess> {
+  if (!isCatalogConfigured()) return "off";
+  try {
+    const { body } = await getJson("/status");
+    return (body as { scopes?: { cost?: unknown } } | null)?.scopes?.cost === true ? "ok" : "no_scope";
+  } catch (err) {
+    if (err instanceof CatalogUnavailableError) return "unavailable";
+    throw err;
+  }
+}
+
+/**
+ * One item's harga modal per unit, or null when the API does not give one (no
+ * scope, never purchased, or the item is gone). Server only and never put on
+ * a CatalogItem: `toCatalogItem` is what reaches browsers, and the cost must
+ * not travel with it.
+ */
+export async function getCatalogItemCost(id: number): Promise<number | null> {
+  const { status, body } = await getJson(`/items/${id}`);
+  if (status === 404) return null;
+  const cost = (body as { data?: { cost?: unknown } } | null)?.data?.cost;
+  const n = typeof cost === "string" ? Number(cost) : cost;
+  return typeof n === "number" && Number.isFinite(n) && n > 0 ? Math.round(n) : null;
+}

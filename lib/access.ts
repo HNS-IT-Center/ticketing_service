@@ -19,6 +19,8 @@ export const AUDIENCES = [
   "sales",
   "rma",
   "store_supervisor",
+  "stock_admin",
+  "finance",
 ] as const;
 export type Audience = (typeof AUDIENCES)[number];
 
@@ -30,6 +32,8 @@ export const AUDIENCE_LABELS: Record<Audience, string> = {
   sales: "Sales",
   rma: "RMA",
   store_supervisor: "Kepala Toko",
+  stock_admin: "Admin Stok",
+  finance: "Finance",
 };
 
 /**
@@ -66,7 +70,7 @@ export const CAPABILITIES = [
 export type Capability = (typeof CAPABILITIES)[number];
 
 const SENIOR: Audience[] = ["administrator", "coordinator", "head_technician"];
-const ALL_STAFF: Audience[] = ["administrator", "coordinator", "head_technician", "technician", "sales", "rma", "store_supervisor"];
+const ALL_STAFF: Audience[] = ["administrator", "coordinator", "head_technician", "technician", "sales", "rma", "store_supervisor", "stock_admin", "finance"];
 
 export type CapabilitySection = "pricing" | "ticket" | "stock";
 export const CAPABILITY_SECTIONS: Record<CapabilitySection, { title: string; hint: string }> = {
@@ -87,8 +91,9 @@ export const CAPABILITY_INFO: Record<
 > = {
   view_cost: {
     label: "Lihat harga modal",
-    hint: "Harga beli dari vendor/supplier.",
-    defaults: SENIOR,
+    hint: "Harga beli dari vendor/supplier, dan HPP Accurate untuk nilai stok yang tertahan di klaim.",
+    // Finance too: the money held in store-stock claims is valued at harga modal.
+    defaults: [...SENIOR, "finance"],
   },
   edit_cost: {
     label: "Isi / ubah harga modal",
@@ -183,6 +188,10 @@ export function audiencesOf(user: {
       return ["rma"];
     case "StoreSupervisor":
       return ["store_supervisor"];
+    case "StockAdmin":
+      return ["stock_admin"];
+    case "Finance":
+      return ["finance"];
     default:
       return [];
   }

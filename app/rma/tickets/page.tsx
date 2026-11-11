@@ -3,8 +3,8 @@ import { db } from "@/lib/db";
 import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
-import { FilterBar, FilterBarSearch } from "@/components/app/FilterBar";
-import { FilterChips } from "@/components/app/FilterChips";
+import { FilterBar, FilterBarField, FilterBarSearch } from "@/components/app/FilterBar";
+import { AutoSubmitSelect } from "@/components/app/AutoSubmitSelect";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
@@ -251,28 +251,8 @@ export default async function RmaTicketsPage({
   if (pageSize !== PAGE_SIZE) clearQs.set("per", String(pageSize));
   const clearHref = `/rma/tickets${clearQs.size ? `?${clearQs}` : ""}`;
 
-  const chips = CLAIM_STATUS_FILTERS.map((s) => {
-    const qs = new URLSearchParams();
-    if (s !== "all") qs.set("status", s);
-    if (query) qs.set("q", query);
-    if (owner !== "all") qs.set("owner", owner);
-    if (sortParam !== "updated_desc") qs.set("sort", sortParam);
-    if (pageSize !== PAGE_SIZE) qs.set("per", String(pageSize));
-    const str = qs.toString();
-    const label = s === "all" ? "All" : s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-    return { key: s, label, href: `/rma/tickets${str ? `?${str}` : ""}` };
-  });
-
-  const ownerChips = CLAIM_OWNER_FILTERS.map((o, i) => {
-    const qs = new URLSearchParams();
-    if (statusFilter !== "all") qs.set("status", statusFilter);
-    if (query) qs.set("q", query);
-    if (o !== "all") qs.set("owner", o);
-    if (sortParam !== "updated_desc") qs.set("sort", sortParam);
-    if (pageSize !== PAGE_SIZE) qs.set("per", String(pageSize));
-    const str = qs.toString();
-    return { key: o, label: `${CLAIM_OWNER_LABELS[o]} (${ownerCounts[i]})`, href: `/rma/tickets${str ? `?${str}` : ""}` };
-  });
+  const statusLabel = (s: (typeof CLAIM_STATUS_FILTERS)[number]) =>
+    s === "all" ? "Semua status" : s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
   return (
     // Built from components/app and shadcn only (the UI-1 reset rule).
@@ -300,11 +280,29 @@ export default async function RmaTicketsPage({
 
       <div className="flex flex-col gap-3">
         <FilterBar action="/rma/tickets">
-          {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
-          {owner !== "all" && <input type="hidden" name="owner" value={owner} />}
           {sortParam !== "updated_desc" && <input type="hidden" name="sort" value={sortParam} />}
           {pageSize !== PAGE_SIZE && <input type="hidden" name="per" value={pageSize} />}
           <FilterBarSearch label="Search claims" placeholder="Cari kode, customer, nama barang, SN…" defaultValue={query} />
+          <div className="grid grid-cols-2 gap-2 md:contents">
+            <FilterBarField label="Milik unit" htmlFor="rt-owner" className="md:w-48">
+              <AutoSubmitSelect id="rt-owner" name="owner" defaultValue={owner === "all" ? "" : owner} key={`o-${owner}`}>
+                {CLAIM_OWNER_FILTERS.map((o, i) => (
+                  <option key={o} value={o === "all" ? "" : o}>
+                    {CLAIM_OWNER_LABELS[o]} ({ownerCounts[i]})
+                  </option>
+                ))}
+              </AutoSubmitSelect>
+            </FilterBarField>
+            <FilterBarField label="Status" htmlFor="rt-status" className="md:w-44">
+              <AutoSubmitSelect id="rt-status" name="status" defaultValue={statusFilter === "all" ? "" : statusFilter} key={`s-${statusFilter}`}>
+                {CLAIM_STATUS_FILTERS.map((s) => (
+                  <option key={s} value={s === "all" ? "" : s}>
+                    {statusLabel(s)}
+                  </option>
+                ))}
+              </AutoSubmitSelect>
+            </FilterBarField>
+          </div>
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
             <Button type="submit">Search</Button>
             {query && (
@@ -314,8 +312,6 @@ export default async function RmaTicketsPage({
             )}
           </div>
         </FilterBar>
-        <FilterChips label="Milik unit" chips={ownerChips} active={owner} />
-        <FilterChips label="Status" chips={chips} active={statusFilter} />
       </div>
 
       <DataTable

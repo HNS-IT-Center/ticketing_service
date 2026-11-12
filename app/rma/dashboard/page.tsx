@@ -1,8 +1,9 @@
 import { requirePage } from "@/lib/page-access";
 import Link from "next/link";
 import type { RmaStatus } from "@prisma/client";
-import { getRmaQueue, PRE_HANDOVER_SLA, RMA_STAGE_SLA, VENDOR_OVERDUE_DAYS, type RmaLane, type RmaQueueRow } from "@/lib/rma/queue";
-import AttentionCard, { PreHandoverCard } from "./AttentionCard";
+import { getRmaQueue, LONG_LEAD_DAYS, PRE_HANDOVER_SLA, RMA_STAGE_SLA, VENDOR_OVERDUE_DAYS, type RmaLane, type RmaQueueRow } from "@/lib/rma/queue";
+import AttentionCard, { LongLeadCard, PreHandoverCard, type LongLeadEntry } from "./AttentionCard";
+import { rmaStatusDisplay } from "@/lib/status-display";
 import { rmaDecisionLabel } from "@/lib/rma/decision";
 import { accessFor } from "@/lib/access-server";
 import { BarChart3, CheckCircle, CheckCircle2, ChevronDown, Clock, Factory, History, Inbox, UserX, Wrench } from "lucide-react";
@@ -67,6 +68,31 @@ export default async function RmaDashboardPage() {
   const inStage = (lane: RmaLane, status: RmaStatus): RmaQueueRow[] => rows.filter((r) => r.lane === lane && r.status === status);
   const decisionEntries = Object.entries(stats.decisions).filter(([, n]) => n > 0);
   const nothing = rows.length === 0 && awaitingCheck.length === 0;
+  const longLead: LongLeadEntry[] = [
+    ...rows
+      .filter((r) => r.leadDays >= LONG_LEAD_DAYS)
+      .map((r) => ({
+        key: r.id,
+        code: r.rma_code,
+        who: [r.ticket.customer_name, r.ticket.device_name].filter(Boolean).join(" · ") || `#${r.ticket.ticket_code}`,
+        stage: rmaStatusDisplay(r.status).label,
+        daysInStage: r.daysInStage,
+        leadDays: r.leadDays,
+        href: `/rma/cases/${r.id}`,
+        row: r,
+      })),
+    ...awaitingCheck
+      .filter((t) => t.daysWaiting >= LONG_LEAD_DAYS)
+      .map((t) => ({
+        key: t.id,
+        code: `${t.ticket_code}${t.store_location ? ` · ${t.store_location.code}` : ""}`,
+        who: [t.technician?.name ? `PIC ${t.technician.name}` : "Belum ada teknisi", t.customer_name, t.device_name].filter(Boolean).join(" · "),
+        stage: "Belum diserahkan ke RMA",
+        daysInStage: t.daysWaiting,
+        leadDays: t.daysWaiting,
+        href: linkTickets ? `/admin/tickets/${t.id}` : undefined,
+      })),
+  ];
 
   return (
     // Built from components/app and shadcn only (the UI-1 reset rule).
@@ -110,6 +136,8 @@ export default async function RmaDashboardPage() {
           tone={stats.unassigned > 0 ? "warning" : "default"}
         />
       </div>
+
+      {longLead.length > 0 && <LongLeadCard entries={longLead} />}
 
       {nothing ? (
         <EmptyState

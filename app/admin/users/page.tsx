@@ -7,13 +7,13 @@ import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarSearch } from "@/components/app/FilterBar";
 import { FilterChips } from "@/components/app/FilterChips";
-import { PageHeader } from "@/components/app/PageHeader";
+import { UsersAccessHeader } from "@/components/users/UsersAccessTabs";
 import { RoleBadge } from "@/components/app/RoleBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { UserPlus, Users } from "lucide-react";
 import { DeactivateUserButton } from "@/components/users/DeactivateUserButton";
 
-export const metadata = { title: "User Management — HNS IT Center" };
+export const metadata = { title: "Pengguna & Akses — HNS IT Center" };
 
 // "Pending" are accounts that signed in through HNS SSO and still need a role.
 const ROLES = ["all", "Pending", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"] as const;
@@ -109,12 +109,12 @@ export default async function AdminUsersPage({
     // Built from components/app and shadcn only, so the page opts into
     // Tailwind spacing with a data-slot (the UI-1 reset rule).
     <div data-slot="admin-users" className="flex flex-col gap-5">
-      <PageHeader
-        title="User Management"
-        description={`${users.length} users found`}
+      <UsersAccessHeader
+        active="akun"
+        description={`${users.length} akun. Role menentukan halaman yang bisa dibuka — diatur di tab Role & Izin.`}
         actions={
           <Link href="/admin/users/create" className={buttonVariants()}>
-            <UserPlus aria-hidden="true" /> Add User
+            <UserPlus aria-hidden="true" /> Tambah pengguna
           </Link>
         }
       />

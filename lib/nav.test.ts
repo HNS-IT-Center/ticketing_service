@@ -19,7 +19,7 @@ describe("navFor — the defaults keep each role's menu", () => {
     expect(m[0].items[0]).toMatchObject({ href: "/admin/dashboard", label: "Dashboard" });
     expect(m.map((s) => s.key)).toEqual(["home", "tickets", "rma", "store", "finance", "performance", "log", "master", "settings"]);
     expect(hrefs({ role: "Administrator" })).toEqual(
-      expect.arrayContaining(["/admin/tickets", "/admin/tickets/create", "/rma/dashboard", "/toko/dashboard", "/stok/rakitan", "/finance/klaim", "/logs", "/admin/users", "/admin/settings/access"]),
+      expect.arrayContaining(["/admin/tickets", "/admin/tickets/create", "/rma/dashboard", "/toko/dashboard", "/stok/rakitan", "/finance/klaim", "/logs", "/admin/users"]),
     );
   });
 

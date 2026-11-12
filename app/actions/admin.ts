@@ -12,7 +12,7 @@ import {
   PERFORMANCE_FAILURE_STATUSES,
   performanceEffect,
 } from "@/lib/kpi";
-import { getTicketPoints } from "@/lib/points";
+import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
 import { deleteFromStorage } from "@/lib/r2";
 import { EXTERNAL_WORK_OUTSTANDING } from "@/lib/charges";
 import { hasExternalWorkOutstanding } from "@/lib/charges-server";
@@ -324,7 +324,8 @@ export async function adminUpdateTicketStatusAction(
     where: { id: ticketId },
     include: { 
       user: { select: { name: true, email: true } },
-      cleaning_detail: true 
+      cleaning_detail: true,
+      charges: JOB_POINT_CHARGES,
     },
   });
   if (!ticket) return { error: "Ticket not found" };
@@ -397,18 +398,8 @@ export async function adminUpdateTicketStatusAction(
   // got at `done`. The extra credit is gone; the rule now lives in lib/kpi.ts.
   const effect = performanceEffect(ticket.ticket_type, newStatus);
   if (effect !== "ignore" && ticket.technician_id) {
-    // This table is this action's own, and disagrees with both the writers' one
-    // in technician.ts and the display one in lib/leaderboard.ts. Left as it is
-    // deliberately: changing it changes credited points, which belongs to
-    // fix/points-table-unification, not to this branch.
-    let points = 3; // default 'others'
-    if (ticket.ticket_type === "service" || ticket.ticket_type === "pc_build") {
-      points = 4;
-    } else if (ticket.ticket_type === "warranty_claim") {
-      points = 2;
-    } else if (ticket.ticket_type === "cleaning" && ticket.cleaning_detail?.service_package === "Deep_Clean") {
-      points = 4;
-    }
+    // The one table (lib/points.ts) plus the Daftar Jasa jobs on the bill.
+    const points = ticketTotalPoints(ticket);
     const isSuccess = effect === "success";
     await db.technicianPerformance.update({
       where: { technician_id: ticket.technician_id },
@@ -502,7 +493,7 @@ export async function checkTicketDeletionAction(ticketId: string) {
       ticket_code: true,
       ticket_type: true,
       device_type: true,
-      cleaning_detail: { select: { service_package: true } },
+      cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
       status: true,
       customer_name: true,
       technician: { select: { name: true } },
@@ -557,7 +548,7 @@ export async function checkTicketDeletionAction(ticketId: string) {
     credits: {
       earningLogs,
       failureLogs,
-      points: earningLogs * getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package),
+      points: earningLogs * ticketTotalPoints(ticket),
     },
   };
 }
@@ -600,7 +591,7 @@ export async function deleteTicketAction(
     include: {
       technician: { select: { id: true, name: true } },
       store_location: { select: { code: true } },
-      cleaning_detail: { select: { service_package: true } },
+      cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
       attachments: { select: { file_url: true } },
       rma_case: { select: { rma_code: true, status: true } },
       _count: {
@@ -637,7 +628,7 @@ export async function deleteTicketAction(
   ]);
 
   const pointsToReverse =
-    earningLogs * getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package);
+    earningLogs * ticketTotalPoints(ticket);
   const attachmentUrls = ticket.attachments.map((a) => a.file_url);
 
   await db.$transaction(async (tx) => {

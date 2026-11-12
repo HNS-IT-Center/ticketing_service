@@ -35,3 +35,34 @@ export function getTicketPoints(
   if (type === "pc_build") return 4;
   return 2;
 }
+
+/** A bill line, as far as points go: a Daftar Jasa job keeps its points on the line. */
+export type JobPointLine = { job_points: number | null; quantity: number };
+
+/**
+ * Prisma `select` for a ticket's job lines — every query that scores a ticket
+ * includes it as `charges`. Only "Jasa service" lines carry points.
+ */
+export const JOB_POINT_CHARGES = {
+  where: { kind: "service_fee" },
+  select: { job_points: true, quantity: true },
+} as const;
+
+/** The Daftar Jasa points recorded on a ticket's bill (owner, 2026-11-12). */
+export function jobPoints(lines?: readonly JobPointLine[] | null): number {
+  return (lines ?? []).reduce((sum, l) => sum + (l.job_points ?? 0) * l.quantity, 0);
+}
+
+/**
+ * A ticket's points: its type (the table above) plus the Daftar Jasa jobs on
+ * its bill — the same job points the Target Teknisi report counts. What the
+ * old "Extra Services" ticks meant is now recorded as those jobs.
+ */
+export function ticketTotalPoints(t: {
+  ticket_type: string;
+  device_type?: string | null;
+  cleaning_detail?: { service_package: string | null } | null;
+  charges?: readonly JobPointLine[] | null;
+}): number {
+  return getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package) + jobPoints(t.charges);
+}

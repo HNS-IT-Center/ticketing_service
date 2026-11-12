@@ -3,7 +3,7 @@
 import { db } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
-import { getTicketPoints } from "@/lib/points";
+import { JOB_POINT_CHARGES, ticketTotalPoints } from "@/lib/points";
 
 
 export const MONTH_COLORS: Record<number, { bg: string; text: string }> = {
@@ -59,7 +59,7 @@ export function getLeaderboardData(month: number | null, year: number) {
             created_at: { gte: startDate, lt: endDate },
           },
           include: {
-            ticket: { select: { technician_id: true, ticket_type: true, device_type: true, cleaning_detail: { select: { service_package: true } } } },
+            ticket: { select: { technician_id: true, ticket_type: true, device_type: true, cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES } },
           },
         }),
       ]);
@@ -70,7 +70,7 @@ export function getLeaderboardData(month: number | null, year: number) {
         const techId = log.ticket.technician_id;
         if (!techId) continue;
         if (!techMap[techId]) techMap[techId] = { points: 0, tickets: 0 };
-        techMap[techId].points  += getTicketPoints(log.ticket.ticket_type, log.ticket.device_type, log.ticket.cleaning_detail?.service_package);
+        techMap[techId].points  += ticketTotalPoints(log.ticket);
         techMap[techId].tickets += 1;
       }
 

@@ -10,7 +10,7 @@ import { publicTicketPath } from "@/lib/routes";
 import { uploadToR2, getExt, getFileType, deleteFromStorage } from "@/lib/r2";
 import { storageFailedMessage } from "@/lib/upload-limit";
 import { performanceEffect } from "@/lib/kpi";
-import { getTicketPoints } from "@/lib/points";
+import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
 import { isServicePart, MAX_PART_PHOTOS } from "@/lib/service-parts";
 import { readPartInput } from "@/lib/replaced-part-input";
 import { EXTERNAL_WORK_OUTSTANDING, partChargeDescription } from "@/lib/charges";
@@ -199,7 +199,7 @@ export async function updateTicketStatusAction(formData: FormData) {
 
     const ticket = await db.ticket.findUnique({ 
       where: { id: ticketId },
-      include: { cleaning_detail: true }
+      include: { cleaning_detail: true, charges: JOB_POINT_CHARGES, }
     });
     if (!ticket) return { error: "Ticket not found" };
 
@@ -380,7 +380,7 @@ export async function updateTicketStatusAction(formData: FormData) {
     // claim credits anything. See lib/kpi.ts.
     const effect = performanceEffect(ticket.ticket_type, newStatus);
     if (effect !== "ignore") {
-      const points = getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package);
+      const points = ticketTotalPoints(ticket);
 
       const isSuccess = effect === "success";
       await db.technicianPerformance.upsert({
@@ -423,7 +423,7 @@ export async function updateTicketStatusAction(formData: FormData) {
     }
 
     if (effect === "success") {
-      const points = getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package);
+      const points = ticketTotalPoints(ticket);
       revalidateTag(`user-profile:${session.userId}`, "max");
       const perf = await db.technicianPerformance.findUnique({
         where: { technician_id: session.userId },

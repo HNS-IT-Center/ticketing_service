@@ -1,6 +1,21 @@
 import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import type { RmaQueueRow, RmaSeverity } from "@/lib/rma/queue";
+
+/** A stage's targets, printed on its card: they decide every colour on this page. */
+export type StageSla = { warning: number; overdue: number };
+function SlaLine({ sla }: { sla: StageSla }) {
+  return (
+    <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.75rem] text-muted-foreground">
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden="true" className="size-2 rounded-full bg-tone-amber-fg" /> kuning ≥ {sla.warning} hari
+      </span>
+      <span className="inline-flex items-center gap-1">
+        <span aria-hidden="true" className="size-2 rounded-full bg-tone-red-fg" /> merah ≥ {sla.overdue} hari
+      </span>
+    </p>
+  );
+}
 import { cn } from "@/lib/utils";
 
 /** How many rows a card shows before the rest fold away. */
@@ -75,10 +90,12 @@ export default function AttentionCard({
   title,
   hint,
   rows,
+  sla,
 }: {
   title: string;
   hint: string;
   rows: RmaQueueRow[];
+  sla: StageSla;
 }) {
   const overdue = rows.filter((r) => r.severity === "overdue").length;
   const warning = rows.filter((r) => r.severity === "warning").length;
@@ -93,7 +110,7 @@ export default function AttentionCard({
   return (
     <section
       data-slot="rma-attention-card"
-      className={cn("relative flex flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs md:p-5", accent.border)}
+      className={cn("relative mb-4 flex break-inside-avoid flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs md:p-5", accent.border)}
     >
       {flagged !== "ok" && (
         <span
@@ -111,6 +128,7 @@ export default function AttentionCard({
         <div className="min-w-0">
           <h3 className="text-base font-semibold text-foreground">{title}</h3>
           <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">{hint}</p>
+          <SlaLine sla={sla} />
         </div>
         <div className="flex flex-wrap gap-1.5">
           <CountPill n={overdue} tone="overdue" label="mendesak" />
@@ -135,6 +153,106 @@ export default function AttentionCard({
               <QueueRow key={row.id} row={row} />
             ))}
           </ul>
+        </details>
+      )}
+    </section>
+  );
+}
+
+function RowLink({ href, children }: { href?: string; children: React.ReactNode }) {
+  const cls = "-mx-2 flex min-h-11 items-center justify-between gap-3 rounded-md px-2 py-2.5 text-inherit";
+  return href ? (
+    <Link href={href} className={cn(cls, "outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50")}>
+      {children}
+    </Link>
+  ) : (
+    <div className={cls}>{children}</div>
+  );
+}
+
+/** A claim still with the technician: no case yet, so no RMA stage measures it. */
+export type PreHandoverRow = {
+  id: string;
+  ticket_code: string;
+  status: string;
+  customer_name: string | null;
+  device_name: string | null;
+  daysWaiting: number;
+  severity: RmaSeverity;
+  store_location: { code: string } | null;
+  technician: { name: string } | null;
+};
+
+/**
+ * The technician's side of the queue: claims raised but not handed over. Read
+ * only here — the desk can see them coming and chase them, not act on them.
+ */
+export function PreHandoverCard({
+  rows,
+  sla,
+  linkTickets,
+}: {
+  rows: PreHandoverRow[];
+  sla: StageSla;
+  /** Whether the viewer may open Semua Tiket; otherwise the rows are not links. */
+  linkTickets: boolean;
+}) {
+  const overdue = rows.filter((r) => r.severity === "overdue").length;
+  const warning = rows.filter((r) => r.severity === "warning").length;
+  const accent = TONES[overdue > 0 ? "overdue" : warning > 0 ? "warning" : "ok"];
+  const sorted = [...rows].sort((a, b) => b.daysWaiting - a.daysWaiting);
+  const row = (t: PreHandoverRow) => (
+    <li key={t.id} className="border-t border-border">
+      <RowLink href={linkTickets ? `/admin/tickets/${t.id}` : undefined}>
+        <span className="min-w-0">
+          <span className="block truncate font-mono text-sm font-semibold">
+            {t.ticket_code}
+            {t.store_location ? ` · ${t.store_location.code}` : ""}
+          </span>
+          <span className="block truncate text-[0.8125rem] text-muted-foreground">
+            {[t.technician?.name ? `PIC ${t.technician.name}` : "Belum ada teknisi", t.customer_name, t.device_name].filter(Boolean).join(" · ")}
+          </span>
+        </span>
+        <span className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-1.5">
+          <span
+            className={cn(
+              "rounded-full px-2 py-0.5 text-[0.7rem] font-semibold whitespace-nowrap",
+              t.status === "on_progress" ? "bg-tone-blue-bg text-tone-blue-fg" : "bg-tone-amber-bg text-tone-amber-fg",
+            )}
+          >
+            {t.status === "on_progress" ? "Diperiksa" : "Belum diambil"}
+          </span>
+          <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold", TONES[t.severity].pill)}>
+            {t.severity !== "ok" && <AlertTriangle aria-hidden="true" className="size-3" />}
+            {t.daysWaiting} hari
+          </span>
+        </span>
+      </RowLink>
+    </li>
+  );
+  return (
+    <section data-slot="rma-attention-card" className={cn("mb-4 flex break-inside-avoid flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs md:p-5", accent.border)}>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h3 className="text-base font-semibold text-foreground">Belum Diserahkan ke RMA</h3>
+          <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">
+            Klaim sudah masuk, unit masih diperiksa teknisi. Case RMA terbentuk setelah diserahkan. Dihitung dari tiket dibuat.
+          </p>
+          <SlaLine sla={sla} />
+        </div>
+        <div className="flex flex-wrap gap-1.5">
+          <CountPill n={overdue} tone="overdue" label="mendesak" />
+          <CountPill n={warning} tone="warning" label="peringatan" />
+          {overdue === 0 && warning === 0 && <CountPill n={rows.length} tone="ok" label="tiket" />}
+        </div>
+      </div>
+      <ul>{sorted.slice(0, CARD_PREVIEW_ROWS).map(row)}</ul>
+      {sorted.length > CARD_PREVIEW_ROWS && (
+        <details>
+          <summary className="flex min-h-11 cursor-pointer list-none items-center border-t border-border text-sm font-semibold text-primary md:min-h-9 [&::-webkit-details-marker]:hidden">
+            Lihat {sorted.length - CARD_PREVIEW_ROWS} tiket lainnya
+          </summary>
+          <ul>{sorted.slice(CARD_PREVIEW_ROWS).map(row)}</ul>
         </details>
       )}
     </section>

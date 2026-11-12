@@ -2,7 +2,7 @@ import { requirePage } from "@/lib/page-access";
 import Link from "next/link";
 import type { RmaStatus } from "@prisma/client";
 import { getRmaQueue, LONG_LEAD_DAYS, PRE_HANDOVER_SLA, RMA_STAGE_SLA, VENDOR_OVERDUE_DAYS, type RmaLane, type RmaQueueRow } from "@/lib/rma/queue";
-import AttentionCard, { LongLeadCard, PreHandoverCard, type LongLeadEntry } from "./AttentionCard";
+import AttentionCard, { caseNote, caseVendorName, LongLeadCard, PreHandoverCard, type LongLeadEntry } from "./AttentionCard";
 import { rmaStatusDisplay } from "@/lib/status-display";
 import { rmaDecisionLabel } from "@/lib/rma/decision";
 import { accessFor } from "@/lib/access-server";
@@ -74,21 +74,21 @@ export default async function RmaDashboardPage() {
       .map((r) => ({
         key: r.id,
         code: r.rma_code,
-        who: [r.ticket.customer_name, r.ticket.device_name].filter(Boolean).join(" · ") || `#${r.ticket.ticket_code}`,
-        stage: rmaStatusDisplay(r.status).label,
-        daysInStage: r.daysInStage,
+        unit: r.ticket.device_name?.trim() || `#${r.ticket.ticket_code}`,
+        // Its keterangan; without one, where it stands — the card mixes stages.
+        note: caseNote(r) ?? rmaStatusDisplay(r.status).label,
+        vendor: caseVendorName(r),
         leadDays: r.leadDays,
         href: `/rma/cases/${r.id}`,
-        row: r,
       })),
     ...awaitingCheck
       .filter((t) => t.daysWaiting >= LONG_LEAD_DAYS)
       .map((t) => ({
         key: t.id,
         code: `${t.ticket_code}${t.store_location ? ` · ${t.store_location.code}` : ""}`,
-        who: [t.technician?.name ? `PIC ${t.technician.name}` : "Belum ada teknisi", t.customer_name, t.device_name].filter(Boolean).join(" · "),
-        stage: "Belum diserahkan ke RMA",
-        daysInStage: t.daysWaiting,
+        unit: t.device_name?.trim() || "—",
+        note: "Belum diserahkan ke RMA",
+        vendor: t.technician?.name ?? null,
         leadDays: t.daysWaiting,
         href: linkTickets ? `/admin/tickets/${t.id}` : undefined,
       })),

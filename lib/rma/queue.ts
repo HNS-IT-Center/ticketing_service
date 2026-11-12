@@ -56,6 +56,13 @@ export function preHandoverSeverity(days: number): RmaSeverity {
   return "ok";
 }
 
+/**
+ * A claim open this long is shown in "Lead Time Lewat 2 Minggu" (owner,
+ * 2026-11-12), whatever stage it is in. Measured from when the claim came in —
+ * the ticket — because that is how long the customer has been waiting.
+ */
+export const LONG_LEAD_DAYS = 14;
+
 /** Days at a vendor beyond which a case is worth chasing. */
 export const VENDOR_WARNING_DAYS = 7;
 export const VENDOR_OVERDUE_DAYS = 14;
@@ -117,7 +124,10 @@ export async function getRmaQueue() {
           rma_code: true,
           status: true,
           vendor_name: true,
+          vendor: { select: { name: true, location: true } },
           decision: true,
+          decision_notes: true,
+          replacement_sn: true,
           submitted_at: true,
           created_at: true,
           hold_reason: true,
@@ -139,6 +149,7 @@ export async function getRmaQueue() {
               customer_name: true,
               device_name: true,
               device_sn: true,
+              created_at: true,
               store_location: { select: { code: true } },
             },
           },
@@ -197,6 +208,7 @@ export async function getRmaQueue() {
       ...c,
       daysAtVendor: c.submitted_at ? days(c.submitted_at) : null,
       daysOpen: days(c.created_at),
+      leadDays: days(c.ticket.created_at),
       daysInStage,
       stageSince,
       severity: rmaSeverity(c.status, daysInStage),
@@ -234,6 +246,10 @@ export async function getRmaQueue() {
     warning: rows.filter((r) => r.severity === "warning").length,
     closedCount,
     cancelledCount,
+    /** Claims open past LONG_LEAD_DAYS since intake, handed over or not. */
+    longLead:
+      rows.filter((r) => r.leadDays >= LONG_LEAD_DAYS).length +
+      awaitingCheck.filter((t) => t.daysWaiting >= LONG_LEAD_DAYS).length,
     /** Longest-running open case, the one most likely to need chasing. */
     oldestOpenDays: rows.reduce((max, r) => Math.max(max, r.daysOpen), 0),
     decisions: Object.fromEntries(

@@ -1,10 +1,13 @@
 import Link from "next/link";
-import { AlertTriangle } from "lucide-react";
-import type { RmaQueueRow, RmaSeverity } from "@/lib/rma/queue";
+import { AlertTriangle, Timer } from "lucide-react";
+import { LONG_LEAD_DAYS, type RmaQueueRow, type RmaSeverity } from "@/lib/rma/queue";
+import { holdReasonMeta } from "@/lib/rma/hold-reason";
+import { RMA_DECISION_LABELS } from "@/lib/rma/decision";
+import { vendorLocationText } from "@/lib/vendors";
 
 /** A stage's targets, printed on its card: they decide every colour on this page. */
 export type StageSla = { warning: number; overdue: number };
-function SlaLine({ sla }: { sla: StageSla }) {
+export function SlaLine({ sla }: { sla: StageSla }) {
   return (
     <p className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[0.75rem] text-muted-foreground">
       <span className="inline-flex items-center gap-1">
@@ -37,6 +40,90 @@ function CountPill({ n, tone, label }: { n: number; tone: RmaSeverity; label: st
   );
 }
 
+/** The vendor's name as it stands in the list, else as typed when the claim went out. */
+export function caseVendorText(row: Pick<RmaQueueRow, "vendor" | "vendor_name">): string | null {
+  const name = row.vendor?.name ?? row.vendor_name?.trim();
+  if (!name) return null;
+  const where = vendorLocationText(row.vendor?.location);
+  return where ? `${name} · ${where}` : name;
+}
+
+const DETAIL = "mt-1 block text-[0.8125rem] leading-snug whitespace-normal";
+
+/**
+ * What the desk needs to know about a case without opening it (owner,
+ * 2026-11-12): why it is held, which vendor has it, and what the vendor
+ * decided. Internal fields — this page is staff only.
+ */
+export function StageDetail({ row }: { row: RmaQueueRow }) {
+  if (row.status === "on_hold") {
+    const reason = row.hold_reason_code ? holdReasonMeta(row.hold_reason_code).label : "kategori tidak dicatat";
+    const note = row.hold_reason?.trim();
+    return (
+      <span className={DETAIL}>
+        <span className="font-semibold text-tone-orange-fg">Ditahan: {reason}</span>
+        {note && <span className="line-clamp-2 text-muted-foreground">Keterangan: {note}</span>}
+      </span>
+    );
+  }
+  if (row.status === "submitted_to_vendor" || row.status === "in_vendor_process") {
+    const vendor = caseVendorText(row);
+    return (
+      <span className={DETAIL}>
+        <span className="text-muted-foreground">Vendor: </span>
+        <span className="font-semibold text-foreground">{vendor ?? "belum dicatat"}</span>
+        {row.daysAtVendor !== null && <span className="text-muted-foreground"> · {row.daysAtVendor} hari di vendor</span>}
+      </span>
+    );
+  }
+  if (row.status === "vendor_decided" || row.status === "unit_received") {
+    const vendor = caseVendorText(row);
+    const note = row.decision_notes?.trim();
+    const approved = row.decision !== null && row.decision !== "rejected";
+    return (
+      <span className={DETAIL}>
+        {row.decision ? (
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span
+              className={cn(
+                "rounded-full border px-2 py-0.5 text-xs font-semibold",
+                approved ? "border-tone-green-border bg-tone-green-bg text-tone-green-fg" : "border-tone-red-border bg-tone-red-bg text-tone-red-fg",
+              )}
+            >
+              {approved ? "Bisa diklaim" : "Tidak bisa diklaim"}
+            </span>
+            <span className="font-semibold text-foreground">{RMA_DECISION_LABELS[row.decision]}</span>
+            {row.decision === "replaced" && row.replacement_sn?.trim() && (
+              <span className="text-muted-foreground">· SN baru {row.replacement_sn.trim()}</span>
+            )}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">Keputusan belum dicatat</span>
+        )}
+        {vendor && <span className="block text-muted-foreground">Vendor: {vendor}</span>}
+        {note && <span className="line-clamp-2 text-muted-foreground">Keterangan: {note}</span>}
+      </span>
+    );
+  }
+  return null;
+}
+
+/**
+ * "N hari total" since the claim came in, once that passes LONG_LEAD_DAYS —
+ * and only when it differs from the days in this stage, which say the same.
+ */
+function LeadPill({ days, inStage }: { days: number; inStage: number }) {
+  if (days < LONG_LEAD_DAYS || days <= inStage) return null;
+  return (
+    <span
+      title="Lead time sejak klaim masuk"
+      className="inline-flex items-center gap-1 rounded-full border border-tone-red-border bg-tone-red-bg px-2 py-0.5 text-[0.6875rem] font-semibold whitespace-nowrap text-tone-red-fg"
+    >
+      <Timer aria-hidden="true" className="size-3" /> {days} hari total
+    </span>
+  );
+}
+
 /** One case: code and who it belongs to on the left, how long it has sat on the right. */
 function QueueRow({ row }: { row: RmaQueueRow }) {
   return (
@@ -62,16 +149,21 @@ function QueueRow({ row }: { row: RmaQueueRow }) {
               </span>
             )}
           </span>
+          <StageDetail row={row} />
         </span>
 
-        <span
-          className={cn(
-            "inline-flex shrink-0 items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold",
-            TONES[row.severity].pill,
-          )}
-        >
-          {row.severity !== "ok" && <AlertTriangle aria-hidden="true" className="size-3" />}
-          {row.daysInStage} hari
+        <span className="flex shrink-0 flex-col items-end gap-1">
+          <span
+            title="Lama di tahap ini"
+            className={cn(
+              "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold",
+              TONES[row.severity].pill,
+            )}
+          >
+            {row.severity !== "ok" && <AlertTriangle aria-hidden="true" className="size-3" />}
+            {row.daysInStage} hari
+          </span>
+          <LeadPill days={row.leadDays} inStage={row.daysInStage} />
         </span>
       </Link>
     </li>
@@ -253,6 +345,74 @@ export function PreHandoverCard({
             Lihat {sorted.length - CARD_PREVIEW_ROWS} tiket lainnya
           </summary>
           <ul>{sorted.slice(CARD_PREVIEW_ROWS).map(row)}</ul>
+        </details>
+      )}
+    </section>
+  );
+}
+
+/** One claim in "Lead Time Lewat 2 Minggu": a case, or a claim not handed over yet. */
+export type LongLeadEntry = {
+  key: string;
+  code: string;
+  who: string;
+  stage: string;
+  daysInStage: number;
+  leadDays: number;
+  href?: string;
+  /** The case itself, for the hold reason / vendor / decision line. */
+  row?: RmaQueueRow;
+};
+
+/**
+ * Every claim open LONG_LEAD_DAYS or more since it came in, longest first
+ * (owner, 2026-11-12), whatever lane it sits in — the stage cards measure the
+ * time in a stage, which reads as fresh right after a case moves even when the
+ * customer has waited a month.
+ */
+export function LongLeadCard({ entries }: { entries: LongLeadEntry[] }) {
+  const sorted = [...entries].sort((a, b) => b.leadDays - a.leadDays);
+  const item = (e: LongLeadEntry) => (
+    <li key={e.key} className="border-t border-border">
+      <RowLink href={e.href}>
+        <span className="min-w-0">
+          <span className="block truncate font-mono text-sm font-semibold">{e.code}</span>
+          <span className="block truncate text-[0.8125rem] text-muted-foreground">{e.who}</span>
+          <span className="mt-0.5 block text-[0.8125rem]">
+            <span className="font-semibold text-foreground">{e.stage}</span>
+            <span className="text-muted-foreground"> · {e.daysInStage} hari di tahap ini</span>
+          </span>
+          {e.row && <StageDetail row={e.row} />}
+        </span>
+        <span className="flex shrink-0 flex-col items-end">
+          <span className="inline-flex items-center gap-1 rounded-full border border-tone-red-border bg-tone-red-bg px-2.5 py-0.5 font-mono text-xs font-semibold text-tone-red-fg">
+            <Timer aria-hidden="true" className="size-3" /> {e.leadDays} hari
+          </span>
+          <span className="mt-0.5 text-[0.6875rem] text-muted-foreground">sejak klaim masuk</span>
+        </span>
+      </RowLink>
+    </li>
+  );
+  return (
+    <section data-slot="rma-attention-card" className="flex flex-col gap-3 rounded-xl border border-tone-red-border bg-card p-4 shadow-xs md:p-5">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="flex items-center gap-2 text-[1.0625rem] font-semibold text-foreground">
+            <Timer aria-hidden="true" className="size-[18px] text-destructive" /> Lead Time Lewat 2 Minggu
+          </h2>
+          <p className="mt-0.5 text-[0.8125rem] text-muted-foreground">
+            Klaim yang sudah {LONG_LEAD_DAYS} hari atau lebih sejak tiketnya dibuat dan belum selesai, terlama di atas.
+          </p>
+        </div>
+        <CountPill n={sorted.length} tone="overdue" label="klaim" />
+      </div>
+      <ul className="lg:columns-2 lg:gap-6 [&>li]:break-inside-avoid">{sorted.slice(0, CARD_PREVIEW_ROWS * 2).map(item)}</ul>
+      {sorted.length > CARD_PREVIEW_ROWS * 2 && (
+        <details>
+          <summary className="flex min-h-11 cursor-pointer list-none items-center border-t border-border text-sm font-semibold text-primary md:min-h-9 [&::-webkit-details-marker]:hidden">
+            Lihat {sorted.length - CARD_PREVIEW_ROWS * 2} klaim lainnya
+          </summary>
+          <ul className="lg:columns-2 lg:gap-6 [&>li]:break-inside-avoid">{sorted.slice(CARD_PREVIEW_ROWS * 2).map(item)}</ul>
         </details>
       )}
     </section>

@@ -5,6 +5,7 @@ import { ClipboardList, Check, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
+import { getTicketPoints } from "@/lib/points";
 
 /**
  * How often the pending-request list is refetched, in milliseconds.
@@ -25,15 +26,10 @@ interface AssignmentRequest {
     ticket_code: string;
     ticket_type: string;
     device_type: string | null;
+    cleaning_detail?: { service_package: string | null } | null;
   };
 }
 
-function getTicketPoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
 
 export default function RequestsBell() {
   const [requests, setRequests]       = useState<AssignmentRequest[]>([]);
@@ -176,7 +172,7 @@ export default function RequestsBell() {
             ) : (
               requests.map((req) => {
                 const handled = handledIds[req.id];
-                const pts = getTicketPoints(req.ticket.ticket_type, req.ticket.device_type);
+                const pts = getTicketPoints(req.ticket.ticket_type, req.ticket.device_type, req.ticket.cleaning_detail?.service_package);
 
                 return (
                   <div

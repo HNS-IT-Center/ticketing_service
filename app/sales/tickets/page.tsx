@@ -16,14 +16,8 @@ import { Ticket, Plus } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
 import { memorySortState, sortTicketsInMemory, statusCounts, ticketListWhere, ticketProgressOptions, ticketSearchWhere } from "@/lib/ticket-list-filter";
 import { sortValue } from "@/lib/table-sort";
+import { getTicketPoints } from "@/lib/points";
 
-function getTicketPoints(type: string, deviceType?: string | null, extraServices?: string[]): number {
-  let base = 2;
-  if (type === "pc_build") base = 4;
-  else if (type === "service") base = 5;
-  else if (type === "cleaning" && deviceType === "PC_Gaming") base = 4;
-  return base + (extraServices?.length ?? 0) * 3;
-}
 
 export const metadata = { title: "My Tickets — HNS IT Center" };
 
@@ -53,7 +47,8 @@ export default async function SalesTicketsPage({
     select: {
       id: true, ticket_code: true, ticket_type: true, device_type: true,
       status: true, technician_id: true, is_for_self: true, customer_name: true,
-      updated_at: true, extra_services: true,
+      updated_at: true,
+      cleaning_detail: { select: { service_package: true } },
       user: { select: { name: true } },
     },
   });
@@ -66,7 +61,7 @@ export default async function SalesTicketsPage({
 
   // Any column ascending or descending; by default what needs hands first.
   const sorted = sortTicketsInMemory(allTickets, sortParam, {
-    points: (t) => getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]),
+    points: (t) => getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package),
   });
 
   const totalCount = allTickets.length;
@@ -113,8 +108,7 @@ export default async function SalesTicketsPage({
       sortKey: "points",
       sortFirst: "desc",
       cell: (t) => {
-        const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
-        const hasExtra = (t.extra_services as string[])?.length > 0;
+        const pts = getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package);
         return (
           <span
             className={cn(
@@ -126,7 +120,7 @@ export default async function SalesTicketsPage({
                 : "border-tone-blue-border bg-tone-blue-bg text-tone-blue-fg",
             )}
           >
-            ⭐ {pts} pts{hasExtra && <span className="text-[0.68rem] font-normal opacity-70"> (+extra)</span>}
+            ⭐ {pts} pts
           </span>
         );
       },

@@ -10,7 +10,7 @@ export const metadata = { title: "Detail Tiket — HNS IT Center" };
  * are not theirs.
  */
 export default async function StoreTicketDetailPage({ params }: { params: Promise<{ id: string }> }) {
-  const { session, stores } = await requireStoreViewer();
+  const { session, stores } = await requireStoreViewer("page_toko_tickets", "page_toko_dashboard", "page_toko_followups");
   const { id: raw } = await params;
   const id = await ticketInStores(raw, stores.map((s) => s.id));
   if (!id) notFound();

@@ -4,7 +4,7 @@ import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarSearch } from "@/components/app/FilterBar";
-import { FilterChips } from "@/components/app/FilterChips";
+import { ProgressSelect } from "@/components/app/ProgressSelect";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
@@ -12,7 +12,8 @@ import { parsePageSize } from "@/lib/pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
-import { TECHNICIAN_TICKET_FILTERS, ticketListWhere, ticketSearchWhere } from "@/lib/ticket-list-filter";
+import { memorySortState, sortTicketsInMemory, statusCounts, ticketListWhere, ticketProgressOptions, ticketSearchWhere } from "@/lib/ticket-list-filter";
+import { sortValue } from "@/lib/table-sort";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { Ticket, Plus } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
@@ -62,6 +63,8 @@ export default async function TechnicianTicketsPage({
       : {}; // no store → empty fallback
   }
 
+  // Everything but the progress, for the dropdown's counts.
+  const baseWhere = { ...technicianWhere, ...ticketSearchWhere(query) };
   const where = {
     ...technicianWhere,
     // Chip → filter lives in lib/ticket-list-filter.ts, shared with the admin
@@ -71,18 +74,6 @@ export default async function TechnicianTicketsPage({
     ...ticketSearchWhere(query),
   };
 
-  const STATUS_PRIORITY: Record<string, number> = {
-    on_progress: 1,
-    waiting: 2,
-    ready_for_pickup: 3,
-    waiting_pickup: 3,
-    handed_to_courier: 3,
-    done: 4,
-    delivered: 5,
-    completed: 6,
-    cancelled: 7,
-    rejected: 8,
-  };
 
   const allTickets = await db.ticket.findMany({
     where,
@@ -97,24 +88,19 @@ export default async function TechnicianTicketsPage({
     },
   });
 
-  allTickets.sort((a, b) => {
-    if (sortParam === "updated_desc") return b.updated_at.getTime() - a.updated_at.getTime();
-    if (sortParam === "updated_asc") return a.updated_at.getTime() - b.updated_at.getTime();
-    if (sortParam === "code_asc") return a.ticket_code.localeCompare(b.ticket_code);
-    if (sortParam === "code_desc") return b.ticket_code.localeCompare(a.ticket_code);
-    if (sortParam === "status_asc" || sortParam === "status_desc") {
-      const res = a.status.localeCompare(b.status);
-      return sortParam === "status_desc" ? -res : res;
-    }
-    // Default: priority sort
-    const pA = STATUS_PRIORITY[a.status] || 99;
-    const pB = STATUS_PRIORITY[b.status] || 99;
-    if (pA !== pB) return pA - pB;
-    return b.updated_at.getTime() - a.updated_at.getTime(); // secondary sort by latest updated
+  const [byStatus, claimCount] = await Promise.all([
+    db.ticket.groupBy({ by: ["status"], where: baseWhere, _count: { _all: true } }),
+    db.ticket.count({ where: { ...baseWhere, ticket_type: "warranty_claim" } }),
+  ]);
+  const progressOptions = ticketProgressOptions(statusCounts(byStatus), { warrantyClaim: claimCount });
+
+  // Any column ascending or descending; by default what needs hands first.
+  const sorted = sortTicketsInMemory(allTickets, sortParam, {
+    points: (t) => getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]),
   });
 
   const totalCount = allTickets.length;
-  const tickets = allTickets.slice(skip, skip + pageSize);
+  const tickets = sorted.slice(skip, skip + pageSize);
 
   const totalPages = Math.ceil(totalCount / pageSize);
 
@@ -129,34 +115,21 @@ export default async function TechnicianTicketsPage({
     return `/technician/tickets${str ? `?${str}` : ""}`;
   };
 
-  const renderSortableHeader = (label: string, ascKey: string, descKey: string) => {
-    const isActive = sortParam === ascKey || sortParam === descKey;
-    const isAsc = sortParam === ascKey;
-    const nextSort = isAsc ? descKey : ascKey;
-    return (
-      <Link
-        href={buildHref(1, nextSort)}
-        className="inline-flex items-center gap-1 rounded-sm text-inherit outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        {label}
-        {isActive ? (isAsc ? " ↑" : " ↓") : <span className="opacity-30"> ↕</span>}
-      </Link>
-    );
-  };
 
   type ListTicket = (typeof tickets)[number];
   const columns: DataTableColumn<ListTicket>[] = [
     {
       key: "code",
-      header: renderSortableHeader("Code", "code_asc", "code_desc"),
-      mobileLabel: "Code",
+      header: "Code",
+      sortKey: "code",
       cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>,
       mobile: "title",
     },
-    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span>, className: "hidden xl:table-cell" },
+    { key: "type", header: "Type", sortKey: "type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span>, className: "hidden xl:table-cell" },
     {
       key: "customer",
       header: "Customer",
+      sortKey: "customer",
       cell: (t) => (
         <span className="flex flex-col">
           <span className="font-medium">{ticketPartyName(t)}</span>
@@ -167,6 +140,8 @@ export default async function TechnicianTicketsPage({
     {
       key: "points",
       header: "Points",
+      sortKey: "points",
+      sortFirst: "desc",
       cell: (t) => {
         const pts = getTicketPoints(t.ticket_type, t.device_type, t.extra_services as string[]);
         const hasExtra = (t.extra_services as string[])?.length > 0;
@@ -188,8 +163,8 @@ export default async function TechnicianTicketsPage({
     },
     {
       key: "status",
-      header: renderSortableHeader("Status", "status_asc", "status_desc"),
-      mobileLabel: "Status",
+      header: "Status",
+      sortKey: "status",
       // `rma_process` is one ticket status covering nine RMA ones; the list
       // shows the informative one. See lib/rma/ticket-status-badge.ts.
       cell: (t) => (
@@ -199,8 +174,9 @@ export default async function TechnicianTicketsPage({
     },
     {
       key: "updated",
-      header: renderSortableHeader("Updated", "updated_asc", "updated_desc"),
-      mobileLabel: "Updated",
+      header: "Updated",
+      sortKey: "updated",
+      sortFirst: "desc",
       cell: (t) => new Date(t.updated_at).toLocaleDateString("id-ID"),
       className: "whitespace-nowrap text-muted-foreground",
     },
@@ -213,15 +189,6 @@ export default async function TechnicianTicketsPage({
     },
   ];
 
-  const chips = TECHNICIAN_TICKET_FILTERS.map(({ key: s, label }) => {
-    const qs = new URLSearchParams();
-    if (s !== "all") qs.set("status", s);
-    if (query) qs.set("q", query);
-    if (sortParam !== "priority") qs.set("sort", sortParam);
-    if (pageSize !== PAGE_SIZE) qs.set("per", String(pageSize));
-    const str = qs.toString();
-    return { key: s, label, href: `/technician/tickets${str ? `?${str}` : ""}` };
-  });
 
   return (
     // Built from components/app and shadcn only, so the page opts into
@@ -239,10 +206,10 @@ export default async function TechnicianTicketsPage({
 
       <div className="flex flex-col gap-3">
         <FilterBar action="/technician/tickets">
-          {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
           {sortParam !== "priority" && <input type="hidden" name="sort" value={sortParam} />}
           {pageSize !== PAGE_SIZE && <input type="hidden" name="per" value={pageSize} />}
           <FilterBarSearch label="Search tickets" placeholder="Cari kode, customer, atau nama barang…" defaultValue={query} />
+          <ProgressSelect id="list-progress" options={progressOptions} value={statusFilter} />
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
             <Button type="submit">Search</Button>
             {query && (
@@ -255,7 +222,6 @@ export default async function TechnicianTicketsPage({
             )}
           </div>
         </FilterBar>
-        <FilterChips label="Status" chips={chips} active={statusFilter} />
       </div>
 
       <DataTable
@@ -264,6 +230,7 @@ export default async function TechnicianTicketsPage({
         rows={tickets}
         getRowKey={(t) => t.id}
         rowHref={(t) => `/technician/tickets/${t.id}`}
+        sort={{ state: memorySortState(sortParam), href: (st) => buildHref(1, sortValue(st)) }}
         empty={<EmptyState icon={Ticket} title="No tickets found" />}
       />
 

@@ -44,7 +44,8 @@ export type StoreClaimRow = {
 };
 
 export type StoreClaimFilter = {
-  storeId?: string;
+  /** Limited to these stores; undefined = every store. */
+  storeIds?: string[];
   vendorKey?: string;
   q?: string;
   /** Sent to the vendor in [start, end) — for the vendor table. */
@@ -59,7 +60,7 @@ export type StoreClaimFilter = {
 export async function loadStoreClaims(f: StoreClaimFilter, now: number): Promise<StoreClaimRow[]> {
   const q = f.q?.trim();
   const and: Prisma.TicketWhereInput[] = [STORE_STOCK_CLAIM_WHERE];
-  if (f.storeId) and.push({ store_location_id: f.storeId });
+  if (f.storeIds) and.push({ store_location_id: { in: f.storeIds } });
   if (f.sentStart && f.sentEnd) and.push({ rma_case: { is: { submitted_at: { gte: f.sentStart, lt: f.sentEnd } } } });
   if (f.createdStart && f.createdEnd) and.push({ created_at: { gte: f.createdStart, lt: f.createdEnd } });
   if (q) {

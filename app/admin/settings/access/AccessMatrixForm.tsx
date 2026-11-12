@@ -10,6 +10,7 @@ import { cn } from "@/lib/utils";
 import {
   AUDIENCES,
   AUDIENCE_LABELS,
+  appliesTo,
   CAPABILITIES,
   CAPABILITY_INFO,
   CAPABILITY_SECTIONS,
@@ -18,7 +19,7 @@ import {
   type CapabilitySection,
 } from "@/lib/access";
 
-const SECTION_ORDER: CapabilitySection[] = ["pricing", "ticket", "stock"];
+const SECTION_ORDER: CapabilitySection[] = ["pages", "pricing", "ticket", "stock"];
 const sectionOf = (c: Capability): CapabilitySection => CAPABILITY_INFO[c].section ?? "pricing";
 import { isNavigationSignal } from "@/lib/navigation-signal";
 
@@ -52,20 +53,30 @@ export default function AccessMatrixForm({
     const name = `${capability}:${audience}`;
     const isAdmin = audience === "administrator";
     const isDefault = CAPABILITY_INFO[capability].defaults.includes(audience);
+    // A page tied to one role (a kepala toko's stores) cannot be given to another.
+    const applies = appliesTo(capability, audience);
     return (
       <label
         key={audience}
-        title={isAdmin ? "Admin selalu punya akses" : isDefault ? "Default: diizinkan" : "Default: tidak diizinkan"}
+        title={
+          isAdmin
+            ? "Admin selalu punya akses"
+            : !applies
+              ? "Tidak berlaku untuk kelompok ini"
+              : isDefault
+                ? "Default: diizinkan"
+                : "Default: tidak diizinkan"
+        }
         className={cn(
           "flex min-h-11 items-center gap-2.5 rounded-lg border border-border bg-card px-3 py-2 text-sm md:min-h-9",
-          isAdmin ? "cursor-not-allowed opacity-70" : "cursor-pointer hover:border-primary/40",
+          isAdmin ? "cursor-not-allowed opacity-70" : !applies ? "cursor-not-allowed border-dashed opacity-45" : "cursor-pointer hover:border-primary/40",
         )}
       >
         <input
           type="checkbox"
           name={name}
-          defaultChecked={isAdmin || on.has(name)}
-          disabled={isAdmin}
+          defaultChecked={isAdmin || (applies && on.has(name))}
+          disabled={isAdmin || !applies}
           className="size-5 shrink-0 accent-primary md:size-4"
         />
         <span>{AUDIENCE_LABELS[audience]}</span>

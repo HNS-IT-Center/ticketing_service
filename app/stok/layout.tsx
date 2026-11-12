@@ -1,16 +1,8 @@
-import { requireRole } from "@/lib/session";
-import DashboardShell from "@/components/layout/DashboardShell";
+import { requireStaff } from "@/lib/page-access";
+import AppShell from "@/components/layout/AppShell";
 
-export default async function StokLayout({ children }: { children: React.ReactNode }) {
-  const session = await requireRole("StockAdmin", "Administrator");
-
-  // An administrator opens these pages from their own sidebar and keeps it
-  // here — the rule /rma and /toko follow.
-  const shellRole = session.role === "Administrator" ? "admin" : "stok";
-
-  return (
-    <DashboardShell role={shellRole} userName={session.name} userId={session.userId} isCoordinator={false}>
-      {children}
-    </DashboardShell>
-  );
+/** Any staff member; each page checks its own capability (Pengaturan Akses → Halaman & Menu). */
+export default async function Layout({ children }: { children: React.ReactNode }) {
+  const session = await requireStaff();
+  return <AppShell session={session}>{children}</AppShell>;
 }

@@ -23,3 +23,21 @@ export function notesToPlainText(notes: string | null | undefined): string {
     .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
+
+const escapeHtml = (s: string) =>
+  s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+
+/**
+ * The other way: text typed in a box, as the HTML the ticket pages render
+ * (`dangerouslySetInnerHTML`). Escaped, so nothing typed becomes markup; a
+ * blank line starts a paragraph, a single line break stays one.
+ * `notesToPlainText` reads it back to the same text.
+ */
+export function plainTextToNotesHtml(text: string): string {
+  return text
+    .replace(/\r\n/g, "\n")
+    .trim()
+    .split(/\n{2,}/)
+    .map((para) => `<p>${para.split("\n").map(escapeHtml).join("<br>")}</p>`)
+    .join("");
+}

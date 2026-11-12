@@ -1,3 +1,4 @@
+import { requirePage } from "@/lib/page-access";
 // Technician leaderboard — live design with Technician and Store (Team vs Team) standings
 import { requireRole } from "@/lib/session";
 import { Trophy, Medal, Store, User } from "lucide-react";
@@ -18,6 +19,7 @@ export default async function TechnicianLeaderboardPage({
   searchParams: Promise<{ month?: string; year?: string; tab?: string }>;
 }) {
   await requireRole("Technician", "Administrator");
+  await requirePage("page_leaderboard");
   const params = await searchParams;
 
   const now = new Date();

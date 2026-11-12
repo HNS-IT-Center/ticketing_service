@@ -1,6 +1,7 @@
+import { requirePage } from "@/lib/page-access";
+import { urlSort } from "@/lib/table-sort";
 import Link from "next/link";
 import { BarChart3, Info } from "lucide-react";
-import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
@@ -26,7 +27,7 @@ export default async function ClaimAnalysisPage({
 }: {
   searchParams: Promise<{ from?: string; to?: string }>;
 }) {
-  await requireRole("RMA", "Administrator");
+  await requirePage("page_rma_analysis");
   const params = await searchParams;
   const from = wibDayStart(params.from);
   const toStart = wibDayStart(params.to);
@@ -50,7 +51,7 @@ export default async function ClaimAnalysisPage({
 
   const columns = (first: string): DataTableColumn<BreakdownRow>[] => [
     {
-      key: "label",
+      key: "label", sortValue: (r) => r.label,
       header: first,
       mobile: "title",
       cell: (r) => (
@@ -58,7 +59,7 @@ export default async function ClaimAnalysisPage({
       ),
     },
     {
-      key: "total",
+      key: "total", sortValue: (r) => r.total, sortFirst: "desc",
       header: "Klaim",
       mobile: "badge",
       cell: (r) => (
@@ -71,17 +72,17 @@ export default async function ClaimAnalysisPage({
         </span>
       ),
     },
-    { key: "approved", header: CLAIM_OUTCOME_LABELS.approved, cell: (r) => r.outcomes.approved || "—" },
-    { key: "vendor_rejected", header: CLAIM_OUTCOME_LABELS.vendor_rejected, cell: (r) => r.outcomes.vendor_rejected || "—" },
-    { key: "ineligible", header: CLAIM_OUTCOME_LABELS.ineligible, cell: (r) => r.outcomes.ineligible || "—" },
+    { key: "approved", sortValue: (r) => r.outcomes.approved, sortFirst: "desc", header: CLAIM_OUTCOME_LABELS.approved, cell: (r) => r.outcomes.approved || "—" },
+    { key: "vendor_rejected", sortValue: (r) => r.outcomes.vendor_rejected, sortFirst: "desc", header: CLAIM_OUTCOME_LABELS.vendor_rejected, cell: (r) => r.outcomes.vendor_rejected || "—" },
+    { key: "ineligible", sortValue: (r) => r.outcomes.ineligible, sortFirst: "desc", header: CLAIM_OUTCOME_LABELS.ineligible, cell: (r) => r.outcomes.ineligible || "—" },
     {
-      key: "open",
+      key: "open", sortValue: (r) => r.outcomes.in_progress + r.outcomes.not_handed_over, sortFirst: "desc",
       header: "Masih jalan",
       mobileLabel: "Masih jalan",
       cell: (r) => r.outcomes.in_progress + r.outcomes.not_handed_over || "—",
     },
     {
-      key: "rate",
+      key: "rate", sortValue: (r) => r.approvalRate, sortFirst: "desc",
       header: "Disetujui dari yang diputus",
       mobileLabel: "Tingkat disetujui",
       cell: (r) => (r.approvalRate === null ? "—" : `${Math.round(r.approvalRate * 100)}%`),
@@ -141,16 +142,16 @@ export default async function ClaimAnalysisPage({
         <>
           <section className="flex flex-col gap-3">
             <h2 className="text-lg font-semibold">Per brand</h2>
-            <DataTable caption="Klaim per brand" columns={columns("Brand")} rows={a.byBrand} getRowKey={(r) => r.key} />
+            <DataTable caption="Klaim per brand" sort={urlSort("/rma/analisa", params, "sort_brand")} columns={columns("Brand")} rows={a.byBrand} getRowKey={(r) => r.key} />
           </section>
           <section className="flex flex-col gap-3">
             <h2 className="text-lg font-semibold">Per jenis barang</h2>
-            <DataTable caption="Klaim per jenis barang" columns={columns("Jenis")} rows={a.byCategory} getRowKey={(r) => r.key} />
+            <DataTable caption="Klaim per jenis barang" sort={urlSort("/rma/analisa", params, "sort_category")} columns={columns("Jenis")} rows={a.byCategory} getRowKey={(r) => r.key} />
           </section>
           {a.byItem.length > 0 && (
             <section className="flex flex-col gap-3">
               <h2 className="text-lg font-semibold">Barang paling sering diklaim</h2>
-              <DataTable caption="Barang paling sering diklaim" columns={columns("Barang")} rows={a.byItem} getRowKey={(r) => r.key} />
+              <DataTable caption="Barang paling sering diklaim" sort={urlSort("/rma/analisa", params, "sort_item")} columns={columns("Barang")} rows={a.byItem} getRowKey={(r) => r.key} />
             </section>
           )}
         </>

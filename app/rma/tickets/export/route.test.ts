@@ -5,8 +5,16 @@ vi.mock("server-only", () => ({}));
 let session: { userId: string; role: string; name: string } | null = null;
 vi.mock("@/lib/session", () => ({ getSession: async () => session }));
 
+// The permission check reads the access settings; under test, the defaults.
+vi.mock("@/lib/access-server", async () => {
+  const { audiencesOf, isAllowed } = await import("@/lib/access");
+  return {
+    accessFor: async () => ({ can: (c: never) => isAllowed(c, audiencesOf({ role: session?.role ?? "" }), new Map()) }),
+  };
+});
+
 const findMany = vi.fn<(args: unknown) => Promise<unknown[]>>(async () => []);
-vi.mock("@/lib/db", () => ({ db: { ticket: { findMany: (args: unknown) => findMany(args) } } }));
+vi.mock("@/lib/db", () => ({ db: { ticket: { findMany: (args: unknown) => findMany(args) }, storeLocation: { findMany: async () => [] } } }));
 
 import { GET } from "./route";
 
@@ -35,8 +43,10 @@ describe("GET /rma/tickets/export", () => {
     expect(Buffer.from(await res.arrayBuffer()).subarray(0, 2).toString()).toBe("PK");
 
     // The list's own filter, every page of it.
-    const args = findMany.mock.calls[0][0] as { where: { ticket_type: string } };
-    expect(args.where.ticket_type).toBe("warranty_claim");
+    const args = findMany.mock.calls[0][0] as { where: { AND: [{ ticket_type: string }, object] } };
+    expect(args.where.AND[0].ticket_type).toBe("warranty_claim");
+    // Not a kepala toko, so no store limit.
+    expect(args.where.AND[1]).toEqual({});
     expect(JSON.stringify(args.where)).toContain("device_name");
     expect(args).not.toHaveProperty("take");
   });

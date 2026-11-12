@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
-import { AUDIENCES, CAPABILITIES, CAPABILITY_INFO } from "@/lib/access";
+import { AUDIENCES, CAPABILITIES, CAPABILITY_INFO, appliesTo } from "@/lib/access";
 import { logActivity } from "@/lib/activity";
 
 /**
@@ -22,7 +22,8 @@ export async function saveAccessRulesAction(formData: FormData) {
   for (const capability of CAPABILITIES) {
     for (const audience of AUDIENCES) {
       if (audience === "administrator") continue;
-      const allowed = formData.get(`${capability}:${audience}`) === "on";
+      // A setting that cannot apply to this group is never stored.
+      const allowed = appliesTo(capability, audience) && formData.get(`${capability}:${audience}`) === "on";
       const isDefault = CAPABILITY_INFO[capability].defaults.includes(audience) === allowed;
       writes.push(
         isDefault

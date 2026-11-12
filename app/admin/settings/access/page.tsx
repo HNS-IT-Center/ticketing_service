@@ -5,7 +5,7 @@ import { AUDIENCES, CAPABILITIES, audienceAllowed, ruleKey } from "@/lib/access"
 import { PageHeader } from "@/components/app/PageHeader";
 import AccessMatrixForm from "./AccessMatrixForm";
 
-export const metadata = { title: "Pengaturan Akses — HNS IT Center" };
+export const metadata = { title: "Hak Akses — HNS IT Center" };
 
 export default async function AccessSettingsPage() {
   await requireRole("Administrator");
@@ -19,10 +19,10 @@ export default async function AccessSettingsPage() {
       <PageHeader
         title={
           <span className="flex items-center gap-2">
-            <ShieldCheck aria-hidden="true" className="size-6" /> Pengaturan Akses
+            <ShieldCheck aria-hidden="true" className="size-6" /> Hak Akses
           </span>
         }
-        description="Siapa yang boleh melihat dan mengubah harga service, memperbaiki data tiket, dan melihat stok gudang mana. Head Teknisi ditandai di halaman Users; Koordinator Toko adalah teknisi bertanda Team Leader."
+        description="Halaman dan menu yang boleh dibuka tiap kelompok, siapa yang boleh melihat dan mengubah harga service, memperbaiki data tiket, dan melihat stok gudang mana. Head Teknisi ditandai di halaman Users; Koordinator Toko adalah teknisi bertanda Team Leader."
       />
       <AccessMatrixForm allowed={allowed} />
     </div>

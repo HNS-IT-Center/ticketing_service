@@ -110,6 +110,13 @@ export default function EditTicketButton({ ticketId, ticketCode, context, values
             <FormField label="Kondisi unit" htmlFor={`${id}-cond`}>
               <Textarea id={`${id}-cond`} name="device_condition" defaultValue={values.device_condition ?? ""} rows={2} className="bg-card" />
             </FormField>
+            <FormField
+              label="Keluhan / catatan"
+              htmlFor={`${id}-notes`}
+              required={context.ticketType === "service" || context.ticketType === "warranty_claim"}
+            >
+              <Textarea id={`${id}-notes`} name="notes" defaultValue={values.notes ?? ""} rows={4} className="bg-card" />
+            </FormField>
           </fieldset>
 
           {customer && <div aria-hidden="true" className="border-t border-border" />}

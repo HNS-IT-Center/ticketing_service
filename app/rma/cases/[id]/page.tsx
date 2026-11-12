@@ -1,10 +1,11 @@
+import { requirePage } from "@/lib/page-access";
+import { inScope, storeScopeFor } from "@/lib/store-scope-server";
 import EditTicketButton from "@/components/tickets/EditTicketButton";
 import { loadTicketEdit } from "@/lib/ticket-edit-server";
 import Link from "next/link";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 import { formatDateTime } from "@/lib/utils";
 import RmaStatusCard, { RmaStatusBadge } from "@/components/rma/RmaStatusCard";
 import RmaActionPanel from "./RmaActionPanel";
@@ -38,7 +39,7 @@ const LAMPIRAN_LABEL: Record<string, string> = {
 };
 
 export default async function RmaCasePage({ params }: { params: Promise<{ id: string }> }) {
-  const session = await requireRole("RMA", "Administrator");
+  const session = await requirePage("page_rma_dashboard", "page_rma_claims");
   const { id } = await params;
 
   const rmaCase = await db.rmaCase.findUnique({
@@ -88,6 +89,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
       ticket: {
         select: {
           id: true,
+          store_location_id: true,
           ticket_code: true,
           status: true,
           created_at: true,
@@ -124,7 +126,8 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
   });
 
 
-  if (!rmaCase) notFound();
+  // A kepala toko reads only the stores they hold.
+  if (!rmaCase || !inScope(await storeScopeFor(session), rmaCase.ticket.store_location_id)) notFound();
 
   const { ticket } = rmaCase;
   const ticketEdit = await loadTicketEdit(session.userId, ticket.id);
@@ -343,7 +346,8 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
-          <RmaActionPanel
+          {/* Processing a case is the desk's; others granted the page only read it. */}
+          {(session.role === "RMA" || session.role === "Administrator") && <RmaActionPanel
             rmaCaseId={rmaCase.id}
             currentStatus={rmaCase.status}
             role={session.role}
@@ -357,7 +361,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
               shipping_tracking: rmaCase.shipping_tracking,
               customer_ticket_number: rmaCase.customer_ticket_number,
             }}
-          />
+          />}
         </div>
       </div>
     </div>

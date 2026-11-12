@@ -1,17 +1,8 @@
 import { requireRole } from "@/lib/session";
-import DashboardShell from "@/components/layout/DashboardShell";
+import AppShell from "@/components/layout/AppShell";
 
-export default async function SalesLayout({ children }: { children: React.ReactNode }) {
+/** A sales person's own tickets. */
+export default async function Layout({ children }: { children: React.ReactNode }) {
   const session = await requireRole("Sales", "Administrator");
-
-  return (
-    <DashboardShell
-      role="sales"
-      userName={session.name}
-      userId={session.userId}
-      isCoordinator={false}
-    >
-      {children}
-    </DashboardShell>
-  );
+  return <AppShell session={session}>{children}</AppShell>;
 }

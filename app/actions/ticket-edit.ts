@@ -9,6 +9,7 @@ import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data"
 import { NO_STOCK, type CatalogItem } from "@/lib/catalog/items";
 import { catalogBrand } from "@/lib/catalog/brand";
 import { describeChanges, diffTicketEdit, EDITABLE_FIELDS, parseTicketEdit, type EditableField } from "@/lib/ticket-edit";
+import { plainTextToNotesHtml } from "@/lib/plain-text";
 import { editContextOf, editValuesOf, TICKET_EDIT_SELECT } from "@/lib/ticket-edit-server";
 
 export type TicketEditResult = { ok: true; changed: number } | { ok: false; error: string };
@@ -79,9 +80,14 @@ export async function updateTicketDetailsAction(ticketId: string, formData: Form
 
   if (changes.length === 0 && !catalogData) return { ok: true, changed: 0 };
 
+  // Only what changed is written: a field read back differently (a keluhan
+  // stored as HTML, edited as text) is never rewritten by saving another one.
+  const changed = Object.fromEntries(
+    changes.map((c) => [c.field, c.field === "notes" && c.to !== null ? plainTextToNotesHtml(c.to) : c.to]),
+  );
   await db.ticket.update({
     where: { id: ticket.id },
-    data: { ...parsed.values, ...(catalogData ?? {}) },
+    data: { ...changed, ...(catalogData ?? {}) },
   });
 
   const catalogNote = catalog

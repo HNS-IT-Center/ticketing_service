@@ -2,17 +2,17 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { pickStores, requireStoreViewer } from "@/lib/store-scope-server";
-import { CLAIM_STATUS_FILTERS, claimListOrderBy, claimListWhere } from "@/lib/rma/claim-list";
+import { CLAIM_SORT_KEYS, CLAIM_STATUS_FILTERS, DEFAULT_CLAIM_SORT, claimListOrderBy, claimListWhere, claimStatusLabel } from "@/lib/rma/claim-list";
+import { readSort, sortValue } from "@/lib/table-sort";
 import { analyzeClaims, claimOutcome } from "@/lib/rma/claim-analysis";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
-import { ticketStatusDisplay } from "@/lib/status-display";
 import { ticketPartyName } from "@/lib/ticket-party";
 import { parsePageSize } from "@/lib/pagination";
 import { NoStores } from "@/components/toko/Sections";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarField, FilterBarSearch } from "@/components/app/FilterBar";
-import { FilterChips } from "@/components/app/FilterChips";
+import { AutoSubmitSelect } from "@/components/app/AutoSubmitSelect";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
@@ -32,14 +32,15 @@ type Search = { status?: string; q?: string; page?: string; sort?: string; per?:
  * stores, each with its RMA stage. Read only; a row opens the ticket.
  */
 export default async function StoreClaimsPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { stores } = await requireStoreViewer();
+  const { stores } = await requireStoreViewer("page_toko_claims");
   if (stores.length === 0) return <NoStores title="Klaim Garansi" />;
   const params = await searchParams;
   const { chosen, shown, ids } = pickStores(stores, params.store);
 
   const status = params.status || "all";
   const query = params.q || "";
-  const sort = params.sort || "updated_desc";
+  const sortState = readSort(params.sort, CLAIM_SORT_KEYS, DEFAULT_CLAIM_SORT);
+  const sort = sortValue(sortState);
   const page = Math.max(1, parseInt(params.page || "1") || 1);
   const pageSize = parsePageSize(params.per, PAGE_SIZE);
   const skip = (page - 1) * pageSize;
@@ -87,10 +88,11 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
 
   type Row = (typeof claims)[number];
   const columns: DataTableColumn<Row>[] = [
-    { key: "code", header: "Kode", mobile: "title", cell: (t) => <span className="font-mono whitespace-nowrap">{t.ticket_code}</span> },
+    { key: "code", header: "Kode", sortKey: "code", mobile: "title", cell: (t) => <span className="font-mono whitespace-nowrap">{t.ticket_code}</span> },
     {
       key: "rma",
       header: "RMA",
+      sortKey: "rma",
       cell: (t) =>
         t.rma_case ? (
           <span className="flex flex-col">
@@ -104,6 +106,7 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
     {
       key: "unit",
       header: "Customer / unit",
+      sortKey: "customer",
       cell: (t) => (
         <span className="flex min-w-0 max-w-md flex-col">
           <span className="font-medium">{ticketPartyName(t)}</span>
@@ -123,17 +126,13 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
     {
       key: "status",
       header: "Tahap",
+      sortKey: "status",
       mobile: "badge",
       cell: (t) => <StatusBadge {...ticketBadgeChoice(t.status, t.rma_case?.status)} hasTechnician={Boolean(t.technician_id)} size="sm" />,
     },
-    { key: "updated", header: "Update", className: "whitespace-nowrap text-muted-foreground", cell: (t) => t.updated_at.toLocaleDateString("id-ID") },
+    { key: "updated", header: "Update", sortKey: "updated", sortFirst: "desc", className: "whitespace-nowrap text-muted-foreground", cell: (t) => t.updated_at.toLocaleDateString("id-ID") },
   ];
 
-  const chips = CLAIM_STATUS_FILTERS.map((s) => ({
-    key: s,
-    label: s === "all" ? "Semua" : ticketStatusDisplay(s).label,
-    href: href({ status: s === "all" ? undefined : s, page: undefined }),
-  }));
 
   return (
     <div data-slot="store-claims" className="flex flex-col gap-5">
@@ -155,7 +154,6 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
 
       <div className="flex flex-col gap-3">
         <FilterBar action="/toko/klaim">
-          {status !== "all" && <input type="hidden" name="status" value={status} />}
           <FilterBarSearch label="Cari klaim" placeholder="Cari kode, RMA, customer, unit, SN, atau vendor…" defaultValue={query} />
           {stores.length > 1 && (
             <FilterBarField label="Toko" htmlFor="tk-store" className="md:w-44">
@@ -169,6 +167,16 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
               </NativeSelect>
             </FilterBarField>
           )}
+          {/* The RMA stage, as the Tahap column shows it (lib/rma/claim-list.ts). */}
+          <FilterBarField label="Tahap" htmlFor="tk-status" className="md:w-52">
+            <AutoSubmitSelect id="tk-status" name="status" defaultValue={status === "all" ? "" : status} key={`s-${status}`}>
+              {CLAIM_STATUS_FILTERS.map((s) => (
+                <option key={s} value={s === "all" ? "" : s}>
+                  {claimStatusLabel(s)}
+                </option>
+              ))}
+            </AutoSubmitSelect>
+          </FilterBarField>
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
             <Button type="submit">Cari</Button>
             {query && (
@@ -178,11 +186,11 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
             )}
           </div>
         </FilterBar>
-        <FilterChips label="Status" chips={chips} active={status} />
       </div>
 
       <DataTable
         caption="Klaim garansi toko"
+        sort={{ state: sortState, href: (st) => href({ sort: sortValue(st) === "updated_desc" ? undefined : sortValue(st), page: undefined }) }}
         columns={columns}
         rows={claims}
         getRowKey={(t) => t.id}

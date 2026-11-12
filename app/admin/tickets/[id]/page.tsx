@@ -1,9 +1,11 @@
+import { requirePage } from "@/lib/page-access";
+import { inScope, storeScopeFor } from "@/lib/store-scope-server";
+import { ReadOnlyTicketView } from "@/components/tickets/ReadOnlyTicketView";
 import EditTicketButton from "@/components/tickets/EditTicketButton";
 import { loadTicketEdit } from "@/lib/ticket-edit-server";
-import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { publicTicketPath } from "@/lib/routes";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import Badge from "@/components/ui/Badge";
 import TicketChat from "@/components/TicketChat";
 import AdminAssignPanel from "./AdminAssignPanel";
@@ -47,8 +49,19 @@ export default async function AdminTicketDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const session = await requireRole("Administrator", "Sales");
+  const session = await requirePage("page_tickets_all");
   const { id } = await params;
+  // Someone granted "Semua Tiket" in Pengaturan Akses reads the ticket; the
+  // panels below (assign, status, delete) are the administrator's.
+  if (session.role !== "Administrator") {
+    const found = await db.ticket.findFirst({ where: { OR: [{ id }, { ticket_code: id }] }, select: { id: true, store_location_id: true } });
+    // A kepala toko reads only the stores they hold.
+    if (!found || !inScope(await storeScopeFor(session), found.store_location_id)) notFound();
+    // A technician (a head technician, by default) works the ticket in their
+    // own portal, where the bill and the status follow the usual rules.
+    if (session.role === "Technician") redirect(`/technician/tickets/${found.id}`);
+    return <ReadOnlyTicketView id={found.id} viewerId={session.userId} back={{ href: "/admin/tickets", label: "Semua Tiket" }} />;
+  }
 
   const [ticket, technicians, salesUsers] = await Promise.all([
     db.ticket.findFirst({
@@ -141,11 +154,6 @@ export default async function AdminTicketDetailPage({
   ]);
 
   if (!ticket) notFound();
-
-  // Sales authorization guard: cannot access if not assigned
-  if (session.role === "Sales" && ticket.sales_id !== session.userId) {
-    notFound();
-  }
 
   // The bill — service tickets only. A cost the viewer may not see is removed
   // on the server, before anything reaches the browser.

@@ -1,6 +1,7 @@
+import { requirePage } from "@/lib/page-access";
+import { scopedStoreIds, storeScopeFor } from "@/lib/store-scope-server";
 import Link from "next/link";
 import { CheckCircle2, ChevronRight, Cpu, Hammer, PackageCheck, PackageSearch, Wrench } from "lucide-react";
-import { requireRole } from "@/lib/session";
 import { parsePeriod, wibDayKey } from "@/lib/store-dashboard";
 import { loadOutgoingParts, loadStockSummary } from "@/lib/stock-server";
 import { OUTGOING_KIND_LABELS } from "@/lib/stock";
@@ -21,15 +22,18 @@ export const metadata = { title: "Dashboard Stok — HNS IT Center" };
  * and the parts that went out most recently.
  */
 export default async function StockDashboardPage() {
-  await requireRole("StockAdmin", "Administrator");
+  const session = await requirePage("page_stock_dashboard");
+  // A kepala toko sees the stores they hold; everyone else every store.
+  const scope = await storeScopeFor(session);
+  const storeIds = scopedStoreIds(scope, null);
   // eslint-disable-next-line react-hooks/purity -- server component, read once
   const now = Date.now();
   const month = parsePeriod({ period: "month" }, now);
   // The uncoded count covers a year: codes arrive late, and the list it opens can show that much.
   const year = parsePeriod({ period: "range", from: wibDayKey(now - 365 * 24 * 3600_000), to: wibDayKey(now) }, now);
   const [{ builds, partsThisMonth, uncodedParts }, recent] = await Promise.all([
-    loadStockSummary(now, month.start, year.start),
-    loadOutgoingParts({ start: month.start, end: month.end }),
+    loadStockSummary(now, month.start, year.start, storeIds),
+    loadOutgoingParts({ start: month.start, end: month.end, storeIds }),
   ]);
 
   const building = builds.filter((b) => b.stage === "building").length;
@@ -38,7 +42,7 @@ export default async function StockDashboardPage() {
 
   return (
     <div data-slot="stock-dashboard" className="flex flex-col gap-5">
-      <PageHeader title="Dashboard Stok" description={`Rakitan PC dan part yang keluar, semua toko · ${month.label}`} />
+      <PageHeader title="Dashboard Stok" description={`Rakitan PC dan part yang keluar, ${storeIds ? scope.stores.map((s) => s.name).join(", ") : "semua toko"} · ${month.label}`} />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <StatCard label="Rakitan baru bulan ini" value={newThisMonth} icon={Cpu} href="/stok/rakitan" />

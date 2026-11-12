@@ -1,13 +1,8 @@
-import { requireRole } from "@/lib/session";
-import DashboardShell from "@/components/layout/DashboardShell";
+import { requireStaff } from "@/lib/page-access";
+import AppShell from "@/components/layout/AppShell";
 
-export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  // Both Administrator and Sales (CS) can access admin routes
-  const session = await requireRole("Administrator", "Sales");
-  const role = session.role === "Sales" ? "sales" : "admin";
-  return (
-    <DashboardShell role={role as "admin" | "sales"} userName={session.name} userId={session.userId}>
-      {children}
-    </DashboardShell>
-  );
+/** Any staff member; each page checks its own capability (Pengaturan Akses → Halaman & Menu). */
+export default async function Layout({ children }: { children: React.ReactNode }) {
+  const session = await requireStaff();
+  return <AppShell session={session}>{children}</AppShell>;
 }

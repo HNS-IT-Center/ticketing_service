@@ -1,4 +1,5 @@
-import { requireRole } from "@/lib/session";
+import { requirePage } from "@/lib/page-access";
+import { storeScopeFor, storeWhere } from "@/lib/store-scope-server";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
@@ -15,11 +16,16 @@ import { cn } from "@/lib/utils";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { FileSpreadsheet, Ticket, Plus } from "lucide-react";
 import { getTicketPoints } from "@/lib/points";
+import { readSort, sortValue } from "@/lib/table-sort";
 import { ticketPartyName } from "@/lib/ticket-party";
 import {
   CLAIM_OWNER_FILTERS,
   CLAIM_OWNER_LABELS,
   CLAIM_STATUS_FILTERS,
+  claimStatusLabel,
+  claimStatusOf,
+  CLAIM_SORT_KEYS,
+  DEFAULT_CLAIM_SORT,
   claimListOrderBy,
   claimListWhere,
   readClaimOwner,
@@ -61,23 +67,27 @@ export default async function RmaTicketsPage({
 }: {
   searchParams: Promise<{ status?: string; q?: string; page?: string; sort?: string; per?: string; owner?: string }>;
 }) {
-  await requireRole("RMA", "Administrator");
+  const session = await requirePage("page_rma_claims");
+  // A kepala toko granted this page sees the claims of the stores they hold.
+  const inStores = storeWhere(await storeScopeFor(session));
+  const claimsWhere = (...a: Parameters<typeof claimListWhere>) => ({ AND: [claimListWhere(...a), inStores] });
   const params = await searchParams;
   const statusFilter = params.status || "all";
   const query = params.q || "";
   const page = Math.max(1, parseInt(params.page || "1") || 1);
   const pageSize = parsePageSize(params.per, PAGE_SIZE);
   const skip = (page - 1) * pageSize;
-  const sortParam = params.sort || "updated_desc";
+  const sortState = readSort(params.sort, CLAIM_SORT_KEYS, DEFAULT_CLAIM_SORT);
+  const sortParam = sortValue(sortState);
   // Klaim User / Klaim Toko — whose unit it is (lib/rma/claim-list.ts).
   const owner = readClaimOwner(params.owner);
 
   // Which claims, what the search reaches, and the sort keys live in
   // lib/rma/claim-list.ts, shared with the spreadsheet export.
-  const where = claimListWhere(statusFilter, query, owner);
+  const where = claimsWhere(statusFilter, query, owner);
   const orderBy = claimListOrderBy(sortParam);
 
-  const [tickets, totalCount, ...ownerCounts] = await Promise.all([
+  const [tickets, totalCount, stageRows, ...ownerCounts] = await Promise.all([
     db.ticket.findMany({
       where,
       orderBy,
@@ -98,7 +108,8 @@ export default async function RmaTicketsPage({
     }),
     db.ticket.count({ where }),
     // What each ownership chip would show under the current status and search.
-    ...CLAIM_OWNER_FILTERS.map((o) => db.ticket.count({ where: claimListWhere(statusFilter, query, o) })),
+    db.ticket.findMany({ where: claimsWhere("all", query, owner), select: { rma_case: { select: { status: true } } } }),
+    ...CLAIM_OWNER_FILTERS.map((o) => db.ticket.count({ where: claimsWhere(statusFilter, query, o) })),
   ]);
 
   const totalPages = Math.ceil(totalCount / pageSize);
@@ -115,20 +126,6 @@ export default async function RmaTicketsPage({
     return `/rma/tickets${str ? `?${str}` : ""}`;
   };
 
-  const renderSortableHeader = (label: string, ascKey: string, descKey: string) => {
-    const isActive = sortParam === ascKey || sortParam === descKey;
-    const isAsc = sortParam === ascKey;
-    const nextSort = isAsc ? descKey : ascKey;
-    return (
-      <Link
-        href={buildHref(1, nextSort)}
-        className="inline-flex items-center gap-1 rounded-sm text-inherit outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        {label}
-        {isActive ? (isAsc ? " ↑" : " ↓") : <span className="opacity-30"> ↕</span>}
-      </Link>
-    );
-  };
 
   const pointsPill = (pts: number) => (
     <span
@@ -149,14 +146,15 @@ export default async function RmaTicketsPage({
   const columns: DataTableColumn<ClaimRow>[] = [
     {
       key: "code",
-      header: renderSortableHeader("Code", "code_asc", "code_desc"),
-      mobileLabel: "Code",
+      header: "Code",
+      sortKey: "code",
       cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>,
       mobile: "title",
     },
     {
       key: "rma",
       header: "RMA",
+      sortKey: "rma",
       cell: (t) =>
         t.rma_case ? (
           <span className="font-mono text-[0.8125rem] whitespace-nowrap text-primary">{t.rma_case.rma_code}</span>
@@ -167,6 +165,7 @@ export default async function RmaTicketsPage({
     {
       key: "customer",
       header: "Customer",
+      sortKey: "customer",
       cell: (t) => (
         <span className="flex flex-col">
           <span className="flex flex-wrap items-center gap-1.5">
@@ -203,8 +202,8 @@ export default async function RmaTicketsPage({
     },
     {
       key: "status",
-      header: renderSortableHeader("Status", "status_asc", "status_desc"),
-      mobileLabel: "Status",
+      header: "Status",
+      sortKey: "status",
       // Before handover the ticket status says where the claim is; after it,
       // the case status does. See lib/rma/ticket-status-badge.ts.
       cell: (t) => (
@@ -214,8 +213,9 @@ export default async function RmaTicketsPage({
     },
     {
       key: "updated",
-      header: renderSortableHeader("Updated", "updated_asc", "updated_desc"),
-      mobileLabel: "Updated",
+      header: "Updated",
+      sortKey: "updated",
+      sortFirst: "desc",
       cell: (t) => new Date(t.updated_at).toLocaleDateString("id-ID"),
       className: "whitespace-nowrap text-muted-foreground",
     },
@@ -251,8 +251,14 @@ export default async function RmaTicketsPage({
   if (pageSize !== PAGE_SIZE) clearQs.set("per", String(pageSize));
   const clearHref = `/rma/tickets${clearQs.size ? `?${clearQs}` : ""}`;
 
+  // How many claims sit at each stage, under the search and ownership chosen.
+  const stageCount = new Map<string, number>();
+  for (const r of stageRows) {
+    const k = claimStatusOf(r.rma_case?.status);
+    stageCount.set(k, (stageCount.get(k) ?? 0) + 1);
+  }
   const statusLabel = (s: (typeof CLAIM_STATUS_FILTERS)[number]) =>
-    s === "all" ? "Semua status" : s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+    `${claimStatusLabel(s)} (${s === "all" ? stageRows.length : (stageCount.get(s) ?? 0)})`;
 
   return (
     // Built from components/app and shadcn only (the UI-1 reset rule).
@@ -293,7 +299,7 @@ export default async function RmaTicketsPage({
                 ))}
               </AutoSubmitSelect>
             </FilterBarField>
-            <FilterBarField label="Status" htmlFor="rt-status" className="md:w-44">
+            <FilterBarField label="Tahap RMA" htmlFor="rt-status" className="md:w-60">
               <AutoSubmitSelect id="rt-status" name="status" defaultValue={statusFilter === "all" ? "" : statusFilter} key={`s-${statusFilter}`}>
                 {CLAIM_STATUS_FILTERS.map((s) => (
                   <option key={s} value={s === "all" ? "" : s}>
@@ -322,6 +328,7 @@ export default async function RmaTicketsPage({
         // Only a claim that reached the desk has a case page.
         rowHref={(t) => (t.rma_case ? `/rma/cases/${t.rma_case.id}` : undefined)}
         empty={<EmptyState icon={Ticket} title="Tidak ada klaim" />}
+        sort={{ state: sortState, href: (st) => buildHref(1, sortValue(st)) }}
       />
 
       <div className="flex flex-col gap-2">

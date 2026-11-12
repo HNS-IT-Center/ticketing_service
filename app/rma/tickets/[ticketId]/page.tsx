@@ -1,6 +1,6 @@
+import { requirePage } from "@/lib/page-access";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 
 /**
  * Resolver for notification links.
@@ -14,7 +14,7 @@ export default async function RmaTicketRedirectPage({
 }: {
   params: Promise<{ ticketId: string }>;
 }) {
-  await requireRole("RMA", "Administrator");
+  await requirePage("page_rma_dashboard", "page_rma_claims");
   const { ticketId } = await params;
 
   const rmaCase = await db.rmaCase.findUnique({

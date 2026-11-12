@@ -1,5 +1,5 @@
-import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { pageSession } from "@/lib/page-access";
+import { scopedStoreIds, storeScopeFor } from "@/lib/store-scope-server";
 import { logActivity } from "@/lib/activity";
 import { loadStoreClaims, withUnitCosts } from "@/lib/finance-claims-server";
 import { accessFor } from "@/lib/access-server";
@@ -14,16 +14,17 @@ import { buildXlsx, XLSX_CONTENT_TYPE } from "@/lib/xlsx";
  * itself rather than relying on the proxy.
  */
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session || (session.role !== "Finance" && session.role !== "Administrator")) {
+  const session = await pageSession("page_finance_claims");
+  if (!session) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const now = Date.now();
   const search = Object.fromEntries(new URL(request.url).searchParams) as FinanceSearch;
-  const stores = await db.storeLocation.findMany({ where: { is_active: true }, select: { id: true } });
-  const p = readFinanceSearch(search, stores.map((s) => s.id), now);
+  // The file holds what the list shows: a kepala toko's stores, or every store.
+  const scope = await storeScopeFor(session);
+  const p = readFinanceSearch(search, scope.stores.map((s) => s.id), now);
   const seesCost = (await accessFor(session.userId)).can("view_cost");
-  const loaded = (await loadStoreClaims({ storeId: p.storeId, q: p.q, createdStart: p.period.start, createdEnd: p.period.end }, now))
+  const loaded = (await loadStoreClaims({ storeIds: scopedStoreIds(scope, p.storeId), q: p.q, createdStart: p.period.start, createdEnd: p.period.end }, now))
     .filter((r) => !p.vendorKey || r.vendorKey === p.vendorKey)
     .filter((r) => p.stage === "all" || stageOfClaim(r) === p.stage);
   const priced = seesCost ? await withUnitCosts(loaded) : null;

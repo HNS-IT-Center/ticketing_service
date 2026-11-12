@@ -24,7 +24,7 @@ type Search = { period?: string; from?: string; to?: string; store?: string };
  * The tables live on their own pages (Kinerja Teknisi, Tiket Toko, …).
  */
 export default async function StoreDashboardPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { stores } = await requireStoreViewer();
+  const { stores } = await requireStoreViewer("page_toko_dashboard");
   const params = await searchParams;
   // One clock reading per request, passed down (the lib/rma/queue.ts rule).
   // eslint-disable-next-line react-hooks/purity -- server component, read once

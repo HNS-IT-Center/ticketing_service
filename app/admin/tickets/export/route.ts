@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { pageSession } from "@/lib/page-access";
+import { storeScopeFor, storeWhere } from "@/lib/store-scope-server";
 import { logActivity } from "@/lib/activity";
 import { TICKET_EXPORT_SELECT, ticketExportFilename, ticketExportSheet } from "@/lib/ticket-export";
 import { ticketListOrderBy, ticketListWhere, ticketSearchWhere } from "@/lib/ticket-list-filter";
@@ -15,8 +16,8 @@ import { buildXlsx, XLSX_CONTENT_TYPE } from "@/lib/xlsx";
  * checks again rather than relying on the matcher.
  */
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "Administrator") {
+  const session = await pageSession("page_tickets_all");
+  if (!session) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -24,7 +25,8 @@ export async function GET(request: Request) {
   const status = params.get("status") || "all";
 
   const tickets = await db.ticket.findMany({
-    where: { ...ticketListWhere(status), ...ticketSearchWhere(params.get("q") || "") },
+    // The file holds what the list shows: a kepala toko's stores, or every store.
+    where: { ...storeWhere(await storeScopeFor(session)), ...ticketListWhere(status), ...ticketSearchWhere(params.get("q") || "") },
     orderBy: ticketListOrderBy(params.get("sort") || ""),
     select: TICKET_EXPORT_SELECT,
   });

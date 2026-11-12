@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { pageSession } from "@/lib/page-access";
+import { storeScopeFor, storeWhere } from "@/lib/store-scope-server";
 import { CLAIM_EXPORT_SELECT, claimExportFilename, claimExportSheet } from "@/lib/rma/claim-export";
 import { CLAIM_OWNER_LABELS, claimListOrderBy, claimListWhere, readClaimOwner } from "@/lib/rma/claim-list";
 import { buildXlsx, XLSX_CONTENT_TYPE } from "@/lib/xlsx";
@@ -15,8 +16,8 @@ import { logActivity } from "@/lib/activity";
  * notes and customer phone numbers.
  */
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session || (session.role !== "RMA" && session.role !== "Administrator")) {
+  const session = await pageSession("page_rma_claims");
+  if (!session) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -25,7 +26,8 @@ export async function GET(request: Request) {
   const owner = readClaimOwner(params.get("owner"));
 
   const claims = await db.ticket.findMany({
-    where: claimListWhere(status, params.get("q") || "", owner),
+    // The file holds what the list shows: a kepala toko's stores, or every store.
+    where: { AND: [claimListWhere(status, params.get("q") || "", owner), storeWhere(await storeScopeFor(session))] },
     orderBy: claimListOrderBy(params.get("sort") || ""),
     select: CLAIM_EXPORT_SELECT,
   });

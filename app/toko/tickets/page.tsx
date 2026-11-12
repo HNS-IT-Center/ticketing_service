@@ -3,7 +3,8 @@ import { FileSpreadsheet, Ticket } from "lucide-react";
 import { db } from "@/lib/db";
 import { pickStores, requireStoreViewer } from "@/lib/store-scope-server";
 import { STORE_TICKET_TYPES, storeTicketWhere } from "@/lib/store-ticket-list";
-import { ADMIN_TICKET_FILTERS, DEFAULT_TICKET_SORT, ticketListOrderBy } from "@/lib/ticket-list-filter";
+import { DEFAULT_TICKET_SORT, DEFAULT_TICKET_SORT_STATE, TICKET_SORT_KEYS, statusCounts, ticketListOrderBy, ticketProgressOptions } from "@/lib/ticket-list-filter";
+import { readSort, sortValue } from "@/lib/table-sort";
 import { TICKET_TYPE_LABELS } from "@/lib/ticket-export";
 import { relativeTimeId } from "@/lib/ticket-recency";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
@@ -14,7 +15,7 @@ import { NoStores } from "@/components/toko/Sections";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarField, FilterBarSearch } from "@/components/app/FilterBar";
-import { FilterChips } from "@/components/app/FilterChips";
+import { ProgressSelect } from "@/components/app/ProgressSelect";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
@@ -29,14 +30,15 @@ type Search = { status?: string; q?: string; page?: string; sort?: string; per?:
 
 /** Every ticket of the kepala toko's stores, read only: search, filter, open, export. */
 export default async function StoreTicketsPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { stores } = await requireStoreViewer();
+  const { stores } = await requireStoreViewer("page_toko_tickets");
   if (stores.length === 0) return <NoStores title="Tiket Toko" />;
   const params = await searchParams;
   const { chosen, shown, ids } = pickStores(stores, params.store);
 
   const status = params.status || "all";
   const query = params.q || "";
-  const sort = params.sort || DEFAULT_TICKET_SORT;
+  const sortState = readSort(params.sort, TICKET_SORT_KEYS, DEFAULT_TICKET_SORT_STATE);
+  const sort = sortValue(sortState);
   const page = Math.max(1, parseInt(params.page || "1") || 1);
   const pageSize = parsePageSize(params.per, PAGE_SIZE);
   const skip = (page - 1) * pageSize;
@@ -67,6 +69,14 @@ export default async function StoreTicketsPage({ searchParams }: { searchParams:
     }),
     db.ticket.count({ where }),
   ]);
+  // Every filter but the progress, for the dropdown's counts.
+  const baseWhere = storeTicketWhere({ storeIds: ids, status: "all", query, technicianId: tech, type });
+  const [byStatus, unassigned, claims] = await Promise.all([
+    db.ticket.groupBy({ by: ["status"], where: baseWhere, _count: { _all: true } }),
+    db.ticket.count({ where: { AND: [baseWhere, { technician_id: null }] } }),
+    db.ticket.count({ where: { AND: [baseWhere, { ticket_type: "warranty_claim" }] } }),
+  ]);
+  const progressOptions = ticketProgressOptions(statusCounts(byStatus), { unassigned, warrantyClaim: claims });
   const pages = Math.ceil(total / pageSize);
 
   const query_ = (over: Partial<Record<keyof Search, string | number | undefined>>) => {
@@ -89,24 +99,15 @@ export default async function StoreTicketsPage({ searchParams }: { searchParams:
     return `/toko/tickets${s ? `?${s}` : ""}`;
   };
 
-  const sortHeader = (label: string, asc: string, desc: string) => {
-    const active = sort === asc || sort === desc;
-    const next = sort === asc ? desc : asc;
-    return (
-      <Link href={href({ sort: next, page: undefined })} className="inline-flex items-center gap-1 rounded-sm text-inherit outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50">
-        {label}
-        {active ? (sort === asc ? " ↑" : " ↓") : <span className="opacity-30"> ↕</span>}
-      </Link>
-    );
-  };
 
   type Row = (typeof tickets)[number];
   const columns: DataTableColumn<Row>[] = [
-    { key: "code", header: sortHeader("Kode", "code_asc", "code_desc"), mobileLabel: "Kode", mobile: "title", cell: (t) => <RecencyCode ticket={t} now={now} /> },
-    { key: "type", header: "Jenis", cell: (t) => TICKET_TYPE_LABELS[t.ticket_type], className: "hidden whitespace-nowrap xl:table-cell" },
+    { key: "code", header: "Kode", sortKey: "code", mobile: "title", cell: (t) => <RecencyCode ticket={t} now={now} /> },
+    { key: "type", header: "Jenis", sortKey: "type", cell: (t) => TICKET_TYPE_LABELS[t.ticket_type], className: "hidden whitespace-nowrap xl:table-cell" },
     {
       key: "unit",
       header: "Customer / unit",
+      sortKey: "customer",
       cell: (t) => (
         <span className="flex min-w-0 max-w-md flex-col">
           <span className="font-medium">{ticketPartyName(t)}</span>
@@ -118,20 +119,22 @@ export default async function StoreTicketsPage({ searchParams }: { searchParams:
     {
       key: "technician",
       header: "Teknisi",
+      sortKey: "technician",
       cell: (t) => t.technician?.name ?? <span className="text-sm font-medium text-destructive">Belum ada</span>,
       className: "whitespace-nowrap text-muted-foreground",
     },
     {
       key: "status",
-      header: sortHeader("Status", "status_asc", "status_desc"),
-      mobileLabel: "Status",
+      header: "Status",
+      sortKey: "status",
       mobile: "badge",
       cell: (t) => <StatusBadge {...ticketBadgeChoice(t.status, t.rma_case?.status)} hasTechnician={Boolean(t.technician_id)} size="sm" />,
     },
     {
       key: "date",
-      header: sortHeader("Update terakhir", "updated_asc", "updated_desc"),
-      mobileLabel: "Update terakhir",
+      header: "Update terakhir",
+      sortKey: "updated",
+      sortFirst: "desc",
       className: "whitespace-nowrap text-muted-foreground",
       cell: (t) => {
         const last = t.status_logs[0]?.created_at ?? t.updated_at;
@@ -146,11 +149,6 @@ export default async function StoreTicketsPage({ searchParams }: { searchParams:
   ];
 
   const exportQs = query_({ page: undefined, per: undefined });
-  const chips = ADMIN_TICKET_FILTERS.map(({ key, label }) => ({
-    key,
-    label,
-    href: href({ status: key === "all" ? undefined : key, page: undefined }),
-  }));
 
   return (
     <div data-slot="store-tickets" className="flex flex-col gap-5">
@@ -175,10 +173,10 @@ export default async function StoreTicketsPage({ searchParams }: { searchParams:
 
       <div className="flex flex-col gap-3">
         <FilterBar action="/toko/tickets">
-          {status !== "all" && <input type="hidden" name="status" value={status} />}
           {sort !== DEFAULT_TICKET_SORT && <input type="hidden" name="sort" value={sort} />}
           {pageSize !== PAGE_SIZE && <input type="hidden" name="per" value={pageSize} />}
           <FilterBarSearch label="Cari tiket" placeholder="Cari kode, customer, atau nama barang…" defaultValue={query} />
+          <ProgressSelect id="tt-progress" options={progressOptions} value={status} />
           <div className="grid grid-cols-2 gap-2 md:contents">
             <FilterBarField label="Teknisi" htmlFor="tt-tech" className="md:w-44">
               <NativeSelect id="tt-tech" name="tech" defaultValue={tech ?? ""}>
@@ -222,11 +220,11 @@ export default async function StoreTicketsPage({ searchParams }: { searchParams:
             )}
           </div>
         </FilterBar>
-        <FilterChips label="Status" chips={chips} active={status} />
       </div>
 
       <DataTable
         caption="Tiket Toko"
+        sort={{ state: sortState, href: (st) => href({ sort: sortValue(st) === DEFAULT_TICKET_SORT ? undefined : sortValue(st), page: undefined }) }}
         columns={columns}
         rows={tickets}
         getRowKey={(t) => t.id}

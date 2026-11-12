@@ -7,7 +7,7 @@ import { isCatalogConfigured } from "@/lib/catalog/hns-data";
 export const metadata = { title: "Create Ticket — HNS IT Center" };
 
 export default async function AdminCreateTicketPage() {
-  await requireRole("Administrator", "Sales", "Technician");
+  await requireRole("Administrator");
 
   const storeLocations = await db.storeLocation.findMany({ where: { is_active: true } });
   const technicians = await db.user.findMany({ where: { role: "Technician" }, select: { id: true, name: true, store_assignments: { select: { store_id: true } } } });

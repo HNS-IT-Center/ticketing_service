@@ -1,4 +1,5 @@
 import { requireRole } from "@/lib/session";
+import { urlSort } from "@/lib/table-sort";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import type { Role } from "@prisma/client";
@@ -41,9 +42,9 @@ export default async function AdminUsersPage({
 
   type ListUser = (typeof users)[number];
   const columns: DataTableColumn<ListUser>[] = [
-    { key: "name", header: "Name", cell: (u) => <span className="font-semibold">{u.name}</span>, mobile: "title" },
+    { key: "name", sortValue: (u) => u.name, header: "Name", cell: (u) => <span className="font-semibold">{u.name}</span>, mobile: "title" },
     {
-      key: "email",
+      key: "email", sortValue: (u) => u.email,
       header: "Email",
       cell: (u) => (
         <span className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-muted-foreground">
@@ -59,10 +60,10 @@ export default async function AdminUsersPage({
         </span>
       ),
     },
-    { key: "phone", header: "Phone", cell: (u) => u.phone_number, className: "text-sm text-muted-foreground" },
-    { key: "role", header: "Role", cell: (u) => <RoleBadge role={u.role} />, mobile: "badge" },
+    { key: "phone", sortValue: (u) => u.phone_number, header: "Phone", cell: (u) => u.phone_number, className: "text-sm text-muted-foreground" },
+    { key: "role", sortValue: (u) => u.role, header: "Role", cell: (u) => <RoleBadge role={u.role} />, mobile: "badge" },
     {
-      key: "active",
+      key: "active", sortValue: (u) => (u.role === "Technician" ? u._count.tickets_technician : null), sortFirst: "desc",
       header: "Active Tickets",
       cell: (u) =>
         u.role === "Technician" ? (
@@ -74,7 +75,7 @@ export default async function AdminUsersPage({
         ),
     },
     {
-      key: "joined",
+      key: "joined", sortValue: (u) => u.created_at, sortFirst: "desc",
       header: "Joined",
       cell: (u) => new Date(u.created_at).toLocaleDateString("id-ID"),
       className: "whitespace-nowrap text-sm text-muted-foreground",
@@ -129,6 +130,7 @@ export default async function AdminUsersPage({
 
       <DataTable
         caption="Users"
+        sort={urlSort("/admin/users", params)}
         columns={columns}
         rows={users}
         getRowKey={(u) => u.id}

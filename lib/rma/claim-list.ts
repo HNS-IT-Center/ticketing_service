@@ -1,4 +1,6 @@
-import type { Prisma, TicketStatus } from "@prisma/client";
+import type { Prisma, RmaStatus, TicketStatus } from "@prisma/client";
+import { readSort, type SortState } from "@/lib/table-sort";
+import { rmaStatusDisplay } from "@/lib/status-display";
 
 /**
  * The RMA desk's Klaim Garansi list — which claims it shows, what the search
@@ -6,15 +8,38 @@ import type { Prisma, TicketStatus } from "@prisma/client";
  * spreadsheet export so the file always holds what the list shows.
  */
 
+/**
+ * The status filter follows the RMA case's stage — what the list's Status
+ * column shows — not the technician's ticket status (RMA desk, 2026-11-11).
+ * "not_handed" is a claim still with the technician, which has no case yet.
+ * In the desk's working order.
+ */
 export const CLAIM_STATUS_FILTERS = [
   "all",
-  "waiting",
-  "on_progress",
-  "rma_process",
-  "done",
-  "completed",
+  "not_handed",
+  "pending_verification",
+  "on_hold",
+  "verified",
+  "submitted_to_vendor",
+  "in_vendor_process",
+  "vendor_decided",
+  "unit_received",
+  "closed",
+  "ineligible",
   "cancelled",
-] as const satisfies readonly ("all" | TicketStatus)[];
+] as const satisfies readonly ("all" | "not_handed" | RmaStatus)[];
+export type ClaimStatusFilter = (typeof CLAIM_STATUS_FILTERS)[number];
+
+export function claimStatusLabel(f: ClaimStatusFilter): string {
+  if (f === "all") return "Semua status";
+  if (f === "not_handed") return "Belum diserahkan ke RMA";
+  return rmaStatusDisplay(f).label;
+}
+
+/** The stage a claim is at, for counting the filter's options. */
+export function claimStatusOf(rmaStatus: RmaStatus | null | undefined): Exclude<ClaimStatusFilter, "all"> {
+  return rmaStatus ?? "not_handed";
+}
 
 /**
  * Whose unit the claim is for: a customer's ("Klaim User") or the shop's own
@@ -76,7 +101,7 @@ export function claimOwnerWhere(owner: ClaimOwnerFilter): Prisma.TicketWhereInpu
 /** Before handover: the queue heading this way. */
 const OPEN_BEFORE_HANDOVER: TicketStatus[] = ["waiting", "on_progress"];
 
-function isClaimStatusFilter(value: string): value is (typeof CLAIM_STATUS_FILTERS)[number] {
+export function isClaimStatusFilter(value: string): value is ClaimStatusFilter {
   return (CLAIM_STATUS_FILTERS as readonly string[]).includes(value);
 }
 
@@ -124,27 +149,37 @@ export function claimListWhere(status: string, query: string, owner: ClaimOwnerF
     ticket_type: "warranty_claim",
     AND: [
       { OR: [{ rma_case: { isNot: null } }, { status: { in: OPEN_BEFORE_HANDOVER } }] },
-      ...(isClaimStatusFilter(status) && status !== "all" ? [{ status }] : []),
+      ...(isClaimStatusFilter(status) && status !== "all"
+        ? [status === "not_handed" ? { rma_case: { is: null } } : { rma_case: { is: { status } } }]
+        : []),
       ...(search ? [search] : []),
       ...(ownership ? [ownership] : []),
     ],
   };
 }
 
-/** The list's sort keys; anything unrecognised is most recently updated first. */
-export function claimListOrderBy(sort: string): Prisma.TicketOrderByWithRelationInput {
-  switch (sort) {
-    case "updated_asc":
-      return { updated_at: "asc" };
-    case "status_asc":
-      return { status: "asc" };
-    case "status_desc":
-      return { status: "desc" };
-    case "code_asc":
-      return { ticket_code: "asc" };
-    case "code_desc":
-      return { ticket_code: "desc" };
+/** The list's sort columns, each `_asc` or `_desc`; anything unrecognised is most recently updated first. */
+export const CLAIM_SORT_KEYS = ["code", "rma", "customer", "status", "updated", "created"] as const;
+export const DEFAULT_CLAIM_SORT: SortState = { key: "updated", dir: "desc" };
+
+/**
+ * Status sorts by the RMA stage, in the order a case moves through them (the
+ * enum's), and claims not handed over yet by their ticket status after it.
+ */
+export function claimListOrderBy(sort: string): Prisma.TicketOrderByWithRelationInput | Prisma.TicketOrderByWithRelationInput[] {
+  const { key, dir } = readSort(sort, CLAIM_SORT_KEYS, DEFAULT_CLAIM_SORT);
+  switch (key) {
+    case "code":
+      return { ticket_code: dir };
+    case "rma":
+      return [{ rma_case: { rma_code: dir } }, { updated_at: "desc" }];
+    case "customer":
+      return [{ customer_name: dir }, { user: { name: dir } }];
+    case "status":
+      return [{ rma_case: { status: dir } }, { status: dir }, { updated_at: "desc" }];
+    case "created":
+      return { created_at: dir };
     default:
-      return { updated_at: "desc" };
+      return { updated_at: dir };
   }
 }

@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { pageSession } from "@/lib/page-access";
 import { logActivity } from "@/lib/activity";
 import { storesFor } from "@/lib/store-dashboard-server";
 import { pickStores } from "@/lib/store-scope-server";
@@ -15,8 +15,8 @@ import { buildXlsx, XLSX_CONTENT_TYPE } from "@/lib/xlsx";
  * rather than relying on the proxy.
  */
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session || (session.role !== "StoreSupervisor" && session.role !== "Administrator")) {
+  const session = await pageSession("page_toko_tickets");
+  if (!session) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const stores = await storesFor(session);

@@ -55,6 +55,42 @@ export function isStockCapability(v: string): v is StockCapability {
   return (STOCK_CAPABILITIES as readonly string[]).includes(v);
 }
 
+/**
+ * Which pages a group may open — one capability per page, and the sidebar
+ * shows exactly what a person may open (owner, 2026-11-11: "pakai RBAC saja").
+ * The defaults are who could open each page before this existed, so turning
+ * it on changed nobody's menu. Pages whose data belongs to the viewer — a
+ * technician's own tickets, a sales person's — are not here: they come with
+ * the role. Users, Stores and these settings stay Administrator only.
+ */
+export const PAGE_CAPABILITIES = [
+  "page_tickets_all",
+  "page_create_ticket",
+  "page_rma_dashboard",
+  "page_rma_claims",
+  "page_rma_analysis",
+  "page_toko_dashboard",
+  "page_toko_tickets",
+  "page_toko_followups",
+  "page_toko_claims",
+  "page_toko_performance",
+  "page_toko_schedule",
+  "page_toko_team",
+  "page_stock_dashboard",
+  "page_stock_builds",
+  "page_stock_parts",
+  "page_finance_vendors",
+  "page_finance_claims",
+  "page_performance",
+  "page_tech_targets",
+  "page_leaderboard",
+  "page_parts_report",
+  "page_log_ticket",
+  "page_log_rma",
+  "page_log_activity",
+] as const;
+export type PageCapability = (typeof PAGE_CAPABILITIES)[number];
+
 export const CAPABILITIES = [
   "view_cost",
   "edit_cost",
@@ -66,18 +102,23 @@ export const CAPABILITIES = [
   "manage_service_jobs",
   "edit_ticket",
   ...STOCK_CAPABILITIES,
+  ...PAGE_CAPABILITIES,
 ] as const;
 export type Capability = (typeof CAPABILITIES)[number];
 
 const SENIOR: Audience[] = ["administrator", "coordinator", "head_technician"];
 const ALL_STAFF: Audience[] = ["administrator", "coordinator", "head_technician", "technician", "sales", "rma", "store_supervisor", "stock_admin", "finance"];
 
-export type CapabilitySection = "pricing" | "ticket" | "stock";
+export type CapabilitySection = "pricing" | "ticket" | "stock" | "pages";
 export const CAPABILITY_SECTIONS: Record<CapabilitySection, { title: string; hint: string }> = {
   pricing: { title: "Harga & Data Master", hint: "Siapa yang boleh melihat dan mengubah harga service." },
   ticket: {
     title: "Tiket",
     hint: "Memperbaiki data tiket yang salah input. Setiap perubahan tercatat di Log Aktivitas beserta isi sebelumnya.",
+  },
+  pages: {
+    title: "Halaman & Menu",
+    hint: "Halaman mana yang boleh dibuka; menu di sidebar mengikuti. Membuka halaman tidak memberi hak mengubah data di dalamnya — itu tetap mengikuti aturan masing-masing. Kotak abu-abu tidak berlaku untuk kelompok itu (mis. halaman Kepala Toko terikat ke toko yang dipegangnya).",
   },
   stock: {
     title: "Stok Gudang",
@@ -85,9 +126,60 @@ export const CAPABILITY_SECTIONS: Record<CapabilitySection, { title: string; hin
   },
 };
 
+const TECHNICIANS: Audience[] = ["technician", "coordinator", "head_technician"];
+const KEPALA_TOKO: Audience[] = ["store_supervisor"];
+const page = (label: string, hint: string, defaults: Audience[], appliesTo?: Audience[]) => ({
+  label,
+  hint,
+  defaults: ["administrator" as Audience, ...defaults],
+  section: "pages" as const,
+  ...(appliesTo ? { appliesTo: ["administrator" as Audience, ...appliesTo] } : {}),
+});
+
+const PAGE_INFO: Record<PageCapability, ReturnType<typeof page>> = {
+  page_tickets_all: page(
+    "Tiket · Semua Tiket",
+    "Daftar semua tiket, detailnya, dan export Excel. Head Teknisi membuka detailnya di portal teknisi; selain itu detail tampil baca saja. Kepala Toko hanya melihat toko yang dipegangnya.",
+    ["head_technician"],
+  ),
+  page_create_ticket: page("Tiket · Buat Tiket", "Form tiket baru di portal masing-masing.", [...TECHNICIANS, "sales", "rma"], [...TECHNICIANS, "sales", "rma"]),
+  page_rma_dashboard: page("Klaim & RMA · Dashboard RMA", "Antrian case RMA dan halaman case. Tombol proses case tetap hanya untuk RMA dan Admin.", ["rma"]),
+  page_rma_claims: page("Klaim & RMA · Tiket Klaim", "Daftar klaim garansi beserta tahap RMA-nya, dan export Excel.", ["rma"]),
+  page_rma_analysis: page("Klaim & RMA · Analisa Klaim", "Klaim per brand, jenis barang dan model.", ["rma"]),
+  page_toko_dashboard: page("Toko · Dashboard Toko", "Dashboard toko yang dipegang.", KEPALA_TOKO, KEPALA_TOKO),
+  page_toko_tickets: page("Toko · Tiket Toko", "Tiket toko yang dipegang, baca saja, dan export Excel.", KEPALA_TOKO, KEPALA_TOKO),
+  page_toko_followups: page("Toko · Tindak Lanjut", "Tiket yang perlu ditindaklanjuti di toko yang dipegang.", KEPALA_TOKO, KEPALA_TOKO),
+  page_toko_claims: page("Toko · Klaim Garansi", "Klaim garansi toko yang dipegang.", KEPALA_TOKO, KEPALA_TOKO),
+  page_toko_performance: page("Toko · Kinerja Teknisi", "Kinerja teknisi toko yang dipegang.", KEPALA_TOKO, KEPALA_TOKO),
+  page_toko_schedule: page("Toko · Jadwal Teknisi", "Jadwal teknisi toko yang dipegang.", KEPALA_TOKO, KEPALA_TOKO),
+  page_toko_team: page("Toko · Daftar User", "Teknisi dan kepala toko di toko yang dipegang.", KEPALA_TOKO, KEPALA_TOKO),
+  page_stock_dashboard: page("Stok · Dashboard Stok", "Ringkasan rakitan PC dan part keluar.", ["stock_admin"]),
+  page_stock_builds: page("Stok · Rakitan PC", "Semua rakitan PC per tahap, dengan quotation dan foto.", ["stock_admin"]),
+  page_stock_parts: page("Stok · Part Keluar", "Part yang keluar dari service, upgrade dan rakitan, dengan foto, dan export Excel.", ["stock_admin"]),
+  page_finance_vendors: page("Keuangan · Kinerja Vendor Klaim", "Lama tiap vendor memproses klaim stok toko.", ["finance"]),
+  page_finance_claims: page("Keuangan · Klaim Stok Toko", "Daftar klaim stok toko dan export Excel.", ["finance"]),
+  page_performance: page("Kinerja · Performance", "Laporan kinerja teknisi per periode.", []),
+  page_tech_targets: page("Kinerja · Target Teknisi", "Target dan capaian teknisi per bulan. Mengubah target tetap hanya Admin.", []),
+  page_leaderboard: page("Kinerja · Leaderboard", "Peringkat teknisi dan toko.", TECHNICIANS),
+  page_parts_report: page("Kinerja · Laporan Part", "Part yang dipakai, yang sering dipakai, dan yang di luar katalog.", []),
+  page_log_ticket: page("Log · Tiket", "Riwayat perubahan status tiket.", []),
+  page_log_rma: page("Log · RMA", "Setiap langkah case RMA.", ["rma"]),
+  page_log_activity: page("Log · Aktivitas", "Siapa melakukan apa: login, perubahan data, export.", []),
+};
+
 export const CAPABILITY_INFO: Record<
   Capability,
-  { label: string; hint: string; defaults: Audience[]; section?: CapabilitySection }
+  {
+    label: string;
+    hint: string;
+    defaults: Audience[];
+    section?: CapabilitySection;
+    /**
+     * The only groups the setting can apply to; for the rest it is always off
+     * and its box is disabled. For pages that only make sense for one role.
+     */
+    appliesTo?: Audience[];
+  }
 > = {
   view_cost: {
     label: "Lihat harga modal",
@@ -158,6 +250,7 @@ export const CAPABILITY_INFO: Record<
     defaults: ["administrator"],
     section: "stock",
   },
+  ...PAGE_INFO,
 };
 
 export function isCapability(v: string): v is Capability {
@@ -203,8 +296,15 @@ export const ruleKey = (capability: Capability, audience: Audience) => `${capabi
 /** Whether one group may, given the owner's changes over the defaults. */
 export function audienceAllowed(capability: Capability, audience: Audience, overrides: AccessOverrides): boolean {
   if (audience === "administrator") return true;
+  if (!appliesTo(capability, audience)) return false;
   const changed = overrides.get(ruleKey(capability, audience));
   return changed ?? CAPABILITY_INFO[capability].defaults.includes(audience);
+}
+
+/** Whether a setting can be switched on for a group at all (see `appliesTo`). */
+export function appliesTo(capability: Capability, audience: Audience): boolean {
+  const only = CAPABILITY_INFO[capability].appliesTo;
+  return !only || only.includes(audience);
 }
 
 /** Whether a user may: any of their groups being allowed is enough. */

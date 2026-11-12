@@ -1,5 +1,5 @@
+import { requirePage } from "@/lib/page-access";
 import Link from "next/link";
-import { requireRole } from "@/lib/session";
 import { getRmaQueue, RMA_STAGE_SLA, VENDOR_OVERDUE_DAYS } from "@/lib/rma/queue";
 import AttentionCard from "./AttentionCard";
 import { rmaDecisionLabel } from "@/lib/rma/decision";
@@ -70,7 +70,7 @@ const CARD_TITLE = "text-base font-semibold text-foreground";
 const CARD_HINT = "mt-0.5 text-[0.8125rem] text-muted-foreground";
 
 export default async function RmaDashboardPage() {
-  await requireRole("RMA", "Administrator");
+  await requirePage("page_rma_dashboard");
 
   // Loaded in lib/rma/queue.ts so every clock-derived number comes from a
   // single instant, outside any component render.
@@ -410,7 +410,7 @@ export default async function RmaDashboardPage() {
       {/* Aktivitas pindah ke halaman sendiri: dashboard ini untuk bertindak,
           bukan untuk membaca riwayat. */}
       <Link
-        href="/rma/logs"
+        href="/logs?jenis=rma"
         className="flex items-center justify-between gap-3 rounded-xl border border-border bg-card p-4 text-inherit shadow-xs outline-none hover:border-primary/40 focus-visible:ring-3 focus-visible:ring-ring/50 md:p-5"
       >
         <span className="flex min-w-0 items-center gap-2.5">

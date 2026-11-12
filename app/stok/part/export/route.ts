@@ -1,5 +1,5 @@
-import { db } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { pageSession } from "@/lib/page-access";
+import { scopedStoreIds, storeScopeFor } from "@/lib/store-scope-server";
 import { logActivity } from "@/lib/activity";
 import { loadOutgoingParts } from "@/lib/stock-server";
 import { OUTGOING_KIND_LABELS } from "@/lib/stock";
@@ -12,14 +12,15 @@ import { buildXlsx, XLSX_CONTENT_TYPE } from "@/lib/xlsx";
  * rather than relying on the proxy.
  */
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session || (session.role !== "StockAdmin" && session.role !== "Administrator")) {
+  const session = await pageSession("page_stock_parts");
+  if (!session) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
   const search = Object.fromEntries(new URL(request.url).searchParams) as OutgoingSearch;
-  const stores = await db.storeLocation.findMany({ where: { is_active: true }, select: { id: true } });
-  const p = readOutgoingSearch(search, stores.map((s) => s.id), Date.now());
-  const rows = await loadOutgoingParts({ start: p.period.start, end: p.period.end, storeId: p.storeId, kind: p.kind, q: p.q, uncoded: p.uncoded });
+  // The file holds what the page shows: a kepala toko's stores, or every store.
+  const scope = await storeScopeFor(session);
+  const p = readOutgoingSearch(search, scope.stores.map((s) => s.id), Date.now());
+  const rows = await loadOutgoingParts({ start: p.period.start, end: p.period.end, storeIds: scopedStoreIds(scope, p.storeId), kind: p.kind, q: p.q, uncoded: p.uncoded });
 
   const file = buildXlsx({
     name: "Part Keluar",

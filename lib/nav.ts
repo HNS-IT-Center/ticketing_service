@@ -35,7 +35,8 @@ export type NavIcon =
   | "users"
   | "truck"
   | "settings"
-  | "database";
+  | "database"
+  | "barcode";
 
 export type NavItem = {
   href: string;
@@ -76,6 +77,8 @@ const GROUPS: Group[] = [
     defaultOpen: true,
     entries: [
       { label: "Semua Tiket", icon: "ticket", href: "/admin/tickets", rule: { cap: "page_tickets_all" } },
+      // Units typed at intake, waiting for their Accurate item (owner, 2026-11-12).
+      { label: "Lengkapi Kode Barang", icon: "barcode", href: "/admin/tickets/kode-barang", rule: { cap: "edit_ticket" } },
       {
         label: "Tiket Saya",
         icon: "ticket",
@@ -165,7 +168,6 @@ const GROUPS: Group[] = [
     icon: "database",
     entries: [
       { label: "Stores", icon: "store", href: "/admin/stores", rule: { roles: ["Administrator"] } },
-      { label: "Users", icon: "users", href: "/admin/users", rule: { roles: ["Administrator"] } },
       {
         label: "Daftar Jasa",
         icon: "list",
@@ -183,7 +185,10 @@ const GROUPS: Group[] = [
   },
   {
     key: "settings",
-    entries: [{ label: "Hak Akses", icon: "settings", href: "/admin/settings/access", rule: { roles: ["Administrator"] } }],
+    // Accounts and what each role may do: one page, two tabs (owner, 2026-11-12).
+    entries: [
+      { label: "Pengguna & Akses", icon: "users", href: "/admin/users", also: ["/admin/settings/access"], rule: { roles: ["Administrator"] } },
+    ],
   },
 ];
 

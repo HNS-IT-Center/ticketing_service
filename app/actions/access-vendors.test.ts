@@ -17,7 +17,7 @@ vi.mock("@/lib/session", () => ({
 }));
 
 const { db } = await import("@/lib/db");
-const { saveAccessRulesAction } = await import("./access");
+const { saveAccessRulesAction, saveAudienceAccessAction } = await import("./access");
 const { createVendorAction, updateVendorAction } = await import("./vendors");
 const access = await import("@/lib/access");
 
@@ -120,6 +120,45 @@ describe("saveAccessRulesAction", () => {
   it("only an administrator may save", async () => {
     as("head", "Technician");
     await expect(saveAccessRulesAction(matrix(defaults()))).rejects.toThrow();
+  });
+});
+
+describe("saveAudienceAccessAction — one role from its edit page", () => {
+  const roleForm = (caps: string[]) => {
+    const fd = new FormData();
+    for (const c of caps) fd.set(c, "on");
+    return fd;
+  };
+  const defaultsOf = (a: string) => access.CAPABILITIES.filter((c) => access.CAPABILITY_INFO[c].defaults.includes(a as never));
+
+  it("stores only this role's changes and leaves other roles alone", async () => {
+    as("admin", "Administrator");
+    const other = defaults();
+    other.add("view_cost:sales");
+    await saveAccessRulesAction(matrix(other));
+    expect(await saveAudienceAccessAction("technician", roleForm([...defaultsOf("technician"), "page_rma_claims"]))).toEqual({ success: true });
+    const rows = await db.accessRule.findMany({ select: { capability: true, audience: true, allowed: true }, orderBy: { audience: "asc" } });
+    expect(rows).toEqual([
+      { capability: "view_cost", audience: "sales", allowed: true },
+      { capability: "page_rma_claims", audience: "technician", allowed: true },
+    ]);
+    // Back to the defaults removes the row.
+    await saveAudienceAccessAction("technician", roleForm(defaultsOf("technician")));
+    expect(await db.accessRule.count({ where: { audience: "technician" } })).toBe(0);
+    await saveAccessRulesAction(matrix(defaults()));
+  });
+
+  it("never stores a page that cannot apply to the role, nor edits the administrator", async () => {
+    as("admin", "Administrator");
+    await saveAudienceAccessAction("technician", roleForm([...defaultsOf("technician"), "page_toko_dashboard"]));
+    expect(await db.accessRule.count({ where: { audience: "technician" } })).toBe(0);
+    expect(await saveAudienceAccessAction("administrator", roleForm([]))).toMatchObject({ error: expect.any(String) });
+    expect(await saveAudienceAccessAction("nobody", roleForm([]))).toMatchObject({ error: expect.any(String) });
+  });
+
+  it("only an administrator may save", async () => {
+    as("head", "Technician");
+    await expect(saveAudienceAccessAction("sales", roleForm([]))).rejects.toThrow();
   });
 });
 

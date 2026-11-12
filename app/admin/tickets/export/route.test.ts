@@ -5,8 +5,16 @@ vi.mock("server-only", () => ({}));
 let session: { userId: string; role: string; name: string } | null = null;
 vi.mock("@/lib/session", () => ({ getSession: async () => session }));
 
+// The permission check reads the access settings; under test, the defaults.
+vi.mock("@/lib/access-server", async () => {
+  const { audiencesOf, isAllowed } = await import("@/lib/access");
+  return {
+    accessFor: async () => ({ can: (c: never) => isAllowed(c, audiencesOf({ role: session?.role ?? "" }), new Map()) }),
+  };
+});
+
 const findMany = vi.fn<(args: unknown) => Promise<unknown[]>>(async () => []);
-vi.mock("@/lib/db", () => ({ db: { ticket: { findMany: (args: unknown) => findMany(args) } } }));
+vi.mock("@/lib/db", () => ({ db: { ticket: { findMany: (args: unknown) => findMany(args) }, storeLocation: { findMany: async () => [] } } }));
 
 import { GET } from "./route";
 import { ticketSearchWhere } from "@/lib/ticket-list-filter";
@@ -19,7 +27,7 @@ afterEach(() => {
 const get = (qs = "") => GET(new Request(`http://localhost/admin/tickets/export${qs}`));
 
 describe("GET /admin/tickets/export", () => {
-  it("refuses anyone who is not an administrator, before reading tickets", async () => {
+  it("refuses anyone not allowed Semua Tiket (by default only administrators), before reading tickets", async () => {
     expect((await get()).status).toBe(403);
     for (const role of ["Sales", "Technician", "RMA", "Customer", "Pending"]) {
       session = { userId: "u", role, name: "x" };

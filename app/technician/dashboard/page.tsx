@@ -1,4 +1,6 @@
 import { requireRole } from "@/lib/session";
+import { urlSort } from "@/lib/table-sort";
+import { TICKET_STATUSES } from "@/lib/ticket-list-filter";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
@@ -25,7 +27,8 @@ function getTicketPoints(type: string, deviceType?: string | null): number {
   return 2;
 }
 
-export default async function TechnicianDashboard() {
+export default async function TechnicianDashboard({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const params = await searchParams;
   const session = await requireRole("Technician");
 
   // ── STEP 1: Fire all queries that don't depend on each other simultaneously.
@@ -119,22 +122,22 @@ export default async function TechnicianDashboard() {
 
   type ActiveTicket = (typeof activeTickets)[number];
   const activeColumns: DataTableColumn<ActiveTicket>[] = [
-    { key: "code", header: "Ticket Code", cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>, mobile: "title" },
-    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
-    { key: "customer", header: "Customer", cell: (t) => ticketPartyName(t) || "Guest" },
+    { key: "code", sortValue: (t) => t.ticket_code, header: "Ticket Code", cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>, mobile: "title" },
+    { key: "type", sortValue: (t) => t.ticket_type, header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
+    { key: "customer", sortValue: (t) => ticketPartyName(t), header: "Customer", cell: (t) => ticketPartyName(t) || "Guest" },
     ...(isCoordinator
       ? [
           {
-            key: "technician",
+            key: "technician", sortValue: (t: ActiveTicket) => t.technician?.name,
             header: "Technician",
             cell: (t: ActiveTicket) => t.technician?.name || <span className="text-muted-foreground">Unassigned</span>,
             className: "text-muted-foreground",
           },
         ]
       : []),
-    { key: "points", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type)} /> },
+    { key: "points", sortValue: (t) => getTicketPoints(t.ticket_type, t.device_type), sortFirst: "desc", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type)} /> },
     {
-      key: "status",
+      key: "status", sortValue: (t) => TICKET_STATUSES.indexOf(t.status),
       header: "Status",
       cell: (t) => <StatusBadge kind="ticket" status={t.status} hasTechnician={Boolean(t.technician_id)} size="sm" />,
       mobile: "badge",
@@ -188,6 +191,7 @@ export default async function TechnicianDashboard() {
         </h2>
         <DataTable
           caption={isCoordinator ? "Store Active Tickets" : "My Active Tickets"}
+          sort={urlSort("/technician/dashboard", params)}
           columns={activeColumns}
           rows={activeTickets}
           getRowKey={(t) => t.id}

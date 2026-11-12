@@ -1,5 +1,5 @@
 import type { ServicePart } from "@prisma/client";
-import { getSession } from "@/lib/session";
+import { pageSession } from "@/lib/page-access";
 import { logActivity } from "@/lib/activity";
 import { toCsv } from "@/lib/csv";
 import { servicePartLabel } from "@/lib/service-parts";
@@ -13,8 +13,8 @@ function wib(d: Date): string {
 
 /** GET /admin/reports/parts/export?month=YYYY-MM&store=… — every row, as CSV. */
 export async function GET(request: Request) {
-  const session = await getSession();
-  if (!session || session.role !== "Administrator") {
+  const session = await pageSession("page_parts_report");
+  if (!session) {
     return Response.json({ error: "Forbidden" }, { status: 403 });
   }
 

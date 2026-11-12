@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { notesToPlainText } from "./plain-text";
+import { plainTextToNotesHtml } from "./plain-text";
 
 describe("notesToPlainText", () => {
   it("leaves plain intake text as it was", () => {
@@ -19,5 +20,18 @@ describe("notesToPlainText", () => {
   it("is empty for nothing", () => {
     expect(notesToPlainText(null)).toBe("");
     expect(notesToPlainText("<p></p>")).toBe("");
+  });
+});
+
+describe("plainTextToNotesHtml", () => {
+  it("escapes what was typed and keeps the lines", () => {
+    expect(plainTextToNotesHtml("Layar <b>mati</b> & bergaris\nsetelah jatuh\n\nCharger ikut")).toBe(
+      "<p>Layar &lt;b&gt;mati&lt;/b&gt; &amp; bergaris<br>setelah jatuh</p><p>Charger ikut</p>",
+    );
+  });
+
+  it("reads back to the same text", () => {
+    const text = "Layar mati\nsetelah jatuh\nCharger <ikut>";
+    expect(notesToPlainText(plainTextToNotesHtml(text))).toBe(text);
   });
 });

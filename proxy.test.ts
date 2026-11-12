@@ -123,7 +123,7 @@ describe("/unauthorized is exempt from every guard", () => {
 
   it("serves it even though /admin would be refused for the same session", async () => {
     // Same session, two paths: the guard fires on one and not the other.
-    expect((await visit("/admin/dashboard", "RMA")).kind).toBe("redirect");
+    expect((await visit("/technician/dashboard", "RMA")).kind).toBe("redirect");
     expect(await visit("/unauthorized", "RMA")).toEqual({ kind: "next" });
   });
 
@@ -150,11 +150,13 @@ describe("unauthenticated access", () => {
 
 describe("role × route matrix", () => {
   const PORTALS = [
-    { path: "/admin/dashboard", allowed: ["Administrator"] },
+    // Since the RBAC change (2026-11-11) the proxy lets any staff member into
+    // the shared prefixes; each page checks its own permission (requirePage).
+    { path: "/admin/dashboard", allowed: ["Administrator", "Technician", "Sales", "RMA"] },
     { path: "/technician/dashboard", allowed: ["Technician"] },
     { path: "/sales/dashboard", allowed: ["Sales"] },
-    { path: "/rma/dashboard", allowed: ["RMA", "Administrator"] },
-    { path: "/rma/cases/abc123", allowed: ["RMA", "Administrator"] },
+    { path: "/rma/dashboard", allowed: ["Administrator", "Technician", "Sales", "RMA"] },
+    { path: "/rma/cases/abc123", allowed: ["Administrator", "Technician", "Sales", "RMA"] },
   ];
 
   for (const portal of PORTALS) {
@@ -186,7 +188,7 @@ describe("RMA portal specifically", () => {
     expect(await visit("/rma/dashboard", "Administrator")).toEqual({ kind: "next" });
   });
 
-  it.each(["Technician", "Sales", "Customer"])("keeps %s out", async (role) => {
+  it.each(["Customer", "Pending"])("keeps %s out", async (role) => {
     const result = await visit("/rma/dashboard", role);
     expect(result.kind).toBe("redirect");
   });

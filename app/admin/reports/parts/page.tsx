@@ -1,7 +1,8 @@
+import { requirePage } from "@/lib/page-access";
+import { urlSort } from "@/lib/table-sort";
 import Link from "next/link";
 import type { ServicePart } from "@prisma/client";
 import { Download, Package, TrendingUp, PackageX, AlertTriangle } from "lucide-react";
-import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { cn, formatDateTime } from "@/lib/utils";
 import { TONE_CLASSES } from "@/lib/status-display";
@@ -70,7 +71,7 @@ export default async function PartsReportPage({
 }: {
   searchParams: Promise<{ month?: string; store?: string }>;
 }) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("page_parts_report");
   const params = await searchParams;
   const month = resolveReportMonth(params.month);
   const storeId = params.store || null;
@@ -103,13 +104,13 @@ export default async function PartsReportPage({
   // On a phone the card title is truncated, so it carries the short SKU or
   // part kind; the item name, which runs long, is a full line underneath.
   const demandColumns: DataTableColumn<DemandRow>[] = [
-    { key: "name", header: "Barang", className: "min-w-36 whitespace-normal", cell: (d) => <span className="font-semibold">{d.name}</span> },
-    { key: "sku", header: "SKU", mobile: "title", className: "whitespace-nowrap", cell: (d) => d.sku },
-    { key: "uses", header: "Dipakai", cell: (d) => <span className="font-bold">{d.uses}×</span> },
-    { key: "quantity", header: "Unit", cell: (d) => d.quantity },
-    { key: "months", header: "Bulan", cell: (d) => `${d.months}/${DEMAND_MONTHS}` },
+    { key: "name", sortValue: (d) => d.name, header: "Barang", className: "min-w-36 whitespace-normal", cell: (d) => <span className="font-semibold">{d.name}</span> },
+    { key: "sku", sortValue: (d) => d.sku, header: "SKU", mobile: "title", className: "whitespace-nowrap", cell: (d) => d.sku },
+    { key: "uses", sortValue: (d) => d.uses, sortFirst: "desc", header: "Dipakai", cell: (d) => <span className="font-bold">{d.uses}×</span> },
+    { key: "quantity", sortValue: (d) => d.quantity, sortFirst: "desc", header: "Unit", cell: (d) => d.quantity },
+    { key: "months", sortValue: (d) => d.months, sortFirst: "desc", header: "Bulan", cell: (d) => `${d.months}/${DEMAND_MONTHS}` },
     {
-      key: "stock",
+      key: "stock", sortValue: (d) => { const s = stock.get(d.sku); return s ? (storeName && s.here !== null ? s.here : s.total) : null; }, sortFirst: "desc",
       header: "Stok sekarang",
       cell: (d) => {
         const s = stock.get(d.sku);
@@ -142,12 +143,12 @@ export default async function PartsReportPage({
   ];
 
   const outsideColumns: DataTableColumn<OutsideRow>[] = [
-    { key: "part", header: "Jenis", mobile: "title", cell: (o) => servicePartLabel(o.part as ServicePart) },
-    { key: "name", header: "Nama yang diketik", className: "min-w-36 whitespace-normal", cell: (o) => <span className="font-semibold">{o.name}</span> },
-    { key: "uses", header: "Dipakai", cell: (o) => <span className="font-bold">{o.uses}×</span> },
-    { key: "quantity", header: "Unit", cell: (o) => o.quantity },
+    { key: "part", sortValue: (o) => servicePartLabel(o.part as ServicePart), header: "Jenis", mobile: "title", cell: (o) => servicePartLabel(o.part as ServicePart) },
+    { key: "name", sortValue: (o) => o.name, header: "Nama yang diketik", className: "min-w-36 whitespace-normal", cell: (o) => <span className="font-semibold">{o.name}</span> },
+    { key: "uses", sortValue: (o) => o.uses, sortFirst: "desc", header: "Dipakai", cell: (o) => <span className="font-bold">{o.uses}×</span> },
+    { key: "quantity", sortValue: (o) => o.quantity, sortFirst: "desc", header: "Unit", cell: (o) => o.quantity },
     {
-      key: "tickets",
+      key: "tickets", sortValue: (o) => o.tickets.length, sortFirst: "desc",
       header: "Tiket",
       cell: (o) => (
         <div className="flex flex-wrap gap-x-2 gap-y-1">
@@ -163,37 +164,37 @@ export default async function PartsReportPage({
 
   type PartGroup = (typeof summary.byPart)[number];
   const byPartColumns: DataTableColumn<PartGroup>[] = [
-    { key: "part", header: "Jenis", mobile: "title", cell: (p) => servicePartLabel(p.part as ServicePart) },
-    { key: "quantity", header: "Jumlah", cell: (p) => <span className="font-bold">{p.quantity}</span> },
-    { key: "entries", header: "Catatan", cell: (p) => p.entries },
+    { key: "part", sortValue: (p) => servicePartLabel(p.part as ServicePart), header: "Jenis", mobile: "title", cell: (p) => servicePartLabel(p.part as ServicePart) },
+    { key: "quantity", sortValue: (p) => p.quantity, sortFirst: "desc", header: "Jumlah", cell: (p) => <span className="font-bold">{p.quantity}</span> },
+    { key: "entries", sortValue: (p) => p.entries, sortFirst: "desc", header: "Catatan", cell: (p) => p.entries },
   ];
 
   type TechGroup = (typeof summary.byTechnician)[number];
   const byTechColumns: DataTableColumn<TechGroup>[] = [
-    { key: "name", header: "Teknisi", mobile: "title", cell: (t) => t.name },
-    { key: "quantity", header: "Jumlah", cell: (t) => <span className="font-bold">{t.quantity}</span> },
-    { key: "entries", header: "Catatan", cell: (t) => t.entries },
+    { key: "name", sortValue: (t) => t.name, header: "Teknisi", mobile: "title", cell: (t) => t.name },
+    { key: "quantity", sortValue: (t) => t.quantity, sortFirst: "desc", header: "Jumlah", cell: (t) => <span className="font-bold">{t.quantity}</span> },
+    { key: "entries", sortValue: (t) => t.entries, sortFirst: "desc", header: "Catatan", cell: (t) => t.entries },
   ];
 
   type ItemGroup = (typeof summary.byItem)[number];
   const byItemColumns: DataTableColumn<ItemGroup>[] = [
-    { key: "label", header: "Barang", className: "min-w-36 whitespace-normal", cell: (i) => <span className="font-semibold">{i.label}</span> },
-    { key: "sku", header: "SKU", mobile: "title", className: "whitespace-nowrap", cell: (i) => i.sku ?? <span className="text-muted-foreground">manual</span> },
-    { key: "category", header: "Kategori Accurate", cell: (i) => i.category ?? "—" },
-    { key: "quantity", header: "Jumlah", cell: (i) => <span className="font-bold">{i.quantity}</span> },
-    { key: "tickets", header: "Tiket", cell: (i) => i.tickets },
+    { key: "label", sortValue: (i) => i.label, header: "Barang", className: "min-w-36 whitespace-normal", cell: (i) => <span className="font-semibold">{i.label}</span> },
+    { key: "sku", sortValue: (i) => i.sku, header: "SKU", mobile: "title", className: "whitespace-nowrap", cell: (i) => i.sku ?? <span className="text-muted-foreground">manual</span> },
+    { key: "category", sortValue: (i) => i.category, header: "Kategori Accurate", cell: (i) => i.category ?? "—" },
+    { key: "quantity", sortValue: (i) => i.quantity, sortFirst: "desc", header: "Jumlah", cell: (i) => <span className="font-bold">{i.quantity}</span> },
+    { key: "tickets", sortValue: (i) => i.tickets, sortFirst: "desc", header: "Tiket", cell: (i) => i.tickets },
   ];
 
   type DetailRow = (typeof data)[number];
   const detailColumns: DataTableColumn<DetailRow>[] = [
-    { key: "ticket", header: "Tiket", mobile: "title", cell: (r) => <span className="font-semibold whitespace-nowrap text-primary">{r.ticketCode}</span> },
-    { key: "date", header: "Tanggal", className: "whitespace-nowrap", cell: (r) => <span className="text-[0.8125rem]">{formatDateTime(r.createdAt)}</span> },
-    { key: "store", header: "Toko", className: "whitespace-normal", cell: (r) => r.storeName ?? "—" },
-    { key: "technician", header: "Teknisi", className: "whitespace-normal", cell: (r) => r.technicianName },
-    { key: "part", header: "Jenis", cell: (r) => servicePartLabel(r.part as ServicePart) },
-    { key: "item", header: "Barang", className: "min-w-36 whitespace-normal", cell: (r) => r.itemName ?? "—" },
-    { key: "sku", header: "SKU", className: "whitespace-nowrap", cell: (r) => r.sku ?? "—" },
-    { key: "quantity", header: "Jml", mobile: "badge", cell: (r) => <span className="font-bold">{r.quantity}</span> },
+    { key: "ticket", sortValue: (r) => r.ticketCode, header: "Tiket", mobile: "title", cell: (r) => <span className="font-semibold whitespace-nowrap text-primary">{r.ticketCode}</span> },
+    { key: "date", sortValue: (r) => r.createdAt, sortFirst: "desc", header: "Tanggal", className: "whitespace-nowrap", cell: (r) => <span className="text-[0.8125rem]">{formatDateTime(r.createdAt)}</span> },
+    { key: "store", sortValue: (r) => r.storeName, header: "Toko", className: "whitespace-normal", cell: (r) => r.storeName ?? "—" },
+    { key: "technician", sortValue: (r) => r.technicianName, header: "Teknisi", className: "whitespace-normal", cell: (r) => r.technicianName },
+    { key: "part", sortValue: (r) => servicePartLabel(r.part as ServicePart), header: "Jenis", cell: (r) => servicePartLabel(r.part as ServicePart) },
+    { key: "item", sortValue: (r) => r.itemName, header: "Barang", className: "min-w-36 whitespace-normal", cell: (r) => r.itemName ?? "—" },
+    { key: "sku", sortValue: (r) => r.sku, header: "SKU", className: "whitespace-nowrap", cell: (r) => r.sku ?? "—" },
+    { key: "quantity", sortValue: (r) => r.quantity, sortFirst: "desc", header: "Jml", mobile: "badge", cell: (r) => <span className="font-bold">{r.quantity}</span> },
   ];
 
   return (
@@ -259,6 +260,7 @@ export default async function PartsReportPage({
         </div>
         <DataTable
           caption="Barang katalog yang sering dipakai"
+          sort={urlSort("/admin/reports/parts", params, "sort_demand")}
           columns={demandColumns}
           rows={demand}
           getRowKey={(d) => d.sku}
@@ -279,6 +281,7 @@ export default async function PartsReportPage({
         </div>
         <DataTable
           caption="Part di luar katalog Accurate"
+          sort={urlSort("/admin/reports/parts", params, "sort_outside")}
           columns={outsideColumns}
           rows={outside}
           getRowKey={(o) => `${o.part}:${o.name}`}
@@ -293,23 +296,24 @@ export default async function PartsReportPage({
           <div className="grid gap-6 md:grid-cols-2">
             <section className="flex min-w-0 flex-col gap-3">
               <h2 className={sectionTitle}>Per jenis part</h2>
-              <DataTable caption="Per jenis part" columns={byPartColumns} rows={summary.byPart} getRowKey={(p) => p.part} />
+              <DataTable caption="Per jenis part" sort={urlSort("/admin/reports/parts", params, "sort_part")} columns={byPartColumns} rows={summary.byPart} getRowKey={(p) => p.part} />
             </section>
             <section className="flex min-w-0 flex-col gap-3">
               <h2 className={sectionTitle}>Per teknisi</h2>
-              <DataTable caption="Per teknisi" columns={byTechColumns} rows={summary.byTechnician} getRowKey={(t) => t.name} />
+              <DataTable caption="Per teknisi" sort={urlSort("/admin/reports/parts", params, "sort_tech")} columns={byTechColumns} rows={summary.byTechnician} getRowKey={(t) => t.name} />
             </section>
           </div>
 
           <section className="flex flex-col gap-3">
             <h2 className={sectionTitle}>Per barang</h2>
-            <DataTable caption="Per barang" columns={byItemColumns} rows={summary.byItem} getRowKey={(i) => i.key} />
+            <DataTable caption="Per barang" sort={urlSort("/admin/reports/parts", params, "sort_item")} columns={byItemColumns} rows={summary.byItem} getRowKey={(i) => i.key} />
           </section>
 
           <section className="flex flex-col gap-3">
             <h2 className={sectionTitle}>Rincian</h2>
             <DataTable
               caption="Rincian part yang dicatat"
+              sort={urlSort("/admin/reports/parts", params, "sort_detail")}
               columns={detailColumns}
               rows={data.slice(0, DETAIL_LIMIT)}
               getRowKey={(r) => r.id}

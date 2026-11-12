@@ -30,12 +30,12 @@ export type BuildRow = {
  * it stands — read only. Photos are the components photographed at intake
  * and the technician's photo of the finished build.
  */
-export async function loadBuilds(storeId: string | undefined, now: number): Promise<BuildRow[]> {
+export async function loadBuilds(storeIds: string[] | undefined, now: number): Promise<BuildRow[]> {
   const tickets = await db.ticket.findMany({
     where: {
       ticket_type: "pc_build",
       status: { notIn: ["cancelled", "rejected"] },
-      ...(storeId ? { store_location_id: storeId } : {}),
+      ...(storeIds ? { store_location_id: { in: storeIds } } : {}),
     },
     orderBy: { created_at: "desc" },
     select: {
@@ -108,7 +108,8 @@ export type OutgoingRow = {
 export type OutgoingFilter = {
   start: Date;
   end: Date;
-  storeId?: string;
+  /** Limited to these stores; undefined = every store. */
+  storeIds?: string[];
   kind?: OutgoingKind;
   q?: string;
   /** Only parts still without an Accurate code. */
@@ -130,7 +131,7 @@ export type OutgoingFilter = {
 export async function loadOutgoingParts(f: OutgoingFilter): Promise<OutgoingRow[]> {
   const ticketWhere = {
     status: { notIn: ["cancelled", "rejected"] as TicketStatus[] },
-    ...(f.storeId ? { store_location_id: f.storeId } : {}),
+    ...(f.storeIds ? { store_location_id: { in: f.storeIds } } : {}),
   };
   const inPeriod = { gte: f.start, lt: f.end };
   const q = f.q?.trim();
@@ -274,10 +275,13 @@ export async function loadOutgoingParts(f: OutgoingFilter): Promise<OutgoingRow[
 }
 
 /** The numbers on the Admin Stok dashboard. */
-export async function loadStockSummary(now: number, monthStart: Date, uncodedSince: Date) {
-  const notClosed = { status: { notIn: ["cancelled", "rejected"] as TicketStatus[] } };
+export async function loadStockSummary(now: number, monthStart: Date, uncodedSince: Date, storeIds?: string[]) {
+  const notClosed = {
+    status: { notIn: ["cancelled", "rejected"] as TicketStatus[] },
+    ...(storeIds ? { store_location_id: { in: storeIds } } : {}),
+  };
   const [builds, partsThisMonth, uncodedParts] = await Promise.all([
-    loadBuilds(undefined, now),
+    loadBuilds(storeIds, now),
     db.ticketReplacedPart.count({ where: { created_at: { gte: monthStart }, ticket: notClosed } }),
     db.ticketReplacedPart.count({ where: { created_at: { gte: uncodedSince }, OR: [{ sku: null }, { sku: "" }], ticket: notClosed } }),
   ]);

@@ -13,6 +13,7 @@ export const EDITABLE_FIELDS = [
   "device_sn",
   "accessories",
   "device_condition",
+  "notes",
   "customer_name",
   "customer_phone",
   "customer_email",
@@ -25,6 +26,7 @@ export const FIELD_LABELS: Record<EditableField, string> = {
   device_sn: "SN",
   accessories: "Kelengkapan",
   device_condition: "Kondisi unit",
+  notes: "Keluhan / catatan",
   customer_name: "Nama customer",
   customer_phone: "No. HP customer",
   customer_email: "Email customer",
@@ -35,6 +37,9 @@ export const FIELD_LABELS: Record<EditableField, string> = {
 const SHORT: ReadonlySet<EditableField> = new Set(["device_sn", "customer_name", "customer_phone", "customer_email"]);
 const SHORT_MAX = 191;
 const LONG_MAX = 5000;
+// Ticket.notes is LONGTEXT; the keluhan can be a long story.
+const NOTES_MAX = 20000;
+const maxOf = (f: EditableField) => (SHORT.has(f) ? SHORT_MAX : f === "notes" ? NOTES_MAX : LONG_MAX);
 
 export type TicketEditValues = Record<EditableField, string | null>;
 
@@ -94,6 +99,7 @@ export function parseTicketEdit(
     device_sn: clean(input.device_sn),
     accessories: cleanText(input.accessories),
     device_condition: cleanText(input.device_condition),
+    notes: cleanText(input.notes),
     customer_name: customer ? clean(input.customer_name) : current.customer_name,
     customer_phone: customer ? normalizePhone(clean(input.customer_phone)) : current.customer_phone,
     customer_email: customer ? clean(input.customer_email)?.toLowerCase() ?? null : current.customer_email,
@@ -102,12 +108,16 @@ export function parseTicketEdit(
 
   for (const f of EDITABLE_FIELDS) {
     const v = values[f];
-    if (v && v.length > (SHORT.has(f) ? SHORT_MAX : LONG_MAX)) {
-      return { ok: false, error: `${FIELD_LABELS[f]} terlalu panjang (maks. ${SHORT.has(f) ? SHORT_MAX : LONG_MAX} karakter).` };
+    if (v && v.length > maxOf(f)) {
+      return { ok: false, error: `${FIELD_LABELS[f]} terlalu panjang (maks. ${maxOf(f)} karakter).` };
     }
   }
   // Clearing a unit name that was there would leave the ticket saying nothing.
   if (!values.device_name && current.device_name) return { ok: false, error: "Nama unit tidak boleh dikosongkan." };
+  // The intake requires the keluhan for a service and a claim; it stays required.
+  if (!values.notes && current.notes && (ctx.ticketType === "service" || ctx.ticketType === "warranty_claim")) {
+    return { ok: false, error: "Keluhan tidak boleh dikosongkan." };
+  }
   if (ctx.ticketType === "warranty_claim" && !values.device_sn) {
     return { ok: false, error: "SN wajib diisi untuk klaim garansi." };
   }

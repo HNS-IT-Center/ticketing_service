@@ -1,4 +1,5 @@
 import { ClipboardCheck, MessageCircle } from "lucide-react";
+import { urlSort } from "@/lib/table-sort";
 import { pickStores, requireStoreViewer } from "@/lib/store-scope-server";
 import { loadFollowups, type FollowupItem } from "@/lib/store-followups-server";
 import { FOLLOWUP_INFO, FOLLOWUP_KINDS, isFollowupKind } from "@/lib/store-followups";
@@ -25,7 +26,7 @@ type Search = { jenis?: string; store?: string };
  * the kepala toko's own WhatsApp with the shop's usual message.
  */
 export default async function StoreFollowupsPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { stores } = await requireStoreViewer();
+  const { stores } = await requireStoreViewer("page_toko_followups");
   if (stores.length === 0) return <NoStores title="Tindak Lanjut" />;
   const params = await searchParams;
   const { chosen, shown, ids } = pickStores(stores, params.store);
@@ -37,7 +38,7 @@ export default async function StoreFollowupsPage({ searchParams }: { searchParam
 
   const columns: DataTableColumn<FollowupItem>[] = [
     {
-      key: "code",
+      key: "code", sortValue: (i) => i.code,
       header: "Kode",
       mobile: "title",
       cell: (i) => (
@@ -48,7 +49,7 @@ export default async function StoreFollowupsPage({ searchParams }: { searchParam
       ),
     },
     {
-      key: "who",
+      key: "who", sortValue: (i) => i.customer,
       header: "Customer / unit",
       cell: (i) => (
         <span className="flex min-w-0 max-w-md flex-col">
@@ -61,10 +62,10 @@ export default async function StoreFollowupsPage({ searchParams }: { searchParam
         </span>
       ),
     },
-    { key: "tech", header: "Teknisi", className: "whitespace-nowrap text-muted-foreground", cell: (i) => i.technician ?? "—" },
+    { key: "tech", sortValue: (i) => i.technician, header: "Teknisi", className: "whitespace-nowrap text-muted-foreground", cell: (i) => i.technician ?? "—" },
     { key: "detail", header: "Keterangan", mobileLabel: "Keterangan", cell: (i) => <span className="text-sm">{i.detail}</span> },
     {
-      key: "days",
+      key: "days", sortValue: (i) => i.days, sortFirst: "desc",
       header: "Lama",
       mobile: "badge",
       cell: (i) => (
@@ -148,6 +149,7 @@ export default async function StoreFollowupsPage({ searchParams }: { searchParam
 
       <DataTable
         caption={info.label}
+        sort={urlSort("/toko/tindak-lanjut", params)}
         columns={columns}
         rows={items}
         getRowKey={(i) => i.key}

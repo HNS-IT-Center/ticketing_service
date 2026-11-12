@@ -49,7 +49,7 @@ function cellText(c: ScheduleCell): { main: string; sub?: string } {
  * technician portal; the weekly pattern on the admin's user form.
  */
 export default async function StoreSchedulePage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { stores } = await requireStoreViewer();
+  const { stores } = await requireStoreViewer("page_toko_schedule");
   if (stores.length === 0) return <NoStores title="Jadwal Teknisi" />;
   const params = await searchParams;
   const { chosen, shown, ids } = pickStores(stores, params.store);

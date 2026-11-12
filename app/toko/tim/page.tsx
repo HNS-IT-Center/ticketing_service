@@ -1,4 +1,5 @@
 import { Contact, Mail, MessageCircle } from "lucide-react";
+import { urlSort } from "@/lib/table-sort";
 import { db } from "@/lib/db";
 import { pickStores, requireStoreViewer } from "@/lib/store-scope-server";
 import { scheduleCell, shiftLabel, type ScheduleCell } from "@/lib/store-schedule";
@@ -65,7 +66,7 @@ type Row = {
  * their contact, weekly pattern, today, and the tickets they hold now.
  */
 export default async function StoreTeamPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { stores } = await requireStoreViewer();
+  const { stores } = await requireStoreViewer("page_toko_team");
   if (stores.length === 0) return <NoStores title="Daftar User" />;
   const params = await searchParams;
   const { chosen, shown, ids } = pickStores(stores, params.store);
@@ -155,7 +156,7 @@ export default async function StoreTeamPage({ searchParams }: { searchParams: Pr
 
   const columns: DataTableColumn<Row>[] = [
     {
-      key: "name",
+      key: "name", sortValue: (r) => r.name,
       header: "Nama",
       mobile: "title",
       cell: (r) => (
@@ -169,7 +170,7 @@ export default async function StoreTeamPage({ searchParams }: { searchParams: Pr
       ),
     },
     {
-      key: "contact",
+      key: "contact", sortValue: (r) => r.phone,
       header: "Kontak",
       interactive: true,
       cell: (r) => {
@@ -213,7 +214,7 @@ export default async function StoreTeamPage({ searchParams }: { searchParams: Pr
         ),
     },
     {
-      key: "today",
+      key: "today", sortValue: (r) => r.today?.kind,
       header: "Hari ini",
       mobile: "badge",
       cell: (r) =>
@@ -226,7 +227,7 @@ export default async function StoreTeamPage({ searchParams }: { searchParams: Pr
         ),
     },
     {
-      key: "active",
+      key: "active", sortValue: (r) => r.active, sortFirst: "desc",
       header: "Tiket aktif",
       className: "tabular-nums",
       cell: (r) => (r.role === "Kepala Toko" ? "—" : r.active),
@@ -263,6 +264,7 @@ export default async function StoreTeamPage({ searchParams }: { searchParams: Pr
 
       <DataTable
         caption="Daftar user toko"
+        sort={urlSort("/toko/tim", params)}
         columns={columns}
         rows={rows}
         getRowKey={(r) => r.id}

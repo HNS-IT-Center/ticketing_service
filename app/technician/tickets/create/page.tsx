@@ -1,3 +1,4 @@
+import { requirePage } from "@/lib/page-access";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import CreateTicketForm from "./CreateTicketForm";
@@ -8,6 +9,7 @@ export const metadata = { title: "Create Ticket — HNS IT Center" };
 
 export default async function TechnicianCreateTicketPage() {
   const session = await requireRole("Technician", "Sales", "Administrator");
+  await requirePage("page_create_ticket");
 
   const storeLocations = await db.storeLocation.findMany({ where: { is_active: true } });
   const technicians = await db.user.findMany({ 

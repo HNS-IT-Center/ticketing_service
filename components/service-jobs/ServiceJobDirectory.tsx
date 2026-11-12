@@ -1,3 +1,4 @@
+import type { TableSort } from "@/lib/table-sort";
 import { ClipboardList } from "lucide-react";
 import { db } from "@/lib/db";
 import { deleteServiceJobAction } from "@/app/actions/service-jobs";
@@ -18,7 +19,7 @@ import {
  * The Daftar Jasa, as the admin and the technician portal show it. The caller
  * guards the page and says whether this viewer may change it.
  */
-export default async function ServiceJobDirectory({ canManage }: { canManage: boolean }) {
+export default async function ServiceJobDirectory({ canManage, sort }: { canManage: boolean; sort?: TableSort }) {
   const jobs = await db.serviceJob.findMany({
     orderBy: [{ is_active: "desc" }, { name: "asc" }],
     select: {
@@ -45,9 +46,9 @@ export default async function ServiceJobDirectory({ canManage }: { canManage: bo
   }));
 
   const columns: DataTableColumn<ServiceJobRowData>[] = [
-    { key: "name", header: "Jasa", mobile: "title", cell: (j) => <span className="font-semibold">{j.name}</span> },
+    { key: "name", sortValue: (j) => j.name, header: "Jasa", mobile: "title", cell: (j) => <span className="font-semibold">{j.name}</span> },
     {
-      key: "status",
+      key: "status", sortValue: (j) => j.is_active,
       header: "Status",
       mobile: "badge",
       cell: (j) => (
@@ -63,14 +64,14 @@ export default async function ServiceJobDirectory({ canManage }: { canManage: bo
       ),
     },
     {
-      key: "price",
+      key: "price", sortValue: (j) => j.default_price, sortFirst: "desc",
       header: "Harga default",
       className: "whitespace-nowrap",
       cell: (j) => (j.default_price === null ? <span className="text-muted-foreground">—</span> : formatRupiah(j.default_price)),
     },
-    { key: "points", header: "Poin", cell: (j) => j.points },
+    { key: "points", sortValue: (j) => j.points, sortFirst: "desc", header: "Poin", cell: (j) => j.points },
     { key: "accurate", header: "Kode Accurate", cell: (j) => <AccurateItemCell job={j} canManage={canManage} /> },
-    { key: "used", header: "Dipakai", cell: (j) => <span className="text-muted-foreground">{j.used}×</span> },
+    { key: "used", sortValue: (j) => j.used, sortFirst: "desc", header: "Dipakai", cell: (j) => <span className="text-muted-foreground">{j.used}×</span> },
     ...(canManage
       ? [
           {
@@ -110,6 +111,7 @@ export default async function ServiceJobDirectory({ canManage }: { canManage: bo
 
       <DataTable
         caption="Daftar Jasa"
+        sort={sort}
         columns={columns}
         rows={rows}
         getRowKey={(j) => j.id}

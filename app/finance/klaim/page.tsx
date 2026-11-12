@@ -1,7 +1,8 @@
+import { requirePage } from "@/lib/page-access";
+import { urlSort } from "@/lib/table-sort";
+import { scopedStoreIds, storeScopeFor } from "@/lib/store-scope-server";
 import Link from "next/link";
 import { Download, ShieldCheck } from "lucide-react";
-import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 import { loadStoreClaims, withUnitCosts, type StoreClaimRow } from "@/lib/finance-claims-server";
 import { heldMoney } from "@/lib/finance-claims";
 import { accessFor } from "@/lib/access-server";
@@ -36,15 +37,17 @@ const d = (x: Date | null) => (x ? DATE.format(x) : "—");
  * how long it has been there. A row opens the claim.
  */
 export default async function FinanceClaimsPage({ searchParams }: { searchParams: Promise<FinanceSearch> }) {
-  const session = await requireRole("Finance", "Administrator");
+  const session = await requirePage("page_finance_claims");
   const raw = await searchParams;
   // eslint-disable-next-line react-hooks/purity -- server component, read once
   const now = Date.now();
   const defaults = { fromDay: wibDayKey(now - YEAR_MS), toDay: wibDayKey(now) };
-  const stores = await db.storeLocation.findMany({ where: { is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  // A kepala toko granted this page sees the stores they hold.
+  const scope = await storeScopeFor(session);
+  const stores = scope.stores;
   const p = readFinanceSearch(raw, stores.map((s) => s.id), now);
 
-  const loaded = await loadStoreClaims({ storeId: p.storeId, q: p.q, createdStart: p.period.start, createdEnd: p.period.end }, now);
+  const loaded = await loadStoreClaims({ storeIds: scopedStoreIds(scope, p.storeId), q: p.q, createdStart: p.period.start, createdEnd: p.period.end }, now);
   const seesCost = (await accessFor(session.userId)).can("view_cost");
   const { rows: inPeriod, cost } = seesCost ? await withUnitCosts(loaded) : { rows: loaded, cost: "hidden" as const };
   // Figures only once the catalogue actually gives costs; until then a notice.
@@ -72,7 +75,7 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
 
   const columns: DataTableColumn<StoreClaimRow>[] = [
     {
-      key: "code",
+      key: "code", sortValue: (r) => r.code,
       header: "Klaim",
       mobile: "title",
       cell: (r) => (
@@ -84,7 +87,7 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
       ),
     },
     {
-      key: "unit",
+      key: "unit", sortValue: (r) => r.device,
       header: "Unit",
       cell: (r) => (
         <span className="flex min-w-48 max-w-sm flex-col">
@@ -99,7 +102,7 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
     ...(showMoney
       ? [
           {
-            key: "cost",
+            key: "cost", sortValue: (r) => r.unitCost, sortFirst: "desc",
             header: "Harga modal",
             mobileLabel: "Harga modal",
             cell: (r: StoreClaimRow) => (
@@ -112,7 +115,7 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
         ]
       : []),
     {
-      key: "vendor",
+      key: "vendor", sortValue: (r) => r.vendorName,
       header: "Vendor",
       cell: (r) =>
         r.vendorName ? (
@@ -128,7 +131,7 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
         ),
     },
     {
-      key: "dates",
+      key: "dates", sortValue: (r) => r.submittedAt, sortFirst: "desc",
       header: "Dikirim / kembali",
       mobileLabel: "Dikirim",
       cell: (r) => (
@@ -140,7 +143,7 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
       ),
     },
     {
-      key: "days",
+      key: "days", sortValue: (r) => r.span?.days, sortFirst: "desc",
       header: "Lama di vendor",
       mobile: "badge",
       cell: (r) =>
@@ -154,7 +157,7 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
         ),
     },
     {
-      key: "stage",
+      key: "stage", sortValue: (r) => CLAIM_STAGES.indexOf(stageOfClaim(r)),
       header: "Tahap",
       cell: (r) => <StatusBadge {...ticketBadgeChoice(r.status, r.rmaStatus)} size="sm" />,
     },
@@ -250,7 +253,9 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
       <DataTable
         caption="Klaim stok toko"
         columns={columns}
-        rows={rows}
+        rows={all}
+        window={[(page - 1) * pageSize, page * pageSize]}
+        sort={urlSort("/finance/klaim", raw)}
         getRowKey={(r) => r.ticketId}
         rowHref={(r) => `/finance/tickets/${r.ticketId}`}
         empty={<EmptyState icon={ShieldCheck} title="Tidak ada klaim stok toko yang cocok" />}

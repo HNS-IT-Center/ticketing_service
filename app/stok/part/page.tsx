@@ -1,7 +1,8 @@
+import { requirePage } from "@/lib/page-access";
+import { urlSort } from "@/lib/table-sort";
+import { scopedStoreIds, storeScopeFor } from "@/lib/store-scope-server";
 import Link from "next/link";
 import { Download, PackageSearch } from "lucide-react";
-import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 import { PERIOD_LABELS, PERIOD_PRESETS } from "@/lib/store-dashboard";
 import { loadOutgoingParts, type OutgoingRow } from "@/lib/stock-server";
 import { OUTGOING_KINDS, OUTGOING_KIND_LABELS } from "@/lib/stock";
@@ -30,12 +31,14 @@ const PAGE_SIZE = 25;
  * of PC builds (with the build's photos). Read only.
  */
 export default async function OutgoingPartsPage({ searchParams }: { searchParams: Promise<OutgoingSearch> }) {
-  await requireRole("StockAdmin", "Administrator");
+  const session = await requirePage("page_stock_parts");
   const raw = await searchParams;
-  const stores = await db.storeLocation.findMany({ where: { is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  // A kepala toko sees the stores they hold; everyone else every store.
+  const scope = await storeScopeFor(session);
+  const stores = scope.stores;
   // eslint-disable-next-line react-hooks/purity -- server component, read once
   const p = readOutgoingSearch(raw, stores.map((s) => s.id), Date.now());
-  const rows = await loadOutgoingParts({ start: p.period.start, end: p.period.end, storeId: p.storeId, kind: p.kind, q: p.q, uncoded: p.uncoded });
+  const rows = await loadOutgoingParts({ start: p.period.start, end: p.period.end, storeIds: scopedStoreIds(scope, p.storeId), kind: p.kind, q: p.q, uncoded: p.uncoded });
 
   const pageSize = parsePageSize(raw.per, PAGE_SIZE);
   const pages = Math.max(1, Math.ceil(rows.length / pageSize));
@@ -53,7 +56,7 @@ export default async function OutgoingPartsPage({ searchParams }: { searchParams
   const columns: DataTableColumn<OutgoingRow>[] = [
     { key: "photo", header: "Foto", interactive: true, cell: (r) => (r.photos.length ? <PhotoStrip size="sm" max={1} photos={r.photos} /> : <span className="text-xs text-muted-foreground">—</span>) },
     {
-      key: "item",
+      key: "item", sortValue: (r) => r.name,
       header: "Barang",
       mobile: "title",
       cell: (r) => (
@@ -69,7 +72,7 @@ export default async function OutgoingPartsPage({ searchParams }: { searchParams
       ),
     },
     {
-      key: "sku",
+      key: "sku", sortValue: (r) => r.sku,
       header: "Kode Accurate",
       mobile: "badge",
       cell: (r) =>
@@ -82,7 +85,7 @@ export default async function OutgoingPartsPage({ searchParams }: { searchParams
         ),
     },
     {
-      key: "ticket",
+      key: "ticket", sortValue: (r) => r.at, sortFirst: "desc",
       header: "Tiket / tanggal",
       mobileLabel: "Tiket",
       cell: (r) => (
@@ -94,7 +97,7 @@ export default async function OutgoingPartsPage({ searchParams }: { searchParams
       ),
     },
     {
-      key: "where",
+      key: "where", sortValue: (r) => r.store,
       header: "Toko / teknisi",
       mobileLabel: "Toko",
       cell: (r) => (
@@ -184,7 +187,9 @@ export default async function OutgoingPartsPage({ searchParams }: { searchParams
       <DataTable
         caption="Part keluar"
         columns={columns}
-        rows={shown}
+        rows={rows}
+        window={[(page - 1) * pageSize, page * pageSize]}
+        sort={urlSort("/stok/part", raw)}
         getRowKey={(r) => r.key}
         rowHref={(r) => `/stok/tickets/${r.ticketId}`}
         empty={<EmptyState icon={PackageSearch} title="Tidak ada part keluar yang cocok" />}

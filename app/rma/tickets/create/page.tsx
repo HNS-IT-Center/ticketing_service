@@ -1,3 +1,4 @@
+import { requirePage } from "@/lib/page-access";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
 import CreateTicketForm from "@/app/technician/tickets/create/CreateTicketForm";
@@ -18,6 +19,7 @@ export const metadata = { title: "Create Ticket — HNS IT Center" };
  */
 export default async function RmaCreateTicketPage() {
   await requireRole("RMA", "Administrator");
+  await requirePage("page_create_ticket");
 
   const [storeLocations, technicians, sales, upgrades] = await Promise.all([
     db.storeLocation.findMany({ where: { is_active: true } }),

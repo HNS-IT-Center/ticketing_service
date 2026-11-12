@@ -112,16 +112,23 @@ describe("canEnter — portal ownership", () => {
     expect(canEnter("/rma/cases/abc", "Administrator")).toBe(true);
   });
 
-  it("keeps every other role out of the RMA portal", () => {
-    for (const role of ["Technician", "Sales", "Customer", "bogus"]) {
-      expect(canEnter("/rma/dashboard", role)).toBe(false);
+  it("lets any staff role reach the permission-checked prefixes, and no one else", () => {
+    // Which page is up to Pengaturan Akses (requirePage); the proxy only keeps out non-staff.
+    for (const prefix of ["/admin/tickets", "/rma/dashboard", "/stok/rakitan", "/finance/klaim", "/logs"]) {
+      for (const role of ["Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance"]) {
+        expect(canEnter(prefix, role), `${role} ${prefix}`).toBe(true);
+      }
+      for (const role of ["Customer", "Pending", "bogus"]) {
+        expect(canEnter(prefix, role), `${role} ${prefix}`).toBe(false);
+      }
     }
   });
 
-  it("keeps RMA out of the other portals", () => {
-    expect(canEnter("/admin/dashboard", "RMA")).toBe(false);
+  it("keeps the portals of a viewer's own data per role", () => {
     expect(canEnter("/technician/dashboard", "RMA")).toBe(false);
     expect(canEnter("/sales/dashboard", "RMA")).toBe(false);
+    expect(canEnter("/toko/dashboard", "Technician")).toBe(false);
+    expect(canEnter("/toko/dashboard", "Administrator")).toBe(true);
   });
 
   it("leaves unowned paths open to any session", () => {

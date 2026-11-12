@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function StoreDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireRole("Administrator", "Sales");
+  await requireRole("Administrator");
 
   const [store, allTechnicians, supervisors, allSupervisors] = await Promise.all([
     db.storeLocation.findUnique({

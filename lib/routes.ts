@@ -92,14 +92,23 @@ export function dashboardPathForRoleName(role: string): string {
 
 // ── Route prefixes each portal owns ─────────────────────────────────────────
 // A role may enter a portal when it appears in that portal's allow-list.
+//
+// Since 2026-11-11 most pages are opened by permission, not by role (RBAC,
+// Pengaturan Akses → Halaman & Menu). Under those prefixes the proxy only
+// keeps out who is not staff; each page checks its own capability with
+// requirePage (lib/page-access.ts). The technician, sales and kepala toko
+// portals hold pages whose data is the viewer's own, so they stay per role.
+export const STAFF_ROLES: readonly Role[] = ["Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance"];
+
 export const PORTAL_ROUTES: { prefix: string; allowed: readonly Role[] }[] = [
-  { prefix: "/admin", allowed: ["Administrator"] },
+  { prefix: "/admin", allowed: STAFF_ROLES },
   { prefix: "/technician", allowed: ["Technician"] },
   { prefix: "/sales", allowed: ["Sales"] },
-  { prefix: "/rma", allowed: ["RMA", "Administrator"] },
+  { prefix: "/rma", allowed: STAFF_ROLES },
   { prefix: "/toko", allowed: ["StoreSupervisor", "Administrator"] },
-  { prefix: "/stok", allowed: ["StockAdmin", "Administrator"] },
-  { prefix: "/finance", allowed: ["Finance", "Administrator"] },
+  { prefix: "/stok", allowed: STAFF_ROLES },
+  { prefix: "/finance", allowed: STAFF_ROLES },
+  { prefix: "/logs", allowed: STAFF_ROLES },
 ];
 
 /** True when `role` may open `pathname`. Paths owned by no portal are open to any session. */

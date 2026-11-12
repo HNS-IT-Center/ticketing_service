@@ -1,4 +1,5 @@
 import { Target, Users } from "lucide-react";
+import { urlSort } from "@/lib/table-sort";
 import { loadStoreDashboard } from "@/lib/store-dashboard-server";
 import { pickStores, requireStoreViewer } from "@/lib/store-scope-server";
 import { parsePeriod } from "@/lib/store-dashboard";
@@ -24,7 +25,7 @@ type Search = { period?: string; from?: string; to?: string; store?: string };
  * this month stands against the target the admin set. Read only.
  */
 export default async function StoreTechniciansPage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { stores } = await requireStoreViewer();
+  const { stores } = await requireStoreViewer("page_toko_performance");
   const params = await searchParams;
   // eslint-disable-next-line react-hooks/purity -- server component, read once
   const now = Date.now();
@@ -44,10 +45,10 @@ export default async function StoreTechniciansPage({ searchParams }: { searchPar
   const targets = targetData ? summarizeTargets(targetData.technicians, targetData.doneTickets, targetData.lines) : null;
 
   const targetColumns: DataTableColumn<TechnicianTarget>[] = [
-    { key: "name", header: "Teknisi", mobile: "title", cell: (r) => <span className="font-semibold">{r.technician.name}</span> },
-    { key: "tickets", header: "Tiket service", mobile: "badge", cell: (r) => r.tickets },
+    { key: "name", sortValue: (r) => r.technician.name, header: "Teknisi", mobile: "title", cell: (r) => <span className="font-semibold">{r.technician.name}</span> },
+    { key: "tickets", sortValue: (r) => r.tickets, sortFirst: "desc", header: "Tiket service", mobile: "badge", cell: (r) => r.tickets },
     {
-      key: "jobs",
+      key: "jobs", sortValue: (r) => r.jobs, sortFirst: "desc",
       header: "Jasa",
       cell: (r) => (
         <div className="flex flex-col gap-1">
@@ -57,7 +58,7 @@ export default async function StoreTechniciansPage({ searchParams }: { searchPar
       ),
     },
     {
-      key: "revenue",
+      key: "revenue", sortValue: (r) => r.revenue, sortFirst: "desc",
       header: "Omzet jasa",
       cell: (r) => (
         <div className="flex flex-col gap-1">
@@ -67,7 +68,7 @@ export default async function StoreTechniciansPage({ searchParams }: { searchPar
       ),
     },
     {
-      key: "points",
+      key: "points", sortValue: (r) => r.points, sortFirst: "desc",
       header: "Poin",
       cell: (r) => (
         <div className="flex flex-col gap-1">
@@ -109,7 +110,7 @@ export default async function StoreTechniciansPage({ searchParams }: { searchPar
           ) : !targets || targets.rows.length === 0 ? (
             <p className="text-sm text-muted-foreground">Belum ada teknisi di toko ini.</p>
           ) : (
-            <DataTable columns={targetColumns} rows={targets.rows} getRowKey={(r) => r.technician.id} caption={`Target ${monthLabel(month)}`} />
+            <DataTable sort={urlSort("/toko/teknisi", params)} columns={targetColumns} rows={targets.rows} getRowKey={(r) => r.technician.id} caption={`Target ${monthLabel(month)}`} />
           )}
         </CardContent>
       </Card>

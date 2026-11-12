@@ -1,10 +1,11 @@
-import { requireRole } from "@/lib/session";
+import { requirePage } from "@/lib/page-access";
+import { storeScopeFor, storeWhere } from "@/lib/store-scope-server";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarSearch } from "@/components/app/FilterBar";
-import { FilterChips } from "@/components/app/FilterChips";
+import { ProgressSelect } from "@/components/app/ProgressSelect";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
@@ -12,12 +13,16 @@ import { parsePageSize } from "@/lib/pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import {
-  ADMIN_TICKET_FILTERS,
   DEFAULT_TICKET_SORT,
+  DEFAULT_TICKET_SORT_STATE,
+  TICKET_SORT_KEYS,
+  statusCounts,
   ticketListOrderBy,
   ticketListWhere,
+  ticketProgressOptions,
   ticketSearchWhere,
 } from "@/lib/ticket-list-filter";
+import { readSort, sortValue } from "@/lib/table-sort";
 import { relativeTimeId } from "@/lib/ticket-recency";
 import RecencyCode from "@/components/tickets/RecencyCode";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
@@ -32,19 +37,24 @@ export default async function AdminTicketsPage({
 }: {
   searchParams: Promise<{ status?: string; q?: string; page?: string; sort?: string; per?: string }>;
 }) {
-  const session = await requireRole("Administrator", "Sales");
+  const session = await requirePage("page_tickets_all");
   const params = await searchParams;
   const statusFilter = params.status || "all";
   const query = params.q || "";
   const page = Math.max(1, parseInt(params.page || "1") || 1);
   const pageSize = parsePageSize(params.per, PAGE_SIZE);
   const skip = (page - 1) * pageSize;
-  const sortParam = params.sort || DEFAULT_TICKET_SORT;
+  const sortState = readSort(params.sort, TICKET_SORT_KEYS, DEFAULT_TICKET_SORT_STATE);
+  const sortParam = sortValue(sortState);
   // One clock for the whole render, so every "x jam lalu" agrees.
   const now = new Date();
 
+  // A kepala toko granted this page sees the stores they hold.
+  const scope = await storeScopeFor(session);
+  // Everything but the progress, for the dropdown's counts.
+  const baseWhere = { ...storeWhere(scope), ...ticketSearchWhere(query) };
   const where = {
-    ...(session.role === "Sales" ? { sales_id: session.userId } : {}),
+    ...storeWhere(scope),
     // Chip → filter lives in lib/ticket-list-filter.ts so the admin and
     // technician lists cannot offer the same chip and mean different things.
     ...ticketListWhere(statusFilter),
@@ -70,6 +80,12 @@ export default async function AdminTicketsPage({
     }),
     db.ticket.count({ where }),
   ]);
+  const [byStatus, unassigned, claims] = await Promise.all([
+    db.ticket.groupBy({ by: ["status"], where: baseWhere, _count: { _all: true } }),
+    db.ticket.count({ where: { ...baseWhere, technician_id: null } }),
+    db.ticket.count({ where: { ...baseWhere, ticket_type: "warranty_claim" } }),
+  ]);
+  const progressOptions = ticketProgressOptions(statusCounts(byStatus), { unassigned, warrantyClaim: claims });
 
   const totalPages = Math.ceil(totalCount / pageSize);
 
@@ -84,34 +100,21 @@ export default async function AdminTicketsPage({
     return `/admin/tickets${str ? `?${str}` : ""}`;
   };
 
-  const renderSortableHeader = (label: string, ascKey: string, descKey: string) => {
-    const isActive = sortParam === ascKey || sortParam === descKey;
-    const isAsc = sortParam === ascKey;
-    const nextSort = isAsc ? descKey : ascKey;
-    return (
-      <Link
-        href={buildHref(1, nextSort)}
-        className="inline-flex items-center gap-1 rounded-sm text-inherit outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        {label}
-        {isActive ? (isAsc ? " ↑" : " ↓") : <span className="opacity-30"> ↕</span>}
-      </Link>
-    );
-  };
 
   type ListTicket = (typeof tickets)[number];
   const columns: DataTableColumn<ListTicket>[] = [
     {
       key: "code",
-      header: renderSortableHeader("Code", "code_asc", "code_desc"),
-      mobileLabel: "Code",
+      header: "Code",
+      sortKey: "code",
       cell: (t) => <RecencyCode ticket={t} now={now} />,
       mobile: "title",
     },
-    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span>, className: "hidden xl:table-cell" },
+    { key: "type", header: "Type", sortKey: "type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span>, className: "hidden xl:table-cell" },
     {
       key: "customer",
       header: "Customer",
+      sortKey: "customer",
       cell: (t) => (
         <span className="flex flex-col">
           <span className="font-medium">{ticketPartyName(t)}</span>
@@ -122,14 +125,15 @@ export default async function AdminTicketsPage({
     {
       key: "technician",
       header: "Technician",
+      sortKey: "technician",
       // "Unassigned" was var(--accent) — near-white since the shadcn init.
       cell: (t) => t.technician?.name ?? <span className="text-sm font-medium text-destructive">Unassigned</span>,
       className: "text-muted-foreground",
     },
     {
       key: "status",
-      header: renderSortableHeader("Status", "status_asc", "status_desc"),
-      mobileLabel: "Status",
+      header: "Status",
+      sortKey: "status",
       // `rma_process` is one ticket status covering nine RMA ones; the list
       // shows the informative one. See lib/rma/ticket-status-badge.ts.
       cell: (t) => (
@@ -139,8 +143,9 @@ export default async function AdminTicketsPage({
     },
     {
       key: "date",
-      header: renderSortableHeader("Update terakhir", "updated_asc", "updated_desc"),
-      mobileLabel: "Update terakhir",
+      header: "Update terakhir",
+      sortKey: "updated",
+      sortFirst: "desc",
       cell: (t) => {
         const last = t.status_logs[0]?.created_at ?? t.updated_at;
         return (
@@ -168,15 +173,6 @@ export default async function AdminTicketsPage({
   if (sortParam !== DEFAULT_TICKET_SORT) exportQs.set("sort", sortParam);
   const exportHref = `/admin/tickets/export${exportQs.size ? `?${exportQs}` : ""}`;
 
-  const chips = ADMIN_TICKET_FILTERS.map(({ key: s, label }) => {
-    const qs = new URLSearchParams();
-    if (s !== "all") qs.set("status", s);
-    if (query) qs.set("q", query);
-    if (sortParam !== DEFAULT_TICKET_SORT) qs.set("sort", sortParam);
-    if (pageSize !== PAGE_SIZE) qs.set("per", String(pageSize));
-    const str = qs.toString();
-    return { key: s, label, href: `/admin/tickets${str ? `?${str}` : ""}` };
-  });
 
   return (
     // Built from components/app and shadcn only, so the page opts into
@@ -187,30 +183,32 @@ export default async function AdminTicketsPage({
         description={`${totalCount} ticket${totalCount !== 1 ? "s" : ""}`}
         actions={
           <>
+            {/* A plain <a>: a file download, not a page for the router to prefetch.
+                The export checks the same page permission as this list. */}
+            <a
+              href={exportHref}
+              download
+              className={buttonVariants({ variant: "outline" })}
+              title="Semua tiket yang cocok dengan filter dan pencarian ini, bukan hanya halaman ini"
+            >
+              <FileSpreadsheet aria-hidden="true" /> Export Excel
+            </a>
+            {/* Everyone else creates tickets from their own portal's form. */}
             {session.role === "Administrator" && (
-              // A plain <a>: a file download, not a page for the router to prefetch.
-              <a
-                href={exportHref}
-                download
-                className={buttonVariants({ variant: "outline" })}
-                title="Semua tiket yang cocok dengan filter dan pencarian ini, bukan hanya halaman ini"
-              >
-                <FileSpreadsheet aria-hidden="true" /> Export Excel
-              </a>
+              <Link href="/admin/tickets/create" className={buttonVariants()}>
+                <Plus aria-hidden="true" /> New Ticket
+              </Link>
             )}
-            <Link href="/admin/tickets/create" className={buttonVariants()}>
-              <Plus aria-hidden="true" /> New Ticket
-            </Link>
           </>
         }
       />
 
       <div className="flex flex-col gap-3">
         <FilterBar action="/admin/tickets">
-          {statusFilter !== "all" && <input type="hidden" name="status" value={statusFilter} />}
           {sortParam !== DEFAULT_TICKET_SORT && <input type="hidden" name="sort" value={sortParam} />}
           {pageSize !== PAGE_SIZE && <input type="hidden" name="per" value={pageSize} />}
           <FilterBarSearch label="Search tickets" placeholder="Cari kode, customer, atau nama barang…" defaultValue={query} />
+          <ProgressSelect id="admin-progress" options={progressOptions} value={statusFilter} />
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
             <Button type="submit">Search</Button>
             {query && (
@@ -223,7 +221,6 @@ export default async function AdminTicketsPage({
             )}
           </div>
         </FilterBar>
-        <FilterChips label="Status" chips={chips} active={statusFilter} />
       </div>
 
       <DataTable
@@ -232,6 +229,7 @@ export default async function AdminTicketsPage({
         rows={tickets}
         getRowKey={(t) => t.id}
         rowHref={(t) => `/admin/tickets/${t.id}`}
+        sort={{ state: sortState, href: (s) => buildHref(1, sortValue(s)) }}
         empty={<EmptyState icon={Ticket} title="No tickets found" />}
       />
 

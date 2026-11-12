@@ -1,5 +1,5 @@
+import { requirePage } from "@/lib/page-access";
 // Admin leaderboard — live design with Technician and Store (Team vs Team) standings
-import { requireRole } from "@/lib/session";
 import { Trophy, Crown, Medal, Store, Users, User } from "lucide-react";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterChips } from "@/components/app/FilterChips";
@@ -19,7 +19,7 @@ export default async function AdminLeaderboardPage({
 }: {
   searchParams: Promise<{ month?: string; year?: string; tab?: string }>;
 }) {
-  await requireRole("Administrator", "Sales");
+  await requirePage("page_leaderboard");
   const params = await searchParams;
 
   const now = new Date();

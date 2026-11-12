@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { DraftScopeProvider } from "@/lib/draft";
+import type { NavIcon, NavItem, NavSection } from "@/lib/nav";
 import { useRef, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import {
@@ -15,7 +16,6 @@ import {
   Trophy,
   TrendingUp,
   Settings,
-  Activity,
   History,
   Store,
   ShieldCheck,
@@ -68,242 +68,37 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import NotificationBell from "./NotificationBell";
 import RequestsBell from "./RequestsBell";
 
-type NavItem = {
-  href: string;
-  label: string;
-  icon: React.ReactNode;
-  /** Other paths that belong to this entry, e.g. a case page reached from the RMA dashboard. */
-  also?: string[];
+// Icons travel from the server as names (lib/nav.ts builds the menu there).
+const ICONS: Record<NavIcon, React.ComponentType<{ size?: number }>> = {
+  dashboard: LayoutDashboard,
+  ticket: Ticket,
+  plus: PlusCircle,
+  list: ClipboardList,
+  shield: ShieldCheck,
+  chart: BarChart3,
+  gauge: Gauge,
+  check: ClipboardCheck,
+  cpu: Cpu,
+  "package-search": PackageSearch,
+  landmark: Landmark,
+  trending: TrendingUp,
+  target: Target,
+  trophy: Trophy,
+  package: Package,
+  calendar: CalendarDays,
+  contact: Contact,
+  history: History,
+  store: Store,
+  users: Users,
+  truck: Truck,
+  settings: Settings,
+  database: Database,
 };
 
-/**
- * A group in the sidebar. A titled section folds open and closed; an untitled
- * one, or one holding a single entry, is shown as plain links.
- */
-type NavSection = {
-  key: string;
-  title?: string;
-  icon?: React.ReactNode;
-  /** Open until the user closes it — for what is opened all day. */
-  defaultOpen?: boolean;
-  items: NavItem[];
-};
-
-// Grouped by what the page is for, the same groups in every portal. Profile is
-// in none of them: it is in the menu under the name at the top right. The small
-// portals keep their groups open — they fold only when someone folds them.
-const NAV_SECTIONS: Record<string, NavSection[]> = {
-  technician: [
-    {
-      key: "home",
-      items: [{ href: "/technician/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
-    },
-    {
-      key: "tickets",
-      title: "Tiket",
-      icon: <Ticket size={18} />,
-      defaultOpen: true,
-      items: [
-        { href: "/technician/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
-        { href: "/technician/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-      ],
-    },
-    {
-      key: "team",
-      title: "Tim",
-      icon: <Users size={18} />,
-      defaultOpen: true,
-      items: [
-        { href: "/technician/schedule", label: "Schedule", icon: <CalendarDays size={18} /> },
-        { href: "/technician/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
-      ],
-    },
-  ],
-  admin: [
-    {
-      key: "home",
-      items: [{ href: "/admin/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
-    },
-    {
-      key: "tickets",
-      title: "Tiket",
-      icon: <Ticket size={18} />,
-      defaultOpen: true,
-      items: [
-        { href: "/admin/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
-        { href: "/admin/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-      ],
-    },
-    // The RMA desk's own pages, opened inside the admin portal: an
-    // administrator stays in this sidebar instead of being moved to the desk's.
-    {
-      key: "rma",
-      title: "Klaim & RMA",
-      icon: <ShieldCheck size={18} />,
-      items: [
-        { href: "/rma/dashboard", label: "Dashboard RMA", icon: <LayoutDashboard size={18} />, also: ["/rma/cases"] },
-        { href: "/rma/tickets", label: "Tiket Klaim", icon: <Ticket size={18} /> },
-        { href: "/rma/logs", label: "Log RMA", icon: <Activity size={18} /> },
-        { href: "/rma/analisa", label: "Analisa Klaim", icon: <BarChart3 size={18} /> },
-      ],
-    },
-    {
-      key: "reports",
-      title: "Laporan",
-      icon: <BarChart3 size={18} />,
-      items: [
-        { href: "/toko/dashboard", label: "Dashboard Toko", icon: <Gauge size={18} /> },
-        { href: "/stok/dashboard", label: "Dashboard Stok", icon: <ClipboardCheck size={18} /> },
-        { href: "/stok/rakitan", label: "Rakitan PC", icon: <Cpu size={18} />, also: ["/stok/tickets"] },
-        { href: "/stok/part", label: "Part Keluar", icon: <PackageSearch size={18} /> },
-        { href: "/finance/dashboard", label: "Vendor Klaim (Finance)", icon: <Landmark size={18} />, also: ["/finance/klaim", "/finance/tickets"] },
-        { href: "/admin/performance", label: "Performance", icon: <TrendingUp size={18} /> },
-        { href: "/admin/reports/technicians", label: "Target Teknisi", icon: <Target size={18} /> },
-        { href: "/admin/leaderboard", label: "Leaderboard", icon: <Trophy size={18} /> },
-        { href: "/admin/reports/parts", label: "Laporan Part", icon: <Package size={18} /> },
-        { href: "/admin/logs", label: "Log Tiket", icon: <Activity size={18} /> },
-        { href: "/admin/activity", label: "Log Aktivitas", icon: <History size={18} /> },
-      ],
-    },
-    {
-      key: "master",
-      title: "Data Master",
-      icon: <Database size={18} />,
-      items: [
-        { href: "/admin/stores", label: "Stores", icon: <Store size={18} /> },
-        { href: "/admin/users", label: "Users", icon: <Users size={18} /> },
-        { href: "/admin/service-jobs", label: "Daftar Jasa", icon: <ClipboardList size={18} /> },
-        { href: "/admin/vendors", label: "Vendor", icon: <Truck size={18} />, also: ["/rma/vendors"] },
-      ],
-    },
-    {
-      key: "settings",
-      items: [{ href: "/admin/settings/access", label: "Pengaturan Akses", icon: <Settings size={18} /> }],
-    },
-  ],
-  // Log Aktivitas sits after the work pages on purpose: it is a reference page,
-  // read after the work, while the ones above it are what the desk opens to act.
-  rma: [
-    {
-      key: "home",
-      items: [{ href: "/rma/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} />, also: ["/rma/cases"] }],
-    },
-    {
-      key: "tickets",
-      title: "Tiket",
-      icon: <Ticket size={18} />,
-      defaultOpen: true,
-      items: [
-        { href: "/rma/tickets", label: "All Tickets", icon: <Ticket size={18} /> },
-        { href: "/rma/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-      ],
-    },
-    {
-      key: "reports",
-      title: "Laporan",
-      items: [
-        { href: "/rma/logs", label: "Log Aktivitas", icon: <Activity size={18} /> },
-        { href: "/rma/analisa", label: "Analisa Klaim", icon: <BarChart3 size={18} /> },
-      ],
-    },
-    {
-      key: "master",
-      title: "Data Master",
-      items: [{ href: "/rma/vendors", label: "Vendor", icon: <Truck size={18} /> }],
-    },
-  ],
-  // Kepala toko: read only — their stores' tickets, claims and technicians.
-  toko: [
-    {
-      key: "home",
-      items: [{ href: "/toko/dashboard", label: "Dashboard", icon: <Gauge size={18} /> }],
-    },
-    {
-      key: "tickets",
-      title: "Tiket",
-      icon: <Ticket size={18} />,
-      defaultOpen: true,
-      items: [
-        { href: "/toko/tickets", label: "Tiket Toko", icon: <Ticket size={18} /> },
-        { href: "/toko/tindak-lanjut", label: "Tindak Lanjut", icon: <ClipboardList size={18} /> },
-        { href: "/toko/klaim", label: "Klaim Garansi", icon: <ShieldCheck size={18} /> },
-      ],
-    },
-    {
-      key: "team",
-      title: "Tim",
-      icon: <Users size={18} />,
-      defaultOpen: true,
-      items: [
-        { href: "/toko/teknisi", label: "Kinerja Teknisi", icon: <TrendingUp size={18} /> },
-        { href: "/toko/jadwal", label: "Jadwal Teknisi", icon: <CalendarDays size={18} /> },
-        { href: "/toko/tim", label: "Daftar User", icon: <Contact size={18} /> },
-      ],
-    },
-  ],
-  // Admin stok: PC builds checked against their quotation, parts going out.
-  stok: [
-    {
-      key: "home",
-      items: [{ href: "/stok/dashboard", label: "Dashboard", icon: <Gauge size={18} /> }],
-    },
-    {
-      key: "work",
-      title: "Pantau",
-      icon: <ClipboardCheck size={18} />,
-      defaultOpen: true,
-      items: [
-        { href: "/stok/rakitan", label: "Rakitan PC", icon: <Cpu size={18} />, also: ["/stok/tickets"] },
-        { href: "/stok/part", label: "Part Keluar", icon: <PackageSearch size={18} /> },
-      ],
-    },
-  ],
-  // Finance: store-stock claims and how long each vendor takes, read only.
-  finance: [
-    {
-      key: "home",
-      items: [{ href: "/finance/dashboard", label: "Kinerja Vendor", icon: <Landmark size={18} /> }],
-    },
-    {
-      key: "claims",
-      title: "Klaim",
-      icon: <ShieldCheck size={18} />,
-      defaultOpen: true,
-      items: [{ href: "/finance/klaim", label: "Klaim Stok Toko", icon: <ShieldCheck size={18} />, also: ["/finance/tickets"] }],
-    },
-  ],
-  sales: [
-    {
-      key: "home",
-      items: [{ href: "/sales/dashboard", label: "Dashboard", icon: <LayoutDashboard size={18} /> }],
-    },
-    {
-      key: "tickets",
-      title: "Tiket",
-      icon: <Ticket size={18} />,
-      defaultOpen: true,
-      items: [
-        { href: "/sales/tickets", label: "My Tickets", icon: <Ticket size={18} /> },
-        { href: "/sales/tickets/create", label: "Create Ticket", icon: <PlusCircle size={18} /> },
-      ],
-    },
-  ],
-};
-
-/**
- * The sidebar for one user. A technician who may manage the Daftar Jasa or the
- * vendor list — a head technician or a coordinator, by default — gets a Data
- * Master group for it; nobody else in the portal sees one.
- */
-function sectionsFor(role: string, manage: DashboardShellProps["manage"]): NavSection[] {
-  const base = NAV_SECTIONS[role] || [];
-  if (role !== "technician" || !(manage?.vendors || manage?.serviceJobs)) return base;
-  const items: NavItem[] = [];
-  if (manage.serviceJobs) {
-    items.push({ href: "/technician/service-jobs", label: "Daftar Jasa", icon: <ClipboardList size={18} /> });
-  }
-  if (manage.vendors) items.push({ href: "/technician/vendors", label: "Vendor", icon: <Truck size={18} /> });
-  return [...base, { key: "master", title: "Data Master", icon: <Database size={18} />, defaultOpen: true, items }];
+function NavGlyph({ name }: { name?: NavIcon }) {
+  if (!name) return null;
+  const Icon = ICONS[name];
+  return <Icon size={18} />;
 }
 
 /**
@@ -336,8 +131,10 @@ interface DashboardShellProps {
   userName: string;
   userId: string;
   isCoordinator?: boolean;
-  /** Data Master pages this technician may manage; decided by the server from the access settings. */
-  manage?: { vendors?: boolean; serviceJobs?: boolean };
+  /** The menu, built on the server from what this person may open (lib/nav.ts). */
+  sections: NavSection[];
+  /** This person's own dashboard; it lights up only on itself. */
+  home: string;
 }
 
 // Only Administrator and Technician have a profile page. Sales had a sidebar
@@ -394,13 +191,13 @@ const collapsedStore = {
  * them would switch it off for all of them at once. The shell's own parts do
  * carry one, so Tailwind spacing works there.
  */
-export default function DashboardShell({ children, role, userName, userId, isCoordinator = false, manage }: DashboardShellProps) {
+export default function DashboardShell({ children, role, userName, userId, isCoordinator = false, sections, home }: DashboardShellProps) {
   const collapsed = useSyncExternalStore(collapsedStore.subscribe, collapsedStore.get, collapsedStore.getServer);
 
   return (
     <TooltipProvider>
       <SidebarProvider open={!collapsed} onOpenChange={(open) => collapsedStore.set(!open)}>
-        <ShellFrame role={role} userName={userName} userId={userId} isCoordinator={isCoordinator} manage={manage}>
+        <ShellFrame role={role} userName={userName} userId={userId} isCoordinator={isCoordinator} sections={sections} home={home}>
           {children}
         </ShellFrame>
       </SidebarProvider>
@@ -408,7 +205,7 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
   );
 }
 
-function ShellFrame({ children, role, userName, userId, isCoordinator = false, manage }: DashboardShellProps) {
+function ShellFrame({ children, role, userName, userId, isCoordinator = false, sections, home }: DashboardShellProps) {
   const pathname = usePathname();
   const { openMobile, setOpenMobile } = useSidebar();
 
@@ -440,11 +237,10 @@ function ShellFrame({ children, role, userName, userId, isCoordinator = false, m
     else if (openMobile && dx < -100) setOpenMobile(false);
   };
 
-  const sections = sectionsFor(role, manage);
   const navItems = sections.flatMap((section) => section.items);
 
   // The entry for this page: the longest matching path wins.
-  const dashboard = `/${role}/dashboard`;
+  const dashboard = home;
   let activeItem: NavItem | null = null;
   let activeScore = 0;
   for (const item of navItems) {
@@ -544,7 +340,7 @@ function AppSidebar({
         tooltip={item.label}
         render={<Link href={item.href} onClick={closeOnPhone} aria-current={activeItem?.href === item.href ? "page" : undefined} />}
       >
-        {item.icon}
+        <NavGlyph name={item.icon} />
         <span>{item.label}</span>
       </SidebarMenuButton>
     </SidebarMenuItem>
@@ -588,7 +384,7 @@ function AppSidebar({
                   render={<CollapsibleTrigger />}
                   className={`h-11 w-full cursor-pointer gap-2 text-sm text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-foreground md:h-8 ${holdsActive && !open ? "bg-sidebar-accent/60 text-sidebar-foreground" : ""}`}
                 >
-                  {section.icon}
+                  <NavGlyph name={section.icon} />
                   <span className="flex-1 text-left">{section.title}</span>
                   <ChevronDown aria-hidden className={`transition-transform ${open ? "rotate-180" : ""}`} />
                 </SidebarGroupLabel>
@@ -603,7 +399,7 @@ function AppSidebar({
                               isActive={isActive}
                               render={<Link href={item.href} onClick={closeOnPhone} aria-current={isActive ? "page" : undefined} />}
                             >
-                              {item.icon}
+                              <NavGlyph name={item.icon} />
                               <span>{item.label}</span>
                             </SidebarMenuSubButton>
                           </SidebarMenuSubItem>

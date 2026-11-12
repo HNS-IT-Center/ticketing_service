@@ -2,6 +2,8 @@ import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { ArrowDown, ArrowUp, ArrowUpDown } from "lucide-react";
+import { nextSort, sortRows, type SortDir, type SortValue, type TableSort } from "@/lib/table-sort";
 
 export type DataTableColumn<T> = {
   key: string;
@@ -28,6 +30,20 @@ export type DataTableColumn<T> = {
    * neither valid nor reliably clickable.
    */
   interactive?: boolean;
+  /**
+   * The table's `sort` key for this column; with `sort` set on the table the
+   * header becomes a link that switches between ascending and descending.
+   */
+  sortKey?: string;
+  /** The direction of the first click: `desc` suits dates and figures. Default `asc`. */
+  sortFirst?: SortDir;
+  /**
+   * For a table loaded whole: the value the column sorts by. The table then
+   * sorts its own rows when this column is the active one, and `sortKey`
+   * defaults to `key`. A list paged by the database leaves this out and sorts
+   * in its query instead.
+   */
+  sortValue?: (row: T) => SortValue;
 };
 
 type DataTableProps<T> = {
@@ -45,7 +61,25 @@ type DataTableProps<T> = {
   loading?: boolean;
   skeletonRows?: number;
   className?: string;
+  /** The current order and how to link to another (lib/table-sort.ts). */
+  sort?: TableSort;
+  /**
+   * For a list paged in memory: hand over every row and the page's
+   * `[start, end)`. The rows are sorted first and cut after, so the order
+   * covers the whole list, not just the page on screen.
+   */
+  window?: [number, number];
 };
+
+/** The column's name as plain text, for the phone sort row and aria labels. */
+function labelOf<T>(col: DataTableColumn<T>): string {
+  return col.mobileLabel ?? (typeof col.header === "string" ? col.header : col.key);
+}
+
+function SortIcon({ dir }: { dir?: SortDir }) {
+  const Icon = dir === "asc" ? ArrowUp : dir === "desc" ? ArrowDown : ArrowUpDown;
+  return <Icon aria-hidden="true" className={cn("size-3.5 shrink-0", !dir && "opacity-40")} />;
+}
 
 /**
  * A list of records: a table from `md` up, a stack of cards below it. Replaces
@@ -60,8 +94,8 @@ type DataTableProps<T> = {
  * be handed to it from a server page but could not cross into a client one.
  */
 export function DataTable<T>({
-  columns,
-  rows,
+  columns: givenColumns,
+  rows: givenRows,
   getRowKey,
   caption,
   rowHref,
@@ -70,7 +104,14 @@ export function DataTable<T>({
   loading = false,
   skeletonRows = 5,
   className,
+  sort,
+  window: pageWindow,
 }: DataTableProps<T>) {
+  const columns = givenColumns.map((c) => (c.sortValue && !c.sortKey ? { ...c, sortKey: c.key } : c));
+  const active = sort ? columns.find((c) => c.sortKey === sort.state.key && c.sortValue) : undefined;
+  const ordered = active ? sortRows(givenRows, sort!.state, { [sort!.state.key]: active.sortValue! }) : givenRows;
+  const rows = pageWindow ? ordered.slice(pageWindow[0], pageWindow[1]) : ordered;
+
   if (!loading && rows.length === 0 && empty) {
     return <>{empty}</>;
   }
@@ -82,6 +123,8 @@ export function DataTable<T>({
   // The first column carries the row link on desktop; the whole row is its
   // hit area through the stretched ::after.
   const linkKey = columns[0]?.key;
+  const sortable = sort ? columns.filter((c) => c.sortKey) : [];
+  const dirOf = (col: DataTableColumn<T>) => (sort && col.sortKey === sort.state.key ? sort.state.dir : undefined);
 
   return (
     <div data-slot="data-table" className={cn("flex flex-col gap-3", className)} aria-busy={loading || undefined}>
@@ -94,9 +137,25 @@ export function DataTable<T>({
                 <TableHead
                   key={col.key}
                   scope="col"
+                  aria-sort={dirOf(col) === "asc" ? "ascending" : dirOf(col) === "desc" ? "descending" : undefined}
                   className={cn("h-11 px-4 text-xs font-semibold tracking-wide text-muted-foreground uppercase", col.className)}
                 >
-                  {col.header}
+                  {sort && col.sortKey ? (
+                    <Link
+                      href={sort.href(nextSort(sort.state, col.sortKey, col.sortFirst))}
+                      scroll={false}
+                      title={`Urutkan menurut ${labelOf(col)}`}
+                      className={cn(
+                        "-mx-1 inline-flex items-center gap-1 rounded-sm px-1 py-1 uppercase outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+                        dirOf(col) && "text-foreground",
+                      )}
+                    >
+                      {col.header}
+                      <SortIcon dir={dirOf(col)} />
+                    </Link>
+                  ) : (
+                    col.header
+                  )}
                 </TableHead>
               ))}
             </TableRow>
@@ -141,6 +200,30 @@ export function DataTable<T>({
           </TableBody>
         </Table>
       </div>
+
+      {sortable.length > 0 && rows.length > 1 && (
+        <nav aria-label="Urutkan" className="flex flex-wrap items-center gap-1.5 md:hidden">
+          <span className="text-xs text-muted-foreground">Urutkan:</span>
+          {sortable.map((col) => {
+            const dir = dirOf(col);
+            return (
+              <Link
+                key={col.key}
+                href={sort!.href(nextSort(sort!.state, col.sortKey!, col.sortFirst))}
+                scroll={false}
+                aria-current={dir ? "true" : undefined}
+                className={cn(
+                  "inline-flex min-h-9 items-center gap-1 rounded-full border px-3 text-xs font-medium outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+                  dir ? "border-primary bg-primary text-primary-foreground" : "border-border bg-card text-muted-foreground",
+                )}
+              >
+                {labelOf(col)}
+                <SortIcon dir={dir} />
+              </Link>
+            );
+          })}
+        </nav>
+      )}
 
       <ul className="flex flex-col gap-2 md:hidden" aria-label={caption}>
         {loading

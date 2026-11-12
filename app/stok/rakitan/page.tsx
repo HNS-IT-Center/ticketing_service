@@ -1,6 +1,7 @@
+import { requirePage } from "@/lib/page-access";
+import { urlSort } from "@/lib/table-sort";
+import { scopedStoreIds, storeScopeFor } from "@/lib/store-scope-server";
 import { CheckCircle2, Cpu } from "lucide-react";
-import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 import { loadBuilds, type BuildRow } from "@/lib/stock-server";
 import { BUILD_FILTERS, BUILD_STAGE_LABELS, isBuildFilter, type BuildFilter } from "@/lib/stock";
 import { formatDateTime } from "@/lib/utils";
@@ -29,13 +30,15 @@ const FILTER_LABELS: Record<BuildFilter, string> = { ...BUILD_STAGE_LABELS, all:
  * holds, who ticked it at intake, and the photos. A row opens the ticket.
  */
 export default async function BuildListPage({ searchParams }: { searchParams: Promise<Search> }) {
-  await requireRole("StockAdmin", "Administrator");
+  const session = await requirePage("page_stock_builds");
   const params = await searchParams;
   const filter = isBuildFilter(params.filter) ? params.filter : "all";
-  const stores = await db.storeLocation.findMany({ where: { is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  // A kepala toko sees the stores they hold; everyone else every store.
+  const scope = await storeScopeFor(session);
+  const stores = scope.stores;
   const store = stores.find((s) => s.id === params.store);
   // eslint-disable-next-line react-hooks/purity -- server component, read once
-  const all = await loadBuilds(store?.id, Date.now());
+  const all = await loadBuilds(scopedStoreIds(scope, store?.id), Date.now());
   const filtered = filter === "all" ? all : all.filter((r) => r.stage === filter);
   const pageSize = parsePageSize(params.per, PAGE_SIZE);
   const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
@@ -56,7 +59,7 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
   const columns: DataTableColumn<BuildRow>[] = [
     { key: "photo", header: "Foto", interactive: true, cell: (r) => (r.photos.length ? <PhotoStrip size="sm" max={1} photos={r.photos} /> : <span className="text-xs text-muted-foreground">—</span>) },
     {
-      key: "code",
+      key: "code", sortValue: (r) => r.code,
       header: "Kode",
       mobile: "title",
       cell: (r) => (
@@ -67,7 +70,7 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
       ),
     },
     {
-      key: "who",
+      key: "who", sortValue: (r) => r.customer,
       header: "Customer",
       cell: (r) => (
         <span className="flex min-w-40 max-w-xs flex-col">
@@ -77,7 +80,7 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
       ),
     },
     {
-      key: "team",
+      key: "team", sortValue: (r) => r.technician,
       header: "Teknisi / sales",
       mobileLabel: "Teknisi",
       cell: (r) => (
@@ -88,7 +91,7 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
       ),
     },
     {
-      key: "comp",
+      key: "comp", sortValue: (r) => r.components, sortFirst: "desc",
       header: "Komponen",
       cell: (r) => (
         <span className="flex flex-col text-sm">
@@ -104,7 +107,7 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
       ),
     },
     {
-      key: "status",
+      key: "status", sortValue: (r) => BUILD_FILTERS.indexOf(r.stage),
       header: "Status",
       mobile: "badge",
       cell: (r) => (
@@ -157,7 +160,9 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
       <DataTable
         caption="Rakitan PC"
         columns={columns}
-        rows={rows}
+        rows={filtered}
+        window={[(page - 1) * pageSize, page * pageSize]}
+        sort={urlSort("/stok/rakitan", params)}
         getRowKey={(r) => r.ticketId}
         rowHref={(r) => `/stok/tickets/${r.ticketId}`}
         empty={<EmptyState icon={Cpu} title="Tidak ada rakitan di sini" />}

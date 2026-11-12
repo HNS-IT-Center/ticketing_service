@@ -1,7 +1,8 @@
+import { requirePage } from "@/lib/page-access";
+import { urlSort } from "@/lib/table-sort";
+import { scopedStoreIds, storeScopeFor } from "@/lib/store-scope-server";
 import Link from "next/link";
 import { CircleDollarSign, Clock, Landmark, PackageOpen, Send, Timer } from "lucide-react";
-import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 import { heldMoney, heldMoneyByVendor, SLOW_DAYS, VERY_SLOW_DAYS, vendorRows, type VendorRow } from "@/lib/finance-claims";
 import { accessFor } from "@/lib/access-server";
 import { formatRupiah, formatRupiahCompact } from "@/lib/charges";
@@ -29,15 +30,17 @@ const YEAR_MS = 365 * 24 * 3600_000;
  * one takes to come back. Read only.
  */
 export default async function FinanceDashboardPage({ searchParams }: { searchParams: Promise<FinanceSearch> }) {
-  const session = await requireRole("Finance", "Administrator");
+  const session = await requirePage("page_finance_vendors");
   const raw = await searchParams;
   // eslint-disable-next-line react-hooks/purity -- server component, read once
   const now = Date.now();
   const defaults = { fromDay: wibDayKey(now - YEAR_MS), toDay: wibDayKey(now) };
-  const stores = await db.storeLocation.findMany({ where: { is_active: true }, select: { id: true, name: true }, orderBy: { name: "asc" } });
+  // A kepala toko granted this page sees the stores they hold.
+  const scope = await storeScopeFor(session);
+  const stores = scope.stores;
   const p = readFinanceSearch(raw, stores.map((s) => s.id), now);
 
-  const loaded = await loadStoreClaims({ storeId: p.storeId, sentStart: p.period.start, sentEnd: p.period.end }, now);
+  const loaded = await loadStoreClaims({ storeIds: scopedStoreIds(scope, p.storeId), sentStart: p.period.start, sentEnd: p.period.end }, now);
   // Harga modal only for a viewer allowed it (Pengaturan Akses → Lihat harga modal).
   const seesCost = (await accessFor(session.userId)).can("view_cost");
   const { rows: claims, cost } = seesCost ? await withUnitCosts(loaded) : { rows: loaded, cost: "hidden" as const };
@@ -64,7 +67,7 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
 
   const columns: DataTableColumn<VendorRow>[] = [
     {
-      key: "vendor",
+      key: "vendor", sortValue: (v) => v.name,
       header: "Vendor",
       mobile: "title",
       cell: (v) => {
@@ -81,9 +84,9 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
         );
       },
     },
-    { key: "sent", header: "Dikirim", className: "tabular-nums", cell: (v) => v.sent },
+    { key: "sent", sortValue: (v) => v.sent, sortFirst: "desc", header: "Dikirim", className: "tabular-nums", cell: (v) => v.sent },
     {
-      key: "open",
+      key: "open", sortValue: (v) => v.open, sortFirst: "desc",
       header: "Masih di vendor",
       cell: (v) => (
         <span className="flex flex-col">
@@ -95,7 +98,7 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
     ...(showMoney
       ? [
           {
-            key: "held",
+            key: "held", sortValue: (v: VendorRow) => heldByVendor.get(v.key)?.value, sortFirst: "desc",
             header: "Uang tertahan",
             cell: (v: VendorRow) => {
               const h = heldByVendor.get(v.key);
@@ -104,9 +107,9 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
           } satisfies DataTableColumn<VendorRow>,
         ]
       : []),
-    { key: "longest", header: "Terlama masih terbuka", mobileLabel: "Terlama terbuka", cell: (v) => <DaysPill days={v.longestOpen} /> },
+    { key: "longest", sortValue: (v) => v.longestOpen, sortFirst: "desc", header: "Terlama masih terbuka", mobileLabel: "Terlama terbuka", cell: (v) => <DaysPill days={v.longestOpen} /> },
     {
-      key: "ret",
+      key: "ret", sortValue: (v) => v.medianReturn, sortFirst: "desc",
       header: "Lama sampai kembali",
       mobile: "badge",
       cell: (v) => (
@@ -116,9 +119,9 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
         </span>
       ),
     },
-    { key: "dec", header: "Sampai keputusan", cell: (v) => (v.medianDecision === null ? "—" : <span className="tabular-nums">{v.medianDecision} hari</span>) },
+    { key: "dec", sortValue: (v) => v.medianDecision, sortFirst: "desc", header: "Sampai keputusan", cell: (v) => (v.medianDecision === null ? "—" : <span className="tabular-nums">{v.medianDecision} hari</span>) },
     {
-      key: "result",
+      key: "result", sortValue: (v) => v.approved, sortFirst: "desc",
       header: "Hasil",
       cell: (v) => (
         <span className="text-sm whitespace-nowrap">
@@ -187,6 +190,7 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
 
       <DataTable
         caption="Kinerja vendor klaim"
+        sort={urlSort("/finance/dashboard", raw)}
         columns={columns}
         rows={vendors}
         getRowKey={(v) => v.key}

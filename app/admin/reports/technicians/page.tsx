@@ -1,5 +1,6 @@
+import { requirePage } from "@/lib/page-access";
+import { urlSort } from "@/lib/table-sort";
 import { Target, AlertTriangle } from "lucide-react";
-import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { formatRupiah, formatRupiahCompact } from "@/lib/charges";
 import { summarizeTargets, type JobCount, type TechnicianTarget } from "@/lib/reports/technicians";
@@ -26,7 +27,9 @@ export default async function TechnicianTargetPage({
 }: {
   searchParams: Promise<{ month?: string; store?: string }>;
 }) {
-  await requireRole("Administrator");
+  const session = await requirePage("page_tech_targets");
+  // Seeing the targets can be granted; setting them stays the administrator's.
+  const canEdit = session.role === "Administrator";
   const params = await searchParams;
   const month = resolveReportMonth(params.month);
   const storeId = params.store || null;
@@ -45,6 +48,7 @@ export default async function TechnicianTargetPage({
     source === "custom" ? "Khusus" : source === "default" ? "Umum" : "Tanpa target";
 
   const editor = (r: TechnicianTarget, className?: string) => {
+    if (!canEdit) return null;
     const target = targetFor(targetRows, r.technician.id, month);
     return (
       <TargetEditor
@@ -61,7 +65,7 @@ export default async function TechnicianTargetPage({
   };
 
   const columns: DataTableColumn<TechnicianTarget>[] = [
-    { key: "name", header: "Teknisi", mobile: "title", cell: (r) => <span className="font-semibold">{r.technician.name}</span> },
+    { key: "name", sortValue: (r) => r.technician.name, header: "Teknisi", mobile: "title", cell: (r) => <span className="font-semibold">{r.technician.name}</span> },
     {
       key: "source",
       header: "Target",
@@ -74,9 +78,9 @@ export default async function TechnicianTargetPage({
         </span>
       ),
     },
-    { key: "tickets", header: "Tiket", cell: (r) => r.tickets },
+    { key: "tickets", sortValue: (r) => r.tickets, sortFirst: "desc", header: "Tiket", cell: (r) => r.tickets },
     {
-      key: "jobs",
+      key: "jobs", sortValue: (r) => r.jobs, sortFirst: "desc",
       header: "Jasa",
       cell: (r) => (
         <div className="flex flex-col gap-1">
@@ -89,7 +93,7 @@ export default async function TechnicianTargetPage({
       ),
     },
     {
-      key: "revenue",
+      key: "revenue", sortValue: (r) => r.revenue, sortFirst: "desc",
       header: "Omzet jasa",
       cell: (r) => (
         <div className="flex flex-col gap-1">
@@ -105,7 +109,7 @@ export default async function TechnicianTargetPage({
       ),
     },
     {
-      key: "points",
+      key: "points", sortValue: (r) => r.points, sortFirst: "desc",
       header: "Poin",
       cell: (r) => (
         <div className="flex flex-col gap-1">
@@ -148,8 +152,8 @@ export default async function TechnicianTargetPage({
   ];
 
   const jobColumns: DataTableColumn<JobCount>[] = [
-    { key: "name", header: "Jasa", mobile: "title", cell: (j) => j.name },
-    { key: "count", header: "Dikerjakan", mobile: "badge", cell: (j) => <span className="font-semibold">{j.count}×</span> },
+    { key: "name", sortValue: (j) => j.name, header: "Jasa", mobile: "title", cell: (j) => j.name },
+    { key: "count", sortValue: (j) => j.count, sortFirst: "desc", header: "Dikerjakan", mobile: "badge", cell: (j) => <span className="font-semibold">{j.count}×</span> },
   ];
 
   const sectionTitle = "text-base font-semibold text-foreground";
@@ -211,7 +215,7 @@ export default async function TechnicianTargetPage({
             </p>
           )}
         </div>
-        <TargetEditor
+        {canEdit && <TargetEditor
           scope={DEFAULT_SCOPE}
           month={month}
           monthText={monthText}
@@ -219,7 +223,7 @@ export default async function TechnicianTargetPage({
           buttonLabel={shopTarget.source === "none" ? "Atur target umum" : "Ubah target umum"}
           title="Target umum per teknisi"
           className="w-full shrink-0 sm:w-auto"
-        />
+        />}
       </section>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
@@ -248,6 +252,7 @@ export default async function TechnicianTargetPage({
         <h2 className={sectionTitle}>Per teknisi</h2>
         <DataTable
           caption="Target per teknisi"
+          sort={urlSort("/admin/reports/technicians", params, "sort_target")}
           columns={columns}
           rows={summary.rows}
           getRowKey={(r) => r.technician.id}
@@ -263,6 +268,7 @@ export default async function TechnicianTargetPage({
         <h2 className={sectionTitle}>Jasa terbanyak</h2>
         <DataTable
           caption="Jasa terbanyak"
+          sort={urlSort("/admin/reports/technicians", params, "sort_jobs")}
           columns={jobColumns}
           rows={summary.jobs}
           getRowKey={(j) => j.jobId}

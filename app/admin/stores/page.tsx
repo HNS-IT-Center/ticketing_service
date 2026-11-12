@@ -12,7 +12,7 @@ import { DeleteEntryButton } from "@/components/app/DeleteEntryButton";
 export const metadata = { title: "Store Locations — HNS IT Center" };
 
 export default async function StoresPage() {
-  await requireRole("Administrator", "Sales");
+  await requireRole("Administrator");
 
   const stores = await db.storeLocation.findMany({
     orderBy: { name: "asc" },

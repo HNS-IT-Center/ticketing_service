@@ -1,3 +1,4 @@
+import type { TableSort } from "@/lib/table-sort";
 import { Truck } from "lucide-react";
 import { db } from "@/lib/db";
 import type { VendorRoles } from "@/lib/vendors";
@@ -13,8 +14,11 @@ import { LocationPill, NewVendorForm, RolePills, VendorRowActions, type VendorRo
 export default async function VendorDirectory({
   canManage,
   defaultRoles,
+  sort,
 }: {
   canManage: boolean;
+  /** Column order from the page's URL (lib/table-sort.ts). */
+  sort?: TableSort;
   /** Roles ticked in advance on the add form — claims on the RMA desk. */
   defaultRoles?: Partial<VendorRoles>;
 }) {
@@ -35,12 +39,12 @@ export default async function VendorDirectory({
   const vendors: VendorRowData[] = rows.map(({ _count, ...v }) => ({ ...v, charges: _count.charges, cases: _count.rma_cases }));
 
   const columns: DataTableColumn<VendorRowData>[] = [
-    { key: "name", header: "Nama", mobile: "title", cell: (v) => <span className="font-semibold">{v.name}</span> },
+    { key: "name", sortValue: (v) => v.name, header: "Nama", mobile: "title", cell: (v) => <span className="font-semibold">{v.name}</span> },
     { key: "roles", header: "Peran", cell: (v) => <RolePills vendor={v} /> },
-    { key: "location", header: "Lokasi", cell: (v) => <LocationPill location={v.location} /> },
-    { key: "contact", header: "Kontak", cell: (v) => <span className="text-muted-foreground">{v.contact ?? "—"}</span> },
+    { key: "location", sortValue: (v) => v.location, header: "Lokasi", cell: (v) => <LocationPill location={v.location} /> },
+    { key: "contact", sortValue: (v) => v.contact, header: "Kontak", cell: (v) => <span className="text-muted-foreground">{v.contact ?? "—"}</span> },
     {
-      key: "status",
+      key: "status", sortValue: (v) => v.is_active,
       header: "Status",
       mobile: "badge",
       cell: (v) => (
@@ -76,6 +80,7 @@ export default async function VendorDirectory({
 
       <DataTable
         caption="Daftar Vendor"
+        sort={sort}
         columns={columns}
         rows={vendors}
         getRowKey={(v) => v.id}

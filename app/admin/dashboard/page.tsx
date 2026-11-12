@@ -1,4 +1,6 @@
 import { requireRole } from "@/lib/session";
+import { urlSort } from "@/lib/table-sort";
+import { TICKET_STATUSES } from "@/lib/ticket-list-filter";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
@@ -14,8 +16,9 @@ import PartCodeAlertCard from "@/components/service/PartCodeAlertCard";
 
 export const metadata = { title: "Dashboard — HNS IT Center" };
 
-export default async function AdminDashboard() {
-  const session = await requireRole("Administrator", "Sales");
+export default async function AdminDashboard({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const params = await searchParams;
+  const session = await requireRole("Administrator");
   const isSales = session.role === "Sales";
   const salesFilter = isSales ? { sales_id: session.userId } : {};
 
@@ -68,17 +71,17 @@ export default async function AdminDashboard() {
 
   type RecentTicket = (typeof recentTickets)[number];
   const recentColumns: DataTableColumn<RecentTicket>[] = [
-    { key: "code", header: "Code", cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>, mobile: "title" },
-    { key: "type", header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
-    { key: "customer", header: "Customer", cell: (t) => ticketPartyName(t) || "Guest" },
+    { key: "code", sortValue: (t) => t.ticket_code, header: "Code", cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>, mobile: "title" },
+    { key: "type", sortValue: (t) => t.ticket_type, header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
+    { key: "customer", sortValue: (t) => ticketPartyName(t), header: "Customer", cell: (t) => ticketPartyName(t) || "Guest" },
     {
-      key: "status",
+      key: "status", sortValue: (t) => TICKET_STATUSES.indexOf(t.status),
       header: "Status",
       cell: (t) => <StatusBadge kind="ticket" status={t.status} hasTechnician={Boolean(t.technician_id)} size="sm" />,
       mobile: "badge",
     },
     {
-      key: "technician",
+      key: "technician", sortValue: (t) => t.technician?.name,
       header: "Technician",
       cell: (t) => t.technician?.name ?? "—",
       className: "text-muted-foreground",
@@ -155,6 +158,7 @@ export default async function AdminDashboard() {
         </div>
         <DataTable
           caption="Recent Tickets"
+          sort={urlSort("/admin/dashboard", params)}
           columns={recentColumns}
           rows={recentTickets}
           getRowKey={(t) => t.id}

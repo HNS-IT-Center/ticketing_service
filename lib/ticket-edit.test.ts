@@ -7,6 +7,7 @@ const current: TicketEditValues = {
   device_sn: "SN123",
   accessories: "Charger",
   device_condition: null,
+  notes: "Layar mati",
   customer_name: "Budi",
   customer_phone: "+62812345",
   customer_email: null,
@@ -62,6 +63,16 @@ describe("parseTicketEdit", () => {
       expect(r.ok).toBe(true);
       if (r.ok) expect(diffTicketEdit(current, r.values)).toEqual([]);
     }
+  });
+});
+
+describe("keluhan", () => {
+  it("can be corrected but not cleared on a service or a claim", () => {
+    const input = { ...current, notes: "  Layar mati total\nsetelah jatuh " };
+    const ok = parseTicketEdit(input, current, service);
+    expect(ok).toMatchObject({ ok: true, values: { notes: "Layar mati total\nsetelah jatuh" } });
+    expect(parseTicketEdit({ ...current, notes: "  " }, current, service)).toEqual({ ok: false, error: "Keluhan tidak boleh dikosongkan." });
+    expect(parseTicketEdit({ ...current, notes: "" }, current, { ...service, ticketType: "cleaning" })).toMatchObject({ ok: true });
   });
 });
 

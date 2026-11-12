@@ -1,4 +1,5 @@
-import { requireRole } from "@/lib/session";
+import { requirePage } from "@/lib/page-access";
+import { urlSort } from "@/lib/table-sort";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { TrendingUp } from "lucide-react";
@@ -58,7 +59,7 @@ export default async function AdminPerformancePage({
 }: {
   searchParams: Promise<{ month?: string; year?: string; store?: string }>;
 }) {
-  await requireRole("Administrator");
+  await requirePage("page_performance");
   const params = await searchParams;
 
   const now = new Date();
@@ -333,7 +334,7 @@ export default async function AdminPerformancePage({
 
   const columns: DataTableColumn<RankedRow>[] = [
     {
-      key: "rank",
+      key: "rank", sortValue: (p) => p.rank,
       header: "Rank",
       mobile: "hidden",
       className: "w-16",
@@ -344,7 +345,7 @@ export default async function AdminPerformancePage({
       ),
     },
     {
-      key: "name",
+      key: "name", sortValue: (p) => p.name,
       header: "Technician",
       mobile: "title",
       className: "min-w-56",
@@ -359,14 +360,14 @@ export default async function AdminPerformancePage({
       ),
     },
     {
-      key: "shift",
+      key: "shift", sortValue: (p) => p.shift,
       header: "Shift",
       // Shift and Active give way first on a narrow desktop; the phone card keeps them.
       className: "hidden whitespace-nowrap xl:table-cell",
       cell: (p) => <span className="capitalize">{p.shift ?? "—"}</span>,
     },
     {
-      key: "active",
+      key: "active", sortValue: (p) => p.activeTickets, sortFirst: "desc",
       header: "Active",
       className: "hidden xl:table-cell",
       cell: (p) => (
@@ -375,11 +376,11 @@ export default async function AdminPerformancePage({
         </span>
       ),
     },
-    { key: "completed", header: "Completed", cell: (p) => <span className="font-semibold">{p.tickets}</span> },
-    { key: "success", header: "Success", cell: (p) => <span className="font-semibold text-tone-green-fg">{p.success}</span> },
-    { key: "failed", header: "Cancelled", cell: (p) => <span className="font-semibold text-destructive">{p.failed}</span> },
+    { key: "completed", sortValue: (p) => p.tickets, sortFirst: "desc", header: "Completed", cell: (p) => <span className="font-semibold">{p.tickets}</span> },
+    { key: "success", sortValue: (p) => p.success, sortFirst: "desc", header: "Success", cell: (p) => <span className="font-semibold text-tone-green-fg">{p.success}</span> },
+    { key: "failed", sortValue: (p) => p.failed, sortFirst: "desc", header: "Cancelled", cell: (p) => <span className="font-semibold text-destructive">{p.failed}</span> },
     {
-      key: "points",
+      key: "points", sortValue: (p) => p.points, sortFirst: "desc",
       header: "Points",
       mobile: "badge",
       className: "whitespace-nowrap text-right",
@@ -465,6 +466,7 @@ export default async function AdminPerformancePage({
 
       <DataTable
         caption="Technician performance"
+        sort={urlSort("/admin/performance", params)}
         columns={columns}
         rows={ranked}
         getRowKey={(p) => p.id}

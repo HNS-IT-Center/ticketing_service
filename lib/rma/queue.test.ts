@@ -4,7 +4,7 @@ import type { RmaStatus } from "@prisma/client";
 // lib/rma/queue.ts pulls in lib/db.ts, which is server-only.
 vi.mock("server-only", () => ({}));
 
-const { RMA_STAGE_SLA, RMA_QUEUE_STATUSES, rmaSeverity, VENDOR_WARNING_DAYS, VENDOR_OVERDUE_DAYS, getRmaQueue } =
+const { RMA_STAGE_SLA, RMA_QUEUE_STATUSES, rmaSeverity, VENDOR_WARNING_DAYS, VENDOR_OVERDUE_DAYS, getRmaQueue, laneOf, DESK_STAGES, PRE_HANDOVER_SLA, preHandoverSeverity } =
   await import("./queue");
 
 const ALL_RMA_STATUSES: RmaStatus[] = [
@@ -140,7 +140,42 @@ describe("getRmaQueue stats — internal consistency", () => {
     expect(stats.warning).toBe(rows.filter((r) => r.severity === "warning").length);
   });
 
-  it("derives the month's net from its own intake and closures", () => {
-    expect(stats.netThisMonth).toBe(stats.openedThisMonth - stats.closedThisMonth);
+  it("splits the queue by whose turn it is, nothing counted twice", () => {
+    const desk = rows.filter((r) => r.lane === "desk").length;
+    const vendor = rows.filter((r) => r.lane === "vendor").length;
+    const tech = rows.filter((r) => r.lane === "technician").length;
+    expect(desk + vendor + tech).toBe(stats.active);
+    expect(stats.needsAction).toBe(desk);
+    expect(stats.atVendor).toBe(vendor);
+  });
+});
+
+describe("laneOf — whose turn it is", () => {
+  it("gives the desk every stage that waits on it, including the three the old count left out", () => {
+    for (const s of ["pending_verification", "verified", "vendor_decided", "unit_received"] as const) {
+      expect(laneOf(s, null)).toBe("desk");
+    }
+    expect(DESK_STAGES).toEqual(expect.arrayContaining(["verified", "vendor_decided", "unit_received"]));
+  });
+
+  it("gives the vendor its two stages", () => {
+    expect(laneOf("submitted_to_vendor", null)).toBe("vendor");
+    expect(laneOf("in_vendor_process", null)).toBe("vendor");
+  });
+
+  it("gives the technician a hold that asks for their evidence, and the desk any other hold", () => {
+    expect(laneOf("on_hold", "missing_damage_video")).toBe("technician");
+    expect(laneOf("on_hold", "missing_purchase_invoice")).toBe("technician");
+    expect(laneOf("on_hold", "other")).toBe("desk");
+    expect(laneOf("on_hold", null)).toBe("desk");
+  });
+});
+
+describe("preHandoverSeverity — a claim the technician has not handed over", () => {
+  it("warns and escalates on its own targets", () => {
+    expect(preHandoverSeverity(PRE_HANDOVER_SLA.warning - 1)).toBe("ok");
+    expect(preHandoverSeverity(PRE_HANDOVER_SLA.warning)).toBe("warning");
+    expect(preHandoverSeverity(PRE_HANDOVER_SLA.overdue)).toBe("overdue");
+    expect(preHandoverSeverity(95)).toBe("overdue");
   });
 });

@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import type { RmaStatus } from "@prisma/client";
 import { cleanVendorName, vendorKey } from "@/lib/rma/vendor";
-import { countByBrand, DEVICE_TYPE_LABELS } from "@/lib/rma/device";
+import { holdReasonAsksTechnician } from "@/lib/rma/hold-reason";
 
 /**
  * Data for the RMA dashboard: the queue and its headline numbers.
@@ -26,11 +26,35 @@ export const RMA_QUEUE_STATUSES: readonly RmaStatus[] = [
   "unit_received",
 ];
 
-/** Waiting on the RMA desk itself, as opposed to waiting on the vendor. */
-const NEEDS_ACTION: readonly RmaStatus[] = ["pending_verification", "on_hold"];
+/**
+ * Whose turn it is (BL28c, owner 2026-10-03: group the dashboard by "whose
+ * ball it is"). The desk owns every stage where nothing happens until it acts
+ * — including `verified`, `vendor_decided` and `unit_received`, which the old
+ * "Butuh Tindakan" figure left out, so it counted 5 where the desk had 7.
+ * A hold that asks the technician for evidence is the technician's turn.
+ */
+export type RmaLane = "desk" | "vendor" | "technician";
+export const DESK_STAGES: readonly RmaStatus[] = ["pending_verification", "on_hold", "verified", "vendor_decided", "unit_received"];
+export const VENDOR_STAGES: readonly RmaStatus[] = ["submitted_to_vendor", "in_vendor_process"];
+const AT_VENDOR = VENDOR_STAGES;
 
-/** In the vendor's hands. */
-const AT_VENDOR: readonly RmaStatus[] = ["submitted_to_vendor", "in_vendor_process"];
+export function laneOf(status: RmaStatus, holdReason: Parameters<typeof holdReasonAsksTechnician>[0]): RmaLane {
+  if (VENDOR_STAGES.includes(status)) return "vendor";
+  if (status === "on_hold" && holdReasonAsksTechnician(holdReason)) return "technician";
+  return "desk";
+}
+
+/**
+ * A claim the technician has not handed over yet — no case exists, so no RMA
+ * stage measures it. One ticket had sat there 95 days with nothing on screen
+ * saying so (found 2026-10-03). A target for the desk to chase, tunable here.
+ */
+export const PRE_HANDOVER_SLA = { warning: 3, overdue: 7 } as const;
+export function preHandoverSeverity(days: number): RmaSeverity {
+  if (days >= PRE_HANDOVER_SLA.overdue) return "overdue";
+  if (days >= PRE_HANDOVER_SLA.warning) return "warning";
+  return "ok";
+}
 
 /** Days at a vendor beyond which a case is worth chasing. */
 export const VENDOR_WARNING_DAYS = 7;
@@ -84,17 +108,7 @@ export async function getRmaQueue() {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-  const [
-    cases,
-    closedCount,
-    cancelledCount,
-    closedThisMonth,
-    openedThisMonth,
-    awaitingCheckRaw,
-    claimTickets,
-    closedCases,
-    decisions,
-  ] = await Promise.all([
+  const [cases, closedCount, cancelledCount, awaitingCheckRaw, closedCases, decisions] = await Promise.all([
       db.rmaCase.findMany({
         where: { status: { in: [...RMA_QUEUE_STATUSES] } },
         orderBy: { created_at: "asc" },
@@ -107,6 +121,7 @@ export async function getRmaQueue() {
           submitted_at: true,
           created_at: true,
           hold_reason: true,
+          hold_reason_code: true,
           recommended_eligible: true,
           recommendation_note: true,
           handler: { select: { id: true, name: true } },
@@ -131,8 +146,6 @@ export async function getRmaQueue() {
       }),
       db.rmaCase.count({ where: { status: "closed" } }),
       db.rmaCase.count({ where: { status: "cancelled" } }),
-      db.rmaCase.count({ where: { status: "closed", closed_at: { gte: monthStart } } }),
-      db.rmaCase.count({ where: { created_at: { gte: monthStart } } }),
       // Claims the desk can already see but cannot act on: the technician still
       // has the unit. Read-only on the dashboard so the desk knows what is
       // coming without an RmaCase row existing before the handover.
@@ -155,13 +168,6 @@ export async function getRmaQueue() {
           technician: { select: { name: true } },
         },
       }),
-      // Every warranty claim ever raised, for the brand and device-type mix.
-      // Deliberately all of them, open and closed: the question "which brand
-      // gets claimed most" is not about the current backlog.
-      db.ticket.findMany({
-        where: { ticket_type: "warranty_claim" },
-        select: { device_name: true, device_type: true },
-      }),
       // Every closed case, for the average turnaround and its trend.
       db.rmaCase.findMany({
         where: { status: "closed", closed_at: { not: null } },
@@ -178,10 +184,10 @@ export async function getRmaQueue() {
   const nowMs = now.getTime();
   const days = (from: Date) => Math.floor((nowMs - new Date(from).getTime()) / 86_400_000);
 
-  const awaitingCheck = awaitingCheckRaw.map((t) => ({
-    ...t,
-    daysWaiting: days(t.created_at),
-  }));
+  const awaitingCheck = awaitingCheckRaw.map((t) => {
+    const daysWaiting = days(t.created_at);
+    return { ...t, daysWaiting, severity: preHandoverSeverity(daysWaiting) };
+  });
 
   const rows = cases.map((c) => {
     // Falls back to the case's own creation for a row whose events were pruned.
@@ -194,12 +200,22 @@ export async function getRmaQueue() {
       daysInStage,
       stageSince,
       severity: rmaSeverity(c.status, daysInStage),
+      lane: laneOf(c.status, c.hold_reason_code),
     };
   });
 
   const stats = {
     active: rows.length,
-    needsAction: rows.filter((r) => NEEDS_ACTION.includes(r.status)).length,
+    /** The desk's turn — every stage where nothing moves until it acts. */
+    needsAction: rows.filter((r) => r.lane === "desk").length,
+    /** The technician's turn: claims not handed over, and holds waiting on their evidence. */
+    withTechnician: awaitingCheck.length + rows.filter((r) => r.lane === "technician").length,
+    /** Claims not handed over yet and past their target — no case, so not in `pastDue`. */
+    preHandoverLate: awaitingCheck.filter((t) => t.severity === "overdue").length,
+    /** Claims sitting with the technician past the pre-handover target. */
+    technicianLate:
+      awaitingCheck.filter((t) => t.severity === "overdue").length +
+      rows.filter((r) => r.lane === "technician" && r.severity === "overdue").length,
     atVendor: rows.filter((r) => AT_VENDOR.includes(r.status)).length,
     /**
      * Still at the vendor AND there too long. `submitted_at` stays set after a
@@ -216,10 +232,6 @@ export async function getRmaQueue() {
     /** Past its stage target — the number the dashboard leads with. */
     pastDue: rows.filter((r) => r.severity === "overdue").length,
     warning: rows.filter((r) => r.severity === "warning").length,
-    closedThisMonth,
-    openedThisMonth,
-    /** Positive means the pile is growing this month. */
-    netThisMonth: openedThisMonth - closedThisMonth,
     closedCount,
     cancelledCount,
     /** Longest-running open case, the one most likely to need chasing. */
@@ -294,26 +306,6 @@ export async function getRmaQueue() {
       return [...byKey.values()].sort((a, b) => b.oldestDays - a.oldestDays || b.open - a.open);
     })(),
 
-    /** Claims per manufacturer, across every claim ever raised. */
-    brands: countByBrand(claimTickets.map((t) => t.device_name)),
-
-    /** Claims per device category, using the enum rather than free text. */
-    deviceTypes: (() => {
-      const counts = new Map<string, number>();
-      for (const t of claimTickets) {
-        counts.set(t.device_type, (counts.get(t.device_type) ?? 0) + 1);
-      }
-      return [...counts.entries()]
-        .map(([type, count]) => ({
-          type,
-          label: DEVICE_TYPE_LABELS[type as keyof typeof DEVICE_TYPE_LABELS] ?? type,
-          count,
-        }))
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-    })(),
-
-    /** Denominator for both breakdowns above. */
-    totalClaims: claimTickets.length,
   };
 
   return { rows, awaitingCheck, stats, closedCount, cancelledCount };

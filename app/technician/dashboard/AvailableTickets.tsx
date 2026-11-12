@@ -9,24 +9,21 @@ import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
 import { PointsBadge } from "@/components/app/PointsBadge";
 import { Button } from "@/components/ui/button";
+import { getTicketPoints } from "@/lib/points";
 
 type UnassignedTicket = {
   id: string;
   ticket_code: string;
   ticket_type: string;
   device_type: string;
+  /** For a cleaning ticket's points (lib/points.ts). */
+  service_package: string | null;
   created_at: Date;
   user: { name: string };
 };
 
 type SortType = "asc" | "desc" | "default";
 
-function getTicketPoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
 
 export default function AvailableTickets({
   tickets,
@@ -113,7 +110,7 @@ export default function AvailableTickets({
     // beside the sidebar; the phone cards still list it.
     { key: "device", header: "Device", cell: (t) => t.device_type.replace(/_/g, " "), className: "hidden text-muted-foreground xl:table-cell" },
     { key: "date", header: "Date", cell: (t) => new Date(t.created_at).toLocaleDateString("id-ID"), className: "whitespace-nowrap text-muted-foreground" },
-    { key: "points", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type)} />, mobile: "badge" },
+    { key: "points", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type, t.service_package)} />, mobile: "badge" },
     { key: "action", header: "", cell: actionCell, mobile: "footer" },
   ];
 

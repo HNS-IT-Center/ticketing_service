@@ -1,23 +1,17 @@
 /**
- * The ticket point table used by the writers.
+ * The ticket point table — the only one (unified 2026-11-12, owner's call).
  *
- * This is the table `app/actions/tickets.ts` and `app/actions/technician.ts`
- * have credited since 2026-07-27 (`0fed3b9`) — the only one that knows the
- * `Other_Device` and `Full_Repaste*` enum values, and the one the stored
- * `TechnicianPerformance` totals were built from. `app/actions/rma.ts` credits
- * the handover of a warranty claim from here, so that the claim is worth the
- * same as any other credited ticket of its type.
+ * What is credited (`app/actions/tickets.ts`, `technician.ts`, `rma.ts`), what
+ * the leaderboard and performance report add up, what the dashboards, the
+ * ticket lists and the requests bell show, and what deleting a ticket takes
+ * back all read this. Before, the leaderboard, the badges and the reports each
+ * carried their own copy, so a cleaning showed 2 and was credited 5, and an
+ * "Other device" service showed 5 and was credited 3.
  *
- * It is NOT yet the only copy. The leaderboard, the performance report and the
- * ticket-list badges each still carry their own table, which disagrees with
- * this one for cleaning and for `Other_Device` service. Unifying them changes
- * figures on screen and credited points for admin-closed tickets, so it is its
- * own branch — `fix/points-table-unification` — and deliberately not part of
- * the RMA work.
- *
- * `extra_services` deliberately does not appear here. Two list pages add +3 per
- * extra service to the badge they render, but no writer has ever credited it.
- * That discrepancy also belongs to the unification branch.
+ * The old "Extra Services" ticks are not counted anywhere. The list badges used
+ * to add +3 per tick ("+extra"), which made a warranty claim with six ticks read
+ * 20 points while it earned 2. Ticks already stored stay in `extra_services`;
+ * nothing reads or writes them.
  */
 
 export function getTicketPoints(

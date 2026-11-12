@@ -27,25 +27,13 @@ import type { CatalogItem } from "@/lib/catalog/items";
 import { catalogBrand } from "@/lib/catalog/brand";
 import { parsePostedItems, parseUpgradeSelections, typedItems } from "@/lib/catalog/picked-items";
 import { resolvePostedItems, type ResolvedItem } from "@/lib/catalog/resolve-picked";
+import { getTicketPoints } from "@/lib/points";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
 const IMAGE_URL = /\.(jpe?g|png|gif|webp|heic|heif)(\?.*)?$/i;
 
 
-// ─── Ticket Point Calculator ───────────────────────────────────────────────
-function getTicketPoints(type: string, deviceType?: string | null, cleaningPackage?: string | null): number {
-  if (type === "service") {
-    if (deviceType === "Other_Device") return 3;
-    return 5;
-  }
-  if (type === "cleaning") {
-    if (cleaningPackage === "Full_Repaste" || cleaningPackage === "Full_Repaste_CPU_GPU") return 5;
-    return 3;
-  }
-  if (type === "pc_build") return 4;
-  return 2;
-}
 
 // ─── Create Ticket ─────────────────────────────────────────────────────────
 export async function createTicketAction(formData: FormData) {

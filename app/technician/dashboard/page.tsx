@@ -17,15 +17,10 @@ import PartCodeAlertCard from "@/components/service/PartCodeAlertCard";
 import { Ticket, CheckCircle, Trophy, PlusCircle, ChevronDown } from "lucide-react";
 import { getUserTitles } from "@/lib/performance";
 import { ticketPartyName } from "@/lib/ticket-party";
+import { getTicketPoints } from "@/lib/points";
 
 export const metadata = { title: "Technician Dashboard — HNS IT Center" };
 
-function getTicketPoints(type: string, deviceType?: string | null): number {
-  if (type === "pc_build") return 4;
-  if (type === "service") return 5;
-  if (type === "cleaning" && deviceType === "PC_Gaming") return 4;
-  return 2;
-}
 
 export default async function TechnicianDashboard({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
   const params = await searchParams;
@@ -57,7 +52,7 @@ export default async function TechnicianDashboard({ searchParams }: { searchPara
         },
         orderBy: { created_at: "asc" },
         take: 20,
-        select: { id: true, ticket_code: true, ticket_type: true, device_type: true, created_at: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
+        select: { id: true, ticket_code: true, ticket_type: true, device_type: true, cleaning_detail: { select: { service_package: true } }, created_at: true, is_for_self: true, customer_name: true, user: { select: { name: true } } },
       }),
       db.ticketAssignmentRequest.findMany({
         where: { technician_id: session.userId, status: "pending" },
@@ -101,6 +96,7 @@ export default async function TechnicianDashboard({ searchParams }: { searchPara
     take: 10,
     select: {
       id: true, ticket_code: true, ticket_type: true, device_type: true,
+      cleaning_detail: { select: { service_package: true } },
       status: true, technician_id: true, is_for_self: true, customer_name: true,
       user: { select: { name: true } },
       technician: { select: { name: true } },
@@ -135,7 +131,7 @@ export default async function TechnicianDashboard({ searchParams }: { searchPara
           },
         ]
       : []),
-    { key: "points", sortValue: (t) => getTicketPoints(t.ticket_type, t.device_type), sortFirst: "desc", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type)} /> },
+    { key: "points", sortValue: (t) => getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package), sortFirst: "desc", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package)} /> },
     {
       key: "status", sortValue: (t) => TICKET_STATUSES.indexOf(t.status),
       header: "Status",
@@ -216,6 +212,7 @@ export default async function TechnicianDashboard({ searchParams }: { searchPara
             ticket_code: t.ticket_code,
             ticket_type: t.ticket_type,
             device_type: t.device_type,
+            service_package: t.cleaning_detail?.service_package ?? null,
             created_at: t.created_at,
             user: { name: (ticketPartyName(t) || "Guest") }
           }))}

@@ -501,6 +501,8 @@ export async function checkTicketDeletionAction(ticketId: string) {
     select: {
       ticket_code: true,
       ticket_type: true,
+      device_type: true,
+      cleaning_detail: { select: { service_package: true } },
       status: true,
       customer_name: true,
       technician: { select: { name: true } },
@@ -555,7 +557,7 @@ export async function checkTicketDeletionAction(ticketId: string) {
     credits: {
       earningLogs,
       failureLogs,
-      points: earningLogs * getTicketPoints(ticket.ticket_type, null, null),
+      points: earningLogs * getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package),
     },
   };
 }
@@ -598,6 +600,7 @@ export async function deleteTicketAction(
     include: {
       technician: { select: { id: true, name: true } },
       store_location: { select: { code: true } },
+      cleaning_detail: { select: { service_package: true } },
       attachments: { select: { file_url: true } },
       rma_case: { select: { rma_code: true, status: true } },
       _count: {
@@ -634,7 +637,7 @@ export async function deleteTicketAction(
   ]);
 
   const pointsToReverse =
-    earningLogs * getTicketPoints(ticket.ticket_type, ticket.device_type, null);
+    earningLogs * getTicketPoints(ticket.ticket_type, ticket.device_type, ticket.cleaning_detail?.service_package);
   const attachmentUrls = ticket.attachments.map((a) => a.file_url);
 
   await db.$transaction(async (tx) => {

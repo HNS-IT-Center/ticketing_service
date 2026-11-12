@@ -59,6 +59,7 @@ export async function GET() {
           ticket_code: true,
           ticket_type: true,
           device_type: true,
+          cleaning_detail: { select: { service_package: true } },
           status: true,
           // Selected here so the store filter below needs no second round of
           // per-request queries. It used to run one `findUnique` per row.

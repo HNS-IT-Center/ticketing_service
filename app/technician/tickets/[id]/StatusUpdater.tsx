@@ -22,7 +22,7 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
 import { TONE_CLASSES, type StatusTone } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 
 /** Matches MAX_DAMAGE_PHOTOS in app/actions/rma.ts. */
 const MAX_DAMAGE_PHOTOS = 5;
@@ -256,7 +256,7 @@ export default function StatusUpdater({
         result = await handoverToRmaAction(fd);
       } catch (err) {
         // Next moving the page (e.g. the login ran out) is not a failure.
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         console.error("[handover] send failed:", err);
         toast.error(uploadFailureMessage(err));
         return;
@@ -325,7 +325,7 @@ export default function StatusUpdater({
         }
       } catch (err) {
         // Next moving the page (e.g. the login ran out) is not a failure.
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         console.error("Action error:", err);
         toast.error(uploadFailureMessage(err));
       }
@@ -347,7 +347,11 @@ export default function StatusUpdater({
 
   if (isInHandover) {
     const info = statusLabels[currentStatus];
-    const canHandover = ticketType === "pc_build" ? isSalesMode : !isSalesMode;
+    // A PC build's handover belongs to Sales — but no Sales account exists yet
+    // (they still work from the e-commerce system, not linked to SSO), so a
+    // sold build could not be picked up at all (owner, 2026-11-12). Until Sales
+    // accounts exist, the technician may run it too. Then: back to Sales only.
+    const canHandover = ticketType === "pc_build" ? true : !isSalesMode;
     const hasAction =
       canHandover &&
       ((currentStatus === "done") || currentStatus === "ready_for_pickup" || currentStatus === "handed_to_courier");

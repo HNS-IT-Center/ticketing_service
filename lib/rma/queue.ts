@@ -130,6 +130,7 @@ export async function getRmaQueue() {
           replacement_sn: true,
           submitted_at: true,
           created_at: true,
+          handed_over_at: true,
           hold_reason: true,
           hold_reason_code: true,
           recommended_eligible: true,
@@ -201,8 +202,9 @@ export async function getRmaQueue() {
   });
 
   const rows = cases.map((c) => {
-    // Falls back to the case's own creation for a row whose events were pruned.
-    const stageSince = c.events[0]?.created_at ?? c.created_at;
+    // Falls back to the handover for a case with no events — as the case
+    // page's "Di tahap ini" does (lib/rma/stage-durations.ts).
+    const stageSince = c.events[0]?.created_at ?? c.handed_over_at;
     const daysInStage = days(stageSince);
     return {
       ...c,

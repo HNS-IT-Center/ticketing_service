@@ -16,6 +16,7 @@ import type { RmaStatus } from "@prisma/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { rmaStatusDisplay, TONE_CLASSES } from "@/lib/status-display";
 import { cn, formatDateTime } from "@/lib/utils";
+import { caseDurations, formatSpan } from "@/lib/rma/stage-durations";
 
 /**
  * Read-only view of a ticket's RMA case for staff portals.
@@ -133,9 +134,18 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default function RmaStatusCard({ rmaCase }: { rmaCase: RmaCaseView }) {
-  // "Days at vendor" is not computed here: reading the clock during render is
-  // impure. The RMA dashboard derives it once per request instead.
+export default function RmaStatusCard({
+  rmaCase,
+  now,
+  claimOpenedAt,
+}: {
+  rmaCase: RmaCaseView;
+  /** The page's clock, read once per request — never here, so the card stays pure. Without it no durations show. */
+  now?: number;
+  /** When the claim's ticket was created, for "sejak klaim masuk". */
+  claimOpenedAt?: Date | null;
+}) {
+  const durations = now === undefined ? null : caseDurations(rmaCase.events, { now, status: rmaCase.status, claimOpenedAt, handedOverAt: rmaCase.handed_over_at });
   return (
     <Card className="md:[--card-spacing:--spacing(6)]">
       <CardHeader>
@@ -144,6 +154,24 @@ export default function RmaStatusCard({ rmaCase }: { rmaCase: RmaCaseView }) {
           <RmaStatusBadge status={rmaCase.status} />
         </div>
         <p className="font-mono text-sm text-muted-foreground">{rmaCase.rma_code}</p>
+        {durations && (
+          <dl className="mt-1 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border border-border bg-muted/50 px-3 py-2">
+              <dt className="text-xs text-muted-foreground">Di tahap ini</dt>
+              <dd className="text-base font-semibold tabular-nums">{durations.currentMs === null ? "Selesai" : formatSpan(durations.currentMs)}</dd>
+            </div>
+            <div className="rounded-lg border border-border bg-muted/50 px-3 py-2">
+              <dt className="text-xs text-muted-foreground">Total proses RMA</dt>
+              <dd className="text-base font-semibold tabular-nums">{formatSpan(durations.rmaMs)}</dd>
+            </div>
+            {durations.claimMs !== null && (
+              <div className="rounded-lg border border-border bg-muted/50 px-3 py-2">
+                <dt className="text-xs text-muted-foreground">Sejak klaim masuk</dt>
+                <dd className="text-base font-semibold tabular-nums">{formatSpan(durations.claimMs)}</dd>
+              </div>
+            )}
+          </dl>
+        )}
       </CardHeader>
 
       <CardContent className="flex flex-col gap-4">
@@ -239,7 +267,19 @@ export default function RmaStatusCard({ rmaCase }: { rmaCase: RmaCaseView }) {
                       )}
                     </div>
                     <div className="min-w-0 pb-1">
-                      <div className="text-sm font-semibold">{label}</div>
+                      <div className="flex flex-wrap items-baseline gap-x-2 text-sm font-semibold">
+                        {label}
+                        {durations && !durations.spans[i].ended && (
+                          <span
+                            className={cn(
+                              "rounded-full px-2 py-0.5 text-[0.6875rem] font-semibold tabular-nums",
+                              durations.spans[i].current ? "bg-tone-blue-bg text-tone-blue-fg" : "bg-muted text-muted-foreground",
+                            )}
+                          >
+                            {durations.spans[i].current ? `berjalan ${formatSpan(durations.spans[i].ms)}` : formatSpan(durations.spans[i].ms)}
+                          </span>
+                        )}
+                      </div>
                       <div className="text-xs text-muted-foreground">
                         {formatDateTime(event.created_at)}
                         {event.actor ? ` • ${event.actor.name}` : ""}

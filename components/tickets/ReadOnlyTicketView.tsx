@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { requestNow } from "@/lib/clock";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
 import { ArrowLeft, Eye } from "lucide-react";
@@ -128,6 +129,8 @@ export async function ReadOnlyTicketView({
       })),
   ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
+  // The clock, read once for the request, for the RMA card's durations.
+  const rmaNow = requestNow();
   return (
     // ReplacedPartsPanel and ChargesPanel carry legacy markup, so the root has
     // no data-slot (the UI-1 rule); every section brings its own.
@@ -176,7 +179,7 @@ export async function ReadOnlyTicketView({
 
           <UpgradesCard details={ticket.upgrade_details} />
           <PcComponentsCard components={ticket.pc_components} detail={ticket.pc_build_detail} />
-          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} />}
+          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} now={rmaNow} claimOpenedAt={ticket.created_at} />}
           <AttachmentsCard attachments={regularAttachments} />
         </div>
 

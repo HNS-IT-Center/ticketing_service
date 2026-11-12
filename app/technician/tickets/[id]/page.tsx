@@ -1,4 +1,5 @@
 import EditTicketButton from "@/components/tickets/EditTicketButton";
+import { requestNow } from "@/lib/clock";
 import { loadTicketEdit } from "@/lib/ticket-edit-server";
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
@@ -187,6 +188,8 @@ export default async function TechnicianTicketDetailPage({
 
   const customerPhone = ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone;
 
+  // The clock, read once for the request, for the RMA card's durations.
+  const rmaNow = requestNow();
   return (
     // ReplacedPartsPanel and ChargesPanel still carry legacy markup, so the
     // root keeps no data-slot (the UI-1 rule); every section brings its own.
@@ -283,7 +286,7 @@ export default async function TechnicianTicketDetailPage({
               />
             )}
 
-          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} />}
+          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} now={rmaNow} claimOpenedAt={ticket.created_at} />}
 
           {ticket.ticket_type === "pc_build" && (
             <PcBuildHandover

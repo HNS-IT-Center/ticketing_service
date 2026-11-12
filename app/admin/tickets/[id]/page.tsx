@@ -1,4 +1,5 @@
 import { requirePage } from "@/lib/page-access";
+import { requestNow } from "@/lib/clock";
 import { inScope, storeScopeFor } from "@/lib/store-scope-server";
 import { ReadOnlyTicketView } from "@/components/tickets/ReadOnlyTicketView";
 import EditTicketButton from "@/components/tickets/EditTicketButton";
@@ -197,6 +198,8 @@ export default async function AdminTicketDetailPage({
   const customerPhone = ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone;
   const isAdmin = session.role === "Administrator";
 
+  // The clock, read once for the request, for the RMA card's durations.
+  const rmaNow = requestNow();
   return (
     <div data-slot="admin-ticket-detail" className="flex flex-col gap-6">
       <TicketHeader
@@ -292,7 +295,7 @@ export default async function AdminTicketDetailPage({
           )}
 
           {/* Warranty detail */}
-          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} />}
+          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} now={rmaNow} claimOpenedAt={ticket.created_at} />}
 
           {ticket.warranty_detail && (
             <DetailCard title="Warranty Information">

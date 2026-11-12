@@ -1,4 +1,5 @@
 import EditTicketButton from "@/components/tickets/EditTicketButton";
+import { requestNow } from "@/lib/clock";
 import { loadTicketEdit } from "@/lib/ticket-edit-server";
 import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
@@ -142,6 +143,8 @@ export default async function SalesTicketDetailPage({
       }))
   ].sort((a, b) => b.date.getTime() - a.date.getTime());
 
+  // The clock, read once for the request, for the RMA card's durations.
+  const rmaNow = requestNow();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
@@ -283,7 +286,7 @@ export default async function SalesTicketDetailPage({
           <PcComponentsCard components={ticket.pc_components} detail={ticket.pc_build_detail} />
 
           {/* PC Build Handover Verification */}
-          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} />}
+          {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} now={rmaNow} claimOpenedAt={ticket.created_at} />}
 
           {ticket.ticket_type === "pc_build" && (
             <PcBuildHandover

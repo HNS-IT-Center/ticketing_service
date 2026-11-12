@@ -13,15 +13,18 @@ export default function CatalogItemPicker({
   store = null,
   showStock = true,
   placeholder = "Cari nama barang atau SKU, mis. baterai asus",
+  initialQuery = "",
   onPick,
 }: {
   store?: StoreRef | null;
   /** Off for a customer's own unit: the shop's stock says nothing about it. */
   showStock?: boolean;
   placeholder?: string;
+  /** Starts the search with this text — e.g. the name typed at intake, when a code is added later. */
+  initialQuery?: string;
   onPick: (item: CatalogItem) => void;
 }) {
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   const [items, setItems] = useState<CatalogItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -107,3 +107,58 @@ export async function updateTicketDetailsAction(ticketId: string, formData: Form
   revalidatePath("/rma/cases/[id]", "page");
   return { ok: true, changed: changes.length + (catalogData && changes.length === 0 ? 1 : 0) };
 }
+
+/**
+ * Lengkapi Kode Barang: give a ticket whose unit was typed its catalogue item,
+ * from the list of tickets without one (owner, 2026-11-12). The same right and
+ * the same rule as the edit dialog — the item is re-read from the catalogue by
+ * id, and its name and SKU replace what was typed, the typed name kept in the
+ * activity log. Only a ticket still without a code is changed, so two people
+ * working the list at once link it once.
+ */
+export async function linkTicketUnitAction(ticketId: string, catalogItemId: number): Promise<TicketEditResult> {
+  const session = await requireSession();
+  const access = await accessFor(session.userId);
+  if (!access.can("edit_ticket")) return { ok: false, error: "Anda tidak punya akses untuk mengubah data tiket." };
+  if (!Number.isInteger(catalogItemId) || catalogItemId <= 0) return { ok: false, error: "Unit dari katalog tidak valid." };
+
+  const ticket = await db.ticket.findUnique({
+    where: { id: ticketId },
+    select: { id: true, ticket_code: true, device_name: true, device_sku: true },
+  });
+  if (!ticket) return { ok: false, error: "Tiket tidak ditemukan." };
+  if (ticket.device_sku) return { ok: false, error: `Tiket ${ticket.ticket_code} sudah punya kode barang (${ticket.device_sku}).` };
+
+  let item: CatalogItem | null;
+  try {
+    item = await getCatalogItem(catalogItemId, NO_STOCK);
+  } catch (err) {
+    if (!(err instanceof CatalogUnavailableError)) throw err;
+    console.error("[UNIT CODE] katalog", err.message);
+    return { ok: false, error: "Katalog barang sedang tidak dapat dihubungi. Coba lagi sebentar lagi." };
+  }
+  if (!item) return { ok: false, error: "Unit tidak ditemukan di katalog." };
+
+  const done = await db.ticket.updateMany({
+    where: { id: ticket.id, OR: [{ device_sku: null }, { device_sku: "" }] },
+    data: {
+      device_name: item.name,
+      device_catalog_item_id: item.id,
+      device_sku: item.sku,
+      device_catalog_category: item.category,
+      device_brand: catalogBrand(item),
+    },
+  });
+  if (done.count === 0) return { ok: false, error: `Tiket ${ticket.ticket_code} baru saja diberi kode oleh orang lain.` };
+
+  await logActivity(
+    session,
+    "ticket.edit",
+    `${ticket.ticket_code}: kode barang dilengkapi — "${ticket.device_name ?? "—"}" → ${item.sku} ${item.name}`,
+    { type: "ticket", id: ticket.id, label: ticket.ticket_code },
+  );
+  revalidatePath("/admin/tickets/kode-barang");
+  revalidatePath(`/admin/tickets/${ticket.id}`);
+  revalidatePath("/rma/cases/[id]", "page");
+  return { ok: true, changed: 1 };
+}

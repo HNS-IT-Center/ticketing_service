@@ -3,7 +3,6 @@ import { AlertTriangle, Timer } from "lucide-react";
 import { LONG_LEAD_DAYS, type RmaQueueRow, type RmaSeverity } from "@/lib/rma/queue";
 import { holdReasonMeta } from "@/lib/rma/hold-reason";
 import { RMA_DECISION_LABELS } from "@/lib/rma/decision";
-import { vendorLocationText } from "@/lib/vendors";
 
 /** A stage's targets, printed on its card: they decide every colour on this page. */
 export type StageSla = { warning: number; overdue: number };
@@ -40,78 +39,78 @@ function CountPill({ n, tone, label }: { n: number; tone: RmaSeverity; label: st
   );
 }
 
-/** The vendor's name as it stands in the list, else as typed when the claim went out. */
-export function caseVendorText(row: Pick<RmaQueueRow, "vendor" | "vendor_name">): string | null {
-  const name = row.vendor?.name ?? row.vendor_name?.trim();
-  if (!name) return null;
-  const where = vendorLocationText(row.vendor?.location);
-  return where ? `${name} · ${where}` : name;
+/** The vendor's name as listed, else as typed when the claim went out. */
+export function caseVendorName(row: Pick<RmaQueueRow, "vendor" | "vendor_name">): string | null {
+  return row.vendor?.name ?? (row.vendor_name?.trim() || null);
 }
 
-const DETAIL = "mt-1 block text-[0.8125rem] leading-snug whitespace-normal";
-
 /**
- * What the desk needs to know about a case without opening it (owner,
- * 2026-11-12): why it is held, which vendor has it, and what the vendor
- * decided. Internal fields — this page is staff only.
+ * The one line of explanation a case needs on the dashboard — the words
+ * themselves, no labels (owner, 2026-11-12): why it is held, or what the
+ * vendor said. Internal fields; this page is staff only.
  */
-export function StageDetail({ row }: { row: RmaQueueRow }) {
+export function caseNote(row: RmaQueueRow): string | null {
   if (row.status === "on_hold") {
-    const reason = row.hold_reason_code ? holdReasonMeta(row.hold_reason_code).label : "kategori tidak dicatat";
-    const note = row.hold_reason?.trim();
-    return (
-      <span className={DETAIL}>
-        <span className="font-semibold text-tone-orange-fg">Ditahan: {reason}</span>
-        {note && <span className="line-clamp-2 text-muted-foreground">Keterangan: {note}</span>}
-      </span>
-    );
-  }
-  if (row.status === "submitted_to_vendor" || row.status === "in_vendor_process") {
-    const vendor = caseVendorText(row);
-    return (
-      <span className={DETAIL}>
-        <span className="text-muted-foreground">{row.status === "submitted_to_vendor" ? "Diajukan ke vendor: " : "Diproses oleh vendor: "}</span>
-        <span className="font-semibold text-foreground">{vendor ?? "nama vendor belum dicatat"}</span>
-        {row.daysAtVendor !== null && <span className="text-muted-foreground"> · {row.daysAtVendor} hari di vendor</span>}
-      </span>
-    );
+    return row.hold_reason?.trim() || (row.hold_reason_code ? holdReasonMeta(row.hold_reason_code).label : null);
   }
   if (row.status === "vendor_decided" || row.status === "unit_received") {
-    const vendor = caseVendorText(row);
-    const note = row.decision_notes?.trim();
-    const approved = row.decision !== null && row.decision !== "rejected";
-    return (
-      <span className={DETAIL}>
-        {row.decision ? (
-          <span className="flex flex-wrap items-center gap-1.5">
-            <span
-              className={cn(
-                "rounded-full border px-2 py-0.5 text-xs font-semibold",
-                approved ? "border-tone-green-border bg-tone-green-bg text-tone-green-fg" : "border-tone-red-border bg-tone-red-bg text-tone-red-fg",
-              )}
-            >
-              {approved ? "Bisa diklaim" : "Tidak bisa diklaim"}
-            </span>
-            <span className="font-semibold text-foreground">{RMA_DECISION_LABELS[row.decision]}</span>
-            {row.decision === "replaced" && row.replacement_sn?.trim() && (
-              <span className="text-muted-foreground">· SN baru {row.replacement_sn.trim()}</span>
-            )}
-          </span>
-        ) : (
-          <span className="text-muted-foreground">Keputusan belum dicatat</span>
-        )}
-        {vendor && <span className="block text-muted-foreground">Diputus oleh vendor: {vendor}</span>}
-        {note && <span className="line-clamp-2 text-muted-foreground">Keterangan: {note}</span>}
-      </span>
-    );
+    return row.decision_notes?.trim() || (row.decision ? RMA_DECISION_LABELS[row.decision] : null);
   }
   return null;
 }
 
 /**
- * How long since the claim came in, beside the days in this stage (owner,
- * 2026-11-12: show both). Red once it passes LONG_LEAD_DAYS.
+ * One row, as clean as it can be (owner, 2026-11-12): number, unit and
+ * keterangan on the left; vendor and days on the right. Who raised the claim
+ * is on the case page, not here.
  */
+export function CaseLine({
+  href,
+  code,
+  unit,
+  note,
+  vendor,
+  children,
+}: {
+  href?: string;
+  code: string;
+  unit: string;
+  note?: string | null;
+  vendor?: string | null;
+  /** The day pills. */
+  children: React.ReactNode;
+}) {
+  return (
+    <li className="border-t border-border">
+      <RowLink href={href}>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate font-mono text-sm font-semibold">{code}</span>
+          <span className="block truncate text-[0.8125rem] text-muted-foreground">{unit}</span>
+          {note && <span className="mt-0.5 line-clamp-2 text-[0.8125rem] leading-snug text-foreground">{note}</span>}
+        </span>
+        <span className="flex max-w-[45%] shrink-0 flex-col items-end gap-1 sm:max-w-[50%] sm:flex-row sm:items-center sm:gap-2">
+          {vendor && <span className="max-w-full truncate text-right text-[0.8125rem] font-semibold text-foreground">{vendor}</span>}
+          <span className="flex flex-col items-end gap-1">{children}</span>
+        </span>
+      </RowLink>
+    </li>
+  );
+}
+
+/** Days in the current stage, coloured by its target. */
+function StagePill({ row }: { row: RmaQueueRow }) {
+  return (
+    <span
+      title="Lama di tahap ini"
+      className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold whitespace-nowrap", TONES[row.severity].pill)}
+    >
+      {row.severity !== "ok" && <AlertTriangle aria-hidden="true" className="size-3" />}
+      {row.daysInStage} hari
+    </span>
+  );
+}
+
+/** Days since the claim came in. Red once it passes LONG_LEAD_DAYS. */
 function LeadPill({ days }: { days: number }) {
   const long = days >= LONG_LEAD_DAYS;
   return (
@@ -127,49 +126,14 @@ function LeadPill({ days }: { days: number }) {
   );
 }
 
-/** One case: code and who it belongs to on the left, how long it has sat on the right. */
+const unitOf = (row: RmaQueueRow) => row.ticket.device_name?.trim() || `#${row.ticket.ticket_code}`;
+
 function QueueRow({ row }: { row: RmaQueueRow }) {
   return (
-    <li className="border-t border-border">
-      <Link
-        href={`/rma/cases/${row.id}`}
-        className="-mx-2 flex min-h-11 items-center justify-between gap-3 rounded-md px-2 py-2.5 text-inherit outline-none hover:bg-muted/60 focus-visible:ring-3 focus-visible:ring-ring/50"
-      >
-        <span className="min-w-0">
-          <span className="block truncate font-mono text-sm font-semibold">{row.rma_code}</span>
-          <span className="flex min-w-0 items-center gap-1.5 text-[0.8125rem] text-muted-foreground">
-            <span className="truncate">
-              {row.ticket.customer_name || row.ticket.device_name || `#${row.ticket.ticket_code}`}
-            </span>
-            {/* What the technician who held the unit thought. Advice, not a
-                verdict — nothing here changes what the desk may do next. */}
-            {row.recommended_eligible === false && (
-              <span
-                title="Rekomendasi teknisi: tidak layak"
-                className="shrink-0 rounded-full border border-tone-amber-border bg-tone-amber-bg px-1.5 text-[0.6875rem] font-semibold text-tone-amber-fg"
-              >
-                tek: tidak layak
-              </span>
-            )}
-          </span>
-          <StageDetail row={row} />
-        </span>
-
-        <span className="flex shrink-0 flex-col items-end gap-1">
-          <span
-            title="Lama di tahap ini"
-            className={cn(
-              "inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold",
-              TONES[row.severity].pill,
-            )}
-          >
-            {row.severity !== "ok" && <AlertTriangle aria-hidden="true" className="size-3" />}
-            tahap ini {row.daysInStage} hari
-          </span>
-          <LeadPill days={row.leadDays} />
-        </span>
-      </Link>
-    </li>
+    <CaseLine href={`/rma/cases/${row.id}`} code={row.rma_code} unit={unitOf(row)} note={caseNote(row)} vendor={caseVendorName(row)}>
+      <StagePill row={row} />
+      <LeadPill days={row.leadDays} />
+    </CaseLine>
   );
 }
 
@@ -297,33 +261,19 @@ export function PreHandoverCard({
   const accent = TONES[overdue > 0 ? "overdue" : warning > 0 ? "warning" : "ok"];
   const sorted = [...rows].sort((a, b) => b.daysWaiting - a.daysWaiting);
   const row = (t: PreHandoverRow) => (
-    <li key={t.id} className="border-t border-border">
-      <RowLink href={linkTickets ? `/admin/tickets/${t.id}` : undefined}>
-        <span className="min-w-0">
-          <span className="block truncate font-mono text-sm font-semibold">
-            {t.ticket_code}
-            {t.store_location ? ` · ${t.store_location.code}` : ""}
-          </span>
-          <span className="block truncate text-[0.8125rem] text-muted-foreground">
-            {[t.technician?.name ? `PIC ${t.technician.name}` : "Belum ada teknisi", t.customer_name, t.device_name].filter(Boolean).join(" · ")}
-          </span>
-        </span>
-        <span className="flex shrink-0 flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-1.5">
-          <span
-            className={cn(
-              "rounded-full px-2 py-0.5 text-[0.7rem] font-semibold whitespace-nowrap",
-              t.status === "on_progress" ? "bg-tone-blue-bg text-tone-blue-fg" : "bg-tone-amber-bg text-tone-amber-fg",
-            )}
-          >
-            {t.status === "on_progress" ? "Diperiksa" : "Belum diambil"}
-          </span>
-          <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold", TONES[t.severity].pill)}>
-            {t.severity !== "ok" && <AlertTriangle aria-hidden="true" className="size-3" />}
-            {t.daysWaiting} hari
-          </span>
-        </span>
-      </RowLink>
-    </li>
+    <CaseLine
+      key={t.id}
+      href={linkTickets ? `/admin/tickets/${t.id}` : undefined}
+      code={`${t.ticket_code}${t.store_location ? ` · ${t.store_location.code}` : ""}`}
+      unit={t.device_name?.trim() || "—"}
+      note={t.status === "on_progress" ? "Sedang diperiksa teknisi" : "Belum diambil teknisi"}
+      vendor={t.technician?.name ?? null}
+    >
+      <span className={cn("inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold whitespace-nowrap", TONES[t.severity].pill)}>
+        {t.severity !== "ok" && <AlertTriangle aria-hidden="true" className="size-3" />}
+        {t.daysWaiting} hari
+      </span>
+    </CaseLine>
   );
   return (
     <section data-slot="rma-attention-card" className={cn("mb-4 flex break-inside-avoid flex-col gap-3 rounded-xl border bg-card p-4 shadow-xs md:p-5", accent.border)}>
@@ -358,13 +308,13 @@ export function PreHandoverCard({
 export type LongLeadEntry = {
   key: string;
   code: string;
-  who: string;
-  stage: string;
-  daysInStage: number;
+  unit: string;
+  /** The case's keterangan, else where it stands. */
+  note: string | null;
+  /** The vendor, or for a claim not handed over the technician holding it. */
+  vendor: string | null;
   leadDays: number;
   href?: string;
-  /** The case itself, for the hold reason / vendor / decision line. */
-  row?: RmaQueueRow;
 };
 
 /**
@@ -376,25 +326,11 @@ export type LongLeadEntry = {
 export function LongLeadCard({ entries }: { entries: LongLeadEntry[] }) {
   const sorted = [...entries].sort((a, b) => b.leadDays - a.leadDays);
   const item = (e: LongLeadEntry) => (
-    <li key={e.key} className="border-t border-border">
-      <RowLink href={e.href}>
-        <span className="min-w-0">
-          <span className="block truncate font-mono text-sm font-semibold">{e.code}</span>
-          <span className="block truncate text-[0.8125rem] text-muted-foreground">{e.who}</span>
-          <span className="mt-0.5 block text-[0.8125rem]">
-            <span className="font-semibold text-foreground">{e.stage}</span>
-            <span className="text-muted-foreground"> · {e.daysInStage} hari di tahap ini</span>
-          </span>
-          {e.row && <StageDetail row={e.row} />}
-        </span>
-        <span className="flex shrink-0 flex-col items-end">
-          <span className="inline-flex items-center gap-1 rounded-full border border-tone-red-border bg-tone-red-bg px-2.5 py-0.5 font-mono text-xs font-semibold text-tone-red-fg">
-            <Timer aria-hidden="true" className="size-3" /> {e.leadDays} hari
-          </span>
-          <span className="mt-0.5 text-[0.6875rem] text-muted-foreground">sejak klaim masuk</span>
-        </span>
-      </RowLink>
-    </li>
+    <CaseLine key={e.key} href={e.href} code={e.code} unit={e.unit} note={e.note} vendor={e.vendor}>
+      <span title="Sejak klaim masuk" className="inline-flex items-center gap-1 rounded-full border border-tone-red-border bg-tone-red-bg px-2.5 py-0.5 font-mono text-xs font-semibold whitespace-nowrap text-tone-red-fg">
+        <Timer aria-hidden="true" className="size-3" /> {e.leadDays} hari
+      </span>
+    </CaseLine>
   );
   return (
     <section data-slot="rma-attention-card" className="flex flex-col gap-3 rounded-xl border border-tone-red-border bg-card p-4 shadow-xs md:p-5">

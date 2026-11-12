@@ -1,4 +1,5 @@
 import { requirePage } from "@/lib/page-access";
+import { requestNow } from "@/lib/clock";
 import { inScope, storeScopeFor } from "@/lib/store-scope-server";
 import EditTicketButton from "@/components/tickets/EditTicketButton";
 import { loadTicketEdit } from "@/lib/ticket-edit-server";
@@ -138,6 +139,8 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
     (a) => a.file_url !== rmaCase.purchase_invoice_url
   );
 
+  // The clock, read once for the request, for the RMA card's durations.
+  const rmaNow = requestNow();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
@@ -342,7 +345,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             )}
           </div>
 
-          <RmaStatusCard rmaCase={rmaCase} />
+          <RmaStatusCard rmaCase={rmaCase} now={rmaNow} claimOpenedAt={rmaCase.ticket.created_at} />
         </div>
 
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>

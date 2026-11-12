@@ -109,17 +109,20 @@ export function StageDetail({ row }: { row: RmaQueueRow }) {
 }
 
 /**
- * "N hari total" since the claim came in, once that passes LONG_LEAD_DAYS —
- * and only when it differs from the days in this stage, which say the same.
+ * How long since the claim came in, beside the days in this stage (owner,
+ * 2026-11-12: show both). Red once it passes LONG_LEAD_DAYS.
  */
-function LeadPill({ days, inStage }: { days: number; inStage: number }) {
-  if (days < LONG_LEAD_DAYS || days <= inStage) return null;
+function LeadPill({ days }: { days: number }) {
+  const long = days >= LONG_LEAD_DAYS;
   return (
     <span
-      title="Lead time sejak klaim masuk"
-      className="inline-flex items-center gap-1 rounded-full border border-tone-red-border bg-tone-red-bg px-2 py-0.5 text-[0.6875rem] font-semibold whitespace-nowrap text-tone-red-fg"
+      title="Total sejak klaim masuk"
+      className={cn(
+        "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[0.6875rem] font-semibold whitespace-nowrap",
+        long ? "border-tone-red-border bg-tone-red-bg text-tone-red-fg" : "border-border bg-muted text-muted-foreground",
+      )}
     >
-      <Timer aria-hidden="true" className="size-3" /> {days} hari total
+      <Timer aria-hidden="true" className="size-3" /> total {days} hari
     </span>
   );
 }
@@ -161,9 +164,9 @@ function QueueRow({ row }: { row: RmaQueueRow }) {
             )}
           >
             {row.severity !== "ok" && <AlertTriangle aria-hidden="true" className="size-3" />}
-            {row.daysInStage} hari
+            tahap ini {row.daysInStage} hari
           </span>
-          <LeadPill days={row.leadDays} inStage={row.daysInStage} />
+          <LeadPill days={row.leadDays} />
         </span>
       </Link>
     </li>

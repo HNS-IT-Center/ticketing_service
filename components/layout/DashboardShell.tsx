@@ -31,8 +31,7 @@ import {
   ClipboardCheck,
   PackageSearch,
   Landmark,
-  Contact,
-} from "lucide-react";
+  Contact, Barcode } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -93,6 +92,7 @@ const ICONS: Record<NavIcon, React.ComponentType<{ size?: number }>> = {
   truck: Truck,
   settings: Settings,
   database: Database,
+  barcode: Barcode,
 };
 
 function NavGlyph({ name }: { name?: NavIcon }) {

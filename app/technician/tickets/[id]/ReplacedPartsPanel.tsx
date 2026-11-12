@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { TONE_CLASSES } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 
 export type ReplacedPartRow = {
   id: string;
@@ -66,7 +66,7 @@ export default function ReplacedPartsPanel({
         result = await removeReplacedPartAction(id);
       } catch (err) {
         // Next moving the page (e.g. the login ran out) is not a failure.
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         toast.error("Gagal menghapus. Periksa koneksi lalu coba lagi.");
         return;
       }

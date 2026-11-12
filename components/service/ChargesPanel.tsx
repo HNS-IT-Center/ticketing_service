@@ -42,7 +42,7 @@ import { MAX_PART_PHOTOS, SERVICE_PART_ORDER, isServicePart, requiresItemName, s
 import { clearDraft, readDraft, useDraft, useDraftKey } from "@/lib/draft";
 import type { ServiceJobOption } from "@/lib/service-jobs";
 import type { PriceReference } from "@/lib/price-reference";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 
 type ActionResult = { error: string } | { success: true };
 
@@ -147,7 +147,7 @@ export default function ChargesPanel({
         router.refresh();
       } catch (err) {
         // Next moving the page (e.g. the login ran out) is not a failure.
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         toast.error("Gagal menyimpan. Periksa koneksi lalu coba lagi.");
       }
     });

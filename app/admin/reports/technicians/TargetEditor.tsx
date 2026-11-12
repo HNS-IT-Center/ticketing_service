@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 
 type Values = { jobs: number | null; revenue: number | null; points: number | null };
 
@@ -65,7 +65,7 @@ export default function TargetEditor({
         router.refresh();
       } catch (err) {
         // Next moving the page (e.g. the login ran out) is not a failure.
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         toast.error("Gagal menyimpan. Periksa koneksi lalu coba lagi.");
       }
     });

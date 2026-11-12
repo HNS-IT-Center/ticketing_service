@@ -7,7 +7,7 @@ import { Loader2, RotateCcw } from "lucide-react";
 import { saveAudienceAccessAction } from "@/app/actions/access";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 import type { Audience, Capability } from "@/lib/access";
 import type { AccessGroup } from "@/lib/access-groups";
 import { cn } from "@/lib/utils";
@@ -76,7 +76,7 @@ export default function RoleEditDialog({
         router.refresh();
       } catch (err) {
         // Next moving the page (e.g. the login ran out) is not a failure.
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         toast.error("Gagal menyimpan izin role.");
       }
     });

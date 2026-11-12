@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { isHandledActionError } from "@/lib/navigation-signal";
 import { useRouter } from "next/navigation";
 import { UploadCloud, CheckCircle2, Lock, Camera, Eye, Loader2 } from "lucide-react";
 import { uploadRevisionBuildAction, uploadFirstBuildAction } from "@/app/actions/sales";
@@ -115,6 +116,7 @@ export default function PcBuildHandover({
           router.refresh();
         }
       } catch (err) {
+        if (isHandledActionError(err)) return;
         console.error("Action error:", err);
         const message = err instanceof Error ? err.message : "";
         if (message.includes("Unexpected end of form") || message.includes("Body exceeded")) {
@@ -168,6 +170,7 @@ export default function PcBuildHandover({
           router.refresh();
         }
       } catch (err) {
+        if (isHandledActionError(err)) return;
         console.error("Action error:", err);
         const message = err instanceof Error ? err.message : "";
         if (message.includes("Unexpected end of form") || message.includes("Body exceeded")) {

@@ -10,7 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/native-select";
 import { errorOf } from "@/lib/action-result";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 
 type Person = { id: string; name: string; email?: string };
 
@@ -45,7 +45,7 @@ export default function SupervisorAssignments({
         setSelected("");
         router.refresh();
       } catch (err) {
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         toast.error("Gagal menyimpan. Periksa koneksi lalu coba lagi.");
       }
     });

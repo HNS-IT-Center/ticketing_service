@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { isHandledActionError } from "@/lib/navigation-signal";
 import { Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -59,6 +60,7 @@ export function ConfirmDialog({
       await onConfirm();
       setOpen(false);
     } catch (e) {
+      if (isHandledActionError(e)) return;
       setError(e instanceof Error && e.message ? e.message : "Gagal. Coba lagi.");
     } finally {
       setPending(false);

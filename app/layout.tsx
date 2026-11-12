@@ -5,6 +5,8 @@ import { Geist } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from '@vercel/speed-insights/next';
+import StaleDeployNotice from "@/components/app/StaleDeployNotice";
+import { currentBuildId } from "@/lib/build-id";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -37,6 +39,8 @@ export default function RootLayout({
       </head>
       <body>
         {children}
+        {/* Explains, and offers a reload, when this page is older than the server. */}
+        <StaleDeployNotice build={currentBuildId()} />
         <Toaster
           position="top-right"
           toastOptions={{

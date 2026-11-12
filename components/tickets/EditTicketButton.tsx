@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { hasCustomerFields } from "@/lib/ticket-edit";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 import type { TicketEditProps } from "@/lib/ticket-edit-server";
 
 /** "+62812…" → "812…" for the box beside the fixed +62. Only the prefix goes. */
@@ -63,7 +63,7 @@ export default function EditTicketButton({ ticketId, ticketCode, context, values
         setOpen(false);
         router.refresh();
       } catch (err) {
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         setError("Gagal menyimpan. Periksa koneksi lalu coba lagi.");
       }
     });

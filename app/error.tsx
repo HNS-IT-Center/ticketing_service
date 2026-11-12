@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { AlertTriangle, RotateCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isStaleDeployError } from "@/lib/stale-deploy";
 
 /**
  * The app's own error boundary.
@@ -21,6 +22,27 @@ export default function AppError({
   useEffect(() => {
     console.error("[app error]", error);
   }, [error]);
+
+  // A page older than the server: say so, and reload rather than retry —
+  // retrying re-sends the same unknown action id (lib/stale-deploy.ts).
+  if (isStaleDeployError(error)) {
+    return (
+      <div data-slot="app-error" className="flex min-h-[50vh] items-center justify-center p-4">
+        <div className="flex w-full max-w-md flex-col items-center gap-4 rounded-xl border border-border bg-card p-6 text-center shadow-sm">
+          <RotateCw aria-hidden="true" className="size-9 text-primary" />
+          <div className="flex flex-col gap-2">
+            <h2 className="text-lg font-semibold text-foreground">Aplikasi baru saja diperbarui</h2>
+            <p className="text-sm text-muted-foreground">
+              Halaman ini dibuka sebelum pembaruan, jadi permintaan tadi ditolak server dan belum tersimpan. Muat ulang halaman, lalu ulangi.
+            </p>
+          </div>
+          <Button type="button" onClick={() => window.location.reload()} className="w-full sm:w-auto">
+            <RotateCw aria-hidden="true" /> Muat ulang
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div data-slot="app-error" className="flex min-h-[50vh] items-center justify-center p-4">

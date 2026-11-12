@@ -9,7 +9,7 @@ import { RMA_HOLD_REASONS } from "@/lib/rma/hold-reason";
 import { UploadCloud } from "lucide-react";
 import { uploadFailureMessage } from "@/lib/upload-limit";
 import { Button } from "@/components/ui/button";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 
 /**
  * What the RMA desk is waiting for, on the page of the person who can supply it.
@@ -55,7 +55,7 @@ export default function HoldEvidencePanel({
         res = await submitHoldEvidenceAction(fd);
       } catch (err) {
         // Next moving the page (e.g. the login ran out) is not a failure.
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         console.error("[hold evidence] send failed:", err);
         toast.error(uploadFailureMessage(err));
         return;

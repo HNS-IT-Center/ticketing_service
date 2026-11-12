@@ -22,7 +22,7 @@ import {
 import { Lock, ArrowRight } from "lucide-react";
 import { uploadFailureMessage } from "@/lib/upload-limit";
 import { VENDOR_LOCATION_INFO, type VendorLocation } from "@/lib/vendors";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 
 /**
  * Every button here is derived from lib/rma/state-machine.ts — the same module
@@ -309,7 +309,7 @@ export default function RmaActionPanel({
         result = await transitionRmaAction(fd);
       } catch (err) {
         // Next moving the page (e.g. the login ran out) is not a failure.
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         console.error("[rma transition] send failed:", err);
         toast.error(uploadFailureMessage(err));
         return;

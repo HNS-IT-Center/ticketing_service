@@ -7,7 +7,7 @@ import { Check, Loader2, X } from "lucide-react";
 import { linkTicketUnitAction } from "@/app/actions/ticket-edit";
 import CatalogItemPicker from "@/components/catalog/CatalogItemPicker";
 import { Button } from "@/components/ui/button";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 import type { CatalogItem } from "@/lib/catalog/items";
 
 /**
@@ -32,7 +32,7 @@ export default function UnitCodeLinker({ ticketId, typedName }: { ticketId: stri
         toast.success(`Kode ${picked.sku} disimpan.`);
         router.refresh();
       } catch (err) {
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         toast.error("Gagal menyimpan kode barang.");
       }
     });

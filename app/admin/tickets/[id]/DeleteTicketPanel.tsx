@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 
 type Inventory = Awaited<ReturnType<typeof checkTicketDeletionAction>>;
 
@@ -59,7 +59,7 @@ export default function DeleteTicketPanel({
       setInventory(await checkTicketDeletionAction(ticketId));
     } catch (err) {
       // Next moving the page (e.g. the login ran out) is not a failure.
-      if (isNavigationSignal(err)) return;
+      if (isHandledActionError(err)) return;
       toast.error("Gagal memuat rincian tiket.");
       setOpen(false);
     } finally {

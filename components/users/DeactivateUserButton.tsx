@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { NativeSelect } from "@/components/ui/native-select";
 import { errorOf } from "@/lib/action-result";
 import { cn } from "@/lib/utils";
-import { isNavigationSignal } from "@/lib/navigation-signal";
+import { isHandledActionError } from "@/lib/navigation-signal";
 
 type ActiveTicket = { id: string; ticket_code: string; ticket_type: string; status: string };
 type Technician = { id: string; name: string };
@@ -75,7 +75,7 @@ export function DeactivateUserButton({
         setStep("has_active");
       } catch (err) {
         // Next moving the page (e.g. the login ran out) is not a failure.
-        if (isNavigationSignal(err)) return;
+        if (isHandledActionError(err)) return;
         toast.error("Gagal memeriksa tiket aktif. Coba lagi.");
         setStep("idle");
       }

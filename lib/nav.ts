@@ -146,6 +146,7 @@ const GROUPS: Group[] = [
         rule: { cap: "page_leaderboard" },
       },
       { label: "Laporan Part", icon: "package", href: "/admin/reports/parts", rule: { cap: "page_parts_report" } },
+      { label: "Tiket Perlu Dicek", icon: "shield", href: "/admin/reports/audit", rule: { roles: ["Administrator"] } },
     ],
   },
   {

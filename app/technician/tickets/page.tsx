@@ -17,7 +17,7 @@ import { sortValue } from "@/lib/table-sort";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { Ticket, Plus } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
-import { getTicketPoints } from "@/lib/points";
+import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
 
 
 export const metadata = { title: "My Tickets — HNS IT Center" };
@@ -75,7 +75,7 @@ export default async function TechnicianTicketsPage({
       id: true, ticket_code: true, ticket_type: true, device_type: true,
       status: true, technician_id: true, is_for_self: true, customer_name: true,
       updated_at: true,
-      cleaning_detail: { select: { service_package: true } },
+      cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
       user: { select: { name: true } },
       // `rma_process` is one ticket status covering nine RMA ones; the list
       // shows the informative one. See lib/rma/ticket-status-badge.ts.
@@ -91,7 +91,7 @@ export default async function TechnicianTicketsPage({
 
   // Any column ascending or descending; by default what needs hands first.
   const sorted = sortTicketsInMemory(allTickets, sortParam, {
-    points: (t) => getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package),
+    points: (t) => ticketTotalPoints(t),
   });
 
   const totalCount = allTickets.length;
@@ -138,7 +138,7 @@ export default async function TechnicianTicketsPage({
       sortKey: "points",
       sortFirst: "desc",
       cell: (t) => {
-        const pts = getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package);
+        const pts = ticketTotalPoints(t);
         return (
           <span
             className={cn(

@@ -13,7 +13,7 @@ import { cn } from "@/lib/utils";
 import ExportToPDF from "./ExportToPDF";
 import SharePerformance from "./SharePerformance";
 import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
-import { getTicketPoints } from "@/lib/points";
+import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
 
 
 export const metadata = { title: "Performance — HNS IT Center" };
@@ -100,7 +100,7 @@ export default async function AdminPerformancePage({
               id: true,
               ticket_type: true,
               device_type: true,
-              cleaning_detail: { select: { service_package: true } },
+              cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
               technician_id: true,
             },
           },
@@ -155,7 +155,7 @@ export default async function AdminPerformancePage({
       const row = getOrCreate(t.technician_id);
       row.tickets++;
       row.success++;
-      row.points += getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package);
+      row.points += ticketTotalPoints(t);
     }
     for (const t of failedTickets) {
       if (!t.technician_id) continue;

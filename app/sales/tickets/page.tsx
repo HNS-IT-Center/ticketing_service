@@ -16,7 +16,7 @@ import { Ticket, Plus } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
 import { memorySortState, sortTicketsInMemory, statusCounts, ticketListWhere, ticketProgressOptions, ticketSearchWhere } from "@/lib/ticket-list-filter";
 import { sortValue } from "@/lib/table-sort";
-import { getTicketPoints } from "@/lib/points";
+import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
 
 
 export const metadata = { title: "My Tickets — HNS IT Center" };
@@ -48,7 +48,7 @@ export default async function SalesTicketsPage({
       id: true, ticket_code: true, ticket_type: true, device_type: true,
       status: true, technician_id: true, is_for_self: true, customer_name: true,
       updated_at: true,
-      cleaning_detail: { select: { service_package: true } },
+      cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
       user: { select: { name: true } },
     },
   });
@@ -61,7 +61,7 @@ export default async function SalesTicketsPage({
 
   // Any column ascending or descending; by default what needs hands first.
   const sorted = sortTicketsInMemory(allTickets, sortParam, {
-    points: (t) => getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package),
+    points: (t) => ticketTotalPoints(t),
   });
 
   const totalCount = allTickets.length;
@@ -108,7 +108,7 @@ export default async function SalesTicketsPage({
       sortKey: "points",
       sortFirst: "desc",
       cell: (t) => {
-        const pts = getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package);
+        const pts = ticketTotalPoints(t);
         return (
           <span
             className={cn(

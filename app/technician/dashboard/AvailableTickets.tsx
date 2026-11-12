@@ -18,6 +18,8 @@ type UnassignedTicket = {
   device_type: string;
   /** For a cleaning ticket's points (lib/points.ts). */
   service_package: string | null;
+  /** Daftar Jasa points already on its bill (lib/points.ts). */
+  job_points: number;
   created_at: Date;
   user: { name: string };
 };
@@ -110,7 +112,7 @@ export default function AvailableTickets({
     // beside the sidebar; the phone cards still list it.
     { key: "device", header: "Device", cell: (t) => t.device_type.replace(/_/g, " "), className: "hidden text-muted-foreground xl:table-cell" },
     { key: "date", header: "Date", cell: (t) => new Date(t.created_at).toLocaleDateString("id-ID"), className: "whitespace-nowrap text-muted-foreground" },
-    { key: "points", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type, t.service_package)} />, mobile: "badge" },
+    { key: "points", header: "Points", cell: (t) => <PointsBadge points={getTicketPoints(t.ticket_type, t.device_type, t.service_package) + t.job_points} />, mobile: "badge" },
     { key: "action", header: "", cell: actionCell, mobile: "footer" },
   ];
 

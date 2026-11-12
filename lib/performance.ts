@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { unstable_cache } from "next/cache";
 import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
-import { getTicketPoints } from "@/lib/points";
+import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
 
 
 const MONTHS = [
@@ -39,7 +39,7 @@ export const getTopTechnicianOfMonth = unstable_cache(
           select: {
             ticket_type: true,
             device_type: true,
-            cleaning_detail: { select: { service_package: true } },
+            cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
             technician_id: true,
           },
         },
@@ -49,7 +49,7 @@ export const getTopTechnicianOfMonth = unstable_cache(
     const pointsMap = new Map<string, number>();
     for (const { ticket: t } of earningLogs) {
       if (!t.technician_id || !eligibleIds.has(t.technician_id)) continue;
-      const pts = getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package);
+      const pts = ticketTotalPoints(t);
       pointsMap.set(t.technician_id, (pointsMap.get(t.technician_id) ?? 0) + pts);
     }
 
@@ -82,7 +82,7 @@ export const getTopStoreOfMonth = unstable_cache(
           select: {
             ticket_type: true,
             device_type: true,
-            cleaning_detail: { select: { service_package: true } },
+            cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
             technician_id: true,
           },
         },
@@ -93,7 +93,7 @@ export const getTopStoreOfMonth = unstable_cache(
     const techPoints = new Map<string, number>();
     for (const { ticket: t } of earningLogs) {
       if (!t.technician_id) continue;
-      const pts = getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package);
+      const pts = ticketTotalPoints(t);
       techPoints.set(t.technician_id, (techPoints.get(t.technician_id) ?? 0) + pts);
     }
 

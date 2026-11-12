@@ -15,7 +15,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { FileSpreadsheet, Ticket, Plus } from "lucide-react";
-import { getTicketPoints } from "@/lib/points";
+import { getTicketPoints, ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
 import { readSort, sortValue } from "@/lib/table-sort";
 import { ticketPartyName } from "@/lib/ticket-party";
 import {
@@ -98,7 +98,7 @@ export default async function RmaTicketsPage({
         technician: { select: { name: true } },
         // getTicketPoints scores cleaning by its package, so the row cannot be
         // priced without it.
-        cleaning_detail: { select: { service_package: true } },
+        cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
         // Only a claim that reached this desk has a case, and only a case has a
         // page in this portal. Without this the Manage link would point at
         // /rma/tickets/{id}, which resolves a case and 404s when there is none.
@@ -198,7 +198,7 @@ export default async function RmaTicketsPage({
       header: "Points",
       // Gives way first beside the sidebar at 1024px; phone cards keep it.
       className: "hidden xl:table-cell",
-      cell: (t) => pointsPill(getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package)),
+      cell: (t) => pointsPill(ticketTotalPoints(t)),
     },
     {
       key: "status",

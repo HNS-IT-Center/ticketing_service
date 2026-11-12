@@ -70,8 +70,8 @@ export function StageDetail({ row }: { row: RmaQueueRow }) {
     const vendor = caseVendorText(row);
     return (
       <span className={DETAIL}>
-        <span className="text-muted-foreground">Vendor: </span>
-        <span className="font-semibold text-foreground">{vendor ?? "belum dicatat"}</span>
+        <span className="text-muted-foreground">{row.status === "submitted_to_vendor" ? "Diajukan ke vendor: " : "Diproses oleh vendor: "}</span>
+        <span className="font-semibold text-foreground">{vendor ?? "nama vendor belum dicatat"}</span>
         {row.daysAtVendor !== null && <span className="text-muted-foreground"> · {row.daysAtVendor} hari di vendor</span>}
       </span>
     );
@@ -100,7 +100,7 @@ export function StageDetail({ row }: { row: RmaQueueRow }) {
         ) : (
           <span className="text-muted-foreground">Keputusan belum dicatat</span>
         )}
-        {vendor && <span className="block text-muted-foreground">Vendor: {vendor}</span>}
+        {vendor && <span className="block text-muted-foreground">Diputus oleh vendor: {vendor}</span>}
         {note && <span className="line-clamp-2 text-muted-foreground">Keterangan: {note}</span>}
       </span>
     );

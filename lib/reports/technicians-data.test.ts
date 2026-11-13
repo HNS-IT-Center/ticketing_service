@@ -118,6 +118,17 @@ describe("loadTargetData", () => {
     expect(data.technicians.map((t) => t.id)).not.toContain(ids.budi);
   });
 
+  it("keeps a ticket whose points were taken off as work and takings, at 0 points", async () => {
+    await db.ticket.update({ where: { id: ids.atStoreB }, data: { points_excluded_at: new Date() } });
+    try {
+      const data = (await loadTargetData(MONTH, ids.storeB))!;
+      const s = summarizeTargets(data.technicians, data.doneTickets, data.lines);
+      expect(s.rows.find((r) => r.technician.id === ids.siti)).toMatchObject({ tickets: 1, jobs: 1, points: 0, revenue: 150000 });
+    } finally {
+      await db.ticket.update({ where: { id: ids.atStoreB }, data: { points_excluded_at: null } });
+    }
+  });
+
   it("refuses a malformed month", async () => {
     expect(await loadTargetData("2031-13", null)).toBeNull();
   });

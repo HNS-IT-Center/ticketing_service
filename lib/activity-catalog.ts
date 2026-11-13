@@ -42,6 +42,8 @@ export const ACTIVITY_ACTIONS = {
   "ticket.build_upload": { area: "ticket", label: "Unggah foto rakitan" },
   "ticket.delivery_proof": { area: "ticket", label: "Bukti pengiriman" },
   "ticket.delete": { area: "ticket", label: "Hapus tiket" },
+  "ticket.points_excluded": { area: "ticket", label: "Hapus poin tiket" },
+  "ticket.points_restored": { area: "ticket", label: "Kembalikan poin tiket" },
 
   "charge.add": { area: "charge", label: "Tambah biaya" },
   "charge.update": { area: "charge", label: "Ubah biaya" },

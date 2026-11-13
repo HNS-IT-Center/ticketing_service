@@ -96,7 +96,7 @@ export default async function TechnicianDashboard({ searchParams }: { searchPara
     take: 10,
     select: {
       id: true, ticket_code: true, ticket_type: true, device_type: true,
-      cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
+      cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES, points_excluded_at: true,
       status: true, technician_id: true, is_for_self: true, customer_name: true,
       user: { select: { name: true } },
       technician: { select: { name: true } },

@@ -18,6 +18,7 @@ import {
   validateRmaTransition,
   type RmaTransitionInput,
 } from "@/lib/rma/state-machine";
+import { closingTimeLogEvent } from "@/lib/working-time";
 import { Prisma, type RmaStatus, type RmaDecision, type UnitOwnership, type RmaHoldReason } from "@prisma/client";
 
 // ─── RMA code generator ────────────────────────────────────────────────────
@@ -129,6 +130,8 @@ export async function handoverToRmaAction(formData: FormData) {
         store_location: { select: { code: true } },
         rma_case: { select: { id: true } },
         warranty_detail: { select: { unit_ownership: true, stock_origin: true } },
+        time_logs: { select: { event: true }, orderBy: { created_at: "asc" } },
+        points_excluded_at: true,
       },
     });
 
@@ -370,12 +373,19 @@ export async function handoverToRmaAction(formData: FormData) {
             },
           });
 
+          // The technician's part ends at handover; a running timer stops here.
+          if (closingTimeLogEvent(ticket.time_logs, "rma_process")) {
+            await tx.ticketTimeLog.create({
+              data: { ticket_id: ticketId, event: "DONE", reason: `Otomatis: diserahkan ke RMA (${rmaCode})` },
+            });
+          }
+
           // The technician's work on a claim finishes here, so this is where
           // the claim is credited. The `done` written when the case closes --
           // possibly months later, by the RMA desk -- credits nothing; see
           // lib/kpi.ts. Inside the transaction, so a retried handover cannot
-          // credit twice.
-          if (ticket.technician_id) {
+          // credit twice. Not for a ticket whose points were taken off.
+          if (ticket.technician_id && !ticket.points_excluded_at) {
             await tx.technicianPerformance.upsert({
               where: { technician_id: ticket.technician_id },
               create: {

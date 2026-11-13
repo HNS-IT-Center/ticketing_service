@@ -297,6 +297,18 @@ model Ticket {
   status           TicketStatus @default(waiting)
   device_type      DeviceType
 
+  // Points taken off by an administrator (owner, 2026-11-13: tickets that look
+  // made up keep their history but earn nothing). While set, the ticket is out
+  // of every earning query (lib/kpi.ts) and the stored TechnicianPerformance
+  // was reduced by exactly `points_excluded_points` / `points_excluded_logs`,
+  // which is what restoring gives back. Names are copied, not linked, like
+  // DeletedTicketLog, so the record outlives the account.
+  points_excluded_at     DateTime?
+  points_excluded_by     String?
+  points_excluded_reason String?   @db.Text
+  points_excluded_points Int?
+  points_excluded_logs   Int?
+
   technician_id String?
   technician    User?   @relation("TicketTechnician", fields: [technician_id], references: [id])
 

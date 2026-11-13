@@ -63,6 +63,9 @@ export function ticketTotalPoints(t: {
   device_type?: string | null;
   cleaning_detail?: { service_package: string | null } | null;
   charges?: readonly JobPointLine[] | null;
+  /** Set when an administrator took the points off: the ticket is worth 0. */
+  points_excluded_at?: Date | null;
 }): number {
+  if (t.points_excluded_at) return 0;
   return getTicketPoints(t.ticket_type, t.device_type, t.cleaning_detail?.service_package) + jobPoints(t.charges);
 }

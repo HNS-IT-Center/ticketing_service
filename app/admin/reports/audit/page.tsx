@@ -2,7 +2,8 @@ import Link from "next/link";
 import { ShieldAlert, CheckCircle2 } from "lucide-react";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
-import { EARNING_STATUS_LOG_FILTER } from "@/lib/kpi";
+import { EARNING_TRANSITION_FILTER } from "@/lib/kpi";
+import { TicketPointsControl } from "@/components/tickets/TicketPointsControl";
 import { JOB_POINT_CHARGES, ticketTotalPoints } from "@/lib/points";
 import { auditReasons, reasonText, tickCount, type AuditReason } from "@/lib/ticket-audit";
 import { TICKET_TYPE_LABELS } from "@/lib/ticket-export";
@@ -23,7 +24,7 @@ export default async function TicketAuditPage({ searchParams }: { searchParams: 
 
   const [tickets, staff] = await Promise.all([
     db.ticket.findMany({
-      where: { technician_id: { not: null }, status_logs: { some: EARNING_STATUS_LOG_FILTER } },
+      where: { technician_id: { not: null }, status_logs: { some: EARNING_TRANSITION_FILTER } },
       orderBy: { created_at: "desc" },
       select: {
         id: true,
@@ -36,6 +37,8 @@ export default async function TicketAuditPage({ searchParams }: { searchParams: 
         customer_phone: true,
         device_name: true,
         extra_services: true,
+        points_excluded_at: true,
+        points_excluded_points: true,
         user: { select: { name: true, phone_number: true } },
         technician: { select: { id: true, name: true } },
         cleaning_detail: { select: { service_package: true } },
@@ -47,20 +50,26 @@ export default async function TicketAuditPage({ searchParams }: { searchParams: 
   ]);
 
   type Flagged = (typeof tickets)[number] & { reasons: AuditReason[]; points: number };
-  const perTech = new Map<string, { id: string; name: string; earned: number; flagged: number; flaggedPoints: number }>();
+  // A ticket whose points were already taken off stays listed, marked, so the
+  // page shows what has been dealt with; it no longer adds to "perlu dicek".
+  const perTech = new Map<string, { id: string; name: string; earned: number; flagged: number; flaggedPoints: number; excluded: number }>();
   const flagged: Flagged[] = [];
   for (const t of tickets) {
     if (!t.technician) continue;
-    const row = perTech.get(t.technician.id) ?? { id: t.technician.id, name: t.technician.name, earned: 0, flagged: 0, flaggedPoints: 0 };
+    const row = perTech.get(t.technician.id) ?? { id: t.technician.id, name: t.technician.name, earned: 0, flagged: 0, flaggedPoints: 0, excluded: 0 };
     row.earned += 1;
     // A ticket "for myself" is on the account it was opened under.
     const customer = t.is_for_self ? t.user?.name ?? null : t.customer_name;
     const phone = t.customer_phone ?? (t.is_for_self ? t.user?.phone_number ?? null : null);
     const reasons = auditReasons({ customer, customer_phone: phone, device_name: t.device_name, extra_ticks: tickCount(t.extra_services) }, staff);
     if (reasons.length > 0) {
-      const points = ticketTotalPoints(t);
-      row.flagged += 1;
-      row.flaggedPoints += points;
+      const points = t.points_excluded_at ? (t.points_excluded_points ?? 0) : ticketTotalPoints(t);
+      if (t.points_excluded_at) {
+        row.excluded += 1;
+      } else {
+        row.flagged += 1;
+        row.flaggedPoints += points;
+      }
       flagged.push({ ...t, reasons, points });
     }
     perTech.set(t.technician.id, row);
@@ -76,7 +85,7 @@ export default async function TicketAuditPage({ searchParams }: { searchParams: 
             <ShieldAlert aria-hidden="true" className="size-6" /> Tiket Perlu Dicek
           </span>
         }
-        description="Tiket yang sudah memberi poin ke teknisi tapi datanya janggal: customer bernama sama dengan staf, nomor HP customer milik staf, nama seperti data uji, atau banyak centang Extra Services lama. Ini petunjuk untuk dicek, bukan bukti — buka tiketnya dan putuskan sendiri."
+        description="Tiket yang sudah memberi poin ke teknisi tapi datanya janggal: customer bernama sama dengan staf, nomor HP customer milik staf, nama seperti data uji, atau banyak centang Extra Services lama. Ini petunjuk untuk dicek, bukan bukti — buka tiketnya dan putuskan sendiri. Kalau memang bukan pekerjaan nyata, Hapus poin: tiketnya tetap ada, tapi tidak dihitung lagi."
       />
 
       <section className="overflow-hidden rounded-xl border border-border bg-card">
@@ -99,6 +108,9 @@ export default async function TicketAuditPage({ searchParams }: { searchParams: 
                   >
                     {r.flagged} perlu dicek{r.flagged > 0 ? ` · ${r.flaggedPoints} poin` : ""}
                   </span>
+                  {r.excluded > 0 && (
+                    <span className="rounded-full border border-border bg-muted px-2.5 py-0.5 font-semibold text-muted-foreground">{r.excluded} poin dihapus</span>
+                  )}
                 </span>
               </Link>
             </li>
@@ -115,12 +127,12 @@ export default async function TicketAuditPage({ searchParams }: { searchParams: 
           </h2>
           <ul className="flex flex-col gap-2">
             {shown.map((t) => (
-              <li key={t.id}>
-                <Link href={`/admin/tickets/${t.id}`} className="flex flex-col gap-1.5 rounded-xl border border-border bg-card p-4 text-inherit hover:border-primary/40">
+              <li key={t.id} className={cn("flex flex-col gap-3 rounded-xl border border-border bg-card p-4 md:flex-row md:items-center", t.points_excluded_at && "opacity-70")}>
+                <Link href={`/admin/tickets/${t.id}`} className="flex min-w-0 flex-1 flex-col gap-1.5 text-inherit hover:text-primary">
                   <span className="flex flex-wrap items-center justify-between gap-2">
                     <span className="font-mono text-sm font-semibold">{t.ticket_code}</span>
                     <span className="text-xs text-muted-foreground">
-                      {TICKET_TYPE_LABELS[t.ticket_type]} · {t.created_at.toLocaleDateString("id-ID")} · {t.points} poin · {t._count.attachments} lampiran
+                      {TICKET_TYPE_LABELS[t.ticket_type]} · {t.created_at.toLocaleDateString("id-ID")} · {t.points_excluded_at ? `${t.points} poin dihapus` : `${t.points} poin`} · {t._count.attachments} lampiran
                     </span>
                   </span>
                   <span className="text-[0.8125rem] text-muted-foreground">
@@ -135,6 +147,9 @@ export default async function TicketAuditPage({ searchParams }: { searchParams: 
                     ))}
                   </span>
                 </Link>
+                <div className="shrink-0">
+                  <TicketPointsControl ticketId={t.id} ticketCode={t.ticket_code} excluded={Boolean(t.points_excluded_at)} size="sm" />
+                </div>
               </li>
             ))}
           </ul>

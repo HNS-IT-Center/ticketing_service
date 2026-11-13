@@ -14,6 +14,7 @@ import { EmptyState } from "@/components/app/EmptyState";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import PartCodeAlertCard from "@/components/service/PartCodeAlertCard";
 
 export const metadata = { title: "Dashboard Stok — HNS IT Center" };
 
@@ -58,6 +59,9 @@ export default async function StockDashboardPage() {
           hint="12 bulan terakhir"
         />
       </div>
+
+      {/* Moved here from the admin dashboard (owner, 2026-11-13): chasing the code is stock work. */}
+      <PartCodeAlertCard scope={storeIds ? { store_location_id: { in: storeIds } } : {}} portal="stok" showTechnician />
 
       <div className="grid items-start gap-5 xl:grid-cols-2">
         <Card className="gap-3">

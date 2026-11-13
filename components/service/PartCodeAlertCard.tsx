@@ -24,7 +24,8 @@ export default async function PartCodeAlertCard({
   showTechnician = false,
 }: {
   scope: Prisma.TicketWhereInput;
-  portal: "admin" | "technician";
+  /** `stok` is read only: Admin Stok follows it up, the technician enters the code. */
+  portal: "admin" | "technician" | "stok";
   showTechnician?: boolean;
 }) {
   const where = ticketsAwaitingPartCodeWhere(scope);
@@ -59,12 +60,20 @@ export default async function PartCodeAlertCard({
         {total} tiket selesai, part belum punya kode Accurate
       </AlertTitle>
       <AlertDescription className="flex flex-col gap-3">
-        <p>
-          Servisnya sudah selesai, tapi part yang dipasang masih tercatat dengan nama saja. Setelah barangnya
-          diterima di Accurate, buka tiketnya → <strong>Rincian Biaya</strong> → <strong>Masukkan kode</strong>,
-          lalu pilih sparepart yang benar-benar dipakai. Tanpa kode itu kasir tidak bisa memasukkan fakturnya ke
-          Accurate.
-        </p>
+        {portal === "stok" ? (
+          <p>
+            Servisnya sudah selesai, tapi part yang dipasang masih tercatat dengan nama saja. Pastikan barangnya sudah
+            diterima di Accurate, lalu ingatkan teknisinya untuk memasukkan kode di <strong>Rincian Biaya</strong>.
+            Tanpa kode itu kasir tidak bisa memasukkan fakturnya ke Accurate.
+          </p>
+        ) : (
+          <p>
+            Servisnya sudah selesai, tapi part yang dipasang masih tercatat dengan nama saja. Setelah barangnya
+            diterima di Accurate, buka tiketnya → <strong>Rincian Biaya</strong> → <strong>Masukkan kode</strong>,
+            lalu pilih sparepart yang benar-benar dipakai. Tanpa kode itu kasir tidak bisa memasukkan fakturnya ke
+            Accurate.
+          </p>
+        )}
         <ul className="flex flex-col gap-2">
           {tickets.map((t) => (
             <li
@@ -86,10 +95,10 @@ export default async function PartCodeAlertCard({
                 </span>
               </span>
               <Link
-                href={`/${portal}/tickets/${t.id}#rincian-biaya`}
+                href={portal === "stok" ? `/stok/tickets/${t.id}` : `/${portal}/tickets/${t.id}#rincian-biaya`}
                 className="inline-flex min-h-11 items-center text-sm font-medium text-primary no-underline hover:underline md:min-h-0"
               >
-                Masukkan kode →
+                {portal === "stok" ? "Lihat tiket →" : "Masukkan kode →"}
               </Link>
             </li>
           ))}

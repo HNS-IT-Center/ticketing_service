@@ -1,187 +1,209 @@
+import { Suspense } from "react";
+import { CheckCircle, ChevronDown, Inbox, Wallet } from "lucide-react";
 import { requireRole } from "@/lib/session";
-import { urlSort } from "@/lib/table-sort";
-import { TICKET_STATUSES } from "@/lib/ticket-list-filter";
-import { db } from "@/lib/db";
-import Link from "next/link";
+import { accessFor } from "@/lib/access-server";
+import { requestNow } from "@/lib/clock";
+import { formatRupiah, formatRupiahCompact } from "@/lib/charges";
+import { backlogText } from "@/lib/admin-dashboard";
+import { loadAdminDashboard } from "@/lib/admin-dashboard-server";
+import { monthLabel } from "@/lib/reports/parts";
+import {
+  DEFAULT_GRAIN,
+  GRAINS,
+  GRAIN_LABELS,
+  PERIODE_PARAM,
+  TYPE_LABELS,
+  TYPE_ORDER,
+  parsePeriode,
+  periodText,
+  type Grain,
+  type TrendRow,
+} from "@/lib/trend";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
-import { EmptyState } from "@/components/app/EmptyState";
+import { FilterChips } from "@/components/app/FilterChips";
 import { PageHeader } from "@/components/app/PageHeader";
-import { StatCard } from "@/components/app/StatCard";
-import { StatusBadge } from "@/components/app/StatusBadge";
-import { buttonVariants } from "@/components/ui/button";
-import { Card, CardAction, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Ticket, CheckCircle, Clock, AlertCircle, ArrowRight, Store, Plus, ChevronDown } from "lucide-react";
-import { ticketPartyName } from "@/lib/ticket-party";
-import PartCodeAlertCard from "@/components/service/PartCodeAlertCard";
+import { StatCard, StatCardSkeleton } from "@/components/app/StatCard";
+import ChartSlider, { type Slide } from "@/components/toko/ChartSlider";
+import { LineChart, StackedColumns, type LineBucket } from "@/components/toko/Charts";
+import { AttentionRow, DeltaHint, HeldClaimsCard, StoreSection, TechnicianSection } from "@/components/dashboard/BusinessSections";
 
-export const metadata = { title: "Dashboard — HNS IT Center" };
+export const metadata = { title: "Ringkasan Bisnis — HNS IT Center" };
 
-export default async function AdminDashboard({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
-  const params = await searchParams;
+const nf = new Intl.NumberFormat("id-ID");
+
+/** The bucket a chart point stands for, in words: "per hari", "per bulan". */
+const BUCKET_WORD: Record<Grain, string> = { day: "hari", week: "minggu", month: "bulan", quarter: "kuartal", year: "tahun" };
+
+/**
+ * Ringkasan Bisnis (owner, 2026-11-13): one page for every administrator, the
+ * boss included. The period picked at the top drives every figure except
+ * "Perlu perhatian", which is today's state. Money — takings and money held in
+ * claims — shows only to a viewer allowed `view_finance_report`; for anyone
+ * else it is not rendered at all, so it is not in the page source either.
+ */
+export default async function AdminDashboard({ searchParams }: { searchParams: Promise<{ periode?: string }> }) {
   const session = await requireRole("Administrator");
-  const isSales = session.role === "Sales";
-  const salesFilter = isSales ? { sales_id: session.userId } : {};
+  const params = await searchParams;
+  const now = requestNow();
+  const grain = parsePeriode(params.periode);
 
-  // Fire all queries in parallel
-  const [userGroups, totalTickets, assignedTickets, closedTickets, totalStores, recentTickets, topTechnicians] =
-    await Promise.all([
-      isSales
-        ? Promise.resolve([] as { role: string; _count: { role: number } }[])
-        : db.user.groupBy({ by: ["role"], _count: { role: true } }),
-      db.ticket.count({ where: salesFilter }),
-      db.ticket.count({ where: { ...salesFilter, technician_id: { not: null } } }),
-      db.ticket.count({ where: { ...salesFilter, status: { in: ["done", "cancelled", "rejected"] } } }),
-      db.storeLocation.count(),
-      db.ticket.findMany({
-        where: salesFilter,
-        orderBy: { created_at: "desc" },
-        take: 8,
-        select: {
-          id: true, ticket_code: true, ticket_type: true, status: true,
-          technician_id: true, is_for_self: true, customer_name: true,
-          user: { select: { name: true } },
-          technician: { select: { name: true } },
-        },
-      }),
-      db.technicianPerformance.findMany({
-        orderBy: { total_points_completed: "desc" },
-        take: 5,
-        select: { id: true, tickets_handled: true, total_points_completed: true, technician: { select: { id: true, name: true } } },
-      }),
-    ]);
+  const [access, data] = await Promise.all([accessFor(session.userId), loadAdminDashboard(grain, now)]);
+  const money = access.can("view_finance_report");
+  const mayValueClaims = money && access.can("view_cost");
 
-  const totalUsersRaw = userGroups;
-  const countByRole = Object.fromEntries(
-    (totalUsersRaw as { role: string; _count: { role: number } }[]).map((u) => [u.role, u._count.role])
-  );
+  const dates = periodText(grain, now);
+  const head = Object.fromEntries(data.headlines.map((h) => [h.metric, h]));
+  const per = BUCKET_WORD[grain];
+  const last = data.rows.length - 1;
+  const monthText = monthLabel(data.month);
 
-  // What needs a hand first: the ticket numbers, Unassigned leading.
-  const ticketStats = [
-    { label: "Unassigned", value: totalTickets - assignedTickets, icon: Clock, tone: "attention" as const, href: "/admin/tickets?assigned=false" },
-    { label: "Assigned", value: assignedTickets, icon: CheckCircle, tone: "success" as const, href: "/admin/tickets?assigned=true" },
-    { label: "Total Tickets", value: totalTickets, icon: Ticket, tone: "default" as const, href: "/admin/tickets" },
-    { label: "Closed", value: closedTickets, icon: AlertCircle, tone: "default" as const, href: "/admin/tickets?status=done" },
-  ];
-  // Who and where: worth knowing, rarely what the day starts with.
-  const orgStats = [
-    { label: "Technicians", value: countByRole.Technician ?? 0, icon: Users, href: "/admin/users?role=Technician" },
-    { label: "Stores", value: totalStores ?? 0, icon: Store, href: "/admin/stores" },
-    { label: "Sales", value: countByRole.Sales ?? 0, icon: Users, href: "/admin/users?role=Sales" },
-  ];
+  const typeText = (r: TrendRow) =>
+    TYPE_ORDER.filter((t) => r.createdByType[t] > 0)
+      .map((t) => `${TYPE_LABELS[t]} ${r.createdByType[t]}`)
+      .join(", ");
 
-  type RecentTicket = (typeof recentTickets)[number];
-  const recentColumns: DataTableColumn<RecentTicket>[] = [
-    { key: "code", sortValue: (t) => t.ticket_code, header: "Code", cell: (t) => <span title={t.ticket_code} className="block max-w-32 truncate font-mono">{t.ticket_code}</span>, mobile: "title" },
-    { key: "type", sortValue: (t) => t.ticket_type, header: "Type", cell: (t) => <span className="capitalize">{t.ticket_type.replace("_", " ")}</span> },
-    { key: "customer", sortValue: (t) => ticketPartyName(t), header: "Customer", cell: (t) => ticketPartyName(t) || "Guest" },
+  const flowBuckets: LineBucket[] = data.rows.map((r, i) => ({
+    key: r.key,
+    label: r.label,
+    longLabel: r.longLabel,
+    values: { created: r.created, finished: r.finished },
+    details: { created: typeText(r) },
+    note: backlogText(r.created, r.finished),
+    partial: i === last,
+  }));
+  const single = (pick: (r: TrendRow) => number) =>
+    data.rows.map((r, i) => ({ key: r.key, label: r.label, longLabel: r.longLabel, values: { v: pick(r) }, total: pick(r), partial: i === last }));
+  const unpricedInWindow = data.rows.reduce((s, r) => s + r.unpriced, 0);
+
+  const slides: Slide[] = [
     {
-      key: "status", sortValue: (t) => TICKET_STATUSES.indexOf(t.status),
-      header: "Status",
-      cell: (t) => <StatusBadge kind="ticket" status={t.status} hasTechnician={Boolean(t.technician_id)} size="sm" />,
-      mobile: "badge",
+      key: "flow",
+      title: "Tiket masuk vs selesai",
+      subtitle: `Total semua jenis tiket per ${per}. Jarak dua garis = tumpukan bertambah atau berkurang.`,
+      content: (
+        <div className="flex flex-col gap-2">
+          <LineChart
+            series={[
+              { key: "created", label: "Masuk", color: 0 },
+              { key: "finished", label: "Selesai", color: 1 },
+            ]}
+            buckets={flowBuckets}
+          />
+          <p className="text-xs text-muted-foreground">
+            Selesai di suatu {per} bisa tiket dari {per} sebelumnya, jadi grafik ini membaca arus kerja, bukan umur tiket. Klaim garansi
+            dihitung selesai saat diserahkan ke RMA.
+          </p>
+        </div>
+      ),
+    },
+    ...(money
+      ? [
+          {
+            key: "takings",
+            title: "Pendapatan",
+            subtitle: `Harga jual di Rincian Biaya tiket yang selesai, per ${per}.`,
+            content: (
+              <div className="flex flex-col gap-2">
+                <StackedColumns series={[{ key: "v", label: "Pendapatan" }]} buckets={single((r) => r.takings)} format="rupiah" />
+                <p className="text-xs text-muted-foreground">
+                  Kolom pudar: {per} masih berjalan.
+                  {unpricedInWindow > 0 && ` ${nf.format(unpricedInWindow)} baris biaya belum ada harga jual dan tidak ikut dijumlah.`}
+                </p>
+              </div>
+            ),
+          },
+        ]
+      : []),
+    {
+      key: "points",
+      title: "Poin teknisi",
+      subtitle: `Total poin seluruh teknisi per ${per}.`,
+      content: (
+        <div className="flex flex-col gap-2">
+          <LineChart series={[{ key: "v", label: "Poin", color: 0 }]} buckets={single((r) => r.points)} unit="poin" />
+          <p className="text-xs text-muted-foreground">Tiket yang poinnya dihapus tidak ikut dihitung. Garis putus-putus: {per} masih berjalan.</p>
+        </div>
+      ),
     },
     {
-      key: "technician", sortValue: (t) => t.technician?.name,
-      header: "Technician",
-      cell: (t) => t.technician?.name ?? "—",
-      className: "text-muted-foreground",
+      key: "types",
+      title: "Tiket masuk per jenis",
+      subtitle: `Komposisi tiket masuk per ${per}.`,
+      content: (
+        <StackedColumns
+          series={TYPE_ORDER.map((t) => ({ key: t, label: TYPE_LABELS[t] }))}
+          buckets={data.rows.map((r, i) => ({ key: r.key, label: r.label, longLabel: r.longLabel, values: r.createdByType, total: r.created, partial: i === last }))}
+        />
+      ),
     },
   ];
 
-  const orgAndTop = (
-    <div className="grid gap-4 lg:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]">
-      <div className="grid grid-cols-3 content-start gap-3">
-        {orgStats.map((s) => (
-          <StatCard key={s.label} label={s.label} value={s.value} icon={s.icon} href={s.href} />
-        ))}
-      </div>
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-bold">Top Technicians</CardTitle>
-          <CardAction>
-            <Link href="/admin/performance" className="text-sm font-medium text-primary hover:underline">All →</Link>
-          </CardAction>
-        </CardHeader>
-        <CardContent>
-          {topTechnicians.length === 0 ? (
-            <p className="py-4 text-center text-muted-foreground">No data yet</p>
-          ) : (
-            <ol className="flex flex-col gap-3">
-              {topTechnicians.map((t, i) => (
-                <li key={t.id} className="flex items-center gap-3">
-                  <span className={i === 0 ? "w-6 font-extrabold text-amber-600" : "w-6 font-extrabold text-muted-foreground"}>
-                    {i === 0 ? "🥇" : `#${i + 1}`}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-[0.9rem] font-semibold">{t.technician?.name ?? "Unknown"}</p>
-                    <p className="text-xs text-muted-foreground">{t.tickets_handled} tickets</p>
-                  </div>
-                  <span className="font-bold text-primary tabular-nums">{t.total_points_completed} pts</span>
-                </li>
-              ))}
-            </ol>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+  const tableColumns: DataTableColumn<TrendRow>[] = [
+    { key: "period", header: "Periode", cell: (r) => r.longLabel, mobile: "title" },
+    { key: "created", header: "Masuk", cell: (r) => nf.format(r.created), className: "text-right tabular-nums" },
+    { key: "finished", header: "Selesai", cell: (r) => nf.format(r.finished), className: "text-right tabular-nums" },
+    { key: "cancelled", header: "Batal / ditolak", cell: (r) => nf.format(r.cancelled), className: "text-right tabular-nums" },
+    ...(money
+      ? [
+          { key: "takings", header: "Pendapatan", cell: (r: TrendRow) => formatRupiah(r.takings), className: "text-right tabular-nums" },
+          { key: "unpriced", header: "Tanpa harga", cell: (r: TrendRow) => nf.format(r.unpriced), className: "text-right tabular-nums" },
+        ]
+      : []),
+    { key: "points", header: "Poin", cell: (r) => nf.format(r.points), className: "text-right tabular-nums" },
+  ];
+
+  const periodeHref = (g: Grain) => (g === DEFAULT_GRAIN ? "/admin/dashboard" : `/admin/dashboard?periode=${PERIODE_PARAM[g]}`);
 
   return (
-    // Built from components/app and shadcn only, so the page opts into
-    // Tailwind spacing with a data-slot (the UI-1 reset rule).
+    // Built from components/app and shadcn only (the UI-1 reset rule).
     <div data-slot="admin-dashboard" className="flex flex-col gap-6">
       <PageHeader
-        title="Admin Dashboard"
-        description="System overview and management"
-        actions={
-          <Link href="/admin/tickets/create" className={buttonVariants()}>
-            <Plus aria-hidden="true" /> Create Ticket
-          </Link>
-        }
+        title="Ringkasan Bisnis"
+        description={`Semua toko · ${dates.current} · dibanding ${dates.previous}`}
       />
 
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {ticketStats.map((s) => (
-          <StatCard key={s.label} label={s.label} value={s.value} icon={s.icon} tone={s.tone} href={s.href} />
-        ))}
+      <FilterChips label="Periode" active={grain} chips={GRAINS.map((g) => ({ key: g, label: GRAIN_LABELS[g], href: periodeHref(g) }))} />
+
+      <div className={money ? "grid grid-cols-2 gap-3 lg:grid-cols-4" : "grid grid-cols-2 gap-3 lg:grid-cols-3"}>
+        {money && (
+          <StatCard
+            label="Pendapatan"
+            value={formatRupiahCompact(data.totals.takings)}
+            icon={Wallet}
+            hint={
+              <span className="flex flex-col gap-0.5">
+                <DeltaHint h={head.takings} money />
+                {data.totals.unpriced > 0 && <span className="text-tone-amber-fg">{nf.format(data.totals.unpriced)} baris belum ada harga</span>}
+              </span>
+            }
+          />
+        )}
+        <StatCard label="Tiket masuk" value={nf.format(data.totals.created)} icon={Inbox} href="/admin/tickets" hint={<DeltaHint h={head.created} />} />
+        <StatCard label="Tiket selesai" value={nf.format(data.totals.finished)} icon={CheckCircle} hint={<DeltaHint h={head.finished} />} />
+        <Suspense fallback={<StatCardSkeleton />}>
+          <HeldClaimsCard now={now} mayValue={mayValueClaims} />
+        </Suspense>
       </div>
 
-      {/* Finished service tickets whose parts still lack an Accurate code. */}
-      <PartCodeAlertCard scope={{}} portal="admin" showTechnician />
+      <div className="flex flex-col gap-3">
+        <ChartSlider slides={slides} label="Grafik ringkasan bisnis" />
+        <details className="group rounded-xl border border-border bg-card">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-foreground outline-none select-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
+            Lihat angka grafik dalam tabel
+            <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
+          </summary>
+          <div className="border-t border-border p-4">
+            <DataTable caption={`Per ${per}`} columns={tableColumns} rows={[...data.rows].reverse()} getRowKey={(r) => r.key} />
+          </div>
+        </details>
+      </div>
 
-      <section aria-labelledby="recent-tickets" className="flex flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <h2 id="recent-tickets" className="text-lg font-bold text-foreground">Recent Tickets</h2>
-          <Link href="/admin/tickets" className="flex min-h-11 items-center gap-1 text-sm font-medium text-primary hover:underline md:min-h-0">
-            View all <ArrowRight aria-hidden="true" className="size-3.5" />
-          </Link>
-        </div>
-        <DataTable
-          caption="Recent Tickets"
-          sort={urlSort("/admin/dashboard", params)}
-          columns={recentColumns}
-          rows={recentTickets}
-          getRowKey={(t) => t.id}
-          rowHref={(t) => `/admin/tickets/${t.id}`}
-          empty={<EmptyState icon={Ticket} title="No tickets yet" />}
-        />
-      </section>
+      <div className="grid items-start gap-4 xl:grid-cols-2">
+        <StoreSection stores={data.stores} money={money} />
+        <TechnicianSection teams={data.teams} monthText={monthText} />
+      </div>
 
-      {!isSales && (
-        <>
-          {/* On a phone this folds away; on a wider screen there is room for it. */}
-          <details className="group rounded-xl border border-border bg-card md:hidden">
-            <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-foreground outline-none select-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 [&::-webkit-details-marker]:hidden">
-              Organisasi &amp; Top Technicians
-              <ChevronDown aria-hidden="true" className="size-4 text-muted-foreground transition-transform group-open:rotate-180" />
-            </summary>
-            <div className="border-t border-border p-4">{orgAndTop}</div>
-          </details>
-          <section aria-label="Organisasi & Top Technicians" className="hidden md:block">
-            {orgAndTop}
-          </section>
-        </>
-      )}
+      <AttentionRow a={data.attention} />
     </div>
   );
 }

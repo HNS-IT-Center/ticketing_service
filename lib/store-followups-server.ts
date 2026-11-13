@@ -20,6 +20,8 @@ export type FollowupItem = {
   /** Unique within its list: the ticket, or for vendor work the bill line. */
   key: string;
   ticketId: string;
+  /** The ticket's store, so one load can be split per store. */
+  storeId: string | null;
   code: string;
   ticketType: TicketType;
   customer: string;
@@ -35,7 +37,7 @@ export type FollowupItem = {
 
 export type Followups = Record<FollowupKind, FollowupItem[]>;
 
-const PARTY = { is_for_self: true, customer_name: true, user: { select: { name: true, phone_number: true } } } as const;
+const PARTY = { store_location_id: true, is_for_self: true, customer_name: true, user: { select: { name: true, phone_number: true } } } as const;
 
 const byDays = (a: FollowupItem, b: FollowupItem) => b.days - a.days || a.code.localeCompare(b.code);
 
@@ -128,6 +130,7 @@ export async function loadFollowups(storeIds: string[], now: number): Promise<Fo
         return {
           key: t.id,
           ticketId: t.id,
+          storeId: t.store_location_id,
           code: t.ticket_code,
           ticketType: t.ticket_type,
           customer: party(t),
@@ -148,6 +151,7 @@ export async function loadFollowups(storeIds: string[], now: number): Promise<Fo
         return {
           key: t.id,
           ticketId: t.id,
+          storeId: t.store_location_id,
           code: t.ticket_code,
           ticketType: t.ticket_type,
           customer: name,
@@ -166,6 +170,7 @@ export async function loadFollowups(storeIds: string[], now: number): Promise<Fo
         return {
           key: c.id,
           ticketId: c.ticket.id,
+          storeId: c.ticket.store_location_id,
           code: c.ticket.ticket_code,
           ticketType: c.ticket.ticket_type,
           customer: party(c.ticket),
@@ -186,6 +191,7 @@ export async function loadFollowups(storeIds: string[], now: number): Promise<Fo
           {
             key: t.id,
             ticketId: t.id,
+            storeId: t.store_location_id,
             code: t.ticket_code,
             ticketType: t.ticket_type,
             customer: party(t),
@@ -205,6 +211,7 @@ export async function loadFollowups(storeIds: string[], now: number): Promise<Fo
         return {
           key: t.id,
           ticketId: t.id,
+          storeId: t.store_location_id,
           code: t.ticket_code,
           ticketType: t.ticket_type,
           customer: party(t),

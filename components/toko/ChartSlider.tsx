@@ -49,7 +49,16 @@ const intervalStore = {
  * finger is on it, and ⏸ stops it. The figures refresh every five minutes so a
  * screen left on in the shop stays current.
  */
-export default function ChartSlider({ slides }: { slides: Slide[] }) {
+export default function ChartSlider({
+  slides,
+  label = "Grafik dashboard toko",
+  noun = "Grafik",
+}: {
+  slides: Slide[];
+  label?: string;
+  /** What one slide is called: "Grafik 2 dari 4", "Tim 1 dari 3". */
+  noun?: string;
+}) {
   const router = useRouter();
   const seconds = useSyncExternalStore(intervalStore.subscribe, intervalStore.get, intervalStore.getServer);
   const [index, setIndex] = useState(0);
@@ -120,7 +129,7 @@ export default function ChartSlider({ slides }: { slides: Slide[] }) {
       ref={rootRef}
       data-slot="chart-slider"
       aria-roledescription="carousel"
-      aria-label="Grafik dashboard toko"
+      aria-label={label}
       tabIndex={-1}
       onKeyDown={(e) => {
         if (e.key === "ArrowRight") go(current + 1);
@@ -149,16 +158,16 @@ export default function ChartSlider({ slides }: { slides: Slide[] }) {
       <header className="flex items-start justify-between gap-3">
         <div className="flex min-w-0 flex-col gap-0.5">
           <p className="text-xs font-medium text-muted-foreground">
-            Grafik {current + 1} dari {count}
+            {noun} {current + 1} dari {count}
           </p>
           <h2 className={cn("text-base font-semibold text-foreground md:text-lg", fullscreen && "text-2xl md:text-3xl")}>{slide.title}</h2>
           {slide.subtitle && <p className="text-sm text-muted-foreground">{slide.subtitle}</p>}
         </div>
         <div className="flex shrink-0 items-center gap-1">
-          <Button type="button" variant="outline" size="icon" aria-label="Grafik sebelumnya" onClick={() => go(current - 1)}>
+          <Button type="button" variant="outline" size="icon" aria-label={`${noun} sebelumnya`} onClick={() => go(current - 1)}>
             <ChevronLeft aria-hidden />
           </Button>
-          <Button type="button" variant="outline" size="icon" aria-label="Grafik berikutnya" onClick={() => go(current + 1)}>
+          <Button type="button" variant="outline" size="icon" aria-label={`${noun} berikutnya`} onClick={() => go(current + 1)}>
             <ChevronRight aria-hidden />
           </Button>
           <Button
@@ -186,7 +195,7 @@ export default function ChartSlider({ slides }: { slides: Slide[] }) {
         />
       </div>
       <footer className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex shrink-0 flex-wrap items-center gap-1 xl:flex-nowrap" role="group" aria-label="Pilih grafik">
+        <div className="flex shrink-0 flex-wrap items-center gap-1 xl:flex-nowrap" role="group" aria-label={`Pilih ${noun.toLowerCase()}`}>
           {slides.map((s, i) => (
             <button
               key={s.key}
@@ -194,7 +203,7 @@ export default function ChartSlider({ slides }: { slides: Slide[] }) {
               aria-label={`${i + 1}. ${s.title}`}
               aria-current={i === current ? "true" : undefined}
               onClick={() => go(i)}
-              className="flex size-10 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:size-7"
+              className="flex size-11 items-center justify-center rounded-full outline-none focus-visible:ring-3 focus-visible:ring-ring/50 md:size-7"
             >
               <span className={cn("block size-2.5 rounded-full", i === current ? "bg-primary" : "bg-border")} />
             </button>

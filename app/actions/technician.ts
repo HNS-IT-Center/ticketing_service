@@ -11,6 +11,7 @@ import { uploadToR2, getExt, getFileType, deleteFromStorage } from "@/lib/r2";
 import { storageFailedMessage } from "@/lib/upload-limit";
 import { performanceEffect } from "@/lib/kpi";
 import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
+import { closingTimeLogEvent } from "@/lib/working-time";
 import { isServicePart, MAX_PART_PHOTOS } from "@/lib/service-parts";
 import { readPartInput } from "@/lib/replaced-part-input";
 import { EXTERNAL_WORK_OUTSTANDING, partChargeDescription } from "@/lib/charges";
@@ -199,7 +200,11 @@ export async function updateTicketStatusAction(formData: FormData) {
 
     const ticket = await db.ticket.findUnique({ 
       where: { id: ticketId },
-      include: { cleaning_detail: true, charges: JOB_POINT_CHARGES, }
+      include: {
+        cleaning_detail: true,
+        charges: JOB_POINT_CHARGES,
+        time_logs: { select: { event: true }, orderBy: { created_at: "asc" } },
+      },
     });
     if (!ticket) return { error: "Ticket not found" };
 
@@ -337,6 +342,13 @@ export async function updateTicketStatusAction(formData: FormData) {
         data: { ticket_id: ticketId, event: eventAction, reason: reason || null },
       }));
     }
+    // Cancel and reject send no event, so a running timer would never stop.
+    const closing = closingTimeLogEvent(ticket.time_logs, newStatus, eventAction);
+    if (closing) {
+      dbOps.push(db.ticketTimeLog.create({
+        data: { ticket_id: ticketId, event: closing, reason: `Otomatis: status ${newStatus}` },
+      }));
+    }
 
     if (uploadedFiles.length > 0) {
       dbOps.push(
@@ -379,7 +391,8 @@ export async function updateTicketStatusAction(formData: FormData) {
     // A claim is paid once, at handover to RMA. Nothing this action does to a
     // claim credits anything. See lib/kpi.ts.
     const effect = performanceEffect(ticket.ticket_type, newStatus);
-    if (effect !== "ignore") {
+    // A ticket whose points an administrator took off counts for nothing.
+    if (effect !== "ignore" && !ticket.points_excluded_at) {
       const points = ticketTotalPoints(ticket);
 
       const isSuccess = effect === "success";

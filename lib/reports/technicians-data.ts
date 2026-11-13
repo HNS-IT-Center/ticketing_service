@@ -11,6 +11,9 @@ import type { TargetLine, TechnicianRef } from "./technicians";
  * not move to the later month. The credit goes to the technician holding the
  * ticket; a ticket with nobody on it is left out.
  *
+ * A ticket whose points an administrator took off still counts as work and
+ * takings; its job points are 0.
+ *
  * Technicians listed: every active one (of the store, when one is chosen), so
  * a month with no work shows as a zero rather than as an absence — plus anyone
  * who did work in the month and has since been deactivated or moved.
@@ -44,6 +47,7 @@ export async function loadTargetData(
           where: { id: { in: ticketIds }, technician_id: { not: null } },
           select: {
             id: true,
+            points_excluded_at: true,
             technician: { select: { id: true, name: true } },
             charges: {
               where: { kind: "service_fee" },
@@ -78,7 +82,9 @@ export async function loadTargetData(
         jobName: c.description,
         quantity: c.quantity,
         unitPrice: c.unit_price,
-        points: c.job_points,
+        // An administrator took this ticket's points off (Hapus poin): the work
+        // and takings still count, the points do not — as on the leaderboard.
+        points: t.points_excluded_at ? 0 : c.job_points,
       });
     }
   }

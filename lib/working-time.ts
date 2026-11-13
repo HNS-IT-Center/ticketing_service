@@ -81,3 +81,27 @@ export function formatMs(ms: number): string {
   if (mins > 0) return `${mins}m ${secs}s`;
   return `${secs}s`;
 }
+
+/**
+ * Statuses that end the work on a ticket. Reaching one with the timer still
+ * running must close it, or the open interval keeps counting against the clock
+ * forever — a cancelled ticket once showed 2457h (BL27). The technician portal
+ * sends DONE with a finish, but cancel, reject, every admin move and the
+ * handover of a claim to RMA (where the technician's part ends) sent nothing.
+ */
+const ENDS_WORK = ["done", "cancelled", "rejected", "rma_process"];
+
+/**
+ * The time-log event to write alongside a status change, or null. `sent` is the
+ * event the caller already writes; a closing one there makes this a no-op.
+ */
+export function closingTimeLogEvent(
+  timeLogs: readonly { event: string }[],
+  newStatus: string,
+  sent: string | null = null,
+): "DONE" | null {
+  if (!ENDS_WORK.includes(newStatus)) return null;
+  if (sent && CLOSES.includes(sent)) return null;
+  const last = timeLogs[timeLogs.length - 1];
+  return last && OPENS.includes(last.event) ? "DONE" : null;
+}

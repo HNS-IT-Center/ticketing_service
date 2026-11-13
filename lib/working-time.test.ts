@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  closingTimeLogEvent,
   calcWorkingMs,
   formatMs,
   isTimerPaused,
@@ -131,5 +132,19 @@ describe("formatMs", () => {
 
   it("keeps a zero middle unit so the shape does not change", () => {
     expect(formatMs(3_600_000)).toBe("1h 0m 0s");
+  });
+});
+
+describe("closingTimeLogEvent", () => {
+  const running = [{ event: "START" }];
+  it("closes a running timer when the ticket is cancelled, rejected, done or handed to RMA", () => {
+    for (const s of ["cancelled", "rejected", "done", "rma_process"]) expect(closingTimeLogEvent(running, s)).toBe("DONE");
+    expect(closingTimeLogEvent([{ event: "START" }, { event: "PAUSE" }, { event: "RESUME" }], "cancelled")).toBe("DONE");
+  });
+  it("writes nothing when nothing is running, the move is not an end, or the caller already closes it", () => {
+    expect(closingTimeLogEvent([], "cancelled")).toBeNull();
+    expect(closingTimeLogEvent([{ event: "START" }, { event: "PAUSE" }], "cancelled")).toBeNull();
+    expect(closingTimeLogEvent(running, "on_progress")).toBeNull();
+    expect(closingTimeLogEvent(running, "done", "DONE")).toBeNull();
   });
 });

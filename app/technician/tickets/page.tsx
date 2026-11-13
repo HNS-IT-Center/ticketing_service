@@ -75,7 +75,7 @@ export default async function TechnicianTicketsPage({
       id: true, ticket_code: true, ticket_type: true, device_type: true,
       status: true, technician_id: true, is_for_self: true, customer_name: true,
       updated_at: true,
-      cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES,
+      cleaning_detail: { select: { service_package: true } }, charges: JOB_POINT_CHARGES, points_excluded_at: true,
       user: { select: { name: true } },
       // `rma_process` is one ticket status covering nine RMA ones; the list
       // shows the informative one. See lib/rma/ticket-status-badge.ts.

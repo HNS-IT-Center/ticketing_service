@@ -71,11 +71,24 @@ export const EARNING_STATUS_LOG_FILTER: Prisma.TicketStatusLogWhereInput = {
   OR: [
     {
       new_status: "done",
-      ticket: { ticket_type: { not: "warranty_claim" } },
+      ticket: { ticket_type: { not: "warranty_claim" }, points_excluded_at: null },
     },
     {
       new_status: "rma_process",
-      ticket: { ticket_type: "warranty_claim" },
+      ticket: { ticket_type: "warranty_claim", points_excluded_at: null },
     },
+  ],
+};
+
+/**
+ * The transitions that earn, whether or not an administrator later took the
+ * ticket's points off. Only for the places that must still see such a ticket:
+ * the audit page, and taking the points off or giving them back. Everything
+ * that counts or totals uses EARNING_STATUS_LOG_FILTER.
+ */
+export const EARNING_TRANSITION_FILTER: Prisma.TicketStatusLogWhereInput = {
+  OR: [
+    { new_status: "done", ticket: { ticket_type: { not: "warranty_claim" } } },
+    { new_status: "rma_process", ticket: { ticket_type: "warranty_claim" } },
   ],
 };

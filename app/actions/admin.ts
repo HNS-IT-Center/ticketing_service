@@ -13,6 +13,7 @@ import {
   performanceEffect,
 } from "@/lib/kpi";
 import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
+import { closingTimeLogEvent } from "@/lib/working-time";
 import { deleteFromStorage } from "@/lib/r2";
 import { EXTERNAL_WORK_OUTSTANDING } from "@/lib/charges";
 import { hasExternalWorkOutstanding } from "@/lib/charges-server";
@@ -326,6 +327,7 @@ export async function adminUpdateTicketStatusAction(
       user: { select: { name: true, email: true } },
       cleaning_detail: true,
       charges: JOB_POINT_CHARGES,
+      time_logs: { select: { event: true }, orderBy: { created_at: "asc" } },
     },
   });
   if (!ticket) return { error: "Ticket not found" };
@@ -387,6 +389,10 @@ export async function adminUpdateTicketStatusAction(
         changed_by: session.userId,
       },
     }),
+    // Done, cancel or reject from here never stopped a running timer (BL27).
+    ...(closingTimeLogEvent(ticket.time_logs, newStatus)
+      ? [db.ticketTimeLog.create({ data: { ticket_id: ticketId, event: "DONE", reason: `Otomatis: status ${newStatus}` } })]
+      : []),
   ]);
 
   // Update technician performance if closing a ticket.
@@ -397,7 +403,8 @@ export async function adminUpdateTicketStatusAction(
   // a second time, for every ticket type, on top of the credit they already
   // got at `done`. The extra credit is gone; the rule now lives in lib/kpi.ts.
   const effect = performanceEffect(ticket.ticket_type, newStatus);
-  if (effect !== "ignore" && ticket.technician_id) {
+  // A ticket whose points an administrator took off counts for nothing.
+  if (effect !== "ignore" && ticket.technician_id && !ticket.points_excluded_at) {
     // The one table (lib/points.ts) plus the Daftar Jasa jobs on the bill.
     const points = ticketTotalPoints(ticket);
     const isSuccess = effect === "success";

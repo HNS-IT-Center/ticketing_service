@@ -21,6 +21,7 @@ import WorkingTimeDisplay from "./WorkingTimeDisplay";
 import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import DeleteTicketPanel from "./DeleteTicketPanel";
+import { TicketPointsCard } from "@/components/tickets/TicketPointsCard";
 import { servicePartLabel } from "@/lib/service-parts";
 import { ticketPartyName } from "@/lib/ticket-party";
 import ChargesPanel from "@/components/service/ChargesPanel";
@@ -437,6 +438,8 @@ export default async function AdminTicketDetailPage({
               />
             </div>
           )}
+
+          {isAdmin && <TicketPointsCard ticketId={ticket.id} />}
 
           {/* Permanent deletion — administrators only, and last on the page so
               it is never the first thing a hand lands on. */}

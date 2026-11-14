@@ -243,6 +243,37 @@ function isBlank(value: unknown): boolean {
 }
 
 /**
+ * A store-stock unit's purchase invoice — the supplier's, not a customer's
+ * receipt — is the RMA desk's to attach, and it must be on the case before
+ * the case is verified (owner, 2026-11-14). Like the stock transfer number it
+ * covers both routes forward, since `on_hold -> in_vendor_process` reaches the
+ * vendor without passing `verified`. A case that already holds one is not
+ * asked again. The invoice is a file, so the action and the dialog check it
+ * here rather than through `validateRmaTransition`'s text fields.
+ */
+export function needsStockInvoice(args: {
+  unitOwnership: UnitOwnership | null | undefined;
+  to: RmaStatus;
+  recordedInvoiceUrl: string | null | undefined;
+}): boolean {
+  return (
+    args.unitOwnership === "store_stock" &&
+    (args.to === "verified" || args.to === "in_vendor_process") &&
+    isBlank(args.recordedInvoiceUrl)
+  );
+}
+
+export const STOCK_INVOICE_REQUIRED = "Nota pembelian unit stok toko wajib diunggah sebelum case diverifikasi.";
+
+/** One file, a photo or a PDF — what a scanned or photographed invoice is. */
+export function stockInvoiceFileError(files: readonly { type: string }[]): string | null {
+  if (files.length === 0) return STOCK_INVOICE_REQUIRED;
+  if (files.length > 1) return "Unggah satu file nota pembelian saja.";
+  const t = files[0].type;
+  return t.startsWith("image/") || t === "application/pdf" ? null : "Nota pembelian harus berupa foto atau PDF.";
+}
+
+/**
  * Single entry point used by the server action.
  *
  * Checks, in order: the role of the actor, that `from -> to` exists, and that

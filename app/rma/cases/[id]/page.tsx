@@ -357,6 +357,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             unitOwnership={rmaCase.unit_ownership}
             claimVendors={claimVendors}
             recordedStockTransferNumber={rmaCase.stock_transfer_number}
+            recordedInvoiceUrl={rmaCase.purchase_invoice_url}
             recorded={{
               vendor_id: rmaCase.vendor_id,
               vendor_name: rmaCase.vendor_name,

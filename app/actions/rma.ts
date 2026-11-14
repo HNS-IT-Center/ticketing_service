@@ -5,7 +5,7 @@ import { unstable_rethrow } from "next/navigation";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
-import { uploadToR2, getExt, getFileType } from "@/lib/r2";
+import { uploadToR2, getExt, getFileType, deleteFromStorage } from "@/lib/r2";
 import { storageFailedMessage } from "@/lib/upload-limit";
 import { logActivity } from "@/lib/activity";
 import { rmaStatusDisplay } from "@/lib/status-display";
@@ -14,7 +14,9 @@ import { cleanVendorName } from "@/lib/rma/vendor";
 import { RMA_HOLD_REASONS, holdReasonAsksTechnician, isRmaHoldReason } from "@/lib/rma/hold-reason";
 import {
   canActOnRma,
+  needsStockInvoice,
   releasesTicket,
+  stockInvoiceFileError,
   validateRmaTransition,
   type RmaTransitionInput,
 } from "@/lib/rma/state-machine";
@@ -584,6 +586,7 @@ export async function transitionRmaAction(formData: FormData) {
         ticket_id: true,
         unit_ownership: true,
         stock_transfer_number: true,
+        purchase_invoice_url: true,
         ticket: {
           select: { id: true, ticket_code: true, status: true, technician_id: true },
         },
@@ -639,9 +642,39 @@ export async function transitionRmaAction(formData: FormData) {
       }
     }
 
+    // A store-stock unit's supplier invoice, attached by the desk before the
+    // case is verified (owner, 2026-11-14). Checked before anything is written.
+    const invoiceNeeded = needsStockInvoice({
+      unitOwnership: rmaCase.unit_ownership,
+      to: toStatus,
+      recordedInvoiceUrl: rmaCase.purchase_invoice_url,
+    });
+    const stockInvoiceFiles = (formData.getAll("stock_invoice_files") as File[]).filter((f) => f.size > 0);
+    if (invoiceNeeded) {
+      const invoiceError = stockInvoiceFileError(stockInvoiceFiles);
+      if (invoiceError) return { error: invoiceError };
+    }
+
     // ── Fields this transition writes onto the case ──
     const now = new Date();
     const data: Record<string, unknown> = { status: toStatus, handler_id: session.userId };
+
+    // Uploaded before the status moves, because the move depends on it: a
+    // failed upload leaves the case where it was.
+    let stockInvoiceUrl: string | null = null;
+    if (invoiceNeeded) {
+      const file = stockInvoiceFiles[0];
+      try {
+        stockInvoiceUrl = await uploadToR2(
+          file,
+          `tickets/${rmaCase.ticket_id}/rma-invoice_${rmaCase.rma_code}.${getExt(file.type, file.name)}`,
+        );
+      } catch (err) {
+        console.error("[RMA STOCK INVOICE UPLOAD ERROR]", err);
+        return { error: storageFailedMessage("nota pembelian") };
+      }
+      data.purchase_invoice_url = stockInvoiceUrl;
+    }
 
     if (toStatus === "on_hold") {
       data.hold_reason = input.hold_reason;
@@ -696,7 +729,19 @@ export async function transitionRmaAction(formData: FormData) {
       data,
     });
     if (updated.count === 0) {
+      // Someone else moved the case: the invoice uploaded for this attempt belongs to nothing.
+      if (stockInvoiceUrl) await deleteFromStorage(stockInvoiceUrl).catch(() => false);
       return { error: "Status sudah diubah user lain. Muat ulang halaman untuk melihat kondisi terbaru." };
+    }
+    if (stockInvoiceUrl) {
+      await db.ticketAttachment.create({
+        data: {
+          ticket_id: rmaCase.ticket_id,
+          file_url: stockInvoiceUrl,
+          file_type: getFileType(stockInvoiceFiles[0].type),
+          kind: "invoice",
+        },
+      });
     }
 
     await db.rmaEvent.create({

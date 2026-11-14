@@ -388,7 +388,7 @@ export default function QuickTicketForm({
       }
       // The claim's invoice and photos keep their kinds; everything else is a plain attachment.
       if (isClaim) {
-        invoiceUrls.forEach((u) => fd.append("preuploaded_urls", u));
+        if (!isStoreStock) invoiceUrls.forEach((u) => fd.append("preuploaded_urls", u));
         photoUrls.forEach((u) => fd.append("unit_photo_urls", u));
       } else {
         photoUrls.forEach((u) => fd.append("preuploaded_urls", u));
@@ -638,12 +638,16 @@ export default function QuickTicketForm({
                 <FileUpload value={photos} onChange={onUpload(setPhotos, setPhotoUrls)} maxFiles={MAX_UNIT_PHOTOS} />
                 {photos.length === 0 && photoUrls.length > 0 && <p className="text-xs text-muted-foreground">{photoUrls.length} foto dari draf sudah terunggah.</p>}
               </Group>
-              {isClaim && (
-                <Group label="Nota pembelian" hint={isStoreStock ? "(opsional)" : "(boleh menyusul sebelum diserahkan ke RMA)"}>
+              {/* A customer's unit needs the customer's receipt before it can go
+                  to RMA (the handover refuses it); a store-stock unit's purchase
+                  invoice is the RMA desk's to attach, not the technician's. */}
+              {isClaim && !isStoreStock && (
+                <Group label="Nota pembelian" hint="(wajib — boleh menyusul, tapi tiket belum bisa diserahkan ke RMA sebelum nota ada)">
                   <FileUpload value={invoice} onChange={onUpload(setInvoice, setInvoiceUrls)} maxFiles={3} />
                   {invoice.length === 0 && invoiceUrls.length > 0 && <p className="text-xs text-muted-foreground">{invoiceUrls.length} file dari draf sudah terunggah.</p>}
                 </Group>
               )}
+              {isStoreStock && <p className="text-sm text-muted-foreground">Nota pembelian unit stok toko diisi oleh meja RMA.</p>}
             </Section>
           )}
 

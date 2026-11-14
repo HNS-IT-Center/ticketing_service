@@ -66,11 +66,18 @@ export function PcComponentsCard({
     verified_by_name: string | null;
   } | null;
 }) {
-  if (components.length === 0) return null;
+  // A build with no components yet can still name its sales (typed at intake).
+  const typedSales = !detail?.quote_code ? detail?.quote_sales_name : null;
+  if (components.length === 0 && !typedSales) return null;
   const fromQuote = components.filter((c) => c.quote_label);
   const added = components.filter((c) => !c.quote_label);
   return (
     <DetailCard title="Komponen PC">
+      {typedSales && (
+        <p className="mb-3 text-sm">
+          <span className="text-muted-foreground">Sales:</span> <span className="font-semibold text-foreground">{typedSales}</span>
+        </p>
+      )}
       {detail?.quote_code && (
         <div className="mb-3 flex flex-col gap-1.5 rounded-lg border border-tone-green-border bg-tone-green-bg px-3 py-2.5 text-sm text-tone-green-fg">
           <span className="flex flex-wrap items-center gap-x-2 gap-y-1">

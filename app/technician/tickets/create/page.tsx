@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { buttonVariants } from "@/components/ui/button";
 import { requirePage } from "@/lib/page-access";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
@@ -28,7 +30,15 @@ export default async function TechnicianCreateTicketPage() {
 
   return (
     <div data-slot="create-ticket-page" className="flex flex-col gap-6">
-      <PageHeader title="Create New Ticket" description="Create a service ticket on behalf of a customer." />
+      <PageHeader
+        title="Create New Ticket"
+        description="Create a service ticket on behalf of a customer."
+        actions={
+          <Link href="/technician/tickets/create/baru" className={buttonVariants()}>
+            Coba form baru
+          </Link>
+        }
+      />
 
       <CreateTicketForm 
         storeLocations={storeLocations}

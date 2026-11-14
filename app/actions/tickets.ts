@@ -198,6 +198,15 @@ export async function createTicketAction(formData: FormData) {
     // The quotation names its sales; a sales picked by hand on the form wins.
     if (!sales_id && quoteSales) sales_id = quoteSales.id;
   }
+  // The sales of a PC build, typed by name while sales still work in the
+  // e-commerce system and have no account here (owner, 2026-11-14). Kept on the
+  // build as written; linked to a Sales account only when one matches the name.
+  const typedSalesName =
+    ticket_type === "pc_build" ? ((formData.get("sales_name") as string | null) ?? "").trim().replace(/\s+/g, " ").slice(0, 100) || null : null;
+  if (typedSalesName && !sales_id) {
+    const account = await findQuoteSales(typedSalesName);
+    if (account) sales_id = account.id;
+  }
   if (ticket_type === "upgrade") {
     const selections = formData.has("upgrade_selections_json")
       ? parseUpgradeSelections(formData.get("upgrade_selections_json") as string | null)
@@ -458,7 +467,9 @@ export async function createTicketAction(formData: FormData) {
                   verified_by_id: session.userId,
                   verified_by_name: session.name,
                 }
-              : {}),
+              : typedSalesName
+                ? { quote_sales_name: typedSalesName }
+                : {}),
           },
         }),
       ];

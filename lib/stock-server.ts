@@ -20,6 +20,12 @@ export type BuildRow = {
   /** Who ticked the quotation against what was brought in, at intake. */
   intakeCheck: { by: string | null; at: Date } | null;
   photos: { url: string; title: string }[];
+  /**
+   * The finished build, every component in place — what the cashier uploads
+   * to Accurate. The technician's photo, and Sales' revision when there is one.
+   * `fileName` is what a download is saved as.
+   */
+  finishedPhotos: { url: string; title: string; fileName: string }[];
   /** Days in the current status. */
   days: number;
   createdAt: Date;
@@ -28,7 +34,7 @@ export type BuildRow = {
 /**
  * Every PC build that is not cancelled or rejected, newest first, with where
  * it stands — read only. Photos are the components photographed at intake
- * and the technician's photo of the finished build.
+ * and the finished build (the technician's photo, and Sales' revision).
  */
 export async function loadBuilds(storeIds: string[] | undefined, now: number): Promise<BuildRow[]> {
   const tickets = await db.ticket.findMany({
@@ -51,7 +57,7 @@ export async function loadBuilds(storeIds: string[] | undefined, now: number): P
       is_for_self: true,
       customer_name: true,
       user: { select: { name: true } },
-      pc_build_detail: { select: { quote_code: true, verified_at: true, verified_by_name: true, first_build_url: true } },
+      pc_build_detail: { select: { quote_code: true, verified_at: true, verified_by_name: true, first_build_url: true, revision_build_url: true } },
       _count: { select: { pc_components: true } },
       attachments: { where: { kind: "build_photo" }, orderBy: { created_at: "asc" }, select: { file_url: true } },
       status_logs: { select: { new_status: true, created_at: true } },
@@ -62,9 +68,13 @@ export async function loadBuilds(storeIds: string[] | undefined, now: number): P
     const stage = buildStageOf(t.status);
     if (!stage) return [];
     const d = t.pc_build_detail;
+    const finishedPhotos = [
+      ...(d?.first_build_url ? [{ url: d.first_build_url, title: "Foto rakitan selesai", fileName: `${t.ticket_code} - rakitan jadi` }] : []),
+      ...(d?.revision_build_url ? [{ url: d.revision_build_url, title: "Foto rakitan revisi", fileName: `${t.ticket_code} - rakitan revisi` }] : []),
+    ];
     const photos = [
       ...t.attachments.map((a, i) => ({ url: a.file_url, title: `Foto komponen saat masuk ${i + 1}` })),
-      ...(d?.first_build_url ? [{ url: d.first_build_url, title: "Foto rakitan selesai" }] : []),
+      ...finishedPhotos.map(({ url, title }) => ({ url, title })),
     ];
     return [
       {
@@ -80,6 +90,7 @@ export async function loadBuilds(storeIds: string[] | undefined, now: number): P
         components: t._count.pc_components,
         intakeCheck: d?.verified_at ? { by: d.verified_by_name, at: d.verified_at } : null,
         photos,
+        finishedPhotos,
         days: daysSince(enteredStatusAt(t.status, t.status_logs, t.created_at), now),
         createdAt: t.created_at,
       },

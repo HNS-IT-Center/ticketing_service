@@ -60,3 +60,14 @@ export type BuildFilter = (typeof BUILD_FILTERS)[number];
 export function isBuildFilter(v: string | undefined): v is BuildFilter {
   return (BUILD_FILTERS as readonly string[]).includes(v ?? "");
 }
+
+/**
+ * The Rakitan PC search box: ticket code, quotation code or customer name,
+ * ignoring case and spacing — what a cashier holds when looking a build up.
+ */
+export function buildMatches(row: { code: string; quoteCode: string | null; customer: string }, query: string): boolean {
+  const fold = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const q = fold(query);
+  if (!q) return true;
+  return [row.code, row.quoteCode ?? "", row.customer].some((v) => fold(v).includes(q));
+}

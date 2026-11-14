@@ -15,6 +15,8 @@ import {
   canActOnRma,
   getAllowedTransitions,
   isTerminalRmaStatus,
+  needsStockInvoice,
+  stockInvoiceFileError,
   validateRmaTransition,
   type RmaTransition,
   type RmaTransitionField,
@@ -214,6 +216,7 @@ export default function RmaActionPanel({
   unitOwnership,
   claimVendors = [],
   recordedStockTransferNumber = null,
+  recordedInvoiceUrl = null,
   recorded = {},
 }: {
   rmaCaseId: string;
@@ -227,6 +230,9 @@ export default function RmaActionPanel({
   claimVendors?: ClaimVendorOption[];
   /** The stock transfer number already on the case; when set it is not asked again. */
   recordedStockTransferNumber?: string | null;
+  /** The purchase invoice already on the case; a store-stock case without one
+   *  asks the desk for it on the way to verified. */
+  recordedInvoiceUrl?: string | null;
   /** What the case already holds from an earlier step. Asked once: a recorded
    *  optional field is shown instead of asked, and a case sent to the vendor
    *  again (after a hold and a re-verification) starts from what it was sent with. */
@@ -238,6 +244,8 @@ export default function RmaActionPanel({
   // Turning a claim down is the one desk decision the customer sees, so it
   // carries the same evidence burden the technician does at handover.
   const [photos, setPhotos] = useState<File[]>([]);
+  // A store-stock unit's supplier invoice, which the desk attaches (owner, 2026-11-14).
+  const [invoiceFiles, setInvoiceFiles] = useState<File[]>([]);
 
   // Status AND role both gate the buttons, matching the server's own checks.
   const allowed = useMemo(
@@ -249,6 +257,7 @@ export default function RmaActionPanel({
     setActive(null);
     setValues({});
     setPhotos([]);
+    setInvoiceFiles([]);
   };
 
   const setValue = (key: string, value: string) =>
@@ -274,6 +283,14 @@ export default function RmaActionPanel({
 
     // Same rules and the same wording as the server, so nobody is told two
     // different things about one requirement.
+    const invoiceNeeded = needsStockInvoice({ unitOwnership, to: active.to, recordedInvoiceUrl });
+    if (invoiceNeeded) {
+      const invoiceError = stockInvoiceFileError(invoiceFiles.filter((f) => f.size > 0));
+      if (invoiceError) {
+        toast.error(invoiceError);
+        return;
+      }
+    }
     if (active.to === "ineligible") {
       const valid = photos.filter((f) => f.size > 0);
       if (valid.length === 0) {
@@ -303,6 +320,7 @@ export default function RmaActionPanel({
       // of damage, and the server rejects damage photos outside `ineligible`.
       const photoField = active.to === "submitted_to_vendor" ? "receipt_files" : "damage_files";
       photos.filter((f) => f.size > 0).forEach((f) => fd.append(photoField, f));
+      if (invoiceNeeded) invoiceFiles.filter((f) => f.size > 0).forEach((f) => fd.append("stock_invoice_files", f));
 
       let result: Awaited<ReturnType<typeof transitionRmaAction>>;
       try {
@@ -420,6 +438,27 @@ export default function RmaActionPanel({
                   <span style={{ color: "var(--text-muted)" }}>(sudah tercatat)</span>
                 </p>
               )}
+
+            {unitOwnership === "store_stock" &&
+              (active.to === "verified" || active.to === "in_vendor_process") &&
+              recordedInvoiceUrl && (
+                <p style={{ fontSize: "0.875rem", margin: 0 }}>
+                  Nota pembelian: <strong>sudah diunggah</strong>{" "}
+                  <span style={{ color: "var(--text-muted)" }}>(lihat di lampiran case)</span>
+                </p>
+              )}
+
+            {needsStockInvoice({ unitOwnership, to: active.to, recordedInvoiceUrl }) && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
+                <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
+                  Nota Pembelian (dari supplier) <span style={{ color: "var(--accent-brand)" }}>*</span>
+                </label>
+                <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
+                  Unit stok toko: nota pembeliannya diunggah meja RMA, satu file foto atau PDF.
+                </p>
+                <FileUpload onChange={setInvoiceFiles} accept="image/*,image/heic,image/heif,application/pdf" maxFiles={1} />
+              </div>
+            )}
 
             {recordedShown.map((f) => (
               <p key={f} style={{ fontSize: "0.875rem", margin: 0 }}>

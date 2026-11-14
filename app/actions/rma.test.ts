@@ -35,6 +35,7 @@ vi.mock("@/lib/r2", () => ({
   // and its quirk of calling everything that is neither image nor video "pdf".
   getFileType: (mime: string) =>
     mime.startsWith("image/") ? "image" : mime.startsWith("video/") ? "video" : "pdf",
+  deleteFromStorage: vi.fn(async () => true),
 }));
 
 // updateTicketStatusAction, imported below for the credit-parity test, fires
@@ -1773,5 +1774,54 @@ describe("transitionRmaAction — the claim vendor comes from the vendor list", 
     expect(await transitionRmaAction(transitionForm(caseId, "submitted_to_vendor", {}))).toMatchObject({
       error: expect.stringContaining("Nama vendor"),
     });
+  });
+});
+
+describe("transitionRmaAction — a store-stock unit's purchase invoice, attached by the desk", () => {
+  /** A store-stock claim handed over with no invoice, as the technician no longer attaches one. */
+  async function stockCase() {
+    const ticket = await makeTicket({ withInvoice: false });
+    const fd = validForm(ticket.id);
+    fd.set("unit_ownership", "store_stock");
+    fd.set("stock_origin", "Gudang Nagoya rak B3");
+    fd.delete("purchase_invoice_url");
+    expect(await handoverToRmaAction(fd)).toMatchObject({ success: true });
+    const rmaCase = await db.rmaCase.findUniqueOrThrow({ where: { ticket_id: ticket.id }, select: { id: true } });
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    return { ticketId: ticket.id, caseId: rmaCase.id };
+  }
+  const invoicePdf = () => new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "nota.pdf", { type: "application/pdf" });
+
+  it("refuses verification until the invoice is uploaded, then records it on the case and the ticket", async () => {
+    const { ticketId, caseId } = await stockCase();
+    const refused = await transitionRmaAction(transitionForm(caseId, "verified", { stock_transfer_number: "PM-1" }));
+    expect(refused).toMatchObject({ error: expect.stringContaining("Nota pembelian") });
+    expect((await db.rmaCase.findUniqueOrThrow({ where: { id: caseId } })).status).toBe("pending_verification");
+
+    const fd = transitionForm(caseId, "verified", { stock_transfer_number: "PM-1" });
+    fd.append("stock_invoice_files", invoicePdf());
+    expect(await transitionRmaAction(fd)).toMatchObject({ success: true });
+    const saved = await db.rmaCase.findUniqueOrThrow({ where: { id: caseId }, select: { status: true, purchase_invoice_url: true } });
+    expect(saved).toEqual({ status: "verified", purchase_invoice_url: "https://r2.test/uploaded-invoice.pdf" });
+    expect(
+      await db.ticketAttachment.count({ where: { ticket_id: ticketId, file_url: "https://r2.test/uploaded-invoice.pdf", kind: "invoice" } }),
+    ).toBe(1);
+  });
+
+  it("does not ask for it on a customer's unit", async () => {
+    const ticket = await makeTicket();
+    expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
+    const { id } = await db.rmaCase.findUniqueOrThrow({ where: { ticket_id: ticket.id }, select: { id: true } });
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    expect(await transitionRmaAction(transitionForm(id, "verified"))).toMatchObject({ success: true });
+  });
+
+  it("refuses a file that is not a photo or a PDF", async () => {
+    const { caseId } = await stockCase();
+    const fd = transitionForm(caseId, "verified", { stock_transfer_number: "PM-1" });
+    fd.append("stock_invoice_files", new File([new Uint8Array([1])], "nota.mp4", { type: "video/mp4" }));
+    expect(await transitionRmaAction(fd)).toMatchObject({ error: expect.stringContaining("foto atau PDF") });
   });
 });

@@ -7,7 +7,7 @@ import QuickTicketForm from "./QuickTicketForm";
 
 /**
  * The one-page Buat Tiket form with its data — shared by the technician and
- * admin portals. The caller checks who may open it; the wizard at
+ * admin portals. The caller checks who may open it; the old wizard at
  * `oldFormHref` stays available.
  */
 export default async function QuickCreate({ userId, oldFormHref }: { userId: string; oldFormHref: string }) {

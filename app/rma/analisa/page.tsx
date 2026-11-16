@@ -82,12 +82,26 @@ function ChartCard({ title, description, center, children }: { title: string; de
   );
 }
 
-/** Bulan, Lokasi, Kepemilikan, Status — two by two beside the figures on a wide screen, as on the sheet. */
+/**
+ * One full-width band of cards under a small heading: four across on a wide
+ * screen (two for `wide` cards), two on a tablet, one on a phone. Cards in a
+ * band share their height, so no card stops short of its neighbour.
+ */
+function Row({ title, wide, children }: { title: string; wide?: boolean; children: React.ReactNode }) {
+  return (
+    <section aria-label={title} className="flex flex-col gap-2">
+      <h2 className="text-sm font-semibold text-muted-foreground">{title}</h2>
+      <div className={wide ? "grid gap-4 lg:grid-cols-2" : "grid gap-4 md:grid-cols-2 xl:grid-cols-4"}>{children}</div>
+    </section>
+  );
+}
+
+/** Bulan, Lokasi, Kepemilikan, Status: one row above the figures. */
 function Filters({ month, months, filter }: { month: string; months: string[]; filter: CaseFilter }) {
   return (
-    <FilterBar action="/rma/analisa" className="xl:grid xl:grid-cols-2 xl:items-end xl:gap-2 xl:self-start">
+    <FilterBar action="/rma/analisa">
       <div className="grid grid-cols-2 gap-2 md:contents">
-        <FilterBarField label="Bulan" htmlFor="an-month" className="md:w-40 xl:w-auto">
+        <FilterBarField label="Bulan" htmlFor="an-month" className="md:w-44">
           <AutoSubmitSelect id="an-month" name="bulan" defaultValue={month} key={`m-${month}`}>
             {months.map((m) => (
               <option key={m} value={m}>
@@ -96,21 +110,21 @@ function Filters({ month, months, filter }: { month: string; months: string[]; f
             ))}
           </AutoSubmitSelect>
         </FilterBarField>
-        <FilterBarField label="Lokasi" htmlFor="an-loc" className="md:w-40 xl:w-auto">
+        <FilterBarField label="Lokasi" htmlFor="an-loc" className="md:w-44">
           <AutoSubmitSelect id="an-loc" name="lokasi" defaultValue={filter.location ?? ""} key={`l-${filter.location}`}>
             <option value="">Semua</option>
             <option value="in_town">{LOCATION_LABELS.in_town}</option>
             <option value="out_of_town">{LOCATION_LABELS.out_of_town}</option>
           </AutoSubmitSelect>
         </FilterBarField>
-        <FilterBarField label="Kepemilikan" htmlFor="an-own" className="md:w-40 xl:w-auto">
+        <FilterBarField label="Kepemilikan" htmlFor="an-own" className="md:w-44">
           <AutoSubmitSelect id="an-own" name="milik" defaultValue={filter.ownership ?? ""} key={`o-${filter.ownership}`}>
             <option value="">Semua</option>
             <option value="customer">{OWNERSHIP_LABELS.customer}</option>
             <option value="store_stock">{OWNERSHIP_LABELS.store_stock}</option>
           </AutoSubmitSelect>
         </FilterBarField>
-        <FilterBarField label="Status" htmlFor="an-status" className="md:w-40 xl:w-auto">
+        <FilterBarField label="Status" htmlFor="an-status" className="md:w-44">
           <AutoSubmitSelect id="an-status" name="status" defaultValue={filter.status ?? ""} key={`s-${filter.status}`}>
             <option value="">Semua</option>
             <option value="open">Masih jalan</option>
@@ -118,7 +132,7 @@ function Filters({ month, months, filter }: { month: string; months: string[]; f
           </AutoSubmitSelect>
         </FilterBarField>
       </div>
-      <Button type="submit" className="xl:col-span-2">
+      <Button type="submit">
         Terapkan
       </Button>
     </FilterBar>
@@ -198,26 +212,22 @@ export default async function ClaimAnalysisPage({ searchParams }: { searchParams
         description="RMA Performance Dashboard. Tiket masuk = unit diserahkan ke RMA; selesai = case ditutup, tidak layak, atau dibatalkan."
       />
 
+      <Filters month={month} months={months} filter={filter} />
+
       {allCases.length === 0 ? (
-        <>
-          <Filters month={month} months={months} filter={filter} />
-          <EmptyState icon={BarChart3} title="Belum ada klaim yang diserahkan ke RMA." />
-        </>
+        <EmptyState icon={BarChart3} title="Belum ada klaim yang diserahkan ke RMA." />
       ) : (
         <>
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem] xl:items-start">
-            <section aria-label={`Ringkasan ${monthLabel(month)}`} className="grid grid-cols-2 gap-2 sm:grid-cols-4 2xl:grid-cols-8">
-              <Kpi label="Total Tiket" value={f.total} hint={`Sampai akhir ${monthLabel(month)}`} />
-              <Kpi label="Tiket Masuk" value={f.masuk} hint="Diserahkan ke RMA" />
-              <Kpi label="Tiket Selesai" value={f.selesai} hint="Ditutup bulan ini" />
-              <Kpi label="Tiket Aktif" value={f.aktif} hint={running ? "Masuk, belum selesai" : "Belum selesai di akhir bulan"} />
-              <Kpi label="AVG LT (Hari)" value={f.avgLeadDays === null ? "—" : nf.format(f.avgLeadDays)} hint="Serah terima → selesai" />
-              <Kpi label="Outstanding" value={f.outstanding} hint="Bulan lalu, belum selesai" />
-              <Kpi label="Workload" value={f.workload} hint="Masuk + outstanding" />
-              <Kpi label="Persentase Selesai" value={pctText(f.selesaiRate)} hint="Selesai ÷ masuk" />
-            </section>
-            <Filters month={month} months={months} filter={filter} />
-          </div>
+          <section aria-label={`Ringkasan ${monthLabel(month)}`} className="grid grid-cols-2 gap-3 sm:grid-cols-4 xl:grid-cols-8">
+            <Kpi label="Total Tiket" value={f.total} hint={`Sampai akhir ${monthLabel(month)}`} />
+            <Kpi label="Tiket Masuk" value={f.masuk} hint="Diserahkan ke RMA" />
+            <Kpi label="Tiket Selesai" value={f.selesai} hint="Ditutup bulan ini" />
+            <Kpi label="Tiket Aktif" value={f.aktif} hint={running ? "Masuk, belum selesai" : "Belum selesai di akhir bulan"} />
+            <Kpi label="AVG LT (Hari)" value={f.avgLeadDays === null ? "—" : nf.format(f.avgLeadDays)} hint="Serah terima → selesai" />
+            <Kpi label="Outstanding" value={f.outstanding} hint="Bulan lalu, belum selesai" />
+            <Kpi label="Workload" value={f.workload} hint="Masuk + outstanding" />
+            <Kpi label="Persentase Selesai" value={pctText(f.selesaiRate)} hint="Selesai ÷ masuk" />
+          </section>
 
           {filtered && (
             <p className="text-sm text-muted-foreground">
@@ -225,67 +235,61 @@ export default async function ClaimAnalysisPage({ searchParams }: { searchParams
             </p>
           )}
 
-          <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
-            <div className="flex min-w-0 flex-col gap-4">
-              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)_minmax(0,1.2fr)]">
-                <div className="grid min-w-0 gap-4 md:col-span-2 md:grid-cols-2 2xl:col-span-1 2xl:grid-cols-1">
-                  <ChartCard title="Tiket Masuk" description="Jumlah tiket masuk per bulan">
-                    <StackedColumns series={one} buckets={columns((x) => x.masuk)} valueLabels />
-                  </ChartCard>
-                  <ChartCard title="Tiket Selesai" description="Jumlah tiket selesai per bulan">
-                    <StackedColumns series={one} buckets={columns((x) => x.selesai)} valueLabels />
-                  </ChartCard>
-                </div>
-                <ChartCard center title="Distribusi Lokasi" description={`ITR (luar kota) vs LKL (dalam kota) · ${monthLabel(month)}`}>
-                  <PieChart slices={slices(locationShares(inMonth))} empty="Belum ada tiket masuk di bulan ini." />
-                </ChartCard>
-                <ChartCard center title="Distribusi Kepemilikan" description={`Klaim User vs Klaim Toko · ${monthLabel(month)}`}>
-                  <PieChart slices={slices(ownershipShares(inMonth))} empty="Belum ada tiket masuk di bulan ini." />
-                </ChartCard>
-              </div>
+          <Row title="Volume tiket per bulan">
+            <ChartCard title="Tiket Masuk" description="Jumlah tiket masuk per bulan">
+              <StackedColumns series={one} buckets={columns((x) => x.masuk)} valueLabels />
+            </ChartCard>
+            <ChartCard title="Tiket Selesai" description="Jumlah tiket selesai per bulan">
+              <StackedColumns series={one} buckets={columns((x) => x.selesai)} valueLabels />
+            </ChartCard>
+            <ChartCard title="Workload" description="Tiket masuk + outstanding bulan lalu">
+              <LineChart series={[{ key: "v", label: "Workload", color: 0 }]} buckets={line((x) => x.workload)} />
+            </ChartCard>
+            <ChartCard title="Outstanding" description="Tiket bulan lalu belum selesai">
+              <LineChart series={[{ key: "v", label: "Outstanding", color: 0 }]} buckets={line((x) => x.outstanding)} />
+            </ChartCard>
+          </Row>
 
-              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-4">
-                <ChartCard title="Average Lead Time" description="Rata-rata lead time (hari)">
-                  <LineChart
-                    series={[{ key: "v", label: "Lead time", color: 0 }]}
-                    buckets={line((x) => (x.avgLeadDays === null ? 0 : Math.round(x.avgLeadDays * 10) / 10))}
-                    unit="hari"
-                  />
-                </ChartCard>
-                <ChartCard title="Success Rate" description="Tiket selesai ÷ tiket masuk">
-                  <StackedColumns
-                    series={[{ key: "v", label: "Persentase selesai" }]}
-                    buckets={columns((x) => (x.selesaiRate === null ? 0 : Math.round(x.selesaiRate * 100)))}
-                    unit="%"
-                    valueLabels
-                  />
-                </ChartCard>
-                <ChartCard title="Workload" description="Tiket masuk + outstanding bulan lalu">
-                  <LineChart series={[{ key: "v", label: "Workload", color: 0 }]} buckets={line((x) => x.workload)} />
-                </ChartCard>
-                <ChartCard title="Outstanding" description="Tiket bulan lalu belum selesai">
-                  <LineChart series={[{ key: "v", label: "Outstanding", color: 0 }]} buckets={line((x) => x.outstanding)} />
-                </ChartCard>
-              </div>
-            </div>
+          <Row title={`Kecepatan, hasil, dan distribusi · ${monthLabel(month)}`}>
+            <ChartCard title="Average Lead Time" description="Rata-rata lead time (hari)">
+              <LineChart
+                series={[{ key: "v", label: "Lead time", color: 0 }]}
+                buckets={line((x) => (x.avgLeadDays === null ? 0 : Math.round(x.avgLeadDays * 10) / 10))}
+                unit="hari"
+              />
+            </ChartCard>
+            <ChartCard title="Success Rate" description="Tiket selesai ÷ tiket masuk">
+              <StackedColumns
+                series={[{ key: "v", label: "Persentase selesai" }]}
+                buckets={columns((x) => (x.selesaiRate === null ? 0 : Math.round(x.selesaiRate * 100)))}
+                unit="%"
+                valueLabels
+              />
+            </ChartCard>
+            <ChartCard center title="Distribusi Lokasi" description="ITR (luar kota) vs LKL (dalam kota)">
+              <PieChart slices={slices(locationShares(inMonth))} empty="Belum ada tiket masuk di bulan ini." />
+            </ChartCard>
+            <ChartCard center title="Distribusi Kepemilikan" description="Klaim User vs Klaim Toko">
+              <PieChart slices={slices(ownershipShares(inMonth))} empty="Belum ada tiket masuk di bulan ini." />
+            </ChartCard>
+          </Row>
 
-            <div className="grid min-w-0 content-start gap-4 md:grid-cols-2 xl:grid-cols-1">
-              <ChartCard title="Supplier Ranking" description={`Jumlah tiket per vendor · ${monthLabel(month)}`}>
-                <div className="max-h-96 overflow-y-auto pr-1">
-                  <HorizontalBars items={rankBars(vendors.rows)} empty="Belum ada tiket bulan ini yang dikirim ke vendor." />
-                </div>
-                {vendors.missing > 0 && <p className="text-xs text-muted-foreground">{vendors.missing} tiket belum dikirim ke vendor, tidak dihitung.</p>}
-              </ChartCard>
-              <ChartCard title="Brand Ranking" description={`Jumlah tiket per brand · ${monthLabel(month)}`}>
-                <div className="max-h-96 overflow-y-auto pr-1">
-                  <HorizontalBars items={rankBars(brands.rows)} empty="Belum ada brand tercatat bulan ini." />
-                </div>
-                {brands.missing > 0 && (
-                  <p className="text-xs text-muted-foreground">{brands.missing} tiket tanpa brand (unit diketik manual), tidak dihitung.</p>
-                )}
-              </ChartCard>
-            </div>
-          </div>
+          <Row title={`Vendor dan brand · ${monthLabel(month)}`} wide>
+            <ChartCard title="Supplier Ranking" description="Jumlah tiket per vendor">
+              <div className="max-h-80 overflow-y-auto pr-1">
+                <HorizontalBars items={rankBars(vendors.rows)} empty="Belum ada tiket bulan ini yang dikirim ke vendor." />
+              </div>
+              {vendors.missing > 0 && <p className="text-xs text-muted-foreground">{vendors.missing} tiket belum dikirim ke vendor, tidak dihitung.</p>}
+            </ChartCard>
+            <ChartCard title="Brand Ranking" description="Jumlah tiket per brand">
+              <div className="max-h-80 overflow-y-auto pr-1">
+                <HorizontalBars items={rankBars(brands.rows)} empty="Belum ada brand tercatat bulan ini." />
+              </div>
+              {brands.missing > 0 && (
+                <p className="text-xs text-muted-foreground">{brands.missing} tiket tanpa brand (unit diketik manual), tidak dihitung.</p>
+              )}
+            </ChartCard>
+          </Row>
 
           {trend.some((t) => t.m === thisMonth) && (
             <p className="text-xs text-muted-foreground">

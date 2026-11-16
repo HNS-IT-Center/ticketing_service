@@ -64,11 +64,14 @@ export function StackedColumns({
   buckets,
   format = "count",
   unit = "tiket",
+  valueLabels = false,
 }: {
   series: StackedSeries[];
   buckets: StackedBucket[];
   format?: ValueFormat;
   unit?: string;
+  /** Print each column's total above it, as a report sheet does. */
+  valueLabels?: boolean;
 }) {
   const [hover, setHover] = useState<number | null>(null);
   const max = Math.max(0, ...buckets.map((b) => b.total));
@@ -91,7 +94,7 @@ export function StackedColumns({
           </li>
         ))}
       </ul>
-      <div className="relative flex h-52 gap-2 md:h-56">
+      <div className={cn("relative flex h-52 gap-2 md:h-56", valueLabels && "pt-4")}>
         <div className={cn("flex flex-col-reverse justify-between text-right text-[0.6875rem] text-muted-foreground tabular-nums", format === "rupiah" ? "w-12" : "w-7")}>
           {ticks.map((t) => (
             <span key={t} className="leading-none">{axisText(t, format)}</span>
@@ -127,6 +130,15 @@ export function StackedColumns({
                     );
                   })}
                 </div>
+                {valueLabels && b.total > 0 && (
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute inset-x-0 text-center text-[0.6875rem] font-semibold text-foreground tabular-nums"
+                    style={{ bottom: `calc(${(b.total / top) * 100}% + 2px)` }}
+                  >
+                    {axisText(b.total, format)}
+                  </span>
+                )}
                 {hover === i && (
                   <div className="pointer-events-none absolute bottom-full z-10 mb-1 w-max max-w-48 rounded-md border border-border bg-popover px-2.5 py-2 text-xs shadow-md">
                     <p className="font-semibold text-foreground">{b.longLabel ?? b.label} · {fullText(b.total, format, unit)}</p>
@@ -366,6 +378,84 @@ export function LineChart({
           </span>
         ))}
       </div>
+    </div>
+  );
+}
+
+export type PieSlice = { key: string; label: string; value: number; color: string };
+
+/**
+ * A pie for a part-of-whole with few parts (two or three): each slice carries
+ * its count and share, separated by a 2px surface gap, with a legend beneath
+ * so identity never rests on colour alone. Hover or focus a slice for its
+ * figures; a slice too thin to hold its label keeps it in the legend only.
+ */
+export function PieChart({ slices, empty = "Belum ada data pada periode ini." }: { slices: PieSlice[]; empty?: string }) {
+  const [hover, setHover] = useState<string | null>(null);
+  const shown = slices.filter((s) => s.value > 0);
+  const total = shown.reduce((t, s) => t + s.value, 0);
+  if (total === 0) return <p className="flex h-56 items-center justify-center text-sm text-muted-foreground">{empty}</p>;
+  const pct = (v: number) => `${nf.format(Math.round((v / total) * 1000) / 10)}%`;
+  const R = 100;
+  const point = (a: number, r: number) => [Math.sin(a) * r, -Math.cos(a) * r];
+  const before = shown.map((_, i) => shown.slice(0, i).reduce((t, x) => t + x.value, 0));
+  const arcs = shown.map((s, i) => {
+    const sweep = (s.value / total) * Math.PI * 2;
+    const a0 = (before[i] / total) * Math.PI * 2;
+    const [x0, y0] = point(a0, R);
+    const [x1, y1] = point(a0 + sweep, R);
+    const d =
+      shown.length === 1
+        ? null
+        : `M0 0 L${x0.toFixed(2)} ${y0.toFixed(2)} A${R} ${R} 0 ${sweep > Math.PI ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z`;
+    const [lx, ly] = point(a0 + sweep / 2, shown.length === 1 ? 0 : R * 0.6);
+    return { s, d, lx, ly, big: sweep > 0.45 };
+  });
+  const active = shown.find((s) => s.key === hover);
+
+  return (
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative w-full max-w-60">
+        <svg viewBox="-104 -104 208 208" className="w-full" role="img" aria-label={shown.map((s) => `${s.label} ${s.value} (${pct(s.value)})`).join(", ")}>
+          {arcs.map(({ s, d }) => {
+            const common = {
+              fill: s.color,
+              stroke: "var(--card)",
+              strokeWidth: 2,
+              tabIndex: 0,
+              className: cn("outline-none transition-opacity", hover && hover !== s.key && "opacity-60"),
+              onPointerEnter: () => setHover(s.key),
+              onPointerLeave: () => setHover(null),
+              onFocus: () => setHover(s.key),
+              onBlur: () => setHover(null),
+              "aria-label": `${s.label}: ${s.value} (${pct(s.value)})`,
+            };
+            return d ? <path key={s.key} d={d} {...common} /> : <circle key={s.key} r={R} {...common} />;
+          })}
+          {arcs.map(({ s, lx, ly, big }) =>
+            big ? (
+              <text key={s.key} x={lx} y={ly} textAnchor="middle" className="pointer-events-none fill-white text-[13px] font-semibold tabular-nums">
+                <tspan x={lx} dy="-0.2em">{nf.format(s.value)}</tspan>
+                <tspan x={lx} dy="1.2em" className="text-[11px] font-medium">({pct(s.value)})</tspan>
+              </text>
+            ) : null,
+          )}
+        </svg>
+        {active && (
+          <div className="pointer-events-none absolute top-0 right-0 z-10 w-max max-w-48 rounded-md border border-border bg-popover px-2.5 py-1.5 text-xs shadow-md">
+            <p className="font-semibold text-foreground">{active.label}</p>
+            <p className="text-muted-foreground tabular-nums">{nf.format(active.value)} tiket · {pct(active.value)}</p>
+          </div>
+        )}
+      </div>
+      <ul className="flex flex-wrap justify-center gap-x-4 gap-y-1" aria-label="Keterangan">
+        {shown.map((s) => (
+          <li key={s.key} className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <span aria-hidden className="size-2.5 rounded-full" style={{ background: s.color }} />
+            {s.label} <span className="font-semibold text-foreground tabular-nums">{s.value}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

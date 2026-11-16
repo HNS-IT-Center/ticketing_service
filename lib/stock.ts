@@ -71,3 +71,79 @@ export function buildMatches(row: { code: string; quoteCode: string | null; cust
   if (!q) return true;
   return [row.code, row.quoteCode ?? "", row.customer].some((v) => fold(v).includes(q));
 }
+
+/**
+ * A finished build's photo, as offered for download on Rakitan PC — what the
+ * cashier uploads to Accurate. `fileName` is what a download is saved as.
+ */
+export type FinishedPhoto = { url: string; title: string; fileName: string };
+
+const IMAGE_FILE = /\.(jpe?g|png|gif|webp|heic|heif|avif)(\?.*)?$/i;
+
+/** Where a photo of the finished build came from, by its stored file name. */
+const FINISHED_GROUPS = [
+  { prefix: "first-build_", title: "Rakitan jadi", file: "rakitan jadi" },
+  { prefix: "revision-", title: "Revisi rakitan", file: "rakitan revisi" },
+  { prefix: "work-proof_", title: "Bukti selesai", file: "bukti selesai" },
+] as const;
+const INTAKE = { title: "Foto saat tiket dibuat", file: "foto masuk" } as const;
+
+/** Files that are on the ticket but are not of the finished build. */
+const NOT_THE_BUILD = ["pickup-proof", "courier-proof", "delivery-proof", "cancel-proof", "rma-"];
+
+function storedName(url: string): string {
+  return decodeURIComponent(url.split(/[?#]/)[0].split("/").pop() ?? "");
+}
+
+/**
+ * Every photo of a finished build — what the cashier uploads to Accurate —
+ * from the places a technician or Sales puts one, told apart by file name:
+ *
+ *   first-build_  the "First Build" box (each upload, not only the latest);
+ *   revision-N_   Sales' revisions;
+ *   work-proof_   the photos sent with "Confirm Work Done" — usually where
+ *                 the finished build is, and often several;
+ *   anything else without a kind: the files attached when the ticket was
+ *                 made. A build without a quotation stores the first of them
+ *                 as `first_build_url`, which is all this page used to offer.
+ *
+ * Left out: handover and RMA files, the quotation, the component photos of a
+ * quotation build (`build_photo`, shown on their own), and anything that is
+ * not an image — Accurate takes photos, and a video stays on the ticket page.
+ * Order: finished build, revisions, done proof, intake.
+ */
+export function finishedBuildPhotos(
+  code: string,
+  detail: { first_build_url: string | null; revision_build_url: string | null } | null,
+  attachments: readonly { file_url: string; file_type: string; kind: string | null }[],
+): FinishedPhoto[] {
+  const groups = [...FINISHED_GROUPS.map(() => [] as string[]), [] as string[]];
+  const seen = new Set<string>();
+  const add = (g: number, url: string) => {
+    if (seen.has(url)) return;
+    seen.add(url);
+    groups[g].push(url);
+  };
+  for (const a of attachments) {
+    if (a.file_type !== "image" || a.kind !== null) continue;
+    const name = storedName(a.file_url);
+    if (NOT_THE_BUILD.some((p) => name.startsWith(p))) continue;
+    const g = FINISHED_GROUPS.findIndex((f) => name.startsWith(f.prefix));
+    add(g < 0 ? FINISHED_GROUPS.length : g, a.file_url);
+  }
+  // Kept on the detail but missing from the attachments: older tickets.
+  for (const url of [detail?.first_build_url, detail?.revision_build_url]) {
+    if (!url || seen.has(url) || !IMAGE_FILE.test(url)) continue;
+    const name = storedName(url);
+    const g = FINISHED_GROUPS.findIndex((f) => name.startsWith(f.prefix));
+    add(g < 0 ? FINISHED_GROUPS.length : g, url);
+  }
+
+  const labels = [...FINISHED_GROUPS, INTAKE];
+  return groups.flatMap((urls, g) =>
+    urls.map((url, i) => {
+      const n = urls.length > 1 ? ` ${i + 1}` : "";
+      return { url, title: `${labels[g].title}${n}`, fileName: `${code} - ${labels[g].file}${n}` };
+    }),
+  );
+}

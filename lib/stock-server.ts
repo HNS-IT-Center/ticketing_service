@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { ticketPartyName } from "@/lib/ticket-party";
 import { daysSince, enteredStatusAt } from "@/lib/store-followups";
 import { servicePartLabel } from "@/lib/service-parts";
-import { buildStageOf, type BuildStage, type OutgoingKind } from "@/lib/stock";
+import { buildStageOf, finishedBuildPhotos, type BuildStage, type FinishedPhoto, type OutgoingKind } from "@/lib/stock";
 
 export type BuildRow = {
   ticketId: string;
@@ -22,10 +22,9 @@ export type BuildRow = {
   photos: { url: string; title: string }[];
   /**
    * The finished build, every component in place — what the cashier uploads
-   * to Accurate. The technician's photo, and Sales' revision when there is one.
-   * `fileName` is what a download is saved as.
+   * to Accurate. See `finishedBuildPhotos` for where they come from.
    */
-  finishedPhotos: { url: string; title: string; fileName: string }[];
+  finishedPhotos: FinishedPhoto[];
   /** Days in the current status. */
   days: number;
   createdAt: Date;
@@ -59,7 +58,7 @@ export async function loadBuilds(storeIds: string[] | undefined, now: number): P
       user: { select: { name: true } },
       pc_build_detail: { select: { quote_code: true, verified_at: true, verified_by_name: true, first_build_url: true, revision_build_url: true } },
       _count: { select: { pc_components: true } },
-      attachments: { where: { kind: "build_photo" }, orderBy: { created_at: "asc" }, select: { file_url: true } },
+      attachments: { orderBy: { created_at: "asc" }, select: { file_url: true, file_type: true, kind: true } },
       status_logs: { select: { new_status: true, created_at: true } },
     },
   });
@@ -68,12 +67,9 @@ export async function loadBuilds(storeIds: string[] | undefined, now: number): P
     const stage = buildStageOf(t.status);
     if (!stage) return [];
     const d = t.pc_build_detail;
-    const finishedPhotos = [
-      ...(d?.first_build_url ? [{ url: d.first_build_url, title: "Foto rakitan selesai", fileName: `${t.ticket_code} - rakitan jadi` }] : []),
-      ...(d?.revision_build_url ? [{ url: d.revision_build_url, title: "Foto rakitan revisi", fileName: `${t.ticket_code} - rakitan revisi` }] : []),
-    ];
+    const finishedPhotos = finishedBuildPhotos(t.ticket_code, d, t.attachments);
     const photos = [
-      ...t.attachments.map((a, i) => ({ url: a.file_url, title: `Foto komponen saat masuk ${i + 1}` })),
+      ...t.attachments.filter((a) => a.kind === "build_photo").map((a, i) => ({ url: a.file_url, title: `Foto komponen saat masuk ${i + 1}` })),
       ...finishedPhotos.map(({ url, title }) => ({ url, title })),
     ];
     return [
@@ -220,23 +216,29 @@ export async function loadOutgoingParts(f: OutgoingFilter): Promise<OutgoingRow[
 
   // A build's photos: the components at intake and the finished build.
   const buildTicketIds = [...new Set(build.map((b) => b.ticket.id))];
-  const [intakePhotos, finished] = buildTicketIds.length
+  const [attachments, details] = buildTicketIds.length
     ? await Promise.all([
         db.ticketAttachment.findMany({
-          where: { ticket_id: { in: buildTicketIds }, kind: "build_photo" },
+          where: { ticket_id: { in: buildTicketIds } },
           orderBy: { created_at: "asc" },
-          select: { ticket_id: true, file_url: true },
+          select: { ticket_id: true, file_url: true, file_type: true, kind: true },
         }),
         db.ticketPcBuildDetail.findMany({
-          where: { ticket_id: { in: buildTicketIds }, first_build_url: { not: null } },
-          select: { ticket_id: true, first_build_url: true },
+          where: { ticket_id: { in: buildTicketIds } },
+          select: { ticket_id: true, first_build_url: true, revision_build_url: true },
         }),
       ])
     : [[], []];
   const buildPhotos = new Map<string, { url: string; title: string }[]>();
-  const push = (id: string, p: { url: string; title: string }) => buildPhotos.set(id, [...(buildPhotos.get(id) ?? []), p]);
-  intakePhotos.forEach((p, i) => push(p.ticket_id, { url: p.file_url, title: `Foto komponen saat masuk ${i + 1}` }));
-  finished.forEach((p) => p.first_build_url && push(p.ticket_id, { url: p.first_build_url, title: "Foto rakitan selesai" }));
+  const codes = new Map(build.map((b) => [b.ticket.id, b.ticket.ticket_code]));
+  const detailOf = new Map(details.map((d) => [d.ticket_id, d]));
+  for (const id of buildTicketIds) {
+    const own = attachments.filter((a) => a.ticket_id === id);
+    buildPhotos.set(id, [
+      ...own.filter((a) => a.kind === "build_photo").map((a, i) => ({ url: a.file_url, title: `Foto komponen saat masuk ${i + 1}` })),
+      ...finishedBuildPhotos(codes.get(id) ?? "", detailOf.get(id) ?? null, own).map(({ url, title }) => ({ url, title })),
+    ]);
+  }
 
   const base = (t: (typeof service)[number]["ticket"]) => ({
     ticketId: t.id,

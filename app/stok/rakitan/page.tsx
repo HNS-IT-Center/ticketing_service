@@ -1,12 +1,12 @@
 import { requirePage } from "@/lib/page-access";
 import { urlSort } from "@/lib/table-sort";
 import { scopedStoreIds, storeScopeFor } from "@/lib/store-scope-server";
-import { CheckCircle2, Cpu, Download } from "lucide-react";
+import { CheckCircle2, Cpu } from "lucide-react";
 import { loadBuilds, type BuildRow } from "@/lib/stock-server";
 import { BUILD_FILTERS, BUILD_STAGE_LABELS, buildMatches, isBuildFilter, type BuildFilter } from "@/lib/stock";
-import { downloadHref } from "@/lib/download-name";
 import { formatDateTime } from "@/lib/utils";
 import { PhotoStrip } from "@/components/stok/PhotoStrip";
+import { BuildPhotoDownload } from "@/components/stok/BuildPhotoDownload";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarField, FilterBarSearch } from "@/components/app/FilterBar";
@@ -16,7 +16,7 @@ import { StatusBadge } from "@/components/app/StatusBadge";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { parsePageSize } from "@/lib/pagination";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 
 export const metadata = { title: "Rakitan PC — HNS IT Center" };
@@ -81,18 +81,7 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
       interactive: true,
       cell: (r) =>
         r.finishedPhotos.length ? (
-          <span className="flex flex-col gap-1.5">
-            {r.finishedPhotos.map((p) => (
-              <a
-                key={p.url}
-                href={downloadHref(p.url, p.fileName)}
-                download
-                className={buttonVariants({ variant: "outline", size: "sm", className: "justify-start whitespace-nowrap" })}
-              >
-                <Download aria-hidden /> {p.title === "Foto rakitan revisi" ? "Unduh revisi" : "Unduh rakitan jadi"}
-              </a>
-            ))}
-          </span>
+          <BuildPhotoDownload code={r.code} photos={r.finishedPhotos} />
         ) : (
           <span className="text-xs text-muted-foreground">Belum ada foto rakitan jadi</span>
         ),
@@ -155,7 +144,7 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
             <Cpu aria-hidden className="size-6" /> Rakitan PC
           </span>
         }
-        description="Semua rakitan PC di setiap toko. Hanya lihat. Foto rakitan jadi bisa diunduh untuk diunggah ke Accurate."
+        description="Semua rakitan PC di setiap toko. Hanya lihat. Pilih foto rakitan untuk diunduh dan diunggah ke Accurate."
         actions={
           <FilterBar action="/stok/rakitan">
             {filter !== "all" && <input type="hidden" name="filter" value={filter} />}

@@ -5,6 +5,7 @@ import { CheckCircle2, Cpu } from "lucide-react";
 import { loadBuilds, type BuildRow } from "@/lib/stock-server";
 import { BUILD_FILTERS, BUILD_STAGE_LABELS, buildMatches, isBuildFilter, type BuildFilter } from "@/lib/stock";
 import { formatDateTime } from "@/lib/utils";
+import { relativeTimeId } from "@/lib/ticket-recency";
 import { PhotoStrip } from "@/components/stok/PhotoStrip";
 import { BuildPhotoDownload } from "@/components/stok/BuildPhotoDownload";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
@@ -38,8 +39,10 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
   const scope = await storeScopeFor(session);
   const stores = scope.stores;
   const store = stores.find((s) => s.id === params.store);
+  // One clock for the whole render, so every "x jam lalu" agrees.
   // eslint-disable-next-line react-hooks/purity -- server component, read once
-  const loaded = await loadBuilds(scopedStoreIds(scope, store?.id), Date.now());
+  const now = new Date(Date.now());
+  const loaded = await loadBuilds(scopedStoreIds(scope, store?.id), now.getTime());
   const query = (params.q ?? "").trim();
   const all = query ? loaded.filter((r) => buildMatches(r, query)) : loaded;
   const filtered = filter === "all" ? all : all.filter((r) => r.stage === filter);
@@ -131,6 +134,16 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
         <span className="flex flex-col gap-1">
           <StatusBadge kind="ticket" status={r.status} hasTechnician={Boolean(r.technician)} size="sm" />
           <span className="text-xs whitespace-nowrap text-muted-foreground">{r.days} hari di status ini</span>
+        </span>
+      ),
+    },
+    {
+      key: "updated", sortValue: (r) => r.updatedAt.getTime(), sortFirst: "desc",
+      header: "Update terakhir",
+      cell: (r) => (
+        <span className="flex flex-col text-sm whitespace-nowrap text-muted-foreground">
+          <span>{relativeTimeId(r.updatedAt, now)}</span>
+          <span className="text-[0.7rem]">dibuat {r.createdAt.toLocaleDateString("id-ID")}</span>
         </span>
       ),
     },

@@ -28,10 +28,12 @@ export type BuildRow = {
   /** Days in the current status. */
   days: number;
   createdAt: Date;
+  /** Last change to the ticket — the list's order. */
+  updatedAt: Date;
 };
 
 /**
- * Every PC build that is not cancelled or rejected, newest first, with where
+ * Every PC build that is not cancelled or rejected, latest activity first, with where
  * it stands — read only. Photos are the components photographed at intake
  * and the finished build (the technician's photo, and Sales' revision).
  */
@@ -42,7 +44,9 @@ export async function loadBuilds(storeIds: string[] | undefined, now: number): P
       status: { notIn: ["cancelled", "rejected"] },
       ...(storeIds ? { store_location_id: { in: storeIds } } : {}),
     },
-    orderBy: { created_at: "desc" },
+    // Latest activity first, as All Tickets: a build finished or handed over
+    // today rises to the top even when it was opened weeks ago.
+    orderBy: [{ updated_at: "desc" }, { created_at: "desc" }],
     select: {
       id: true,
       ticket_code: true,
@@ -89,6 +93,7 @@ export async function loadBuilds(storeIds: string[] | undefined, now: number): P
         finishedPhotos,
         days: daysSince(enteredStatusAt(t.status, t.status_logs, t.created_at), now),
         createdAt: t.created_at,
+        updatedAt: t.updated_at,
       },
     ];
   });

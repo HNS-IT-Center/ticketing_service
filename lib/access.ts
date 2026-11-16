@@ -145,7 +145,7 @@ const PAGE_INFO: Record<PageCapability, ReturnType<typeof page>> = {
   page_create_ticket: page("Tiket · Buat Tiket", "Form tiket baru di portal masing-masing.", [...TECHNICIANS, "sales", "rma"], [...TECHNICIANS, "sales", "rma"]),
   page_rma_dashboard: page("Klaim & RMA · Dashboard RMA", "Antrian case RMA dan halaman case. Tombol proses case tetap hanya untuk RMA dan Admin.", ["rma"]),
   page_rma_claims: page("Klaim & RMA · Tiket Klaim", "Daftar klaim garansi beserta tahap RMA-nya, dan export Excel.", ["rma"]),
-  page_rma_analysis: page("Klaim & RMA · Analisa Klaim", "Klaim per brand, jenis barang dan model.", ["rma"]),
+  page_rma_analysis: page("Klaim & RMA · Analisa Klaim", "Kinerja RMA per bulan: masuk, selesai, lead time, vendor dan brand.", ["rma"]),
   page_toko_dashboard: page("Toko · Dashboard Toko", "Dashboard toko yang dipegang.", KEPALA_TOKO, KEPALA_TOKO),
   page_toko_tickets: page("Toko · Tiket Toko", "Tiket toko yang dipegang, baca saja, dan export Excel.", KEPALA_TOKO, KEPALA_TOKO),
   page_toko_followups: page("Toko · Tindak Lanjut", "Tiket yang perlu ditindaklanjuti di toko yang dipegang.", KEPALA_TOKO, KEPALA_TOKO),

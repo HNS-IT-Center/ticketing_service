@@ -3,6 +3,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import { ChevronLeft, ChevronRight, Download, FileText } from "lucide-react";
 import { PdfViewer } from "@/components/app/PdfViewer";
+import { ZoomableImage } from "@/components/app/ZoomableImage";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { buttonVariants } from "@/components/ui/button";
 import { downloadHref } from "@/lib/download-name";
@@ -10,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * Photos, videos and PDFs of one ticket, opened in a pop-up with previous /
- * next and a real download.
+ * next, a real download, and zoom on photos (ZoomableImage).
  *
  * `MediaGallery` holds the list and the viewer; anything inside it can open
  * the viewer at an index through `GalleryTrigger`, so a server component keeps
@@ -124,10 +125,7 @@ function MediaViewer({
                 go(end < start ? 1 : -1);
               }}
             >
-              {kind === "image" && (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img key={item.url} src={item.url} alt={item.title} className="block max-h-[70svh] w-full object-contain" />
-              )}
+              {kind === "image" && <ZoomableImage key={item.url} src={item.url} alt={item.title} />}
               {kind === "video" && (
                 <video key={item.url} src={item.url} controls playsInline preload="metadata" className="max-h-[70svh] w-full" />
               )}

@@ -9,7 +9,7 @@ import FileUpload from "@/components/ui/FileUpload";
 import { useDraft, useDraftKey } from "@/lib/draft";
 import { MAX_BUILD_PHOTOS, MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import { QuoteChecklist } from "@/components/pc-build/QuoteChecklist";
-import { appendQuoteFields, quoteFullyChecked } from "@/components/pc-build/quote-form";
+import { appendQuoteFields, quoteBuildIndexes, quoteFullyChecked } from "@/components/pc-build/quote-form";
 import type { UploadedQuote } from "@/lib/pc-build-quote/parse";
 import { normalizeName } from "@/lib/pc-build-quote/sales";
 import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
@@ -1277,7 +1277,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 {salesId && <p><strong>Sales:</strong> {sales.find((s) => s.id === salesId)?.name ?? quote?.sales?.name}</p>}
                 {ticketType === "pc_build" && quote && (
                   <p>
-                    <strong>Quotation:</strong> {quote.code} · {quoteChecked.length}/{quote.items.length} komponen dicek sesuai ·{" "}
+                    <strong>Quotation:</strong> {quote.code} · {quoteChecked.filter((i) => quoteBuildIndexes(quote).includes(i)).length}/{quoteBuildIndexes(quote).length} komponen dicek sesuai ·{" "}
                     {buildPhotoUrls.length} foto komponen
                   </p>
                 )}

@@ -72,6 +72,8 @@ export type UploadedQuote = Omit<ParsedQuote, "lines"> & {
   /** As typed in the e-commerce system, normalised to +62…. */
   customerPhone?: string | null;
   items: QuoteItem[];
+  /** Indexes of `items` taken out of the build (`defaultExcluded`); absent on an older draft: none. */
+  excluded?: number[];
   /** False when the catalogue could not be asked; the SKUs are then unconfirmed. */
   catalogChecked: boolean;
   /** The ticketing Sales account matching `salesName`, when exactly one does. */

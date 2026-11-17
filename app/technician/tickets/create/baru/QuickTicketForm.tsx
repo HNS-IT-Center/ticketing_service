@@ -10,7 +10,7 @@ import FileUpload from "@/components/ui/FileUpload";
 import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
 import CatalogItemList from "@/components/catalog/CatalogItemList";
 import { QuoteChecklist } from "@/components/pc-build/QuoteChecklist";
-import { appendQuoteFields, quoteFullyChecked } from "@/components/pc-build/quote-form";
+import { appendQuoteFields, quoteBuildIndexes, quoteFullyChecked } from "@/components/pc-build/quote-form";
 import { FormField } from "@/components/app/FormField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -428,7 +428,7 @@ export default function QuickTicketForm({
         {isBuild ? (
           <>
             <dt className="text-muted-foreground">Komponen</dt>
-            <dd className="font-medium">{quote ? `${quote.items.length} dari quotation` : pcComponents.length ? `${pcComponents.length} komponen` : "—"}</dd>
+            <dd className="font-medium">{quote ? `${quoteBuildIndexes(quote).length} dari quotation` : pcComponents.length ? `${pcComponents.length} komponen` : "—"}</dd>
           </>
         ) : (
           <>

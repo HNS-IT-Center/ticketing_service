@@ -16,9 +16,11 @@ import {
   MemoryStick,
   Monitor,
   Package,
+  PackageX,
   RefreshCw,
   Search,
   Trash2,
+  Undo2,
   Upload,
   Wrench,
   Zap,
@@ -28,7 +30,7 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import FilePreview from "@/components/ui/FilePreview";
 import { cn } from "@/lib/utils";
 import type { QuoteItem, UploadedQuote } from "@/lib/pc-build-quote/parse";
-import { checkableIndexes, itemKind } from "@/lib/ecommerce/quote-contract";
+import { buildIndexes, defaultExcluded, itemKind } from "@/lib/ecommerce/quote-contract";
 
 /**
  * The PC build quotation on the intake form. Load it by its code (or the link
@@ -38,7 +40,9 @@ import { checkableIndexes, itemKind } from "@/lib/ecommerce/quote-contract";
  * have the quotation revised and load it again, which replaces the list.
  *
  * Service lines (the assembly) are not ticked; they are shown apart because
- * they go on the ticket's bill as the technician's job.
+ * they go on the ticket's bill as the technician's job. Goods that are sold
+ * but not assembled can be taken out of the build ("Bukan rakitan"): they are
+ * then neither ticked nor recorded. Peripherals start out taken out.
  *
  * Controlled: the form owns the quote and which lines are ticked, so both go
  * into its draft and its submit. The server reads the quotation again on
@@ -105,7 +109,7 @@ export function QuoteChecklist({
 
   const accept = (next: UploadedQuote) => {
     if (quote) setRevision(revisionDiff(quote.items, next.items));
-    onQuoteChange(next);
+    onQuoteChange({ ...next, excluded: next.excluded ?? defaultExcluded(next.items) });
     onCheckedChange([]);
     setMismatch(false);
   };
@@ -267,7 +271,13 @@ export function QuoteChecklist({
   }
 
   const fromApi = quote.source === "api";
-  const checkable = checkableIndexes(quote.items);
+  const excluded = quote.excluded ?? [];
+  const checkable = buildIndexes(quote.items, excluded);
+  const setOut = (i: number, out: boolean) => {
+    const next = out ? [...excluded, i] : excluded.filter((n) => n !== i);
+    onQuoteChange({ ...quote, excluded: [...new Set(next)].sort((a, b) => a - b) });
+    if (out) onCheckedChange(checked.filter((n) => n !== i));
+  };
   const services = quote.items.filter((item) => itemKind(item) === "service");
   const total = checkable.length;
   const done = checked.filter((i) => checkable.includes(i)).length;
@@ -368,6 +378,7 @@ export function QuoteChecklist({
         <p className={cn("text-sm font-medium", allChecked ? "text-tone-green-fg" : "text-muted-foreground")}>
           {allChecked ? <Check aria-hidden="true" className="mr-1 inline size-4" /> : null}
           {done} dari {total} barang dicek sesuai
+          {excluded.length > 0 && <span className="font-normal text-muted-foreground"> · {excluded.length} bukan rakitan</span>}
         </p>
         {!allChecked && (
           <Button type="button" variant="outline" size="sm" onClick={() => onCheckedChange(checkable)} className="h-11 bg-card md:h-8">
@@ -381,43 +392,79 @@ export function QuoteChecklist({
           const kind = itemKind(item);
           if (kind === "service") return null;
           const Icon = iconFor(item.label);
-          const on = checked.includes(i);
+          const out = excluded.includes(i);
+          const on = !out && checked.includes(i);
+          const meta = (
+            <span id={`${uid}-meta-${i}`} className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
+              {out ? (
+                <span className="font-medium text-tone-amber-fg">Bukan rakitan — tidak dicek dan tidak dicatat di tiket</span>
+              ) : (
+                kind === "peripheral" && <span className="font-medium text-tone-blue-fg">Perlengkapan — tidak dirakit</span>
+              )}
+              {item.sku ? <span>SKU {item.sku}</span> : <span>Tanpa SKU</span>}
+              {quote.catalogChecked && item.sku && (
+                item.catalogItemId ? (
+                  <span className="text-tone-blue-fg">Ada di katalog Accurate</span>
+                ) : (
+                  <span className="text-tone-amber-fg">Tidak ditemukan di katalog</span>
+                )
+              )}
+            </span>
+          );
+          const body = (
+            <>
+              <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
+                <Icon aria-hidden="true" className="size-5" />
+              </span>
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase">
+                  {item.label || "Komponen"} · {item.quantity} pcs
+                </span>
+                <span className={cn("text-sm font-semibold wrap-anywhere", out && "text-muted-foreground")}>{item.name}</span>
+                {meta}
+              </span>
+            </>
+          );
           return (
-            <li key={`${i}-${item.sku ?? item.name}`}>
-              <label
-                className={cn(
-                  "flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors",
-                  on ? "border-tone-green-border bg-tone-green-bg/60" : "border-border bg-card hover:border-primary/50",
-                )}
+            <li
+              key={`${i}-${item.sku ?? item.name}`}
+              className={cn(
+                "flex flex-col gap-2 rounded-xl border px-3 py-3 transition-colors sm:flex-row sm:items-start",
+                out
+                  ? "border-dashed border-input bg-muted/40"
+                  : on
+                    ? "border-tone-green-border bg-tone-green-bg/60"
+                    : "border-border bg-card hover:border-primary/50",
+              )}
+            >
+              {out ? (
+                <div className="flex min-w-0 flex-1 items-start gap-3 opacity-80">
+                  <PackageX aria-hidden="true" className="mt-1 size-5 shrink-0 text-muted-foreground" />
+                  {body}
+                </div>
+              ) : (
+                <label className="flex min-w-0 flex-1 cursor-pointer items-start gap-3">
+                  <input
+                    type="checkbox"
+                    checked={on}
+                    onChange={() => toggle(i)}
+                    className="mt-1 size-5 shrink-0 accent-primary"
+                    aria-describedby={`${uid}-meta-${i}`}
+                  />
+                  {body}
+                </label>
+              )}
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={() => setOut(i, !out)}
+                aria-label={out ? `Masukkan ${item.name} ke rakitan` : `Tandai ${item.name} bukan rakitan`}
+                className={cn("h-11 self-end sm:self-start md:h-8", out ? "text-primary" : "text-muted-foreground")}
               >
-                <input
-                  type="checkbox"
-                  checked={on}
-                  onChange={() => toggle(i)}
-                  className="mt-1 size-5 shrink-0 accent-primary"
-                  aria-describedby={`${uid}-meta-${i}`}
-                />
-                <span className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
-                  <Icon aria-hidden="true" className="size-5" />
-                </span>
-                <span className="flex min-w-0 flex-col gap-1">
-                  <span className="text-[0.7rem] font-semibold tracking-wide text-muted-foreground uppercase">
-                    {item.label || "Komponen"} · {item.quantity} pcs
-                  </span>
-                  <span className="text-sm font-semibold wrap-anywhere">{item.name}</span>
-                  <span id={`${uid}-meta-${i}`} className="flex flex-wrap gap-x-2 text-xs text-muted-foreground">
-                    {kind === "peripheral" && <span className="font-medium text-tone-blue-fg">Perlengkapan — tidak dirakit</span>}
-                    {item.sku ? <span>SKU {item.sku}</span> : <span>Tanpa SKU</span>}
-                    {quote.catalogChecked && item.sku && (
-                      item.catalogItemId ? (
-                        <span className="text-tone-blue-fg">Ada di katalog Accurate</span>
-                      ) : (
-                        <span className="text-tone-amber-fg">Tidak ditemukan di katalog</span>
-                      )
-                    )}
-                  </span>
-                </span>
-              </label>
+                {out ? <Undo2 aria-hidden="true" /> : <PackageX aria-hidden="true" />}
+                {out ? "Masukkan ke rakitan" : "Bukan rakitan"}
+              </Button>
             </li>
           );
         })}

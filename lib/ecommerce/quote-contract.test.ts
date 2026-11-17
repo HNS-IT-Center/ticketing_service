@@ -1,7 +1,9 @@
 import { describe, it, expect } from "vitest";
 import fixture from "./__fixtures__/quote-api-0027.json";
 import {
+  buildIndexes,
   checkableIndexes,
+  defaultExcluded,
   findQuoteCode,
   itemKind,
   parseQuoteRef,
@@ -9,6 +11,7 @@ import {
   quoteRefPath,
   quoteSourceLines,
   readEcommerceQuote,
+  readExcluded,
 } from "./quote-contract";
 
 const clone = () => JSON.parse(JSON.stringify(fixture)) as Record<string, unknown> & { items: Record<string, unknown>[] };
@@ -153,5 +156,25 @@ describe("the ticket rules", () => {
     expect(checkableIndexes(items)).toEqual([0, 1, 2]);
     // A draft saved before kinds existed: read from the label.
     expect(itemKind({ label: "JASA RAKIT", name: "JASA RAKIT PC" })).toBe("service");
+  });
+});
+
+describe("goods taken out of the build", () => {
+  const items = quoteSourceLines(readEcommerceQuote(fixture)!); // processor, SSD, monitor, assembly
+
+  it("takes the peripherals out on load, and leaves the rest to tick", () => {
+    expect(defaultExcluded(items)).toEqual([2]);
+    expect(buildIndexes(items, [2])).toEqual([0, 1]);
+    expect(buildIndexes(items)).toEqual([0, 1, 2]);
+  });
+
+  it("reads what the form posts against the quotation read again", () => {
+    expect(readExcluded(null, items)).toEqual({ ok: true, value: [] });
+    expect(readExcluded(" 2 , 0,2", items)).toEqual({ ok: true, value: [0, 2] });
+  });
+
+  it("refuses a service line, an index that is not there, and an empty build", () => {
+    for (const bad of ["3", "9", "-1", "x", "1.5"]) expect(readExcluded(bad, items)).toMatchObject({ ok: false });
+    expect(readExcluded("0,1,2", items)).toEqual({ ok: false, error: expect.stringContaining("Minimal satu barang") });
   });
 });

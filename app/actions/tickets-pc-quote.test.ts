@@ -322,6 +322,28 @@ describe("createTicketAction — PC build from the e-commerce API", () => {
     await cancelLast();
   });
 
+  it("records neither the goods taken out of the build nor their ticks", async () => {
+    answer = body();
+    // The monitor (line 2) is sold on the quotation but not assembled.
+    expect(await createTicketAction(apiForm({ quote_excluded: "2", quote_checked_count: "2" }))).toMatchObject({ success: true });
+    const t = await lastTicket();
+    expect(t?.pc_components.map((c) => c.quote_label)).toEqual(["Processor", "SSD / NVMe", null]);
+    await cancelLast();
+  });
+
+  it("still asks for every line left in the build to be ticked", async () => {
+    answer = body();
+    expect(await createTicketAction(apiForm({ quote_excluded: "2", quote_checked_count: "3" }))).toEqual({
+      error: expect.stringContaining("Semua komponen di quotation harus dicentang"),
+    });
+    expect(await createTicketAction(apiForm({ quote_excluded: "0,1,2", quote_checked_count: "0" }))).toEqual({
+      error: expect.stringContaining("Minimal satu barang"),
+    });
+    expect(await createTicketAction(apiForm({ quote_excluded: "3", quote_checked_count: "3" }))).toEqual({
+      error: expect.stringContaining("bukan rakitan tidak cocok"),
+    });
+  });
+
   it("refuses when the quotation was revised after it was loaded", async () => {
     answer = { ...body(), revision: 4 };
     expect(await createTicketAction(apiForm())).toEqual({ error: expect.stringContaining("direvisi sejak dimuat (revisi 3 → 4)") });

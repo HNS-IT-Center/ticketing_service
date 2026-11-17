@@ -252,7 +252,46 @@ export function itemKind(item: { kind?: QuoteLineKind | null; label: string; nam
   return item.kind ?? quoteLineKind(null, item.label, item.name);
 }
 
-/** Indexes of the lines to tick: every component and peripheral, no service. */
-export function checkableIndexes(items: { kind?: QuoteLineKind | null; label: string; name: string }[]): number[] {
+type KindedLine = { kind?: QuoteLineKind | null; label: string; name: string };
+
+/** Indexes of the goods lines: every component and peripheral, no service. */
+export function checkableIndexes(items: KindedLine[]): number[] {
   return items.flatMap((item, i) => (isCheckedLine(itemKind(item)) ? [i] : []));
+}
+
+/**
+ * Goods the technician takes out of the build (owner, 2026-11-17): sold on the
+ * same quotation but not assembled, so neither ticked nor recorded as a
+ * component. A quotation loads with its peripherals (a monitor, a UPS...)
+ * already out; any line can be put back, or another taken out.
+ */
+export function defaultExcluded(items: KindedLine[]): number[] {
+  return items.flatMap((item, i) => (itemKind(item) === "peripheral" ? [i] : []));
+}
+
+/** The goods that stay in the build, so must be ticked. */
+export function buildIndexes(items: KindedLine[], excluded: readonly number[] = []): number[] {
+  return checkableIndexes(items).filter((i) => !excluded.includes(i));
+}
+
+/**
+ * The excluded lines as the form posts them ("3,8"), checked against the
+ * quotation read again on the server: goods lines only, and at least one
+ * left in the build.
+ */
+export function readExcluded(
+  raw: string | null,
+  items: KindedLine[],
+): { ok: true; value: number[] } | { ok: false; error: string } {
+  const text = (raw ?? "").trim();
+  if (!text) return { ok: true, value: [] };
+  const goods = checkableIndexes(items);
+  const value = [...new Set(text.split(",").map((s) => Number(s.trim())))];
+  if (value.some((i) => !Number.isInteger(i) || !goods.includes(i))) {
+    return { ok: false, error: "Daftar barang bukan rakitan tidak cocok dengan quotation. Muat ulang quotation-nya." };
+  }
+  if (value.length >= goods.length) {
+    return { ok: false, error: "Minimal satu barang di quotation harus masuk rakitan." };
+  }
+  return { ok: true, value: value.sort((a, b) => a - b) };
 }

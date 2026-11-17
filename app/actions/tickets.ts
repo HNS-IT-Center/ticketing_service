@@ -21,7 +21,7 @@ import { findQuoteSales, matchQuoteToCatalog, ticketUsingQuote } from "@/lib/pc-
 import type { ParsedQuote, QuoteItem } from "@/lib/pc-build-quote/parse";
 import { readApiQuote } from "@/lib/pc-build-quote/api-quote";
 import { pcBuildLabourCharges } from "@/lib/pc-build-quote/assembly";
-import { isCheckedLine, parseQuoteRef, type EcommerceQuote } from "@/lib/ecommerce/quote-contract";
+import { buildIndexes, parseQuoteRef, readExcluded, type EcommerceQuote } from "@/lib/ecommerce/quote-contract";
 import { notifyNewTicket } from "@/lib/new-ticket-notify";
 import { CHECK_FEE_JOB_NAME, checkFeeCharge } from "@/lib/check-fee";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
@@ -182,6 +182,8 @@ export async function createTicketAction(formData: FormData) {
     url: string | null;
     /** The API body, kept as the record of what was checked; null for a PDF. */
     api: EcommerceQuote | null;
+    /** Indexes of `items` the technician took out of the build: sold, not assembled. */
+    excluded: number[];
   } | null = null;
   let quoteSales: { id: string; name: string } | null = null;
   let buildPhotoUrls: string[] = [];
@@ -210,6 +212,7 @@ export async function createTicketAction(formData: FormData) {
         items: q.items,
         url: null,
         api: read.raw,
+        excluded: [],
       };
       quoteSales = q.sales;
     } else {
@@ -219,10 +222,13 @@ export async function createTicketAction(formData: FormData) {
       const used = await ticketUsingQuote(head.code);
       if (used) return { error: `Quotation ${head.code} sudah dibuat tiketnya: ${used.ticket_code}.` };
       const [matched, sales] = await Promise.all([matchQuoteToCatalog(lines), findQuoteSales(head.salesName)]);
-      quote = { head, items: matched.items, url: quoteUrl, api: null };
+      quote = { head, items: matched.items, url: quoteUrl, api: null, excluded: [] };
       quoteSales = sales;
     }
-    if (Number(formData.get("quote_checked_count")) !== quote.items.filter((i) => isCheckedLine(i.kind)).length) {
+    const excluded = readExcluded(formData.get("quote_excluded") as string | null, quote.items);
+    if (!excluded.ok) return { error: excluded.error };
+    quote.excluded = excluded.value;
+    if (Number(formData.get("quote_checked_count")) !== buildIndexes(quote.items, quote.excluded).length) {
       return {
         error:
           "Semua komponen di quotation harus dicentang sesuai sebelum tiket dibuat. Bila ada yang tidak sesuai, " +
@@ -523,9 +529,11 @@ export async function createTicketAction(formData: FormData) {
         }),
       ];
       // The quotation's lines first, in its order, then anything added by hand.
-      // Its service lines are not things in the box: they are the bill's.
+      // Its service lines are not things in the box: they are the bill's; and
+      // the lines taken out of the build are not the technician's.
+      const kept = quote ? buildIndexes(quote.items, quote.excluded) : [];
       const componentRows = [
-        ...(quote?.items ?? []).filter((i) => i.kind !== "service").map((i) => ({
+        ...(quote?.items ?? []).filter((_, n) => kept.includes(n)).map((i) => ({
           ticket_id: ticket.id,
           component_name: i.name,
           catalog_item_id: i.catalogItemId,
@@ -574,7 +582,7 @@ export async function createTicketAction(formData: FormData) {
     session,
     "ticket.create",
     `Membuat tiket ${ticketData.ticket_code} (${typeLabel})${customer_name ? ` untuk ${customer_name}` : ""}${device_name ? `, unit ${device_name}` : ""}` +
-      `${quote ? ` dari quotation ${quote.head.code}${quote.api ? ` rev. ${quote.api.revision}` : ""} (${quote.items.filter((i) => isCheckedLine(i.kind)).length} barang dicek sesuai, ${buildPhotoUrls.length} foto)` : ""}.`,
+      `${quote ? ` dari quotation ${quote.head.code}${quote.api ? ` rev. ${quote.api.revision}` : ""} (${buildIndexes(quote.items, quote.excluded).length} barang dicek sesuai, ${buildPhotoUrls.length} foto${quote.excluded.length ? `; bukan rakitan: ${quote.excluded.map((n) => quote!.items[n].name).join(", ")}` : ""})` : ""}.`,
     { type: "ticket", id: ticket.id, label: ticketData.ticket_code },
   );
 

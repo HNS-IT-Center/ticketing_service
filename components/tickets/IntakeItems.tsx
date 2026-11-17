@@ -1,4 +1,4 @@
-import { FileCheck2, PackageCheck, PenLine } from "lucide-react";
+import { ExternalLink, FileCheck2, PackageCheck, PenLine } from "lucide-react";
 import FilePreview from "@/components/ui/FilePreview";
 import { formatDateTime } from "@/lib/utils";
 import { DetailCard } from "./TicketSections";
@@ -62,6 +62,9 @@ export function PcComponentsCard({
     quote_code: string | null;
     quote_url: string | null;
     quote_sales_name?: string | null;
+    /** From the e-commerce API: the revision that was ticked and the quotation's page on the web. */
+    quote_revision?: number | null;
+    quote_public_url?: string | null;
     verified_at: Date | null;
     verified_by_name: string | null;
   } | null;
@@ -84,7 +87,18 @@ export function PcComponentsCard({
             <FileCheck2 aria-hidden="true" className="size-4 shrink-0" />
             <span>
               Dari quotation <span className="font-mono font-semibold">{detail.quote_code}</span>
+              {typeof detail.quote_revision === "number" && <span className="text-xs"> rev. {detail.quote_revision}</span>}
             </span>
+            {detail.quote_public_url && (
+              <a
+                href={detail.quote_public_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center gap-1 font-medium underline underline-offset-2 md:min-h-0"
+              >
+                <ExternalLink aria-hidden="true" className="size-3.5" /> Buka di web
+              </a>
+            )}
             {detail.quote_url && (
               <FilePreview
                 url={detail.quote_url}
@@ -102,7 +116,7 @@ export function PcComponentsCard({
           )}
           {detail.verified_at && (
             <span className="text-xs">
-              {fromQuote.length} komponen dicek sesuai dengan barang yang dibawa
+              {fromQuote.length} barang dicek sesuai dengan barang yang dibawa
               {detail.verified_by_name ? ` oleh ${detail.verified_by_name}` : ""}, {formatDateTime(detail.verified_at)}.
             </span>
           )}

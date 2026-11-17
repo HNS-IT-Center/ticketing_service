@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
+import { isEcommerceConfigured } from "@/lib/ecommerce/quotes";
 import { PageHeader } from "@/components/app/PageHeader";
 import Link from "next/link";
 import { buttonVariants } from "@/components/ui/button";
@@ -48,6 +49,7 @@ export default async function QuickCreate({ userId, oldFormHref }: { userId: str
         currentUserId={userId}
         currentUserName={me?.name ?? ""}
         catalogEnabled={isCatalogConfigured()}
+        quoteApiEnabled={isEcommerceConfigured()}
       />
     </div>
   );

@@ -9,6 +9,7 @@ import FileUpload from "@/components/ui/FileUpload";
 import { useDraft, useDraftKey } from "@/lib/draft";
 import { MAX_BUILD_PHOTOS, MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import { QuoteChecklist } from "@/components/pc-build/QuoteChecklist";
+import { appendQuoteFields, quoteFullyChecked } from "@/components/pc-build/quote-form";
 import type { UploadedQuote } from "@/lib/pc-build-quote/parse";
 import { normalizeName } from "@/lib/pc-build-quote/sales";
 import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
@@ -32,6 +33,8 @@ type Props = {
   defaultStoreLocationId?: string;
   /** Whether the Accurate catalogue is reachable; without it the unit is typed. */
   catalogEnabled?: boolean;
+  /** Whether PC-build quotations can be loaded from the e-commerce site. */
+  quoteApiEnabled?: boolean;
 };
 
 const STEPS = ["Intake & Assign", "Choose Device", "Service Details", "Confirm"];
@@ -180,7 +183,7 @@ function Uploading({ children }: { children: React.ReactNode }) {
   );
 }
 
-export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades, defaultStoreLocationId, catalogEnabled = false }: Props) {
+export default function CreateTicketForm({ storeLocations, technicians, sales, upgrades, defaultStoreLocationId, catalogEnabled = false, quoteApiEnabled = false }: Props) {
   const [step, setStep] = useState(1);
   const uid = useId();
   const router = useRouter();
@@ -363,7 +366,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (ticketType === "cleaning" && !cleaningPackage) errs.cleaningPackage = "Cleaning package is required.";
       if (ticketType === "upgrade" && selectedUpgrades.length === 0) errs.selectedUpgrades = "Please select at least one upgrade.";
       if (ticketType === "pc_build" && quote) {
-        if (quoteChecked.length !== quote.items.length) {
+        if (!quoteFullyChecked(quote, quoteChecked)) {
           errs.quote = "Centang setiap komponen yang sesuai dengan barang yang dibawa. Bila ada yang tidak sesuai, tekan \u201cAda yang tidak sesuai?\u201d.";
         }
         if (isUploadingBuildPhotos) errs.buildPhotos = "Tunggu sampai foto selesai terunggah.";
@@ -503,8 +506,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (ticketType === "pc_build") {
         fd.append("pc_components_json", JSON.stringify(pcComponents.map(toPosted)));
         if (quote) {
-          fd.append("quote_url", quote.url);
-          fd.append("quote_checked_count", String(quoteChecked.length));
+          appendQuoteFields(fd, quote, quoteChecked);
           buildPhotoUrls.forEach((url) => fd.append("build_photo_urls", url));
         }
       }
@@ -952,6 +954,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                       checked={quoteChecked}
                       onCheckedChange={setQuoteChecked}
                       error={errors.quote}
+                      apiEnabled={quoteApiEnabled}
                     />
                     {quote?.sales && salesId === quote.sales.id && (
                       <p className="text-xs text-tone-green-fg">

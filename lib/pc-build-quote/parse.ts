@@ -16,6 +16,8 @@
  * them; the header's own "7 item" is then used to prove nothing was missed.
  */
 
+import { findQuoteCode, type EcommerceQuoteStatus, type QuoteLineKind } from "@/lib/ecommerce/quote-contract";
+
 export type TextPiece = { str: string; x: number; y: number };
 
 export type QuoteLine = {
@@ -47,12 +49,28 @@ export type QuoteItem = QuoteLine & {
   /** The Accurate item with exactly this SKU, when the catalogue has one. */
   catalogItemId: number | null;
   catalogCategory: string | null;
+  /**
+   * Built in, handed over beside the PC, or labour (`quoteLineKind`). A
+   * service line is not ticked: it goes on the bill as the technician's job.
+   */
+  kind: QuoteLineKind;
+  /** Per unit as sold; null from a PDF, which prints no line prices. */
+  unitPrice: number | null;
 };
 
-/** What the intake form holds once a quotation has been uploaded and read. */
+/** What the intake form holds once a quotation has been read, from a PDF or from the e-commerce API. */
 export type UploadedQuote = Omit<ParsedQuote, "lines"> & {
-  /** Where the PDF was stored; the server reads it again from there on create. */
+  /** Where the PDF was stored; the server reads it again from there on create. Empty for an API quotation. */
   url: string;
+  /** Absent on a draft saved before the API existed: a PDF. */
+  source?: "pdf" | "api";
+  /** API only — what the server compares on create, so what was ticked is what is recorded. */
+  revision?: number | null;
+  status?: EcommerceQuoteStatus | null;
+  /** The customer's page of the quotation on hnsitcenter.id. */
+  publicUrl?: string | null;
+  /** As typed in the e-commerce system, normalised to +62…. */
+  customerPhone?: string | null;
   items: QuoteItem[];
   /** False when the catalogue could not be asked; the SKUs are then unconfirmed. */
   catalogChecked: boolean;
@@ -61,7 +79,6 @@ export type UploadedQuote = Omit<ParsedQuote, "lines"> & {
 };
 
 export const MAX_QUOTE_LINES = 30;
-const CODE_PATTERN = /\b([A-Z]{2,8}-\d{8}-\d{3,6})\b/;
 
 const NOT_A_QUOTATION =
   "PDF ini bukan quotation rakitan PC dari web HNS (nomor quotation tidak ditemukan). " +
@@ -125,12 +142,12 @@ function findCode(pages: TextPiece[][]): string | null {
   const no = all.find((p) => p.str.trim() === "No.");
   if (no) {
     const next = rightOf(all, no);
-    const m = next?.str.match(CODE_PATTERN);
-    if (m) return m[1];
+    const code = next && findQuoteCode(next.str);
+    if (code) return code;
   }
   for (const p of all) {
-    const m = p.str.match(CODE_PATTERN);
-    if (m) return m[1];
+    const code = findQuoteCode(p.str);
+    if (code) return code;
   }
   return null;
 }

@@ -5,10 +5,12 @@
  *
  * Runs createTicketAction against the local database. The stored PDF is
  * replaced by the parsed text of the real quotation (the parser has its own
- * tests in lib/pc-build-quote), and the catalogue API is replaced.
+ * tests in lib/pc-build-quote), the catalogue API is replaced, and the
+ * e-commerce API answers with the contract's fixture through a stubbed fetch.
  */
 import { describe, it, expect, beforeAll, afterAll, vi } from "vitest";
 import fixture from "@/lib/pc-build-quote/__fixtures__/quote-hnspc-0027.json";
+import apiFixture from "@/lib/ecommerce/__fixtures__/quote-api-0027.json";
 
 vi.mock("server-only", () => ({}));
 vi.mock("next/cache", () => ({
@@ -72,6 +74,7 @@ const { createTicketAction } = await import("./tickets");
 const CODE = `Q${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
 const QUOTE_URL = "https://r2.test/temp/u/quote-HNSPC-20261104-0027-abc.pdf";
 let storeId: string;
+let assemblyJobId: string;
 const users: Record<"sales" | "sales2" | "tech" | "lead" | "plain", string> = { sales: "", sales2: "", tech: "", lead: "", plain: "" };
 
 function buildForm(overrides: Record<string, string | string[] | null> = {}) {
@@ -87,7 +90,8 @@ function buildForm(overrides: Record<string, string | string[] | null> = {}) {
     pickup_method: "self_pickup",
     pc_components_json: JSON.stringify([{ catalogItemId: null, name: "Kabel HDMI milik customer", quantity: 1 }]),
     quote_url: QUOTE_URL,
-    quote_checked_count: "7",
+    // Seven lines, the last of them the assembly: six to tick.
+    quote_checked_count: "6",
     build_photo_urls: ["https://r2.test/temp/u/a.jpg", "https://r2.test/temp/u/b.jpg"],
   };
   for (const [k, v] of Object.entries({ ...base, ...overrides })) {
@@ -127,6 +131,8 @@ beforeAll(async () => {
   users.lead = l.id;
   users.plain = p.id;
   session.userId = s.id;
+  // Seeded by the migration that made the assembly a technician's job.
+  assemblyJobId = (await db.serviceJob.findFirstOrThrow({ where: { name: "Jasa Rakit PC" }, select: { id: true } })).id;
 });
 
 afterAll(async () => {
@@ -153,6 +159,7 @@ const lastTicket = () =>
       sales_id: true,
       pc_build_detail: true,
       pc_components: { orderBy: { id: "asc" } },
+      charges: { select: { kind: true, description: true, quantity: true, unit_price: true, service_job_id: true } },
       attachments: { select: { kind: true, file_type: true, file_url: true } },
       notifications: { select: { user_id: true, type: true } },
     },
@@ -168,6 +175,8 @@ describe("createTicketAction — PC build from a quotation", () => {
     expect(t?.pc_build_detail).toMatchObject({
       quote_code: "HNSPC-20261104-0027",
       quote_url: QUOTE_URL,
+      quote_source: "pdf",
+      quote_revision: null,
       quote_customer: "Cust Rakitan",
       quote_total: 8635000,
       verified_by_id: users.sales,
@@ -176,7 +185,8 @@ describe("createTicketAction — PC build from a quotation", () => {
     });
     expect(t?.pc_build_detail?.verified_at).toBeInstanceOf(Date);
 
-    // Seven from the quotation in its order, then the one added by hand.
+    // The quotation's goods in its order, then the one added by hand. The
+    // assembly is not a thing in the box: it is the technician's job on the bill.
     expect(t?.pc_components.map((c) => [c.quote_label, c.sku, c.quantity])).toEqual([
       ["PROCESSOR", "2606000158", 1],
       ["MOTHERBOARD", "2504000288", 1],
@@ -184,13 +194,16 @@ describe("createTicketAction — PC build from a quotation", () => {
       ["CASING", "2509000273", 1],
       ["SSD / NVME", "2605000042", 1],
       ["MONITOR", "2602000029", 1],
-      ["JASA RAKIT", null, 1],
       [null, null, 1],
+    ]);
+    // A PDF prints no line prices: the Daftar Jasa's default.
+    expect(t?.charges).toEqual([
+      { kind: "service_fee", description: "Jasa Rakit PC", quantity: 1, unit_price: 150000, service_job_id: assemblyJobId },
     ]);
     // Matched to the catalogue by exact SKU only.
     expect(t?.pc_components[0]).toMatchObject({ catalog_item_id: 9001, catalog_category: "PROCESSOR INTEL" });
     expect(t?.pc_components[1]).toMatchObject({ catalog_item_id: null });
-    expect(t?.pc_components[7]).toMatchObject({ component_name: "Kabel HDMI milik customer" });
+    expect(t?.pc_components[6]).toMatchObject({ component_name: "Kabel HDMI milik customer" });
 
     expect(t?.attachments.map((a) => a.kind).sort()).toEqual(["build_photo", "build_photo", "quotation"]);
     expect(t?.attachments.find((a) => a.kind === "quotation")).toMatchObject({ file_type: "pdf", file_url: QUOTE_URL });
@@ -214,7 +227,7 @@ describe("createTicketAction — PC build from a quotation", () => {
   });
 
   it("refuses when not every line was ticked", async () => {
-    const result = await createTicketAction(buildForm({ quote_checked_count: "6" }));
+    const result = await createTicketAction(buildForm({ quote_checked_count: "5" }));
     expect(result).toEqual({ error: expect.stringContaining("Semua komponen di quotation harus dicentang") });
   });
 
@@ -244,7 +257,109 @@ describe("createTicketAction — PC build from a quotation", () => {
     const t = await lastTicket();
     expect(t?.pc_build_detail?.quote_code).toBeNull();
     expect(t?.pc_components.map((c) => c.component_name)).toEqual(["Kabel HDMI milik customer"]);
+    // The assembly is still the technician's job.
+    expect(t?.charges).toEqual([
+      { kind: "service_fee", description: "Jasa Rakit PC", quantity: 1, unit_price: 150000, service_job_id: assemblyJobId },
+    ]);
     await db.ticket.update({ where: { id: t!.id }, data: { status: "cancelled" } });
+  });
+});
+
+describe("createTicketAction — PC build from the e-commerce API", () => {
+  const body = () => JSON.parse(JSON.stringify(apiFixture)) as typeof apiFixture & Record<string, unknown>;
+  let answer: Record<string, unknown> = body();
+  const fetchMock = vi.fn(async () => new Response(JSON.stringify(answer), { status: 200 }));
+  const apiForm = (overrides: Record<string, string | string[] | null> = {}) =>
+    buildForm({ quote_url: null, quote_ref: "HNSPC-20261104-0027", quote_revision: "3", quote_checked_count: "3", ...overrides });
+  const cancelLast = async () => {
+    const t = await lastTicket();
+    await db.ticket.update({ where: { id: t!.id }, data: { status: "cancelled" } });
+  };
+
+  beforeAll(async () => {
+    vi.stubGlobal("fetch", fetchMock);
+    process.env.HNS_ECOMMERCE_URL = "https://shop.test";
+    process.env.TICKETING_INTEGRATION_TOKEN = "tok";
+    // Earlier tests left PDF tickets on this quotation code live.
+    await db.ticket.updateMany({ where: { store_location_id: storeId }, data: { status: "cancelled" } });
+  });
+  afterAll(() => {
+    vi.unstubAllGlobals();
+    delete process.env.HNS_ECOMMERCE_URL;
+    delete process.env.TICKETING_INTEGRATION_TOKEN;
+  });
+
+  it("records the quotation it asked for again, its revision and link, and bills the assembly at its sold price", async () => {
+    answer = body();
+    const result = await createTicketAction(apiForm());
+    expect(result).toMatchObject({ success: true });
+
+    const t = await lastTicket();
+    expect(t?.pc_build_detail).toMatchObject({
+      quote_code: "HNSPC-20261104-0027",
+      quote_source: "api",
+      quote_url: null,
+      quote_revision: 3,
+      quote_public_url: "https://hnsitcenter.id/q/Ab3dEf6hIj9kLm",
+      quote_customer: "Cust Rakitan",
+      quote_sales_name: "Sales Web",
+      quote_total: 3975000,
+    });
+    expect(t?.pc_build_detail?.quote_priced_at?.toISOString()).toBe("2026-11-04T02:30:00.000Z");
+    expect((t?.pc_build_detail?.quote_snapshot as { code?: string } | null)?.code).toBe("HNSPC-20261104-0027");
+    // The Accurate code now, not the SKU printed; the variant in the name; the monitor ticked too.
+    expect(t?.pc_components.map((c) => [c.quote_label, c.component_name, c.sku])).toEqual([
+      ["Processor", "PROCESSOR INTEL CORE I3-12100 TRAY 3.3Ghz", "2606000158"],
+      ["SSD / NVMe", "SSD NVME ENPC — 512GB · Hitam", "2605000099"],
+      ["Monitor", "MONITOR XIAOMI A24i", "2602000029"],
+      [null, "Kabel HDMI milik customer", null],
+    ]);
+    expect(t?.charges).toEqual([
+      { kind: "service_fee", description: "Jasa Rakit PC", quantity: 1, unit_price: 175000, service_job_id: assemblyJobId },
+    ]);
+    // No PDF: only the photos are attachments.
+    expect(t?.attachments.map((a) => a.kind)).toEqual(["build_photo", "build_photo"]);
+    await cancelLast();
+  });
+
+  it("refuses when the quotation was revised after it was loaded", async () => {
+    answer = { ...body(), revision: 4 };
+    expect(await createTicketAction(apiForm())).toEqual({ error: expect.stringContaining("direvisi sejak dimuat (revisi 3 → 4)") });
+  });
+
+  it("opens a ticket from a quotation the cashier has not closed yet", async () => {
+    // Closing is marked when the finished build is scanned at the till.
+    answer = { ...body(), status: "terbit" };
+    expect(await createTicketAction(apiForm())).toMatchObject({ success: true });
+    await cancelLast();
+  });
+
+  it("counts only the goods as lines to tick", async () => {
+    answer = body();
+    expect(await createTicketAction(apiForm({ quote_checked_count: "4" }))).toEqual({
+      error: expect.stringContaining("Semua komponen di quotation harus dicentang"),
+    });
+  });
+
+  it("refuses a second live ticket from the same quotation, whichever way it was read", async () => {
+    answer = body();
+    expect(await createTicketAction(apiForm())).toMatchObject({ success: true });
+    expect(await createTicketAction(apiForm())).toEqual({ error: expect.stringContaining("sudah dibuat tiketnya") });
+    expect(await createTicketAction(buildForm())).toEqual({ error: expect.stringContaining("sudah dibuat tiketnya") });
+    await cancelLast();
+  });
+
+  it("finds the sales by their SSO subject before their name", async () => {
+    await db.user.update({ where: { id: users.sales2 }, data: { sso_sub: `sub-${CODE}` } });
+    answer = { ...body(), salesName: `${CODE} sales`, sales: { email: null, ssoSub: `sub-${CODE}` } };
+    expect(await createTicketAction(apiForm())).toMatchObject({ success: true });
+    expect((await lastTicket())?.sales_id).toBe(users.sales2);
+    await cancelLast();
+  });
+
+  it("passes the e-commerce side's refusal on as a sentence", async () => {
+    fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ error: "not_found" }), { status: 404 }));
+    expect(await createTicketAction(apiForm())).toEqual({ error: expect.stringContaining("tidak ditemukan di ecommerce") });
   });
 });
 

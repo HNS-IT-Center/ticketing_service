@@ -19,6 +19,9 @@ import { MAX_BUILD_PHOTOS, MAX_UNIT_PHOTOS } from "@/lib/attachment-kind";
 import { readStoredQuote } from "@/lib/pc-build-quote/read";
 import { findQuoteSales, matchQuoteToCatalog, ticketUsingQuote } from "@/lib/pc-build-quote/resolve";
 import type { ParsedQuote, QuoteItem } from "@/lib/pc-build-quote/parse";
+import { readApiQuote } from "@/lib/pc-build-quote/api-quote";
+import { pcBuildLabourCharges } from "@/lib/pc-build-quote/assembly";
+import { isCheckedLine, parseQuoteRef, type EcommerceQuote } from "@/lib/ecommerce/quote-contract";
 import { notifyNewTicket } from "@/lib/new-ticket-notify";
 import { CHECK_FEE_JOB_NAME, checkFeeCharge } from "@/lib/check-fee";
 import { CatalogUnavailableError, getCatalogItem } from "@/lib/catalog/hns-data";
@@ -165,36 +168,73 @@ export async function createTicketAction(formData: FormData) {
     pcComponents = resolved.items;
   }
 
-  // A PC build opened from its e-commerce quotation (lib/pc-build-quote). The
-  // stored PDF is read again here rather than trusting the list the browser
-  // showed; every line must have been ticked as matching what was brought in,
-  // and the components must be photographed. A mismatch is not recorded: the
-  // form sends the person back to have the quotation revised and re-uploaded.
-  let quote: { head: Omit<ParsedQuote, "lines">; items: QuoteItem[]; url: string } | null = null;
+  // A PC build opened from its e-commerce quotation (lib/pc-build-quote), read
+  // from the e-commerce API (`quote_ref`) or from the uploaded PDF
+  // (`quote_url`). Either way it is read again here rather than trusting the
+  // list the browser showed; every component and peripheral must have been
+  // ticked as matching what was brought in, and the components photographed.
+  // A mismatch is not recorded: the form sends the person back to have the
+  // quotation revised. Its service lines are not ticked: they go on the bill.
+  let quote: {
+    head: Omit<ParsedQuote, "lines">;
+    items: QuoteItem[];
+    /** The stored PDF; null for an API quotation. */
+    url: string | null;
+    /** The API body, kept as the record of what was checked; null for a PDF. */
+    api: EcommerceQuote | null;
+  } | null = null;
+  let quoteSales: { id: string; name: string } | null = null;
   let buildPhotoUrls: string[] = [];
   const quoteUrl = ((formData.get("quote_url") as string | null) || "").trim();
-  if (quoteUrl) {
+  const quoteRef = ((formData.get("quote_ref") as string | null) || "").trim();
+  if (quoteUrl || quoteRef) {
     if (ticket_type !== "pc_build") return { error: "Quotation rakitan hanya untuk tiket Build PC." };
-    const read = await readStoredQuote(quoteUrl);
-    if (!read.ok) return { error: read.error };
-    const { lines, ...head } = read.quote;
-    if (Number(formData.get("quote_checked_count")) !== lines.length) {
+    if (quoteRef) {
+      const ref = parseQuoteRef(quoteRef);
+      if (!ref || ref.by !== "code") return { error: "Kode quotation tidak valid. Muat ulang quotation-nya." };
+      const read = await readApiQuote(ref);
+      if (!read.ok) return { error: read.error };
+      // Only a change to its lines bumps the revision; a note or a DP mark
+      // does not, and must not send the person back (e-commerce, 2026-11-16).
+      const ticked = Number(formData.get("quote_revision"));
+      if (ticked !== read.raw.revision) {
+        return {
+          error:
+            `Quotation ${read.raw.code} direvisi sejak dimuat (revisi ${ticked} → ${read.raw.revision}). ` +
+            "Muat ulang quotation-nya dan cek lagi komponennya.",
+        };
+      }
+      const q = read.quote;
+      quote = {
+        head: { code: q.code, customer: q.customer, salesName: q.salesName, date: q.date, total: q.total },
+        items: q.items,
+        url: null,
+        api: read.raw,
+      };
+      quoteSales = q.sales;
+    } else {
+      const read = await readStoredQuote(quoteUrl);
+      if (!read.ok) return { error: read.error };
+      const { lines, ...head } = read.quote;
+      const used = await ticketUsingQuote(head.code);
+      if (used) return { error: `Quotation ${head.code} sudah dibuat tiketnya: ${used.ticket_code}.` };
+      const [matched, sales] = await Promise.all([matchQuoteToCatalog(lines), findQuoteSales(head.salesName)]);
+      quote = { head, items: matched.items, url: quoteUrl, api: null };
+      quoteSales = sales;
+    }
+    if (Number(formData.get("quote_checked_count")) !== quote.items.filter((i) => isCheckedLine(i.kind)).length) {
       return {
         error:
           "Semua komponen di quotation harus dicentang sesuai sebelum tiket dibuat. Bila ada yang tidak sesuai, " +
-          "minta sales merevisi quotation lalu unggah PDF terbarunya.",
+          "minta sales merevisi quotation lalu muat ulang quotation-nya.",
       };
     }
-    const used = await ticketUsingQuote(head.code);
-    if (used) return { error: `Quotation ${head.code} sudah dibuat tiketnya: ${used.ticket_code}.` };
     buildPhotoUrls = (formData.getAll("build_photo_urls") as string[]).filter(Boolean);
     if (buildPhotoUrls.length === 0) {
       return { error: "Lampirkan foto komponen rakitan yang dibawa sebelum tiket dibuat." };
     }
     if (buildPhotoUrls.length > MAX_BUILD_PHOTOS) return { error: `Maksimal ${MAX_BUILD_PHOTOS} foto komponen rakitan.` };
     if (buildPhotoUrls.some((u) => !IMAGE_URL.test(u))) return { error: "Foto komponen rakitan harus berupa gambar." };
-    const [matched, quoteSales] = await Promise.all([matchQuoteToCatalog(lines), findQuoteSales(head.salesName)]);
-    quote = { head, items: matched.items, url: quoteUrl };
     // The quotation names its sales; a sales picked by hand on the form wins.
     if (!sales_id && quoteSales) sales_id = quoteSales.id;
   }
@@ -371,7 +411,7 @@ export async function createTicketAction(formData: FormData) {
       file_type: "image" as const,
       kind: "unit_photo" as const,
     })),
-    ...(quote ? [{ ticket_id: ticket.id, file_url: quote.url, file_type: "pdf" as const, kind: "quotation" as const }] : []),
+    ...(quote?.url ? [{ ticket_id: ticket.id, file_url: quote.url, file_type: "pdf" as const, kind: "quotation" as const }] : []),
     ...buildPhotoUrls.map((url) => ({
       ticket_id: ticket.id,
       file_url: url,
@@ -463,6 +503,15 @@ export async function createTicketAction(formData: FormData) {
                   quote_customer: quote.head.customer,
                   quote_sales_name: quote.head.salesName,
                   quote_total: quote.head.total,
+                  quote_source: quote.api ? ("api" as const) : ("pdf" as const),
+                  ...(quote.api
+                    ? {
+                        quote_revision: quote.api.revision,
+                        quote_public_url: quote.api.publicUrl,
+                        quote_priced_at: Number.isNaN(Date.parse(quote.api.pricedAt)) ? null : new Date(quote.api.pricedAt),
+                        quote_snapshot: quote.api as unknown as Prisma.InputJsonValue,
+                      }
+                    : {}),
                   verified_at: new Date(),
                   verified_by_id: session.userId,
                   verified_by_name: session.name,
@@ -474,8 +523,9 @@ export async function createTicketAction(formData: FormData) {
         }),
       ];
       // The quotation's lines first, in its order, then anything added by hand.
+      // Its service lines are not things in the box: they are the bill's.
       const componentRows = [
-        ...(quote?.items ?? []).map((i) => ({
+        ...(quote?.items ?? []).filter((i) => i.kind !== "service").map((i) => ({
           ticket_id: ticket.id,
           component_name: i.name,
           catalog_item_id: i.catalogItemId,
@@ -496,6 +546,22 @@ export async function createTicketAction(formData: FormData) {
       if (componentRows.length > 0) {
         pcOps.push(db.ticketPcBuildComponent.createMany({ data: componentRows }));
       }
+      // The assembly is the technician's job on the bill (lib/pc-build-quote/assembly).
+      const jobs = await db.serviceJob.findMany({
+        where: { is_active: true },
+        select: { id: true, name: true, points: true, default_price: true, accurate_sku: true },
+      });
+      const labour = pcBuildLabourCharges(
+        ticket.id,
+        quote
+          ? quote.items
+              .filter((i) => i.kind === "service")
+              .map((i) => ({ name: i.name, sku: i.sku, quantity: i.quantity, unitPrice: i.unitPrice }))
+          : null,
+        jobs,
+        session.userId,
+      );
+      if (labour.length > 0) pcOps.push(db.ticketCharge.createMany({ data: labour }));
       followUps.push(Promise.all(pcOps));
       break;
     }
@@ -508,7 +574,7 @@ export async function createTicketAction(formData: FormData) {
     session,
     "ticket.create",
     `Membuat tiket ${ticketData.ticket_code} (${typeLabel})${customer_name ? ` untuk ${customer_name}` : ""}${device_name ? `, unit ${device_name}` : ""}` +
-      `${quote ? ` dari quotation ${quote.head.code} (${quote.items.length} komponen dicek sesuai, ${buildPhotoUrls.length} foto)` : ""}.`,
+      `${quote ? ` dari quotation ${quote.head.code}${quote.api ? ` rev. ${quote.api.revision}` : ""} (${quote.items.filter((i) => isCheckedLine(i.kind)).length} barang dicek sesuai, ${buildPhotoUrls.length} foto)` : ""}.`,
     { type: "ticket", id: ticket.id, label: ticketData.ticket_code },
   );
 

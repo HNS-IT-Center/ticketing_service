@@ -6,6 +6,7 @@ import { requireRole } from "@/lib/session";
 import CreateTicketForm from "../CreateTicketForm";
 import { PageHeader } from "@/components/app/PageHeader";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
+import { isEcommerceConfigured } from "@/lib/ecommerce/quotes";
 
 export const metadata = { title: "Create Ticket (form lama) — HNS IT Center" };
 
@@ -46,6 +47,7 @@ export default async function TechnicianCreateTicketPage() {
         sales={sales}
         upgrades={upgrades}
         catalogEnabled={isCatalogConfigured()}
+        quoteApiEnabled={isEcommerceConfigured()}
         defaultStoreLocationId={defaultStoreLocationId}
       />
     </div>

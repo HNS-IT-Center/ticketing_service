@@ -10,6 +10,7 @@ import FileUpload from "@/components/ui/FileUpload";
 import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
 import CatalogItemList from "@/components/catalog/CatalogItemList";
 import { QuoteChecklist } from "@/components/pc-build/QuoteChecklist";
+import { appendQuoteFields, quoteFullyChecked } from "@/components/pc-build/quote-form";
 import { FormField } from "@/components/app/FormField";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,8 @@ type Props = {
   currentUserId: string;
   currentUserName: string;
   catalogEnabled?: boolean;
+  /** Whether PC-build quotations can be loaded from the e-commerce site. */
+  quoteApiEnabled?: boolean;
 };
 
 type TicketType = "service" | "cleaning" | "warranty_claim" | "upgrade" | "pc_build";
@@ -150,6 +153,7 @@ export default function QuickTicketForm({
   currentUserId,
   currentUserName,
   catalogEnabled = false,
+  quoteApiEnabled = false,
 }: Props) {
   const uid = useId();
   const router = useRouter();
@@ -302,7 +306,7 @@ export default function QuickTicketForm({
     if (isClaim && !deviceSn.trim()) e.deviceSn = "SN wajib untuk klaim garansi.";
     if (isClaim && !isStoreStock && !purchaseDate) e.purchaseDate = "Tanggal pembelian wajib untuk klaim garansi.";
     if (isBuild && quote) {
-      if (quoteChecked.length !== quote.items.length) e.quote = "Centang setiap komponen yang sesuai dengan barang yang dibawa.";
+      if (!quoteFullyChecked(quote, quoteChecked)) e.quote = "Centang setiap komponen yang sesuai dengan barang yang dibawa.";
       if (buildPhotoUrls.length === 0) e.buildPhotos = "Lampirkan foto komponen rakitan.";
     }
     if ((ticketType === "service" || isClaim) && !notes.trim()) e.notes = "Tulis keluhan customer.";
@@ -364,8 +368,7 @@ export default function QuickTicketForm({
       if (isBuild) {
         fd.append("pc_components_json", JSON.stringify(pcComponents.map(toPosted)));
         if (quote) {
-          fd.append("quote_url", quote.url);
-          fd.append("quote_checked_count", String(quoteChecked.length));
+          appendQuoteFields(fd, quote, quoteChecked);
           buildPhotoUrls.forEach((u) => fd.append("build_photo_urls", u));
         }
       }
@@ -566,9 +569,12 @@ export default function QuickTicketForm({
                       setQuote(q);
                       if (q?.salesName && !salesName.trim()) setSalesName(q.salesName);
                       if (q?.customer && !customerName.trim()) setCustomerName(q.customer);
+                      // "+62812…" → the digits after the box's own +62 prefix.
+                      if (q?.customerPhone && !phone && !noPhone) setPhone(q.customerPhone.replace(/^\+62/, "").slice(0, 13));
                     }}
                     checked={quoteChecked}
                     onCheckedChange={setQuoteChecked}
+                    apiEnabled={quoteApiEnabled}
                   />
                 </Group>
                 <Group label={quote ? "Komponen tambahan" : "Komponen PC"} hint="(opsional)">

@@ -6,6 +6,9 @@ import { storageFailedMessage } from "@/lib/upload-limit";
 import { MAX_QUOTE_PDF_BYTES, readQuotePdf } from "@/lib/pc-build-quote/read";
 import { findQuoteSales, matchQuoteToCatalog, ticketUsingQuote } from "@/lib/pc-build-quote/resolve";
 import type { UploadedQuote } from "@/lib/pc-build-quote/parse";
+import { readApiQuote } from "@/lib/pc-build-quote/api-quote";
+import { parseQuoteRef } from "@/lib/ecommerce/quote-contract";
+import { isEcommerceConfigured } from "@/lib/ecommerce/quotes";
 
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 10);
 
@@ -62,6 +65,33 @@ export async function POST(req: Request) {
   }
 
   const [{ items, catalogChecked }, sales] = await Promise.all([matchQuoteToCatalog(lines), findQuoteSales(head.salesName)]);
-  const quote: UploadedQuote = { ...head, url, items, catalogChecked, sales };
+  const quote: UploadedQuote = { ...head, source: "pdf", url, items, catalogChecked, sales };
   return Response.json({ quote });
+}
+
+/**
+ * GET /api/pc-build-quote?ref=… — the same answer from the e-commerce API: a
+ * quotation code, or the customer link sales send ("…/q/<token>"). The token
+ * that opens the API stays on this server; the browser only ever sees what the
+ * checklist shows. Nothing is stored here either: `createTicketAction` asks
+ * the API again on create.
+ */
+export async function GET(req: Request) {
+  const session = await getSession();
+  if (!session) return Response.json({ error: "Unauthorized" }, { status: 401 });
+  if (!STAFF.includes(session.role as Role)) return Response.json({ error: "Forbidden" }, { status: 403 });
+  if (!isEcommerceConfigured()) {
+    return Response.json({ error: "Pencarian quotation dari ecommerce belum diaktifkan. Unggah PDF quotation-nya." }, { status: 503 });
+  }
+
+  const ref = parseQuoteRef(new URL(req.url).searchParams.get("ref") ?? "");
+  if (!ref) {
+    return Response.json(
+      { error: "Tulis kode quotation (contoh HNSPC-20261104-0027) atau tempel tautan quotation dari sales." },
+      { status: 400 },
+    );
+  }
+  const read = await readApiQuote(ref);
+  if (!read.ok) return Response.json({ error: read.error }, { status: read.status });
+  return Response.json({ quote: read.quote });
 }

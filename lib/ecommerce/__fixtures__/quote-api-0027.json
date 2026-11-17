@@ -1,0 +1,26 @@
+{
+  "code": "HNSPC-20261104-0027",
+  "kind": "build",
+  "prebuildName": null,
+  "revision": 3,
+  "status": "closing",
+  "dpAt": "2026-11-04T03:10:00.000Z",
+  "closedAt": "2026-11-05T02:00:00.000Z",
+  "customer": { "name": "Cust Rakitan", "phone": "0812-3456 7890" },
+  "salesName": "Sales Web",
+  "sales": { "email": "sales.web@example.test", "ssoSub": "sub-sales-web" },
+  "items": [
+    { "productId": 11, "name": "PROCESSOR INTEL CORE I3-12100 TRAY 3.3Ghz", "variationLabel": null, "sku": "2606000158", "accurateCode": "2606000158", "quantity": 1, "unitPrice": 1650000, "stepName": "Processor", "stepKind": "component" },
+    { "productId": 12, "name": "SSD NVME ENPC", "variationLabel": "512GB · Hitam", "sku": "2605000042", "accurateCode": "2605000099", "quantity": 1, "unitPrice": 650000, "stepName": "SSD / NVMe", "stepKind": null },
+    { "productId": 13, "name": "MONITOR XIAOMI A24i", "variationLabel": null, "sku": "2602000029", "accurateCode": null, "quantity": 1, "unitPrice": 1500000, "stepName": "Monitor", "stepKind": null },
+    { "productId": 14, "name": "JASA RAKIT PC", "variationLabel": null, "sku": null, "accurateCode": "101048", "quantity": 1, "unitPrice": 175000, "stepName": "Jasa Rakit", "stepKind": "service" }
+  ],
+  "subtotal": 3975000,
+  "assemblyFee": 0,
+  "discount": 0,
+  "total": 3975000,
+  "publicUrl": "https://hnsitcenter.id/q/Ab3dEf6hIj9kLm",
+  "createdAt": "2026-11-04T02:00:00.000Z",
+  "pricedAt": "2026-11-04T02:30:00.000Z",
+  "updatedAt": "2026-11-05T02:00:00.000Z"
+}

@@ -506,7 +506,24 @@ model TicketPcBuildDetail {
   verified_by_id   String?
   verified_by_name String?
 
+  // Where the checklist came from: the uploaded PDF (`quote_url`) or the
+  // e-commerce API (lib/ecommerce). Null on builds opened before the API.
+  quote_source     QuoteSource?
+  // API only: the revision that was ticked, the customer's page of the
+  // quotation, when it was priced, and the body as received — the record of
+  // what was checked, as the frozen PDF is for an uploaded one. The snapshot
+  // holds the customer's phone: internal, never on the public page.
+  quote_revision   Int?
+  quote_public_url String?   @db.Text
+  quote_priced_at  DateTime?
+  quote_snapshot   Json?
+
   @@index([quote_code])
+}
+
+enum QuoteSource {
+  pdf
+  api
 }
 
 model TicketPcBuildComponent {

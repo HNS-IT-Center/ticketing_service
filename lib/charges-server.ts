@@ -1,8 +1,8 @@
 import "server-only";
-import type { ChargeKind, ServicePart, TicketStatus } from "@prisma/client";
+import type { ChargeKind, ServicePart, TicketStatus, TicketType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { accessFor } from "@/lib/access-server";
-import { mayEditCharges, mayLinkPartCode, type ChargePermissions, type ChargeRow, type VendorOption } from "@/lib/charges";
+import { billKindsFor, mayEditCharges, mayLinkPartCode, type ChargePermissions, type ChargeRow, type VendorOption } from "@/lib/charges";
 import type { ServiceJobOption } from "@/lib/service-jobs";
 import { priceReference, type PriceSample } from "@/lib/price-reference";
 import { isCatalogConfigured } from "@/lib/catalog/hns-data";
@@ -172,7 +172,7 @@ export async function hasExternalWorkOutstanding(ticketId: string): Promise<bool
  */
 export async function loadChargesPanel(
   userId: string,
-  ticket: TicketScope & { id: string; ticket_type: string },
+  ticket: TicketScope & { id: string; ticket_type: TicketType },
 ): Promise<{
   perms: ChargePermissions;
   lines: ChargeRow[];
@@ -180,13 +180,16 @@ export async function loadChargesPanel(
   serviceJobs: ServiceJobOption[];
   /** Whether a part's Accurate code can be searched for; off, the panel offers no link. */
   catalogEnabled: boolean;
+  /** What this ticket's bill may hold (`billKindsFor`): a PC build takes labour only. */
+  kinds: readonly ChargeKind[];
 } | null> {
-  if (ticket.ticket_type !== "service") return null;
+  const kinds = billKindsFor(ticket.ticket_type);
+  if (!kinds) return null;
   const perms = await chargePermissions(userId, ticket);
   const [lines, vendors, serviceJobs] = await Promise.all([
     loadTicketCharges(ticket.id, perms.canViewCost, perms.canEditPrice),
     perms.canEdit ? activeVendors() : Promise.resolve([]),
     perms.canEdit ? activeServiceJobs() : Promise.resolve([]),
   ]);
-  return { perms, lines, vendors, serviceJobs, catalogEnabled: isCatalogConfigured() };
+  return { perms, lines, vendors, serviceJobs, catalogEnabled: kinds.includes("part") && isCatalogConfigured(), kinds };
 }

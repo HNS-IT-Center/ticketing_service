@@ -8,7 +8,7 @@
  * ticket it is.
  */
 
-import type { ChargeKind, ExternalResult, ServicePart, TicketStatus } from "@prisma/client";
+import type { ChargeKind, ExternalResult, ServicePart, TicketStatus, TicketType } from "@prisma/client";
 import type { Audience } from "@/lib/access";
 import { servicePartLabel } from "@/lib/service-parts";
 import { VENDOR_ROLE_INFO, type VendorRoles } from "@/lib/vendors";
@@ -25,6 +25,33 @@ export const MAX_DESCRIPTION = 300;
  * technician did not record, nor miss one they did.
  */
 export const ADDABLE_CHARGE_KINDS: readonly ChargeKind[] = ["service_fee", "external_service", "other"];
+
+const SERVICE_BILL: readonly ChargeKind[] = ["service_fee", "part", "external_service", "other"];
+const LABOUR_ONLY: readonly ChargeKind[] = ["service_fee"];
+
+/**
+ * Which kinds of line a ticket's bill may hold, or null when the ticket has no
+ * bill. A service ticket holds everything. A PC build holds labour only — the
+ * assembly fee is the technician's job and counts toward their target (owner,
+ * 2026-11-16), while the components are sold through the e-commerce quotation
+ * and billed there.
+ */
+export function billKindsFor(ticketType: TicketType): readonly ChargeKind[] | null {
+  switch (ticketType) {
+    case "service":
+      return SERVICE_BILL;
+    case "pc_build":
+      return LABOUR_ONLY;
+    case "warranty_claim":
+    case "cleaning":
+    case "upgrade":
+      return null;
+    default: {
+      const _exhaustive: never = ticketType;
+      return _exhaustive;
+    }
+  }
+}
 
 export function chargeKindLabel(kind: ChargeKind): string {
   switch (kind) {

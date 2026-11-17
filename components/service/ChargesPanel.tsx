@@ -16,6 +16,7 @@ import {
 } from "@/app/actions/charges";
 import {
   ADDABLE_CHARGE_KINDS,
+  billKindsFor,
   MAX_CHARGE_QUANTITY,
   MAX_DESCRIPTION,
   chargeKindLabel,
@@ -52,6 +53,7 @@ const FIELD =
 const TEXTAREA =
   "min-h-16 w-full min-w-0 rounded-lg border border-input bg-card px-3 py-2 text-base text-foreground transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 md:text-sm";
 const LABEL = "text-xs font-semibold text-muted-foreground";
+const SERVICE_KINDS = billKindsFor("service") ?? [];
 const DANGER_SOLID = "bg-destructive text-white hover:bg-destructive/90";
 
 const KIND_TONE: Record<ChargeKind, StatusTone> = {
@@ -100,6 +102,7 @@ export default function ChargesPanel({
   vendors,
   serviceJobs,
   catalogEnabled = false,
+  kinds = SERVICE_KINDS,
 }: {
   ticketId: string;
   lines: ChargeRow[];
@@ -109,6 +112,8 @@ export default function ChargesPanel({
   serviceJobs: ServiceJobOption[];
   /** Whether the catalogue can be searched, to give a typed part its Accurate code. */
   catalogEnabled?: boolean;
+  /** What the bill may hold (`billKindsFor`); a PC build's is labour only, and it has no invoice here. */
+  kinds?: readonly ChargeKind[];
 }) {
   const router = useRouter();
   const addKey = useDraftKey(addDraftKey(ticketId));
@@ -279,7 +284,7 @@ export default function ChargesPanel({
 
       {lines.length > 0 && <SummaryView summary={summary} perms={perms} />}
 
-      {perms.canPrintInvoice && lines.length > 0 && (
+      {perms.canPrintInvoice && kinds.includes("part") && lines.length > 0 && (
         <a
           href={`/faktur/${ticketId}`}
           target="_blank"
@@ -300,6 +305,7 @@ export default function ChargesPanel({
             vendors={vendors}
             serviceJobs={serviceJobs}
             catalogEnabled={catalogEnabled}
+            kinds={kinds}
             pending={pending}
             onCancel={() => setAdding(false)}
             onSubmit={(e, photos) =>
@@ -1084,6 +1090,7 @@ function AddForm({
   vendors,
   serviceJobs,
   catalogEnabled,
+  kinds,
   pending,
   onCancel,
   onSubmit,
@@ -1095,6 +1102,7 @@ function AddForm({
   vendors: VendorOption[];
   serviceJobs: ServiceJobOption[];
   catalogEnabled: boolean;
+  kinds: readonly ChargeKind[];
   pending: boolean;
   onCancel: () => void;
   /** The part's photos travel beside the form's own fields; files are not drafted. */
@@ -1103,7 +1111,10 @@ function AddForm({
   // Read once, on opening. The form only mounts after a click, so this never
   // runs on the server and cannot disagree with it.
   const [initial] = useState(() => readDraft<AddDraft>(draftKey));
-  const [kind, setKind] = useState<ChargeKind>(startOnPart ? "part" : (initial?.kind ?? "service_fee"));
+  const [kind, setKind] = useState<ChargeKind>(() => {
+    const wanted = startOnPart ? "part" : (initial?.kind ?? "service_fee");
+    return kinds.includes(wanted) ? wanted : kinds[0];
+  });
   const [photos, setPhotos] = useState<File[]>([]);
   const [values, setValues] = useState<Record<string, string>>(initial?.values ?? {});
   const [picked, setPicked] = useState<CatalogItem | null>(initial?.picked ?? null);
@@ -1167,7 +1178,7 @@ function AddForm({
           className={FIELD}
         >
           {/* Part right after the labour, since the two are nearly always recorded together. */}
-          {(["service_fee", "part", ...ADDABLE_CHARGE_KINDS.filter((k) => k !== "service_fee")] as ChargeKind[]).map((k) => (
+          {(["service_fee", "part", ...ADDABLE_CHARGE_KINDS.filter((k) => k !== "service_fee")] as ChargeKind[]).filter((k) => kinds.includes(k)).map((k) => (
             <option key={k} value={k}>
               {k === "external_service"
                 ? "Service eksternal — kirim ke vendor"

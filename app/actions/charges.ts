@@ -13,6 +13,7 @@ import { storageFailedMessage } from "@/lib/upload-limit";
 import { logActivity, type ActivityActor } from "@/lib/activity";
 import { isServicePart, MAX_PART_PHOTOS, requiresItemName } from "@/lib/service-parts";
 import {
+  billKindsFor,
   chargeKindLabel,
   formatRupiah,
   MAX_CHARGE_QUANTITY,
@@ -41,6 +42,8 @@ import {
  */
 
 type Fail = { error: string };
+
+const ONLY_LABOUR = "Tiket Build PC hanya mencatat jasa; komponennya ditagih lewat quotation ecommerce.";
 type Ok = { success: true };
 
 const TICKET_SCOPE = {
@@ -60,14 +63,15 @@ function revalidateTicket(ticketId: string) {
 
 async function guardTicket(
   ticketId: string,
-): Promise<Fail | { userId: string; actor: ActivityActor; perms: ChargePermissions }> {
+): Promise<Fail | { userId: string; actor: ActivityActor; perms: ChargePermissions; kinds: readonly ChargeKind[] }> {
   const session = await requireSession();
   const ticket = await db.ticket.findUnique({ where: { id: ticketId }, select: TICKET_SCOPE });
   if (!ticket) return { error: "Tiket tidak ditemukan." };
-  if (ticket.ticket_type !== "service") return { error: "Rincian biaya hanya ada pada tiket service." };
+  const kinds = billKindsFor(ticket.ticket_type);
+  if (!kinds) return { error: "Rincian biaya hanya ada pada tiket service dan Build PC." };
   const perms = await chargePermissions(session.userId, ticket);
   if (!perms.canEdit) return { error: "Anda tidak dapat mengubah rincian biaya tiket ini." };
-  return { userId: session.userId, actor: session, perms };
+  return { userId: session.userId, actor: session, perms, kinds };
 }
 
 /** "Jasa service: Ganti LCD ×1, harga jual Rp 350.000" — the cost is never written to the log. */
@@ -177,6 +181,7 @@ export async function addChargeAction(formData: FormData): Promise<Fail | Ok> {
   if (!isAddableChargeKind(kind)) {
     return { error: "Baris part dibuat dari panel Part yang Diganti." };
   }
+  if (!guard.kinds.includes(kind)) return { error: ONLY_LABOUR };
   let job: Awaited<ReturnType<typeof readServiceJob>> = undefined;
   if (kind === "service_fee") {
     job = await readServiceJob(formData, null);
@@ -236,6 +241,7 @@ export async function addPartChargeAction(formData: FormData): Promise<Fail | Ok
   const ticketId = String(formData.get("ticket_id") ?? "");
   const guard = await guardTicket(ticketId);
   if ("error" in guard) return guard;
+  if (!guard.kinds.includes("part")) return { error: ONLY_LABOUR };
 
   const input = await readPartInput(formData);
   if ("error" in input) return input;

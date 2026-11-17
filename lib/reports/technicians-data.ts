@@ -2,11 +2,18 @@ import "server-only";
 import { db } from "@/lib/db";
 import { monthRange } from "./parts";
 import type { TargetLine, TechnicianRef } from "./technicians";
+import type { TicketType } from "@prisma/client";
+
+const BILLED_TYPES: TicketType[] = ["service", "pc_build"];
 
 /**
  * A month of service work, ready for summarizeTargets.
  *
- * A service ticket counts in the month it FIRST reached `done`, ever — a ticket
+ * Service tickets and PC builds — the tickets that carry a bill
+ * (`billKindsFor`); a PC build's bill is its assembly fee, the technician's
+ * job (owner, 2026-11-16).
+ *
+ * A ticket counts in the month it FIRST reached `done`, ever — a ticket
  * sent back to work and finished again (BL7) is not counted twice, and does
  * not move to the later month. The credit goes to the technician holding the
  * ticket; a ticket with nobody on it is left out.
@@ -33,7 +40,7 @@ export async function loadTargetData(
 
   const firstDone = await db.ticketStatusLog.groupBy({
     by: ["ticket_id"],
-    where: { new_status: "done", created_at: { lt: range.end }, ticket: { ticket_type: "service", ...ticketFilter } },
+    where: { new_status: "done", created_at: { lt: range.end }, ticket: { ticket_type: { in: BILLED_TYPES }, ...ticketFilter } },
     _min: { created_at: true },
   });
   const ticketIds = firstDone

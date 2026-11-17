@@ -76,17 +76,20 @@ export function buildMatches(row: { code: string; quoteCode: string | null; cust
  * A finished build's photo, as offered for download on Rakitan PC — what the
  * cashier uploads to Accurate. `fileName` is what a download is saved as.
  */
-export type FinishedPhoto = { url: string; title: string; fileName: string };
+export type FinishedPhoto = { url: string; title: string; fileName: string; group: FinishedPhotoGroup };
+
+/** Which of the places below a photo came from — a stable key for other systems. */
+export type FinishedPhotoGroup = "first_build" | "revision" | "work_proof" | "intake";
 
 const IMAGE_FILE = /\.(jpe?g|png|gif|webp|heic|heif|avif)(\?.*)?$/i;
 
 /** Where a photo of the finished build came from, by its stored file name. */
 const FINISHED_GROUPS = [
-  { prefix: "first-build_", title: "Rakitan jadi", file: "rakitan jadi" },
-  { prefix: "revision-", title: "Revisi rakitan", file: "rakitan revisi" },
-  { prefix: "work-proof_", title: "Bukti selesai", file: "bukti selesai" },
+  { prefix: "first-build_", title: "Rakitan jadi", file: "rakitan jadi", group: "first_build" },
+  { prefix: "revision-", title: "Revisi rakitan", file: "rakitan revisi", group: "revision" },
+  { prefix: "work-proof_", title: "Bukti selesai", file: "bukti selesai", group: "work_proof" },
 ] as const;
-const INTAKE = { title: "Foto saat tiket dibuat", file: "foto masuk" } as const;
+const INTAKE = { title: "Foto saat tiket dibuat", file: "foto masuk", group: "intake" } as const;
 
 /** Files that are on the ticket but are not of the finished build. */
 const NOT_THE_BUILD = ["pickup-proof", "courier-proof", "delivery-proof", "cancel-proof", "rma-"];
@@ -143,7 +146,7 @@ export function finishedBuildPhotos(
   return groups.flatMap((urls, g) =>
     urls.map((url, i) => {
       const n = urls.length > 1 ? ` ${i + 1}` : "";
-      return { url, title: `${labels[g].title}${n}`, fileName: `${code} - ${labels[g].file}${n}` };
+      return { url, title: `${labels[g].title}${n}`, fileName: `${code} - ${labels[g].file}${n}`, group: labels[g].group };
     }),
   );
 }

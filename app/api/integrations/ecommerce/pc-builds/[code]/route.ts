@@ -1,7 +1,7 @@
-import { createHash, timingSafeEqual } from "node:crypto";
 import type { NextRequest } from "next/server";
 import { findQuoteCode } from "@/lib/ecommerce/quote-contract";
 import { loadBuildPhotos } from "@/lib/ecommerce/build-photos";
+import { integrationJson as json, refuseIntegrationCaller } from "@/lib/ecommerce/integration-auth";
 
 export const dynamic = "force-dynamic";
 
@@ -19,25 +19,9 @@ export const dynamic = "force-dynamic";
  *   503 this server has no token set
  */
 
-const NO_STORE = { "Cache-Control": "no-store" };
-
-function json(body: unknown, status: number) {
-  return Response.json(body, { status, headers: NO_STORE });
-}
-
-function tokenMatches(given: string, expected: string): boolean {
-  // Hashed first so the comparison takes the same time whatever the lengths.
-  const a = createHash("sha256").update(given).digest();
-  const b = createHash("sha256").update(expected).digest();
-  return timingSafeEqual(a, b);
-}
-
 export async function GET(request: NextRequest, ctx: RouteContext<"/api/integrations/ecommerce/pc-builds/[code]">) {
-  const expected = process.env.TICKETING_INTEGRATION_TOKEN?.trim();
-  if (!expected) return json({ error: "Integrasi belum diatur di Ticketing." }, 503);
-
-  const given = request.headers.get("authorization")?.match(/^Bearer\s+(.+)$/i)?.[1]?.trim() ?? "";
-  if (!given || !tokenMatches(given, expected)) return json({ error: "Token tidak valid." }, 401);
+  const refused = refuseIntegrationCaller(request);
+  if (refused) return refused;
 
   const { code: raw } = await ctx.params;
   const typed = decodeURIComponent(raw).trim().toUpperCase();

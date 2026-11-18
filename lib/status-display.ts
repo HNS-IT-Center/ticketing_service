@@ -129,6 +129,8 @@ export const TONE_CLASSES: Record<StatusTone, string> = {
  */
 export function roleDisplay(role: Role): StatusDisplay {
   switch (role) {
+    case "Owner":
+      return { label: "Owner", tone: "orange" };
     case "Administrator":
       return { label: "Admin", tone: "violet" };
     case "Technician":

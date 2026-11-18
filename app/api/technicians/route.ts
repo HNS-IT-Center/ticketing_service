@@ -1,5 +1,6 @@
 import { db } from "@/lib/db";
 import { requireSession } from "@/lib/session";
+import { isAdminRole } from "@/lib/admin-roles";
 
 /**
  * GET /api/technicians?exclude=<userId>
@@ -8,7 +9,7 @@ import { requireSession } from "@/lib/session";
  */
 export async function GET(req: Request) {
   const session = await requireSession();
-  if (session.role !== "Administrator") {
+  if (!isAdminRole(session.role)) {
     return Response.json({ error: "Unauthorized" }, { status: 403 });
   }
 

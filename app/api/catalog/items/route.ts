@@ -5,7 +5,7 @@ import { MAX_QUERY, MIN_QUERY } from "@/lib/catalog/items";
 import { stockVisibilityFor } from "@/lib/access-server";
 
 // Typed against the enum, so a misspelt role fails tsc instead of locking it out.
-const STAFF: ReadonlySet<string> = new Set<Role>(["Administrator", "Technician", "Sales", "RMA"]);
+const STAFF: ReadonlySet<string> = new Set<Role>(["Owner", "Administrator", "Technician", "Sales", "RMA"]);
 
 /**
  * GET /api/catalog/items?q=… — search the item catalogue for the parts panel.

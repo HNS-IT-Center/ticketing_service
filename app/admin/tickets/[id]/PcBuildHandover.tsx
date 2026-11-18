@@ -10,6 +10,7 @@ import { compressFile, normalizeFileType } from "@/lib/compress";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { isAdminRole } from "@/lib/admin-roles";
 
 interface PcBuildHandoverProps {
   ticketId: string;
@@ -45,7 +46,7 @@ export default function PcBuildHandover({
   const [fbIsReplacing, setFbIsReplacing] = useState(false);
   const [fbIsPending, startFbTransition] = useTransition();
 
-  const canUpload = userRole === "Administrator" || (userRole === "Sales" && isAssignedSales) || (userRole === "Technician" && isAssignedTechnician);
+  const canUpload = isAdminRole(userRole) || (userRole === "Sales" && isAssignedSales) || (userRole === "Technician" && isAssignedTechnician);
 
   const isPdfUrl = (url: string | null) => url ? url.toLowerCase().includes(".pdf") : false;
 

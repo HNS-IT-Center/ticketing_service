@@ -8,6 +8,9 @@ import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import { FormField } from "@/components/app/FormField";
 import { errorOf } from "@/lib/action-result";
+import { assignableRoles } from "@/lib/admin-roles";
+
+const ROLE_OPTIONS = ["Pending", "Owner", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"] as const;
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,7 +32,8 @@ interface User {
   is_head_technician: boolean;
 }
 
-export default function EditUserForm({ user }: { user: User }) {
+/** `viewerRole`: only the Owner is offered the Owner and Administrator roles. */
+export default function EditUserForm({ user, viewerRole }: { user: User; viewerRole: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [role, setRole] = useState(user.role);
@@ -96,7 +100,7 @@ export default function EditUserForm({ user }: { user: User }) {
               </FormField>
               <FormField label="Role" htmlFor="eu-role">
                 <NativeSelect id="eu-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
-                  {["Pending", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"].map((r) => (
+                  {assignableRoles(viewerRole, ROLE_OPTIONS).map((r) => (
                     <option key={r} value={r}>{r === "StoreSupervisor" ? "Kepala Toko" : r === "StockAdmin" ? "Admin Stok" : r}</option>
                   ))}
                 </NativeSelect>

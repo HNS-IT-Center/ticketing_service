@@ -11,6 +11,7 @@
 import type { Role } from "@prisma/client";
 import type { Capability } from "@/lib/access";
 import { destinationForRole, type Portal } from "@/lib/routes";
+import { roleMatches } from "@/lib/admin-roles";
 
 export type NavIcon =
   | "dashboard"
@@ -205,7 +206,7 @@ function hrefFor(entry: Entry, portal: Portal | null): string | null {
 }
 
 function visible(rule: Rule, role: Role, can: (c: Capability) => boolean): boolean {
-  if (rule.roles && !rule.roles.includes(role)) return false;
+  if (rule.roles && !roleMatches(role, rule.roles)) return false;
   if (rule.cap && !can(rule.cap)) return false;
   if (rule.anyCap && !rule.anyCap.some(can)) return false;
   return true;

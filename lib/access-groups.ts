@@ -22,7 +22,8 @@ export type AccessGroup = { key: string; title: string; hint?: string; items: Ac
 
 /** What each group of staff is, on its card. */
 export const AUDIENCE_HINTS: Record<Audience, string> = {
-  administrator: "Akses penuh ke semua fitur. Tidak bisa dibatasi, supaya tidak ada yang terkunci dari halaman ini.",
+  owner: "Pemilik usaha: akses penuh ke semua fitur, dan satu-satunya yang mengatur halaman ini serta akun Admin dan Owner. Tidak bisa dibatasi.",
+  administrator: "Admin toko: mengelola tiket, pengguna, dan toko. Bawaannya semua dicentang; Owner bisa mencabut halaman atau data tertentu (mis. harga modal, laporan keuangan).",
   coordinator: "Teknisi bertanda Team Leader: menyetujui permintaan tiket di toko yang dipegangnya.",
   head_technician: "Teknisi bertanda Head Teknisi: melihat semua tiket dan mengelola harga service.",
   technician: "Mengerjakan tiket service, cleaning, upgrade, rakitan dan klaim.",

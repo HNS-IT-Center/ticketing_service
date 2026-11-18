@@ -13,15 +13,16 @@ import { logActivity } from "@/lib/activity";
  * "capability:audience". A setting equal to its default is stored as no row at
  * all, so the table only ever holds what the owner deliberately changed — and
  * a default improved later in code reaches everyone who never touched it.
- * Administrators are not in the form: they always may.
+ * The Owner is not in the form: they always may. Owner only (2026-11-18) —
+ * an Administrator is one of the groups these settings narrow.
  */
 export async function saveAccessRulesAction(formData: FormData) {
-  const session = await requireRole("Administrator");
+  const session = await requireRole("Owner");
 
   const writes = [];
   for (const capability of CAPABILITIES) {
     for (const audience of AUDIENCES) {
-      if (audience === "administrator") continue;
+      if (audience === "owner") continue;
       // A setting that cannot apply to this group is never stored.
       const allowed = appliesTo(capability, audience) && formData.get(`${capability}:${audience}`) === "on";
       const isDefault = CAPABILITY_INFO[capability].defaults.includes(audience) === allowed;
@@ -56,8 +57,8 @@ export async function saveAccessRulesAction(formData: FormData) {
  * overwrite each other.
  */
 export async function saveAudienceAccessAction(audience: string, formData: FormData): Promise<{ success: true } | { error: string }> {
-  const session = await requireRole("Administrator");
-  if (!isAudience(audience) || audience === "administrator") return { error: "Role ini tidak bisa diubah." };
+  const session = await requireRole("Owner");
+  if (!isAudience(audience) || audience === "owner") return { error: "Role ini tidak bisa diubah." };
 
   const writes = CAPABILITIES.map((capability) => {
     const allowed = appliesTo(capability, audience) && formData.get(capability) === "on";

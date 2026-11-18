@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { errorOf } from "@/lib/action-result";
 import { compressFile, normalizeFileType } from "@/lib/compress";
+import { isAdminRole } from "@/lib/admin-roles";
 
 type TicketStatus =
   | "waiting" | "on_progress" | "done" | "ready_for_pickup"
@@ -42,7 +43,7 @@ export default function AdminWorkflowPanel({ ticketId, currentStatus, pickupMeth
   const [activeDialog, setActiveDialog] = useState<"courier_handover" | "self_pickup_complete" | null>(null);
   const [file, setFile] = useState<File | null>(null);
 
-  const isSales = userRole === "Administrator" || userRole === "Sales";
+  const isSales = isAdminRole(userRole) || userRole === "Sales";
 
   const moveStatus = (status: TicketStatus) => {
     startTransition(async () => {

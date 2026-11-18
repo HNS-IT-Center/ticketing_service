@@ -17,16 +17,20 @@ export function UsersAccessHeader({
   active,
   description,
   actions,
+  showRoles = true,
 }: {
   active: (typeof TABS)[number]["key"];
   description?: React.ReactNode;
   actions?: React.ReactNode;
+  /** "Role & Izin" is the Owner's alone (2026-11-18). */
+  showRoles?: boolean;
 }) {
+  const tabs = showRoles ? TABS : TABS.filter((t) => t.key !== "role");
   return (
     <div className="flex flex-col gap-4">
       <PageHeader title="Pengguna & Akses" description={description} actions={actions} />
       <nav aria-label="Pengguna & Akses" className="flex flex-wrap gap-1 self-start rounded-xl border border-border bg-card p-1">
-        {TABS.map((t) => {
+        {tabs.map((t) => {
           const on = t.key === active;
           const Icon = t.icon;
           return (

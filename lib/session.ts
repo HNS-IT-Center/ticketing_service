@@ -4,6 +4,7 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { mayUsePassword } from "@/lib/auth/local-login";
+import { roleMatches } from "@/lib/admin-roles";
 import { ensureSsoSessionActive } from "@/lib/sso/sso-session";
 import {
   SESSION_COOKIE,
@@ -133,8 +134,13 @@ export async function requireSession(): Promise<SessionPayload> {
   return session;
 }
 
+/**
+ * The session, when its role is one of `roles`. The Owner passes wherever an
+ * Administrator would (lib/admin-roles.ts); `requireRole("Owner")` is the
+ * Owner alone.
+ */
 export async function requireRole(...roles: string[]): Promise<SessionPayload> {
   const session = await requireSession();
-  if (!roles.includes(session.role)) redirect("/login");
+  if (!roleMatches(session.role, roles)) redirect("/login");
   return session;
 }

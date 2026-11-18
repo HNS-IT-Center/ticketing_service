@@ -86,7 +86,9 @@ describe("navFor — Pengaturan Akses changes the menu", () => {
     expect(isAllowed("page_toko_dashboard", ["technician"], new Map([[ruleKey("page_toko_dashboard", "technician"), true]]))).toBe(false);
   });
 
-  it("keeps the administrator's own pages fixed", () => {
-    expect(hrefs({ role: "Administrator" }, [["page_tickets_all", "administrator", false]])).toContain("/admin/tickets");
+  it("keeps the owner's pages fixed, and lets the owner narrow an administrator", () => {
+    expect(hrefs({ role: "Owner" }, [["page_tickets_all", "owner", false]])).toContain("/admin/tickets");
+    expect(hrefs({ role: "Administrator" }, [["page_tickets_all", "administrator", false]])).not.toContain("/admin/tickets");
+    expect(hrefs({ role: "Administrator" }, [])).toContain("/admin/tickets");
   });
 });

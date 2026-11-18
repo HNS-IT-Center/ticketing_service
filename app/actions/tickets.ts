@@ -31,6 +31,7 @@ import { catalogBrand } from "@/lib/catalog/brand";
 import { parsePostedItems, parseUpgradeSelections, typedItems } from "@/lib/catalog/picked-items";
 import { resolvePostedItems, type ResolvedItem } from "@/lib/catalog/resolve-picked";
 import { getTicketPoints } from "@/lib/points";
+import { isAdminRole } from "@/lib/admin-roles";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
 
@@ -761,7 +762,7 @@ export async function sendPublicMessageAction(
 // ─── Update Pickup Method ──────────────────────────────────────────────────
 export async function updatePickupMethodAction(ticketId: string, pickupMethod: "self_pickup" | "courier") {
   const session = await requireSession();
-  if (session.role !== "Administrator" && session.role !== "Technician" && session.role !== "Sales") {
+  if (!isAdminRole(session.role) && session.role !== "Technician" && session.role !== "Sales") {
     return { error: "Unauthorized" };
   }
 

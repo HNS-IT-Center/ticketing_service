@@ -33,6 +33,10 @@ enum Role {
   // Finance: how long each vendor holds the shop's own claimed stock, to
   // weigh payment terms. Every store, read only (owner, 2026-11-10).
   Finance
+  // The owner (boss): everything an Administrator may, always — nothing in
+  // Pengaturan Akses can take it away — and the only one who changes those
+  // settings or the Administrator / Owner accounts (owner, 2026-11-18).
+  Owner
 }
 
 enum Shift {

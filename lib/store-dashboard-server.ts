@@ -25,7 +25,7 @@ export type DashboardStore = { id: string; name: string; code: string };
  */
 export async function storesFor(session: { userId: string; role: string }): Promise<DashboardStore[]> {
   const role = session.role as Role;
-  if (role === "Administrator") {
+  if (role === "Administrator" || role === "Owner") {
     return db.storeLocation.findMany({
       where: { is_active: true },
       select: { id: true, name: true, code: true },

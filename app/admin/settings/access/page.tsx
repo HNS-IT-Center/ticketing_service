@@ -1,6 +1,8 @@
 import { Lock, Pencil, ShieldCheck, Users } from "lucide-react";
 import { db } from "@/lib/db";
+import { redirect } from "next/navigation";
 import { requireRole } from "@/lib/session";
+import { isOwnerRole } from "@/lib/admin-roles";
 import { loadAccessOverrides } from "@/lib/access-server";
 import { AUDIENCE_LABELS, CAPABILITIES, CAPABILITY_INFO, appliesTo, audienceAllowed, type Audience } from "@/lib/access";
 import { AUDIENCE_HINTS, AUDIENCE_ORDER, accessGroupsFor, accessSummary } from "@/lib/access-groups";
@@ -17,7 +19,9 @@ export const metadata = { title: "Role & Izin — HNS IT Center" };
  * there is no adding or deleting one here.
  */
 export default async function AccessSettingsPage() {
-  await requireRole("Administrator");
+  // Owner only (2026-11-18); an Administrator who types the address is told no.
+  const session = await requireRole("Administrator");
+  if (!isOwnerRole(session.role)) redirect("/unauthorized");
   const [overrides, byRole, coordinators, heads] = await Promise.all([
     loadAccessOverrides(),
     db.user.groupBy({ by: ["role"], where: { is_active: true }, _count: { _all: true } }),
@@ -26,6 +30,7 @@ export default async function AccessSettingsPage() {
   ]);
   const ofRole = (role: string) => byRole.find((r) => r.role === role)?._count._all ?? 0;
   const users: Record<Audience, number> = {
+    owner: ofRole("Owner"),
     administrator: ofRole("Administrator"),
     coordinator: coordinators,
     head_technician: heads,
@@ -47,7 +52,7 @@ export default async function AccessSettingsPage() {
       <ul className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
         {AUDIENCE_ORDER.map((a) => {
           const { allowed, total } = accessSummary(a, overrides);
-          const fixed = a === "administrator";
+          const fixed = a === "owner";
           const body = (
             <>
               <div className="flex items-start gap-3">
@@ -82,7 +87,7 @@ export default async function AccessSettingsPage() {
           return (
             <li key={a}>
               {fixed ? (
-                <div className={card} title="Admin selalu punya semua akses">
+                <div className={card} title="Owner selalu punya semua akses">
                   {body}
                 </div>
               ) : (

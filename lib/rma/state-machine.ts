@@ -11,7 +11,7 @@ import type { RmaStatus, RmaDecision, UnitOwnership } from "@prisma/client";
 
 // ── Roles allowed to drive an RMA case ──────────────────────────────────────
 // Administrator can do everything the RMA desk can.
-export const RMA_ACTOR_ROLES = ["RMA", "Administrator"] as const;
+export const RMA_ACTOR_ROLES = ["RMA", "Administrator", "Owner"] as const;
 export type RmaActorRole = (typeof RMA_ACTOR_ROLES)[number];
 
 export function canActOnRma(role: string): role is RmaActorRole {

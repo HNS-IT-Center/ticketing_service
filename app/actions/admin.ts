@@ -20,6 +20,7 @@ import { hasExternalWorkOutstanding } from "@/lib/charges-server";
 import { notifyPartCodePending } from "@/lib/part-code-notify";
 import { logActivity } from "@/lib/activity";
 import { ticketStatusText } from "@/lib/activity-catalog";
+import { isAdminRole, mayManageAccount, OWNER_ONLY_ACCOUNT_MESSAGE } from "@/lib/admin-roles";
 
 // ─── Create User ───────────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
@@ -33,6 +34,7 @@ export async function createUserAction(formData: FormData) {
     role: formData.get("role") as string,
     password: formData.get("password") as string,
   };
+  if (!mayManageAccount(session.role, null, data.role)) return { error: OWNER_ONLY_ACCOUNT_MESSAGE };
 
   const existing = await db.user.findUnique({ where: { email: data.email } });
   if (existing) return { error: "Email already in use" };
@@ -79,6 +81,17 @@ export async function updateUserAction(userId: string, formData: FormData) {
   const max_points = formData.get("max_points") as string | null;
   const is_team_leader = formData.get("is_team_leader") === "1";
   const is_head_technician = formData.get("is_head_technician") === "1";
+
+  const target = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (!target) return { error: "User not found" };
+  if (!mayManageAccount(session.role, target.role, String(formData.get("role") ?? ""))) {
+    return { error: OWNER_ONLY_ACCOUNT_MESSAGE };
+  }
+  // Nobody changes their own role here: an Owner demoting themselves could
+  // leave the shop with no one able to open Pengaturan Akses.
+  if (userId === session.userId && formData.get("role") !== target.role) {
+    return { error: "Role akun sendiri tidak bisa diubah." };
+  }
 
   if (is_team_leader) {
     const stores = await db.technicianStoreAssignment.findMany({
@@ -163,6 +176,9 @@ export async function deactivateUserAction(
   if (userId === session.userId) {
     return { error: "You cannot deactivate your own account." };
   }
+  const target = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+  if (!target) return { error: "User not found" };
+  if (!mayManageAccount(session.role, target.role, null)) return { error: OWNER_ONLY_ACCOUNT_MESSAGE };
 
   // Step 1: Reassign active tickets if a replacement is specified
   if (reassignToTechnicianId) {
@@ -207,7 +223,7 @@ export async function adminAssignTicketAction(
 ) {
   const session = await requireSession();
   
-  if (session.role !== "Administrator") {
+  if (!isAdminRole(session.role)) {
     const user = await db.user.findUnique({ where: { id: session.userId }, select: { is_team_leader: true } });
     if (!user?.is_team_leader) {
       throw new Error("Unauthorized");

@@ -8,6 +8,7 @@ import ProfileForm from "@/components/ui/ProfileForm";
 import ChangePasswordForm from "@/components/ui/ChangePasswordForm";
 import { Card, CardContent } from "@/components/ui/card";
 import { updateAdminProfileAction } from "@/app/actions/profile";
+import { ADMIN_ROLES } from "@/lib/admin-roles";
 
 export const metadata = { title: "My Profile — HNS IT Center" };
 
@@ -28,7 +29,7 @@ export default async function AdminProfilePage() {
       },
     }),
     db.ticket.count(),
-    db.user.count({ where: { role: { not: "Administrator" } } }),
+    db.user.count({ where: { role: { notIn: [...ADMIN_ROLES] } } }),
   ]);
 
   if (!user) return <EmptyState icon={Users} title="User not found." />;
@@ -59,7 +60,7 @@ export default async function AdminProfilePage() {
           </div>
           <div className="flex min-w-0 flex-col gap-0.5">
             <div className="text-lg font-bold text-foreground">{user.name}</div>
-            <div className="text-sm text-muted-foreground">Administrator</div>
+            <div className="text-sm text-muted-foreground">{session.role === "Owner" ? "Owner" : "Administrator"}</div>
             <div className="mt-1 text-xs text-muted-foreground">
               Member since {new Date(user.created_at).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" })}
             </div>

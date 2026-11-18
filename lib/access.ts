@@ -7,11 +7,15 @@
  * server reads the rows and calls `isAllowed`, the settings page renders from
  * the same tables, and the tests need no database.
  *
- * Administrators always may — the column is fixed on the settings page — so
- * nobody can lock the owner out of the page that grants access.
+ * The Owner always may — their card is fixed on the settings page, and only
+ * they open it — so nobody can lock the owner out of the page that grants
+ * access (owner, 2026-11-18). Administrators follow the settings like every
+ * other group; every default includes them, so until the Owner narrows
+ * something an Administrator may do everything, as before.
  */
 
 export const AUDIENCES = [
+  "owner",
   "administrator",
   "coordinator",
   "head_technician",
@@ -25,6 +29,7 @@ export const AUDIENCES = [
 export type Audience = (typeof AUDIENCES)[number];
 
 export const AUDIENCE_LABELS: Record<Audience, string> = {
+  owner: "Owner",
   administrator: "Admin",
   coordinator: "Koordinator Toko",
   head_technician: "Head Teknisi",
@@ -61,7 +66,7 @@ export function isStockCapability(v: string): v is StockCapability {
  * The defaults are who could open each page before this existed, so turning
  * it on changed nobody's menu. Pages whose data belongs to the viewer — a
  * technician's own tickets, a sales person's — are not here: they come with
- * the role. Users, Stores and these settings stay Administrator only.
+ * the role. Users and Stores stay Administrator only, these settings Owner only.
  */
 export const PAGE_CAPABILITIES = [
   "page_tickets_all",
@@ -267,6 +272,8 @@ export function audiencesOf(user: {
   is_head_technician?: boolean | null;
 }): Audience[] {
   switch (user.role) {
+    case "Owner":
+      return ["owner"];
     case "Administrator":
       return ["administrator"];
     case "Technician": {
@@ -295,7 +302,7 @@ export const ruleKey = (capability: Capability, audience: Audience) => `${capabi
 
 /** Whether one group may, given the owner's changes over the defaults. */
 export function audienceAllowed(capability: Capability, audience: Audience, overrides: AccessOverrides): boolean {
-  if (audience === "administrator") return true;
+  if (audience === "owner") return true;
   if (!appliesTo(capability, audience)) return false;
   const changed = overrides.get(ruleKey(capability, audience));
   return changed ?? CAPABILITY_INFO[capability].defaults.includes(audience);
@@ -303,6 +310,7 @@ export function audienceAllowed(capability: Capability, audience: Audience, over
 
 /** Whether a setting can be switched on for a group at all (see `appliesTo`). */
 export function appliesTo(capability: Capability, audience: Audience): boolean {
+  if (audience === "owner") return true;
   const only = CAPABILITY_INFO[capability].appliesTo;
   return !only || only.includes(audience);
 }

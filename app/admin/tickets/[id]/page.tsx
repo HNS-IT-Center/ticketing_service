@@ -42,6 +42,7 @@ import {
   type HistoryEvent,
 } from "@/components/tickets/TicketSections";
 import { TONE_CLASSES } from "@/lib/status-display";
+import { isAdminRole } from "@/lib/admin-roles";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -56,7 +57,7 @@ export default async function AdminTicketDetailPage({
   const { id } = await params;
   // Someone granted "Semua Tiket" in Pengaturan Akses reads the ticket; the
   // panels below (assign, status, delete) are the administrator's.
-  if (session.role !== "Administrator") {
+  if (!isAdminRole(session.role)) {
     const found = await db.ticket.findFirst({ where: { OR: [{ id }, { ticket_code: id }] }, select: { id: true, store_location_id: true } });
     // A kepala toko reads only the stores they hold.
     if (!found || !inScope(await storeScopeFor(session), found.store_location_id)) notFound();
@@ -198,7 +199,7 @@ export default async function AdminTicketDetailPage({
 
   const publicHref = ticket.public_share_token ? publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code) ?? "#" : null;
   const customerPhone = ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone;
-  const isAdmin = session.role === "Administrator";
+  const isAdmin = isAdminRole(session.role);
 
   // The clock, read once for the request, for the RMA card's durations.
   const rmaNow = requestNow();

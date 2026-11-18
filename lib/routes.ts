@@ -32,6 +32,7 @@ export const DENIED_DESTINATION = "/unauthorized";
 
 export function destinationForRole(role: Role): RoleDestination {
   switch (role) {
+    case "Owner":
     case "Administrator":
       return { allowed: true, dashboard: "/admin/dashboard", portal: "admin" };
     case "Technician":
@@ -69,7 +70,7 @@ export function destinationForRole(role: Role): RoleDestination {
   }
 }
 
-const ROLE_NAMES = ["Administrator", "Technician", "Sales", "RMA", "Customer", "Pending", "StoreSupervisor", "StockAdmin", "Finance"] as const;
+const ROLE_NAMES = ["Owner", "Administrator", "Technician", "Sales", "RMA", "Customer", "Pending", "StoreSupervisor", "StockAdmin", "Finance"] as const;
 
 export function isRole(value: string): value is Role {
   return (ROLE_NAMES as readonly string[]).includes(value);
@@ -98,14 +99,14 @@ export function dashboardPathForRoleName(role: string): string {
 // keeps out who is not staff; each page checks its own capability with
 // requirePage (lib/page-access.ts). The technician, sales and kepala toko
 // portals hold pages whose data is the viewer's own, so they stay per role.
-export const STAFF_ROLES: readonly Role[] = ["Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance"];
+export const STAFF_ROLES: readonly Role[] = ["Owner", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance"];
 
 export const PORTAL_ROUTES: { prefix: string; allowed: readonly Role[] }[] = [
   { prefix: "/admin", allowed: STAFF_ROLES },
   { prefix: "/technician", allowed: ["Technician"] },
   { prefix: "/sales", allowed: ["Sales"] },
   { prefix: "/rma", allowed: STAFF_ROLES },
-  { prefix: "/toko", allowed: ["StoreSupervisor", "Administrator"] },
+  { prefix: "/toko", allowed: ["StoreSupervisor", "Administrator", "Owner"] },
   { prefix: "/stok", allowed: STAFF_ROLES },
   { prefix: "/finance", allowed: STAFF_ROLES },
   { prefix: "/logs", allowed: STAFF_ROLES },

@@ -12,10 +12,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
+import { assignableRoles } from "@/lib/admin-roles";
+
+const ROLE_OPTIONS = ["Owner", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"] as const;
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-export default function CreateUserForm() {
+/** `viewerRole`: only the Owner is offered the Owner and Administrator roles. */
+export default function CreateUserForm({ viewerRole }: { viewerRole: string }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [role, setRole] = useState("Technician");
@@ -58,7 +62,7 @@ export default function CreateUserForm() {
             </FormField>
             <FormField label="Role" htmlFor="cu-role">
               <NativeSelect id="cu-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
-                {["Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"].map((r) => (
+                {assignableRoles(viewerRole, ROLE_OPTIONS).map((r) => (
                   <option key={r} value={r}>{r === "StoreSupervisor" ? "Kepala Toko" : r === "StockAdmin" ? "Admin Stok" : r}</option>
                 ))}
               </NativeSelect>

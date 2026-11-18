@@ -13,7 +13,7 @@ import { isEcommerceConfigured } from "@/lib/ecommerce/quotes";
 const nanoid = customAlphabet("abcdefghijklmnopqrstuvwxyz0123456789", 10);
 
 /** Whoever can open a ticket. */
-const STAFF: Role[] = ["Administrator", "Technician", "Sales", "RMA"];
+const STAFF: Role[] = ["Owner", "Administrator", "Technician", "Sales", "RMA"];
 
 /**
  * POST /api/pc-build-quote — multipart, one "file": the e-commerce quotation

@@ -12,11 +12,12 @@ import { RoleBadge } from "@/components/app/RoleBadge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { UserPlus, Users } from "lucide-react";
 import { DeactivateUserButton } from "@/components/users/DeactivateUserButton";
+import { isOwnerRole, mayManageAccount } from "@/lib/admin-roles";
 
 export const metadata = { title: "Pengguna & Akses — HNS IT Center" };
 
 // "Pending" are accounts that signed in through HNS SSO and still need a role.
-const ROLES = ["all", "Pending", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"] as const;
+const ROLES = ["all", "Pending", "Owner", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"] as const;
 
 export default async function AdminUsersPage({
   searchParams,
@@ -94,8 +95,12 @@ export default async function AdminUsersPage({
       className: "w-px text-right",
       mobile: "footer",
       interactive: true,
-      // Your own account is not offered: the action refuses it anyway.
-      cell: (u) => (u.id === session.userId ? null : <DeactivateUserButton user={{ id: u.id, name: u.name }} compact />),
+      // Your own account is not offered, nor an Admin / Owner account to an
+      // Administrator: the action refuses both anyway.
+      cell: (u) =>
+        u.id === session.userId || !mayManageAccount(session.role, u.role, null) ? null : (
+          <DeactivateUserButton user={{ id: u.id, name: u.name }} compact />
+        ),
     },
   ];
 
@@ -111,7 +116,12 @@ export default async function AdminUsersPage({
     <div data-slot="admin-users" className="flex flex-col gap-5">
       <UsersAccessHeader
         active="akun"
-        description={`${users.length} akun. Role menentukan halaman yang bisa dibuka — diatur di tab Role & Izin.`}
+        showRoles={isOwnerRole(session.role)}
+        description={
+          isOwnerRole(session.role)
+            ? `${users.length} akun. Role menentukan halaman yang bisa dibuka — diatur di tab Role & Izin.`
+            : `${users.length} akun. Role menentukan halaman yang bisa dibuka — diatur oleh Owner.`
+        }
         actions={
           <Link href="/admin/users/create" className={buttonVariants()}>
             <UserPlus aria-hidden="true" /> Tambah pengguna

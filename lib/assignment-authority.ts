@@ -23,7 +23,7 @@ export type AssignmentAuthority =
   | { kind: "none" };
 
 /** Roles the route treats as unrestricted. Sales is included deliberately. */
-export const UNRESTRICTED_ASSIGNMENT_ROLES = ["Administrator", "Sales"] as const;
+export const UNRESTRICTED_ASSIGNMENT_ROLES = ["Owner", "Administrator", "Sales"] as const;
 
 export function isUnrestrictedAssignmentRole(role: string): boolean {
   return (UNRESTRICTED_ASSIGNMENT_ROLES as readonly string[]).includes(role);

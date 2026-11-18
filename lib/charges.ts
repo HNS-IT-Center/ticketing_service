@@ -310,7 +310,7 @@ export function mayEditCharges(input: {
   };
 }): boolean {
   const { userId, audiences, coordinatorStoreIds, ticket } = input;
-  if (audiences.includes("administrator") || audiences.includes("head_technician")) return true;
+  if (audiences.includes("owner") || audiences.includes("administrator") || audiences.includes("head_technician")) return true;
   if (
     audiences.includes("coordinator") &&
     (ticket.store_location_id === null || coordinatorStoreIds.includes(ticket.store_location_id))

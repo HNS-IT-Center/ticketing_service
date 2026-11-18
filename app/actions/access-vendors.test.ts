@@ -11,7 +11,10 @@ vi.mock("@/lib/session", () => ({
   requireSession: async () => session,
   getSession: async () => session,
   requireRole: async (...roles: string[]) => {
-    if (!roles.includes(session.role)) throw new Error("Unauthorized");
+    // As lib/session.ts: an Owner passes wherever an Administrator would.
+    if (!roles.includes(session.role) && !(session.role === "Owner" && roles.includes("Administrator"))) {
+      throw new Error("Unauthorized");
+    }
     return session;
   },
 }));
@@ -56,6 +59,7 @@ const defaults = () =>
 
 beforeAll(async () => {
   savedRules = await db.accessRule.findMany({ select: { capability: true, audience: true, allowed: true } });
+  await user("owner", "Owner");
   await user("admin", "Administrator");
   await user("tech", "Technician");
   await user("head", "Technician", { is_head_technician: true });
@@ -65,7 +69,7 @@ beforeAll(async () => {
 
 beforeEach(async () => {
   await db.accessRule.deleteMany({});
-  as("admin", "Administrator");
+  as("owner", "Owner");
 });
 
 afterAll(async () => {
@@ -91,9 +95,14 @@ describe("access rules (pure)", () => {
     expect(access.isAllowed("edit_price", ["technician"], none)).toBe(true);
     expect(access.isAllowed("view_cost", ["sales"], none)).toBe(false);
   });
-  it("an administrator always may, whatever is stored", () => {
-    const denyAdmin = new Map([["view_cost:administrator", false]]);
-    expect(access.isAllowed("view_cost", ["administrator"], denyAdmin)).toBe(true);
+  it("the owner always may, whatever is stored; an administrator can be narrowed", () => {
+    const deny = new Map([
+      ["view_cost:owner", false],
+      ["view_cost:administrator", false],
+    ]);
+    expect(access.isAllowed("view_cost", ["owner"], deny)).toBe(true);
+    expect(access.isAllowed("view_cost", ["administrator"], deny)).toBe(false);
+    expect(access.isAllowed("view_cost", ["administrator"], none)).toBe(true);
   });
 });
 
@@ -117,7 +126,18 @@ describe("saveAccessRulesAction", () => {
     expect(await db.accessRule.count()).toBe(0);
   });
 
-  it("only an administrator may save", async () => {
+  it("can narrow an administrator", async () => {
+    const changed = defaults();
+    changed.delete("view_cost:administrator");
+    await saveAccessRulesAction(matrix(changed));
+    expect(await db.accessRule.findMany({ select: { capability: true, audience: true, allowed: true } })).toEqual([
+      { capability: "view_cost", audience: "administrator", allowed: false },
+    ]);
+  });
+
+  it("only the owner may save", async () => {
+    as("admin", "Administrator");
+    await expect(saveAccessRulesAction(matrix(defaults()))).rejects.toThrow();
     as("head", "Technician");
     await expect(saveAccessRulesAction(matrix(defaults()))).rejects.toThrow();
   });
@@ -132,7 +152,6 @@ describe("saveAudienceAccessAction — one role from its edit page", () => {
   const defaultsOf = (a: string) => access.CAPABILITIES.filter((c) => access.CAPABILITY_INFO[c].defaults.includes(a as never));
 
   it("stores only this role's changes and leaves other roles alone", async () => {
-    as("admin", "Administrator");
     const other = defaults();
     other.add("view_cost:sales");
     await saveAccessRulesAction(matrix(other));
@@ -148,15 +167,16 @@ describe("saveAudienceAccessAction — one role from its edit page", () => {
     await saveAccessRulesAction(matrix(defaults()));
   });
 
-  it("never stores a page that cannot apply to the role, nor edits the administrator", async () => {
-    as("admin", "Administrator");
+  it("never stores a page that cannot apply to the role, nor edits the owner", async () => {
     await saveAudienceAccessAction("technician", roleForm([...defaultsOf("technician"), "page_toko_dashboard"]));
     expect(await db.accessRule.count({ where: { audience: "technician" } })).toBe(0);
-    expect(await saveAudienceAccessAction("administrator", roleForm([]))).toMatchObject({ error: expect.any(String) });
+    expect(await saveAudienceAccessAction("owner", roleForm([]))).toMatchObject({ error: expect.any(String) });
     expect(await saveAudienceAccessAction("nobody", roleForm([]))).toMatchObject({ error: expect.any(String) });
   });
 
-  it("only an administrator may save", async () => {
+  it("only the owner may save", async () => {
+    as("admin", "Administrator");
+    await expect(saveAudienceAccessAction("sales", roleForm([]))).rejects.toThrow();
     as("head", "Technician");
     await expect(saveAudienceAccessAction("sales", roleForm([]))).rejects.toThrow();
   });

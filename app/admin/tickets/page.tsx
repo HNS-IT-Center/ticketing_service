@@ -28,6 +28,7 @@ import RecencyCode from "@/components/tickets/RecencyCode";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { FileSpreadsheet, Plus, Ticket } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
+import { isAdminRole } from "@/lib/admin-roles";
 
 export const metadata = { title: "All Tickets — HNS IT Center" };
 const PAGE_SIZE = 10;
@@ -194,7 +195,7 @@ export default async function AdminTicketsPage({
               <FileSpreadsheet aria-hidden="true" /> Export Excel
             </a>
             {/* Everyone else creates tickets from their own portal's form. */}
-            {session.role === "Administrator" && (
+            {isAdminRole(session.role) && (
               <Link href="/admin/tickets/create" className={buttonVariants()}>
                 <Plus aria-hidden="true" /> New Ticket
               </Link>

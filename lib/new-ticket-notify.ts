@@ -1,5 +1,6 @@
 import "server-only";
 import { db } from "@/lib/db";
+import { ADMIN_ROLES } from "@/lib/admin-roles";
 
 /**
  * Who hears about a ticket the moment it is created (owner, 2026-11-05):
@@ -50,7 +51,7 @@ export async function notifyNewTicket(input: {
       : [];
     const recipients = coordinators.length
       ? coordinators
-      : await db.user.findMany({ where: { role: "Administrator", is_active: true }, select: { id: true } });
+      : await db.user.findMany({ where: { role: { in: [...ADMIN_ROLES] }, is_active: true }, select: { id: true } });
     const to = recipients.map((u) => u.id).filter((id) => id !== input.creatorId);
     if (to.length === 0) return 0;
 

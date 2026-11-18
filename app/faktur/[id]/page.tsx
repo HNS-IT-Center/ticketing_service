@@ -14,6 +14,7 @@ export const metadata = { title: "Faktur Service — HNS IT Center" };
 
 /** Where "back to the ticket" goes, by who is printing. */
 const TICKET_PAGE: Record<string, string> = {
+  Owner: "/admin/tickets/",
   Administrator: "/admin/tickets/",
   Technician: "/technician/tickets/",
   Sales: "/sales/tickets/",

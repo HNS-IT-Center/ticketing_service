@@ -36,7 +36,7 @@ export function mayUsePassword(
 ): boolean {
   if (localLoginMode(env) === "all") return true;
   return (
-    user.role === "Administrator" &&
+    (user.role === "Administrator" || user.role === "Owner") &&
     breakGlassEmails(env).includes(user.email.trim().toLowerCase())
   );
 }

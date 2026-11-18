@@ -30,6 +30,7 @@ export default async function AppShell({ session, children }: { session: Session
       isCoordinator={role === "Technician" && Boolean(user?.is_team_leader)}
       sections={sections}
       home={destination.allowed ? destination.dashboard : "/"}
+      roleLabel={role === "Owner" ? "Owner" : undefined}
     >
       {children}
     </DashboardShell>

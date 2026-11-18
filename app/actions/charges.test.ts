@@ -101,7 +101,9 @@ async function grant(plus: string[], minus: string[] = []) {
   const fd = new FormData();
   for (const k of checked) fd.set(k, "on");
   const before = { ...session };
+  // Pengaturan Akses is saved by the Owner (2026-11-18).
   as("admin");
+  session.role = "Owner";
   await saveAccessRulesAction(fd);
   Object.assign(session, before);
 }

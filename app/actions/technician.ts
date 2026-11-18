@@ -20,6 +20,7 @@ import { notifyPartCodePending } from "@/lib/part-code-notify";
 import { logActivity } from "@/lib/activity";
 import { ticketStatusText } from "@/lib/activity-catalog";
 import { describeReplacedPart } from "@/lib/service-parts";
+import { ADMIN_ROLES } from "@/lib/admin-roles";
 
 
 // ─── Request Ticket Assignment (Technician) ────────────────────────────────
@@ -137,7 +138,7 @@ export async function requestTicketAssignmentAction(ticketId: string) {
   const adminsAndLeaders = await db.user.findMany({
     where: {
       OR: [
-        { role: "Administrator" },
+        { role: { in: [...ADMIN_ROLES] } },
         { is_team_leader: true }
       ]
     },

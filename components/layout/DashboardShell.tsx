@@ -135,6 +135,8 @@ interface DashboardShellProps {
   sections: NavSection[];
   /** This person's own dashboard; it lights up only on itself. */
   home: string;
+  /** The account's role in words, when it differs from the portal's ("Owner" in the admin portal). */
+  roleLabel?: string;
 }
 
 // Only Administrator and Technician have a profile page. Sales had a sidebar
@@ -191,13 +193,13 @@ const collapsedStore = {
  * them would switch it off for all of them at once. The shell's own parts do
  * carry one, so Tailwind spacing works there.
  */
-export default function DashboardShell({ children, role, userName, userId, isCoordinator = false, sections, home }: DashboardShellProps) {
+export default function DashboardShell({ children, role, userName, userId, isCoordinator = false, sections, home, roleLabel }: DashboardShellProps) {
   const collapsed = useSyncExternalStore(collapsedStore.subscribe, collapsedStore.get, collapsedStore.getServer);
 
   return (
     <TooltipProvider>
       <SidebarProvider open={!collapsed} onOpenChange={(open) => collapsedStore.set(!open)}>
-        <ShellFrame role={role} userName={userName} userId={userId} isCoordinator={isCoordinator} sections={sections} home={home}>
+        <ShellFrame role={role} userName={userName} userId={userId} isCoordinator={isCoordinator} sections={sections} home={home} roleLabel={roleLabel}>
           {children}
         </ShellFrame>
       </SidebarProvider>
@@ -205,7 +207,7 @@ export default function DashboardShell({ children, role, userName, userId, isCoo
   );
 }
 
-function ShellFrame({ children, role, userName, userId, isCoordinator = false, sections, home }: DashboardShellProps) {
+function ShellFrame({ children, role, userName, userId, isCoordinator = false, sections, home, roleLabel }: DashboardShellProps) {
   const pathname = usePathname();
   const { openMobile, setOpenMobile } = useSidebar();
 
@@ -266,7 +268,7 @@ function ShellFrame({ children, role, userName, userId, isCoordinator = false, s
         Langsung ke konten
       </a>
 
-      <AppSidebar role={role} sections={sections} activeItem={activeItem} pathname={pathname} />
+      <AppSidebar roleLabel={roleLabel ?? ROLE_LABELS[role]} sections={sections} activeItem={activeItem} pathname={pathname} />
 
       <div className="flex min-w-0 flex-1 flex-col">
         <header
@@ -282,7 +284,7 @@ function ShellFrame({ children, role, userName, userId, isCoordinator = false, s
             {/* Requests bell — Admin, Sales, and Store Coordinators */}
             {(role === "admin" || role === "sales" || isCoordinator) && <RequestsBell />}
             <NotificationBell role={role} />
-            <ProfileMenu role={role} userName={userName} />
+            <ProfileMenu role={role} roleLabel={roleLabel ?? ROLE_LABELS[role]} userName={userName} />
           </div>
         </header>
 
@@ -297,12 +299,12 @@ function ShellFrame({ children, role, userName, userId, isCoordinator = false, s
 }
 
 function AppSidebar({
-  role,
+  roleLabel,
   sections,
   activeItem,
   pathname,
 }: {
-  role: DashboardShellProps["role"];
+  roleLabel: string;
   sections: NavSection[];
   activeItem: NavItem | null;
   pathname: string;
@@ -356,7 +358,7 @@ function AppSidebar({
           </span>
           <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
             <div className="truncate text-sm leading-tight font-bold">HNS IT Center</div>
-            <div className="text-[0.6875rem] text-sidebar-foreground/75">{ROLE_LABELS[role]}</div>
+            <div className="text-[0.6875rem] text-sidebar-foreground/75">{roleLabel}</div>
           </div>
         </div>
       </SidebarHeader>
@@ -430,7 +432,7 @@ function AppSidebar({
   );
 }
 
-function ProfileMenu({ role, userName }: { role: DashboardShellProps["role"]; userName: string }) {
+function ProfileMenu({ role, roleLabel, userName }: { role: DashboardShellProps["role"]; roleLabel: string; userName: string }) {
   const initials = userName
     .split(" ")
     .map((n) => n[0])
@@ -456,7 +458,7 @@ function ProfileMenu({ role, userName }: { role: DashboardShellProps["role"]; us
         <DropdownMenuGroup>
           <DropdownMenuLabel className="flex flex-col gap-0.5 px-2 py-1.5">
             <span className="truncate text-sm font-semibold text-foreground">{userName}</span>
-            <span className="text-xs font-normal text-muted-foreground">{ROLE_LABELS[role]}</span>
+            <span className="text-xs font-normal text-muted-foreground">{roleLabel}</span>
           </DropdownMenuLabel>
         </DropdownMenuGroup>
         {(profileHref || ticketsHref) && (

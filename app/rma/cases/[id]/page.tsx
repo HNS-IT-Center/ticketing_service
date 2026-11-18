@@ -17,6 +17,7 @@ import { downloadHref } from "@/lib/download-name";
 import { attachmentKindLabel } from "@/lib/attachment-kind";
 import { vendorLocationText } from "@/lib/vendors";
 import { ArrowLeft, Download, FileText, Film } from "lucide-react";
+import { isAdminRole } from "@/lib/admin-roles";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
 
@@ -350,7 +351,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
 
         <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
           {/* Processing a case is the desk's; others granted the page only read it. */}
-          {(session.role === "RMA" || session.role === "Administrator") && <RmaActionPanel
+          {(session.role === "RMA" || isAdminRole(session.role)) && <RmaActionPanel
             rmaCaseId={rmaCase.id}
             currentStatus={rmaCase.status}
             role={session.role}

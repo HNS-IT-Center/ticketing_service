@@ -22,6 +22,7 @@ import {
 } from "@/lib/rma/state-machine";
 import { closingTimeLogEvent } from "@/lib/working-time";
 import { Prisma, type RmaStatus, type RmaDecision, type UnitOwnership, type RmaHoldReason } from "@prisma/client";
+import { ADMIN_ROLES, isAdminRole } from "@/lib/admin-roles";
 
 // ─── RMA code generator ────────────────────────────────────────────────────
 // RMA-{STORECODE}-{YYMM}-{0001}, sequence restarting each month per store.
@@ -150,7 +151,7 @@ export async function handoverToRmaAction(formData: FormData) {
         : stockOriginInput;
 
     // ── Authorization ──
-    const isAdmin = session.role === "Administrator";
+    const isAdmin = isAdminRole(session.role);
     const isAssignedTechnician =
       session.role === "Technician" && ticket.technician_id === session.userId;
     if (!isAdmin && !isAssignedTechnician) {
@@ -284,7 +285,7 @@ export async function handoverToRmaAction(formData: FormData) {
     // same next sequence, so a unique-violation on rma_code is retried with a
     // freshly generated code rather than surfaced to the technician.
     const rmaStaff = await db.user.findMany({
-      where: { is_active: true, OR: [{ role: "RMA" }, { role: "Administrator" }] },
+      where: { is_active: true, OR: [{ role: "RMA" }, { role: "Administrator" }, { role: "Owner" }] },
       select: { id: true },
     });
 
@@ -869,7 +870,7 @@ export async function transitionRmaAction(formData: FormData) {
 
     if (toStatus === "on_hold" && holdReasonCode === "other") {
       const admins = await db.user.findMany({
-        where: { role: "Administrator", is_active: true },
+        where: { role: { in: [...ADMIN_ROLES] }, is_active: true },
         select: { id: true },
       });
       if (admins.length > 0) {
@@ -967,7 +968,7 @@ export async function submitHoldEvidenceAction(formData: FormData) {
     // Whoever examined the unit is who can photograph it again. The assigned
     // technician counts too, because a ticket can change hands.
     const mayAnswer =
-      session.role === "Administrator" ||
+      isAdminRole(session.role) ||
       session.userId === rmaCase.handed_over_by_id ||
       session.userId === rmaCase.ticket.technician_id;
     if (!mayAnswer) {

@@ -35,7 +35,7 @@ const TONE_BUTTON = {
   green: "bg-green-600 text-white hover:bg-green-600/90",
   cyan: "bg-cyan-600 text-white hover:bg-cyan-600/90",
   violet: "bg-violet-600 text-white hover:bg-violet-600/90",
-  danger: "bg-destructive text-white hover:bg-destructive/90",
+  danger: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
 } as const;
 
 /**

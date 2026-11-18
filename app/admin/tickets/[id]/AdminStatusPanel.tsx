@@ -13,7 +13,7 @@ type Status = string;
 const TONE = {
   primary: "",
   success: "bg-green-600 text-white hover:bg-green-600/90",
-  danger: "bg-destructive text-white hover:bg-destructive/90",
+  danger: "bg-destructive text-destructive-foreground hover:bg-destructive/90",
 } as const;
 
 const STATUS_ACTIONS: Record<string, { label: string; next: string; tone: keyof typeof TONE }[]> = {

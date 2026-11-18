@@ -8,7 +8,7 @@ const LABEL = "Stok Model Ini di Gudang Klaim";
 export function ClaimStockShell({ value, muted = false }: { value: string; muted?: boolean }) {
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-1">{LABEL}</p>
+      <p className="text-xs text-muted-foreground mb-1">{LABEL}</p>
       <p className="font-medium" style={{ wordBreak: "break-word", color: muted ? "var(--text-muted)" : undefined }}>
         {value}
       </p>

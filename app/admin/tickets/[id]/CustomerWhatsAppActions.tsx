@@ -59,7 +59,7 @@ export default function CustomerWhatsAppActions({ customerPhone, customerName, t
           <button
             key={idx}
             type="button"
-            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-[#bbf2d1] bg-[#e8fcf0] px-3 py-1.5 text-xs font-medium text-[#1da851] transition-colors outline-none hover:border-green-300 hover:bg-emerald-100 focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-8"
+            className="inline-flex min-h-11 items-center justify-center rounded-lg border border-tone-green-border bg-tone-green-bg px-3 py-1.5 text-xs font-medium text-tone-green-fg transition-colors outline-none hover:border-tone-green-fg/40 hover:bg-tone-green-bg/70 focus-visible:ring-3 focus-visible:ring-ring/50 md:min-h-8"
             onClick={() => sendWa(t.text)}
           >
             {t.label}

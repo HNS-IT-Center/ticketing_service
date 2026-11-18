@@ -129,7 +129,7 @@ export default function RequestsBell() {
         {pendingCount > 0 && (
           <span
             aria-hidden="true"
-            className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-tone-violet-fg px-1 text-[0.625rem] leading-none font-bold text-white tabular-nums"
+            className="absolute top-1 right-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-tone-violet-fg px-1 text-[0.625rem] leading-none font-bold text-tone-violet-bg tabular-nums"
           >
             {pendingCount > 9 ? "9+" : pendingCount}
           </span>
@@ -150,7 +150,7 @@ export default function RequestsBell() {
               <span className="text-[0.9375rem] font-bold">Ticket Requests</span>
             </div>
             {pendingCount > 0 && (
-              <span className="rounded-full bg-tone-violet-fg px-2 py-0.5 text-[0.7rem] font-bold text-white">
+              <span className="rounded-full bg-tone-violet-fg px-2 py-0.5 text-[0.7rem] font-bold text-tone-violet-bg">
                 {pendingCount} pending
               </span>
             )}
@@ -226,7 +226,7 @@ export default function RequestsBell() {
                         <Button
                           onClick={() => handleAction(req.id, "accept")}
                           disabled={isPending}
-                          className="flex-1 bg-tone-green-fg text-white hover:bg-tone-green-fg/90"
+                          className="flex-1 bg-tone-green-fg text-tone-green-bg hover:bg-tone-green-fg/90"
                         >
                           <Check aria-hidden="true" /> Accept
                         </Button>

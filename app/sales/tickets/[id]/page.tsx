@@ -240,7 +240,7 @@ export default async function SalesTicketDetailPage({
                 ["Address", ticket.is_for_self ? ticket.user?.address : ticket.customer_address],
               ].map(([label, value]) => (
                 <div key={label}>
-                  <p className="text-xs text-gray-500 mb-1">
+                  <p className="text-xs text-muted-foreground mb-1">
                     {label} {label === "Name" && !ticket.is_for_self ? "(Recipient)" : label === "Name" ? "" : "(Account)"}
                   </p>
                   <div className="flex items-center gap-2">
@@ -335,21 +335,21 @@ export default async function SalesTicketDetailPage({
               ) : (
                 historyEvents.map((event) => {
                   const bg = event.isPaused
-                    ? "#fef9c3"
-                    : event.variant === "on_progress" ? "#eff6ff"
-                    : event.variant === "done" ? "#f0fdf4"
-                    : event.variant === "waiting" ? "#fffbeb"
-                    : event.variant === "cancelled" || event.variant === "rejected" ? "#fff1f2"
-                    : event.variant === "ready_for_pickup" || event.variant === "waiting_pickup" || event.variant === "handed_to_courier" || event.variant === "delivered" || event.variant === "completed" ? "#f0fdf4"
-                    : "#f8fafc";
+                    ? "var(--tone-amber-bg)"
+                    : event.variant === "on_progress" ? "var(--tone-blue-bg)"
+                    : event.variant === "done" ? "var(--tone-green-bg)"
+                    : event.variant === "waiting" ? "var(--tone-amber-bg)"
+                    : event.variant === "cancelled" || event.variant === "rejected" ? "var(--tone-red-bg)"
+                    : event.variant === "ready_for_pickup" || event.variant === "waiting_pickup" || event.variant === "handed_to_courier" || event.variant === "delivered" || event.variant === "completed" ? "var(--tone-green-bg)"
+                    : "var(--tone-gray-bg)";
                   const border = event.isPaused
-                    ? "#fde68a"
-                    : event.variant === "on_progress" ? "#bfdbfe"
-                    : event.variant === "done" ? "#bbf7d0"
-                    : event.variant === "waiting" ? "#fde68a"
-                    : event.variant === "cancelled" || event.variant === "rejected" ? "#fecdd3"
-                    : event.variant === "ready_for_pickup" || event.variant === "waiting_pickup" || event.variant === "handed_to_courier" || event.variant === "delivered" || event.variant === "completed" ? "#bbf7d0"
-                    : "#e2e8f0";
+                    ? "var(--tone-amber-border)"
+                    : event.variant === "on_progress" ? "var(--tone-blue-border)"
+                    : event.variant === "done" ? "var(--tone-green-border)"
+                    : event.variant === "waiting" ? "var(--tone-amber-border)"
+                    : event.variant === "cancelled" || event.variant === "rejected" ? "var(--tone-red-border)"
+                    : event.variant === "ready_for_pickup" || event.variant === "waiting_pickup" || event.variant === "handed_to_courier" || event.variant === "delivered" || event.variant === "completed" ? "var(--tone-green-border)"
+                    : "var(--tone-gray-border)";
                   return (
                     <div key={event.id} style={{ background: bg, border: `1px solid ${border}`, borderRadius: "0.5rem", padding: "0.625rem 0.75rem", display: "flex", flexDirection: "column", gap: "0.375rem" }}>
                       <Badge variant={event.variant} technicianId={ticket.technician_id} isPaused={event.isPaused} />

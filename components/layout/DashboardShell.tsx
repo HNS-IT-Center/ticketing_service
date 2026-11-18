@@ -64,6 +64,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { ThemeToggle } from "@/components/theme/ThemeToggle";
 import NotificationBell from "./NotificationBell";
 import RequestsBell from "./RequestsBell";
 
@@ -283,6 +284,7 @@ function ShellFrame({ children, role, userName, userId, isCoordinator = false, s
           <div className="flex shrink-0 items-center gap-1 md:gap-2">
             {/* Requests bell — Admin, Sales, and Store Coordinators */}
             {(role === "admin" || role === "sales" || isCoordinator) && <RequestsBell />}
+            <ThemeToggle />
             <NotificationBell role={role} />
             <ProfileMenu role={role} roleLabel={roleLabel ?? ROLE_LABELS[role]} userName={userName} />
           </div>

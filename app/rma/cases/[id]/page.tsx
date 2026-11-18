@@ -26,7 +26,7 @@ function Field({ label, value, mono = false }: { label: string; value: string | 
   if (!value) return null;
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-1">{label}</p>
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
       <p className="font-medium" style={{ wordBreak: "break-word", fontFamily: mono ? "ui-monospace, monospace" : undefined }}>
         {value}
       </p>

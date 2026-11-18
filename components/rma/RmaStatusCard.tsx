@@ -67,13 +67,13 @@ export type RmaCaseView = {
 type Tone = { bg: string; fg: string; border: string };
 
 const TONES: Record<string, Tone> = {
-  amber: { bg: "#fef3c7", fg: "#92400e", border: "#fde68a" },
-  orange: { bg: "#ffedd5", fg: "#9a3412", border: "#fed7aa" },
-  blue: { bg: "#dbeafe", fg: "#1e40af", border: "#bfdbfe" },
-  violet: { bg: "#ede9fe", fg: "#5b21b6", border: "#ddd6fe" },
-  teal: { bg: "#ccfbf1", fg: "#115e59", border: "#99f6e4" },
-  green: { bg: "#d1fae5", fg: "#065f46", border: "#a7f3d0" },
-  red: { bg: "#fee2e2", fg: "#991b1b", border: "#fecaca" },
+  amber: { bg: "var(--tone-amber-bg)", fg: "var(--tone-amber-fg)", border: "var(--tone-amber-border)" },
+  orange: { bg: "var(--tone-orange-bg)", fg: "var(--tone-orange-fg)", border: "var(--tone-orange-border)" },
+  blue: { bg: "var(--tone-blue-bg)", fg: "var(--tone-blue-fg)", border: "var(--tone-blue-border)" },
+  violet: { bg: "var(--tone-violet-bg)", fg: "var(--tone-violet-fg)", border: "var(--tone-violet-border)" },
+  teal: { bg: "var(--tone-teal-bg)", fg: "var(--tone-teal-fg)", border: "var(--tone-teal-border)" },
+  green: { bg: "var(--tone-green-bg)", fg: "var(--tone-green-fg)", border: "var(--tone-green-border)" },
+  red: { bg: "var(--tone-red-bg)", fg: "var(--tone-red-fg)", border: "var(--tone-red-border)" },
   slate: { bg: "var(--cream)", fg: "var(--text-secondary)", border: "var(--border)" },
 };
 

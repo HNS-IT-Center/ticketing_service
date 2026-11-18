@@ -7,6 +7,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import StaleDeployNotice from "@/components/app/StaleDeployNotice";
 import { currentBuildId } from "@/lib/build-id";
+import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
 const geist = Geist({subsets:['latin'],variable:'--font-sans'});
 
@@ -28,7 +29,8 @@ export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
-    <html lang="en" className={cn("font-sans", geist.variable)}>
+    // next-themes sets the "dark" class on <html> before React hydrates.
+    <html lang="en" className={cn("font-sans", geist.variable)} suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
@@ -38,6 +40,7 @@ export default function RootLayout({
         />
       </head>
       <body>
+        <ThemeProvider>
         {children}
         {/* Explains, and offers a reload, when this page is older than the server. */}
         <StaleDeployNotice build={currentBuildId()} />
@@ -46,22 +49,23 @@ export default function RootLayout({
           toastOptions={{
             duration: 3000,
             style: {
-              background: "#fff",
-              color: "#1a1a2e",
+              background: "var(--popover)",
+              color: "var(--popover-foreground)",
               borderRadius: "0.75rem",
-              border: "1px solid #ddd6cf",
-              boxShadow: "0 8px 32px rgba(22,70,157,0.16)",
+              border: "1px solid var(--border)",
+              boxShadow: "var(--shadow-lg)",
               fontSize: "0.9375rem",
               padding: "0.75rem 1rem",
             },
             success: {
-              iconTheme: { primary: "#16469d", secondary: "#fff" },
+              iconTheme: { primary: "var(--primary)", secondary: "var(--primary-foreground)" },
             },
             error: {
-              iconTheme: { primary: "#cd2426", secondary: "#fff" },
+              iconTheme: { primary: "var(--destructive)", secondary: "var(--destructive-foreground)" },
             },
           }}
         />
+        </ThemeProvider>
         <Analytics />
         <SpeedInsights />
       </body>

@@ -22,7 +22,7 @@ import { isHandledActionError } from "@/lib/navigation-signal";
 
 type Inventory = Awaited<ReturnType<typeof checkTicketDeletionAction>>;
 
-const DANGER = "bg-destructive text-white hover:bg-destructive/90";
+const DANGER = "bg-destructive text-destructive-foreground hover:bg-destructive/90";
 
 /**
  * Permanent ticket deletion, for administrators.

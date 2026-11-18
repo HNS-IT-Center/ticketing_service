@@ -14,7 +14,7 @@ import { cleanVendorName } from "@/lib/rma/vendor";
 import { RMA_HOLD_REASONS, holdReasonAsksTechnician, isRmaHoldReason } from "@/lib/rma/hold-reason";
 import {
   canActOnRma,
-  needsStockInvoice,
+  offersStockInvoice,
   releasesTicket,
   stockInvoiceFileError,
   validateRmaTransition,
@@ -642,15 +642,15 @@ export async function transitionRmaAction(formData: FormData) {
       }
     }
 
-    // A store-stock unit's supplier invoice, attached by the desk before the
-    // case is verified (owner, 2026-11-14). Checked before anything is written.
-    const invoiceNeeded = needsStockInvoice({
+    // A store-stock unit's supplier invoice, optional (owner, 2026-11-18).
+    // When one is sent it is checked before anything is written.
+    const invoiceOffered = offersStockInvoice({
       unitOwnership: rmaCase.unit_ownership,
       to: toStatus,
       recordedInvoiceUrl: rmaCase.purchase_invoice_url,
     });
     const stockInvoiceFiles = (formData.getAll("stock_invoice_files") as File[]).filter((f) => f.size > 0);
-    if (invoiceNeeded) {
+    if (invoiceOffered) {
       const invoiceError = stockInvoiceFileError(stockInvoiceFiles);
       if (invoiceError) return { error: invoiceError };
     }
@@ -662,7 +662,7 @@ export async function transitionRmaAction(formData: FormData) {
     // Uploaded before the status moves, because the move depends on it: a
     // failed upload leaves the case where it was.
     let stockInvoiceUrl: string | null = null;
-    if (invoiceNeeded) {
+    if (invoiceOffered && stockInvoiceFiles.length > 0) {
       const file = stockInvoiceFiles[0];
       try {
         stockInvoiceUrl = await uploadToR2(

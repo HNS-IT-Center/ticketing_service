@@ -15,7 +15,7 @@ import {
   canActOnRma,
   getAllowedTransitions,
   isTerminalRmaStatus,
-  needsStockInvoice,
+  offersStockInvoice,
   stockInvoiceFileError,
   validateRmaTransition,
   type RmaTransition,
@@ -283,8 +283,8 @@ export default function RmaActionPanel({
 
     // Same rules and the same wording as the server, so nobody is told two
     // different things about one requirement.
-    const invoiceNeeded = needsStockInvoice({ unitOwnership, to: active.to, recordedInvoiceUrl });
-    if (invoiceNeeded) {
+    const invoiceOffered = offersStockInvoice({ unitOwnership, to: active.to, recordedInvoiceUrl });
+    if (invoiceOffered) {
       const invoiceError = stockInvoiceFileError(invoiceFiles.filter((f) => f.size > 0));
       if (invoiceError) {
         toast.error(invoiceError);
@@ -320,7 +320,7 @@ export default function RmaActionPanel({
       // of damage, and the server rejects damage photos outside `ineligible`.
       const photoField = active.to === "submitted_to_vendor" ? "receipt_files" : "damage_files";
       photos.filter((f) => f.size > 0).forEach((f) => fd.append(photoField, f));
-      if (invoiceNeeded) invoiceFiles.filter((f) => f.size > 0).forEach((f) => fd.append("stock_invoice_files", f));
+      if (invoiceOffered) invoiceFiles.filter((f) => f.size > 0).forEach((f) => fd.append("stock_invoice_files", f));
 
       let result: Awaited<ReturnType<typeof transitionRmaAction>>;
       try {
@@ -448,13 +448,14 @@ export default function RmaActionPanel({
                 </p>
               )}
 
-            {needsStockInvoice({ unitOwnership, to: active.to, recordedInvoiceUrl }) && (
+            {offersStockInvoice({ unitOwnership, to: active.to, recordedInvoiceUrl }) && (
               <div style={{ display: "flex", flexDirection: "column", gap: "0.375rem" }}>
                 <label style={{ fontSize: "0.875rem", fontWeight: 600 }}>
-                  Nota Pembelian (dari supplier) <span style={{ color: "var(--accent-brand)" }}>*</span>
+                  Nota Pembelian (dari supplier){" "}
+                  <span style={{ fontWeight: 400, color: "var(--text-muted)" }}>(opsional)</span>
                 </label>
                 <p style={{ fontSize: "0.8125rem", color: "var(--text-muted)", margin: 0 }}>
-                  Unit stok toko: nota pembeliannya diunggah meja RMA, satu file foto atau PDF.
+                  Unggah bila supplier memintanya, satu file foto atau PDF. Boleh dikosongkan.
                 </p>
                 <FileUpload onChange={setInvoiceFiles} accept="image/*,image/heic,image/heif,application/pdf" maxFiles={1} />
               </div>

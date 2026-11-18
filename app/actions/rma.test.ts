@@ -1793,12 +1793,18 @@ describe("transitionRmaAction — a store-stock unit's purchase invoice, attache
   }
   const invoicePdf = () => new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], "nota.pdf", { type: "application/pdf" });
 
-  it("refuses verification until the invoice is uploaded, then records it on the case and the ticket", async () => {
+  it("verifies without an invoice — optional since 2026-11-18 — and records nothing", async () => {
     const { ticketId, caseId } = await stockCase();
-    const refused = await transitionRmaAction(transitionForm(caseId, "verified", { stock_transfer_number: "PM-1" }));
-    expect(refused).toMatchObject({ error: expect.stringContaining("Nota pembelian") });
-    expect((await db.rmaCase.findUniqueOrThrow({ where: { id: caseId } })).status).toBe("pending_verification");
+    expect(await transitionRmaAction(transitionForm(caseId, "verified", { stock_transfer_number: "PM-1" }))).toMatchObject({
+      success: true,
+    });
+    const saved = await db.rmaCase.findUniqueOrThrow({ where: { id: caseId }, select: { status: true, purchase_invoice_url: true } });
+    expect(saved).toEqual({ status: "verified", purchase_invoice_url: null });
+    expect(await db.ticketAttachment.count({ where: { ticket_id: ticketId, kind: "invoice" } })).toBe(0);
+  });
 
+  it("records an invoice when one is uploaded, on the case and the ticket", async () => {
+    const { ticketId, caseId } = await stockCase();
     const fd = transitionForm(caseId, "verified", { stock_transfer_number: "PM-1" });
     fd.append("stock_invoice_files", invoicePdf());
     expect(await transitionRmaAction(fd)).toMatchObject({ success: true });

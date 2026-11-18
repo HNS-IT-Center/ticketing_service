@@ -8,9 +8,8 @@ import {
   getAllowedTransitions,
   isTerminalRmaStatus,
   releasesTicket,
-  needsStockInvoice,
+  offersStockInvoice,
   stockInvoiceFileError,
-  STOCK_INVOICE_REQUIRED,
   validateRmaTransition,
 } from "./state-machine";
 
@@ -607,20 +606,20 @@ describe("supplier claim number depends on where the unit came from", () => {
   });
 });
 
-describe("needsStockInvoice — the desk attaches a store-stock unit's purchase invoice", () => {
-  it("asks for it on both routes forward, for store stock without one", () => {
-    expect(needsStockInvoice({ unitOwnership: "store_stock", to: "verified", recordedInvoiceUrl: null })).toBe(true);
-    expect(needsStockInvoice({ unitOwnership: "store_stock", to: "in_vendor_process", recordedInvoiceUrl: "  " })).toBe(true);
+describe("offersStockInvoice — the desk attaches a store-stock unit's purchase invoice", () => {
+  it("offers it on both routes forward, for store stock without one", () => {
+    expect(offersStockInvoice({ unitOwnership: "store_stock", to: "verified", recordedInvoiceUrl: null })).toBe(true);
+    expect(offersStockInvoice({ unitOwnership: "store_stock", to: "in_vendor_process", recordedInvoiceUrl: "  " })).toBe(true);
   });
-  it("does not ask again once the case holds one, nor for a customer's unit, nor on other moves", () => {
-    expect(needsStockInvoice({ unitOwnership: "store_stock", to: "verified", recordedInvoiceUrl: "https://x/nota.pdf" })).toBe(false);
-    expect(needsStockInvoice({ unitOwnership: "customer", to: "verified", recordedInvoiceUrl: null })).toBe(false);
+  it("does not offer it again once the case holds one, nor for a customer's unit, nor on other moves", () => {
+    expect(offersStockInvoice({ unitOwnership: "store_stock", to: "verified", recordedInvoiceUrl: "https://x/nota.pdf" })).toBe(false);
+    expect(offersStockInvoice({ unitOwnership: "customer", to: "verified", recordedInvoiceUrl: null })).toBe(false);
     for (const to of ["on_hold", "ineligible", "cancelled", "submitted_to_vendor"] as RmaStatus[]) {
-      expect(needsStockInvoice({ unitOwnership: "store_stock", to, recordedInvoiceUrl: null }), to).toBe(false);
+      expect(offersStockInvoice({ unitOwnership: "store_stock", to, recordedInvoiceUrl: null }), to).toBe(false);
     }
   });
-  it("takes one photo or PDF", () => {
-    expect(stockInvoiceFileError([])).toBe(STOCK_INVOICE_REQUIRED);
+  it("takes none, or one photo or PDF", () => {
+    expect(stockInvoiceFileError([])).toBeNull(); // optional since 2026-11-18
     expect(stockInvoiceFileError([{ type: "application/pdf" }])).toBeNull();
     expect(stockInvoiceFileError([{ type: "image/jpeg" }])).toBeNull();
     expect(stockInvoiceFileError([{ type: "image/jpeg" }, { type: "image/jpeg" }])).toMatch(/satu file/);

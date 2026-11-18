@@ -1,3 +1,4 @@
+import LinkQuoteButton from "@/components/pc-build/LinkQuoteButton";
 import { requirePage } from "@/lib/page-access";
 import { requestNow } from "@/lib/clock";
 import { inScope, storeScopeFor } from "@/lib/store-scope-server";
@@ -379,7 +380,11 @@ export default async function AdminTicketDetailPage({
 
           {/* What came in: upgrades with the item fitted, PC build components */}
           <UpgradesCard details={ticket.upgrade_details} />
-          <PcComponentsCard components={ticket.pc_components} detail={ticket.pc_build_detail} />
+          <PcComponentsCard
+            components={ticket.pc_components}
+            detail={ticket.pc_build_detail}
+            linkQuote={ticketEdit && ticket.ticket_type === "pc_build" && <LinkQuoteButton ticketId={ticket.id} ticketCode={ticket.ticket_code} />}
+          />
 
           {/* PC Build Handover Verification */}
           {ticket.ticket_type === "pc_build" && (

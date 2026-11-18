@@ -1,3 +1,4 @@
+import LinkQuoteButton from "@/components/pc-build/LinkQuoteButton";
 import EditTicketButton from "@/components/tickets/EditTicketButton";
 import { requestNow } from "@/lib/clock";
 import { loadTicketEdit } from "@/lib/ticket-edit-server";
@@ -273,7 +274,11 @@ export default async function TechnicianTicketDetailPage({
 
           {/* What came in: upgrades with the item fitted, PC build components */}
           <UpgradesCard details={ticket.upgrade_details} />
-          <PcComponentsCard components={ticket.pc_components} detail={ticket.pc_build_detail} />
+          <PcComponentsCard
+            components={ticket.pc_components}
+            detail={ticket.pc_build_detail}
+            linkQuote={ticketEdit && ticket.ticket_type === "pc_build" && <LinkQuoteButton ticketId={ticket.id} ticketCode={ticket.ticket_code} />}
+          />
 
           {/* What the desk is waiting for, above the read-only case card: the
               technician is the only one who can answer it. */}

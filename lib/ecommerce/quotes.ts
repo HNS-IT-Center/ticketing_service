@@ -28,10 +28,16 @@ export type FetchQuoteResult = { ok: true; quote: EcommerceQuote } | { ok: false
 
 const FALLBACK = "Unggah PDF quotation-nya sebagai gantinya.";
 
-/** The quotation, or a sentence for the person at the counter. Never throws. */
-export async function fetchEcommerceQuote(ref: QuoteRef): Promise<FetchQuoteResult> {
+/**
+ * The quotation, or a sentence for the person at the counter. Never throws.
+ * `fallback` is what to do instead, appended to a failure; null where there
+ * is no other way (linking an existing ticket to its quotation).
+ */
+export async function fetchEcommerceQuote(ref: QuoteRef, fallback: string | null = FALLBACK): Promise<FetchQuoteResult> {
+  const then = (lead: string, instead: string) => (fallback ? `${lead}${instead}${fallback.charAt(0).toLowerCase()}${fallback.slice(1)}` : `${lead}.`);
+  const plus = (lead: string, otherwise = "") => (fallback ? `${lead} ${fallback}` : `${lead}${otherwise}`);
   const s = settings();
-  if (!s) return { ok: false, error: `Pencarian quotation dari ecommerce belum diaktifkan. ${FALLBACK}` };
+  if (!s) return { ok: false, error: plus("Pencarian quotation dari ecommerce belum diaktifkan.") };
   const named = ref.by === "code" ? `Quotation ${ref.code}` : "Quotation dari tautan itu";
 
   let res: Response;
@@ -45,18 +51,18 @@ export async function fetchEcommerceQuote(ref: QuoteRef): Promise<FetchQuoteResu
     });
   } catch (err) {
     console.error("[ECOMMERCE QUOTE] request failed", err instanceof Error ? err.message : err);
-    return { ok: false, error: `Web ecommerce tidak bisa dihubungi. Coba lagi sebentar, atau ${FALLBACK.toLowerCase()}` };
+    return { ok: false, error: then("Web ecommerce tidak bisa dihubungi. Coba lagi sebentar", ", atau ") };
   }
 
   if (res.status === 404) return { ok: false, error: `${named} tidak ditemukan di ecommerce. Periksa kodenya.` };
   if (res.status === 400) return { ok: false, error: "Kode quotation tidak valid. Contoh: HNSPC-20261104-0027." };
   if (res.status === 401 || res.status === 503) {
     console.error(`[ECOMMERCE QUOTE] ${res.status}: token missing or wrong on one side`);
-    return { ok: false, error: `Ticketing belum tersambung ke ecommerce. Kabari admin, lalu ${FALLBACK.toLowerCase()}` };
+    return { ok: false, error: then("Ticketing belum tersambung ke ecommerce. Kabari admin", ", lalu ") };
   }
   if (!res.ok) {
     console.error(`[ECOMMERCE QUOTE] unexpected status ${res.status}`);
-    return { ok: false, error: `Web ecommerce sedang bermasalah. ${FALLBACK}` };
+    return { ok: false, error: plus("Web ecommerce sedang bermasalah.", " Coba lagi sebentar.") };
   }
 
   let body: unknown;
@@ -68,7 +74,7 @@ export async function fetchEcommerceQuote(ref: QuoteRef): Promise<FetchQuoteResu
   const quote = readEcommerceQuote(body);
   if (!quote) {
     console.error("[ECOMMERCE QUOTE] body does not match the contract");
-    return { ok: false, error: `Jawaban ecommerce tidak dikenali. ${FALLBACK}` };
+    return { ok: false, error: plus("Jawaban ecommerce tidak dikenali.") };
   }
   return { ok: true, quote };
 }

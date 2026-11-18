@@ -48,6 +48,7 @@ function ItemRow({ item, title }: { item: ItemLine; title?: string }) {
 export function PcComponentsCard({
   components,
   detail,
+  linkQuote,
 }: {
   components: {
     id: string;
@@ -68,14 +69,20 @@ export function PcComponentsCard({
     verified_at: Date | null;
     verified_by_name: string | null;
   } | null;
+  /** "Tautkan quotation", for a build that has none and a viewer who may link it. */
+  linkQuote?: React.ReactNode;
 }) {
   // A build with no components yet can still name its sales (typed at intake).
   const typedSales = !detail?.quote_code ? detail?.quote_sales_name : null;
-  if (components.length === 0 && !typedSales) return null;
+  const linkSlot = !detail?.quote_code ? linkQuote : null;
+  // An old build linked to its quotation afterwards may hold no components;
+  // the card still says which quotation it was sold on.
+  if (components.length === 0 && !typedSales && !linkSlot && !detail?.quote_code) return null;
   const fromQuote = components.filter((c) => c.quote_label);
   const added = components.filter((c) => !c.quote_label);
   return (
     <DetailCard title="Komponen PC">
+      {linkSlot && <div className="mb-3">{linkSlot}</div>}
       {typedSales && (
         <p className="mb-3 text-sm">
           <span className="text-muted-foreground">Sales:</span> <span className="font-semibold text-foreground">{typedSales}</span>

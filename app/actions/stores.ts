@@ -2,12 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 import { logActivity } from "@/lib/activity";
+import { requirePage } from "@/lib/page-access";
 
 // ─── Create Store ─────────────────────────────────────────────────────────────
 export async function createStoreAction(formData: FormData) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_stores");
 
   const name = (formData.get("name") as string).trim();
   const code = (formData.get("code") as string).trim().toUpperCase();
@@ -36,7 +36,7 @@ export async function createStoreAction(formData: FormData) {
 
 // ─── Update Store ─────────────────────────────────────────────────────────────
 export async function updateStoreAction(storeId: string, formData: FormData) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_stores");
 
   const name = (formData.get("name") as string).trim();
   const address = (formData.get("address") as string | null)?.trim() || null;
@@ -59,7 +59,7 @@ export async function updateStoreAction(storeId: string, formData: FormData) {
 
 // ─── Delete Store ─────────────────────────────────────────────────────────────
 export async function deleteStoreAction(storeId: string) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_stores");
 
   // Check if any tickets reference this store before deleting
   const ticketCount = await db.ticket.count({
@@ -86,7 +86,7 @@ export async function assignTechnicianToStoreAction(
   technicianId: string,
   storeId: string
 ) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_stores");
 
   await db.technicianStoreAssignment.upsert({
     where: { technician_id_store_id: { technician_id: technicianId, store_id: storeId } },
@@ -105,7 +105,7 @@ export async function removeTechnicianFromStoreAction(
   technicianId: string,
   storeId: string
 ) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_stores");
 
   await db.technicianStoreAssignment.deleteMany({
     where: { technician_id: technicianId, store_id: storeId },
@@ -120,7 +120,7 @@ export async function removeTechnicianFromStoreAction(
 // ─── Kepala toko (StoreSupervisor) of a store ────────────────────────────────
 /** Puts a kepala toko on a store. Only an account with that role can be one. */
 export async function assignSupervisorToStoreAction(userId: string, storeId: string) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_stores");
   const user = await db.user.findUnique({ where: { id: userId }, select: { name: true, role: true } });
   if (!user || user.role !== "StoreSupervisor") return { error: "Akun ini bukan kepala toko. Ubah role-nya di halaman Users." };
   const store = await db.storeLocation.findUnique({ where: { id: storeId }, select: { name: true } });
@@ -142,7 +142,7 @@ export async function assignSupervisorToStoreAction(userId: string, storeId: str
 }
 
 export async function removeSupervisorFromStoreAction(userId: string, storeId: string) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_stores");
   const [user, store] = await Promise.all([
     db.user.findUnique({ where: { id: userId }, select: { name: true } }),
     db.storeLocation.findUnique({ where: { id: storeId }, select: { name: true } }),

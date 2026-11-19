@@ -3,8 +3,10 @@ import { roleDisplay, TONE_CLASSES } from "@/lib/status-display";
 import { cn } from "@/lib/utils";
 
 /** A user's role, with the label and colour from lib/status-display.ts. */
-export function RoleBadge({ role, className }: { role: Role; className?: string }) {
-  const { label, tone } = roleDisplay(role);
+/** `label`: the made role's name, when the account has one; the tone stays its base's. */
+export function RoleBadge({ role, label: name, className }: { role: Role; label?: string | null; className?: string }) {
+  const { label: baseLabel, tone } = roleDisplay(role);
+  const label = name || baseLabel;
   return (
     <span
       data-slot="role-badge"

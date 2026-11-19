@@ -19,7 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import TargetEditor from "./TargetEditor";
-import { isAdminRole } from "@/lib/admin-roles";
+import { accessFor } from "@/lib/access-server";
 
 export const metadata = { title: "Target Teknisi — HNS IT Center" };
 
@@ -29,8 +29,8 @@ export default async function TechnicianTargetPage({
   searchParams: Promise<{ month?: string; store?: string }>;
 }) {
   const session = await requirePage("page_tech_targets");
-  // Seeing the targets can be granted; setting them stays the administrator's.
-  const canEdit = isAdminRole(session.role);
+  // Seeing the targets and setting them are two settings (edit_targets, 2026-11-18).
+  const canEdit = (await accessFor(session.userId)).can("edit_targets");
   const params = await searchParams;
   const month = resolveReportMonth(params.month);
   const storeId = params.store || null;

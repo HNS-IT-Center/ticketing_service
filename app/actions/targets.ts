@@ -2,10 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 import { monthRange } from "@/lib/reports/parts";
 import { DEFAULT_SCOPE, readTargetForm } from "@/lib/reports/targets";
 import { logActivity } from "@/lib/activity";
+import { requirePage } from "@/lib/page-access";
 
 /**
  * Set a monthly target, from the month on screen onward.
@@ -18,7 +18,7 @@ import { logActivity } from "@/lib/activity";
  * Administrator only: the target is the owner's call, like the report it sits on.
  */
 export async function saveTargetAction(formData: FormData) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("edit_targets");
 
   const month = String(formData.get("month") ?? "");
   if (!monthRange(month)) return { error: "Bulan tidak valid." };

@@ -232,6 +232,14 @@ model User {
   role         Role     @default(Customer)
   password     String?
 
+  // The role from Pengguna & Akses → Role & Izin (owner, 2026-11-18): what
+  // this person may open. `role` above stays the role's base type and keeps
+  // deciding behaviour (portal, holding tickets, store binding). Null for the
+  // Owner, customers, accounts still waiting for a role, and accounts made by
+  // scripts — those fall back to the older per-group settings (AccessRule).
+  access_role_id String?
+  access_role    AccessRole? @relation(fields: [access_role_id], references: [id], onDelete: SetNull)
+
   // Technician-specific
   shift     Shift?
   work_days Json?  // e.g. ["Mon","Tue","Wed"]
@@ -283,6 +291,7 @@ model User {
   rma_events         RmaEvent[]
 
   @@index([email])
+  @@index([access_role_id])
 }
 
 // ─────────────────────────────────────────────
@@ -1010,6 +1019,43 @@ model SsoSession {
 // One row per (capability, audience) the owner has changed from its default;
 // no row means the default applies. Capabilities and audiences are the string
 // keys listed in lib/access.ts, so adding one needs no migration.
+/// Where a role's data comes from. `assigned` (the stores the account holds)
+/// is honoured from stage B4 of docs/plan-rbac-dan-tema.md; until then every
+/// role reads `all`.
+enum AccessLocation {
+  all
+  assigned
+}
+
+/// A role made in Pengguna & Akses → Role & Izin: a name, the base type whose
+/// behaviour it keeps, and the full list of what it may open (AccessRoleGrant).
+/// The roles that existed before (Admin, Teknisi, …) were created from the old
+/// per-group settings by migration 20261119090000_access_roles.
+model AccessRole {
+  id            String         @id @default(cuid())
+  name          String         @unique
+  description   String?        @db.Text
+  base          Role
+  location      AccessLocation @default(all)
+  created_by_id String?
+  created_at    DateTime       @default(now())
+  updated_at    DateTime       @updatedAt
+
+  grants AccessRoleGrant[]
+  users  User[]
+}
+
+/// One capability a role holds (lib/access.ts CAPABILITIES). No row = not allowed.
+model AccessRoleGrant {
+  role_id    String
+  role       AccessRole @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  capability String
+
+  @@id([role_id, capability])
+}
+
+/// The older per-group settings. Read only for accounts without an AccessRole
+/// (see User.access_role_id) and by the migration that created the roles.
 model AccessRule {
   id            String   @id @default(cuid())
   capability    String

@@ -93,6 +93,9 @@ export const PAGE_CAPABILITIES = [
   "page_log_ticket",
   "page_log_rma",
   "page_log_activity",
+  // Formerly Administrator only by code (owner, 2026-11-18). Admin-based roles only.
+  "page_business_dashboard",
+  "page_ticket_audit",
 ] as const;
 export type PageCapability = (typeof PAGE_CAPABILITIES)[number];
 
@@ -106,6 +109,12 @@ export const CAPABILITIES = [
   "manage_vendors",
   "manage_service_jobs",
   "edit_ticket",
+  // Formerly Administrator only by code (owner, 2026-11-18). Admin-based roles only.
+  "delete_ticket",
+  "ticket_points",
+  "manage_users",
+  "manage_stores",
+  "edit_targets",
   ...STOCK_CAPABILITIES,
   ...PAGE_CAPABILITIES,
 ] as const;
@@ -114,12 +123,16 @@ export type Capability = (typeof CAPABILITIES)[number];
 const SENIOR: Audience[] = ["administrator", "coordinator", "head_technician"];
 const ALL_STAFF: Audience[] = ["administrator", "coordinator", "head_technician", "technician", "sales", "rma", "store_supervisor", "stock_admin", "finance"];
 
-export type CapabilitySection = "pricing" | "ticket" | "stock" | "pages";
+export type CapabilitySection = "pricing" | "ticket" | "admin" | "stock" | "pages";
 export const CAPABILITY_SECTIONS: Record<CapabilitySection, { title: string; hint: string }> = {
   pricing: { title: "Harga & Data Master", hint: "Siapa yang boleh melihat dan mengubah harga service." },
   ticket: {
     title: "Tiket",
     hint: "Memperbaiki data tiket yang salah input. Setiap perubahan tercatat di Log Aktivitas beserta isi sebelumnya.",
+  },
+  admin: {
+    title: "Administrasi",
+    hint: "Mengelola akun, toko, dan target. Hanya untuk role bertipe dasar Admin. Akun Admin dan Owner tetap hanya bisa diubah Owner.",
   },
   pages: {
     title: "Halaman & Menu",
@@ -170,6 +183,8 @@ const PAGE_INFO: Record<PageCapability, ReturnType<typeof page>> = {
   page_log_ticket: page("Log · Tiket", "Riwayat perubahan status tiket.", []),
   page_log_rma: page("Log · RMA", "Setiap langkah case RMA.", ["rma"]),
   page_log_activity: page("Log · Aktivitas", "Siapa melakukan apa: login, perubahan data, export.", []),
+  page_business_dashboard: page("Administrasi · Ringkasan Bisnis", "Dashboard bisnis semua toko. Angka uang tetap mengikuti izin laporan keuangan.", [], []),
+  page_ticket_audit: page("Administrasi · Tiket Perlu Dicek", "Tiket dengan data atau poin yang janggal, beserta nama staf.", [], []),
 };
 
 export const CAPABILITY_INFO: Record<
@@ -233,6 +248,41 @@ export const CAPABILITY_INFO: Record<
     hint: "Nama unit (dari katalog atau ketik), SN, kelengkapan, kondisi unit, dan data customer — di tiket mana pun, status apa pun.",
     defaults: ["administrator"],
     section: "ticket",
+  },
+  delete_ticket: {
+    label: "Hapus tiket permanen",
+    hint: "Menghapus tiket beserta riwayatnya. Tidak bisa dibatalkan; tercatat di Log Aktivitas.",
+    defaults: ["administrator"],
+    section: "ticket",
+    appliesTo: ["administrator"],
+  },
+  ticket_points: {
+    label: "Hapus / kembalikan poin tiket",
+    hint: "Mengeluarkan tiket dari perhitungan poin teknisi, wajib dengan alasan.",
+    defaults: ["administrator"],
+    section: "ticket",
+    appliesTo: ["administrator"],
+  },
+  manage_users: {
+    label: "Kelola pengguna",
+    hint: "Tambah, ubah, dan nonaktifkan akun, serta memberi role. Role bertipe Admin hanya bisa diberikan Owner.",
+    defaults: ["administrator"],
+    section: "admin",
+    appliesTo: ["administrator"],
+  },
+  manage_stores: {
+    label: "Kelola toko",
+    hint: "Tambah dan ubah toko, pasang teknisi dan kepala toko.",
+    defaults: ["administrator"],
+    section: "admin",
+    appliesTo: ["administrator"],
+  },
+  edit_targets: {
+    label: "Ubah target teknisi",
+    hint: "Mengisi target bulanan di halaman Target Teknisi.",
+    defaults: ["administrator"],
+    section: "admin",
+    appliesTo: ["administrator"],
   },
   view_stock_utama: { label: "Lihat stok Gudang Utama", hint: "Ikut dihitung di stok total.", defaults: ALL_STAFF, section: "stock" },
   view_stock_nagoyahill: { label: "Lihat stok Nagoyahill", hint: "Stok toko NGH.", defaults: ALL_STAFF, section: "stock" },

@@ -80,6 +80,9 @@ export const ACTIVITY_ACTIONS = {
   "profile.title": { area: "user", label: "Pasang gelar" },
 
   "access.update": { area: "setting", label: "Ubah pengaturan akses" },
+  "role.create": { area: "setting", label: "Tambah role" },
+  "role.update": { area: "setting", label: "Ubah role" },
+  "role.delete": { area: "setting", label: "Hapus role" },
   "target.update": { area: "setting", label: "Ubah target" },
   "schedule.leave": { area: "setting", label: "Atur cuti" },
   "schedule.override": { area: "setting", label: "Tukar shift" },

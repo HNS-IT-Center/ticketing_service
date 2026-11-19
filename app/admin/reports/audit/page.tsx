@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ShieldAlert, CheckCircle2 } from "lucide-react";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 import { EARNING_TRANSITION_FILTER } from "@/lib/kpi";
 import { TicketPointsControl } from "@/components/tickets/TicketPointsControl";
 import { JOB_POINT_CHARGES, ticketTotalPoints } from "@/lib/points";
@@ -10,6 +9,8 @@ import { TICKET_TYPE_LABELS } from "@/lib/ticket-export";
 import { PageHeader } from "@/components/app/PageHeader";
 import { EmptyState } from "@/components/app/EmptyState";
 import { cn } from "@/lib/utils";
+import { requirePage } from "@/lib/page-access";
+import { accessFor } from "@/lib/access-server";
 
 export const metadata = { title: "Tiket Perlu Dicek — HNS IT Center" };
 
@@ -19,7 +20,8 @@ export const metadata = { title: "Tiket Perlu Dicek — HNS IT Center" };
  * Read only — deciding what a flagged ticket was is a person's job.
  */
 export default async function TicketAuditPage({ searchParams }: { searchParams: Promise<{ tech?: string }> }) {
-  await requireRole("Administrator");
+  const session = await requirePage("page_ticket_audit");
+  const canChangePoints = (await accessFor(session.userId)).can("ticket_points");
   const { tech } = await searchParams;
 
   const [tickets, staff] = await Promise.all([
@@ -147,9 +149,11 @@ export default async function TicketAuditPage({ searchParams }: { searchParams: 
                     ))}
                   </span>
                 </Link>
-                <div className="shrink-0">
-                  <TicketPointsControl ticketId={t.id} ticketCode={t.ticket_code} excluded={Boolean(t.points_excluded_at)} size="sm" />
-                </div>
+                {canChangePoints && (
+                  <div className="shrink-0">
+                    <TicketPointsControl ticketId={t.id} ticketCode={t.ticket_code} excluded={Boolean(t.points_excluded_at)} size="sm" />
+                  </div>
+                )}
               </li>
             ))}
           </ul>

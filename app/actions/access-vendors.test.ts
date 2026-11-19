@@ -20,7 +20,7 @@ vi.mock("@/lib/session", () => ({
 }));
 
 const { db } = await import("@/lib/db");
-const { saveAccessRulesAction, saveAudienceAccessAction } = await import("./access");
+const { createAccessRoleAction, updateAccessRoleAction, deleteAccessRoleAction } = await import("./access");
 const { createVendorAction, updateVendorAction } = await import("./vendors");
 const access = await import("@/lib/access");
 
@@ -46,16 +46,15 @@ const vendorForm = (name: string, extra: Record<string, string> = {}) => {
   return fd;
 };
 
-/** The form as the settings page posts it, from a set of checked boxes. */
-function matrix(checked: Set<string>) {
+/** The Role & Izin panel's form. */
+function roleForm(name: string, base: string, grants: string[], description = "") {
   const fd = new FormData();
-  for (const c of access.CAPABILITIES) for (const a of access.AUDIENCES) {
-    if (checked.has(`${c}:${a}`)) fd.set(`${c}:${a}`, "on");
-  }
+  fd.set("name", name);
+  fd.set("base", base);
+  fd.set("description", description);
+  for (const g of grants) fd.append("grant", g);
   return fd;
 }
-const defaults = () =>
-  new Set(access.CAPABILITIES.flatMap((c) => access.CAPABILITY_INFO[c].defaults.map((a) => `${c}:${a}`)));
 
 beforeAll(async () => {
   savedRules = await db.accessRule.findMany({ select: { capability: true, audience: true, allowed: true } });
@@ -77,6 +76,7 @@ afterAll(async () => {
   if (savedRules.length) await db.accessRule.createMany({ data: savedRules });
   await db.vendor.deleteMany({ where: { name: { startsWith: RUN } } });
   await db.user.deleteMany({ where: { email: { startsWith: RUN } } });
+  await db.accessRole.deleteMany({ where: { name: { startsWith: RUN } } });
   await db.$disconnect();
 });
 
@@ -106,79 +106,40 @@ describe("access rules (pure)", () => {
   });
 });
 
-describe("saveAccessRulesAction", () => {
-  it("stores nothing when the form equals the defaults", async () => {
-    await saveAccessRulesAction(matrix(defaults()));
-    expect(await db.accessRule.count()).toBe(0);
-  });
-
-  it("stores only what differs, and going back removes the row", async () => {
-    const changed = defaults();
-    changed.add("view_cost:technician");
-    changed.delete("print_invoice:sales");
-    await saveAccessRulesAction(matrix(changed));
-    const rows = await db.accessRule.findMany({ select: { capability: true, audience: true, allowed: true }, orderBy: { capability: "asc" } });
-    expect(rows).toEqual([
-      { capability: "print_invoice", audience: "sales", allowed: false },
-      { capability: "view_cost", audience: "technician", allowed: true },
-    ]);
-    await saveAccessRulesAction(matrix(defaults()));
-    expect(await db.accessRule.count()).toBe(0);
-  });
-
-  it("can narrow an administrator", async () => {
-    const changed = defaults();
-    changed.delete("view_cost:administrator");
-    await saveAccessRulesAction(matrix(changed));
-    expect(await db.accessRule.findMany({ select: { capability: true, audience: true, allowed: true } })).toEqual([
-      { capability: "view_cost", audience: "administrator", allowed: false },
-    ]);
-  });
-
-  it("only the owner may save", async () => {
+describe("Role & Izin — made roles", () => {
+  it("only the owner may make, change or remove a role", async () => {
     as("admin", "Administrator");
-    await expect(saveAccessRulesAction(matrix(defaults()))).rejects.toThrow();
+    await expect(createAccessRoleAction(roleForm(`${RUN} Kasir`, "Sales", []))).rejects.toThrow();
     as("head", "Technician");
-    await expect(saveAccessRulesAction(matrix(defaults()))).rejects.toThrow();
-  });
-});
-
-describe("saveAudienceAccessAction — one role from its edit page", () => {
-  const roleForm = (caps: string[]) => {
-    const fd = new FormData();
-    for (const c of caps) fd.set(c, "on");
-    return fd;
-  };
-  const defaultsOf = (a: string) => access.CAPABILITIES.filter((c) => access.CAPABILITY_INFO[c].defaults.includes(a as never));
-
-  it("stores only this role's changes and leaves other roles alone", async () => {
-    const other = defaults();
-    other.add("view_cost:sales");
-    await saveAccessRulesAction(matrix(other));
-    expect(await saveAudienceAccessAction("technician", roleForm([...defaultsOf("technician"), "page_rma_claims"]))).toEqual({ success: true });
-    const rows = await db.accessRule.findMany({ select: { capability: true, audience: true, allowed: true }, orderBy: { audience: "asc" } });
-    expect(rows).toEqual([
-      { capability: "view_cost", audience: "sales", allowed: true },
-      { capability: "page_rma_claims", audience: "technician", allowed: true },
-    ]);
-    // Back to the defaults removes the row.
-    await saveAudienceAccessAction("technician", roleForm(defaultsOf("technician")));
-    expect(await db.accessRule.count({ where: { audience: "technician" } })).toBe(0);
-    await saveAccessRulesAction(matrix(defaults()));
+    await expect(deleteAccessRoleAction("role_sales")).rejects.toThrow();
   });
 
-  it("never stores a page that cannot apply to the role, nor edits the owner", async () => {
-    await saveAudienceAccessAction("technician", roleForm([...defaultsOf("technician"), "page_toko_dashboard"]));
-    expect(await db.accessRule.count({ where: { audience: "technician" } })).toBe(0);
-    expect(await saveAudienceAccessAction("owner", roleForm([]))).toMatchObject({ error: expect.any(String) });
-    expect(await saveAudienceAccessAction("nobody", roleForm([]))).toMatchObject({ error: expect.any(String) });
+  it("keeps only what applies to the base, and refuses a duplicate name", async () => {
+    const made = await createAccessRoleAction(roleForm(`${RUN} Kasir`, "Sales", ["print_invoice", "page_toko_dashboard", "manage_users", "nope"]));
+    expect(made).toMatchObject({ success: true });
+    const id = (made as { id: string }).id;
+    const grants = await db.accessRoleGrant.findMany({ where: { role_id: id }, select: { capability: true } });
+    expect(grants.map((g) => g.capability)).toEqual(["print_invoice"]);
+    expect(await createAccessRoleAction(roleForm(`${RUN} kasir`, "Sales", []))).toMatchObject({ error: expect.stringContaining("Sudah ada") });
+    expect(await createAccessRoleAction(roleForm("Owner", "Sales", []))).toMatchObject({ error: expect.any(String) });
+    expect(await createAccessRoleAction(roleForm(`${RUN} X`, "Owner", []))).toMatchObject({ error: expect.stringContaining("tipe dasar") });
   });
 
-  it("only the owner may save", async () => {
-    as("admin", "Administrator");
-    await expect(saveAudienceAccessAction("sales", roleForm([]))).rejects.toThrow();
-    as("head", "Technician");
-    await expect(saveAudienceAccessAction("sales", roleForm([]))).rejects.toThrow();
+  it("gives an account exactly what its role holds, at once", async () => {
+    const made = (await createAccessRoleAction(roleForm(`${RUN} Teknisi Vendor`, "Technician", ["manage_vendors"]))) as { id: string };
+    await db.user.update({ where: { id: ids.tech }, data: { access_role_id: made.id } });
+    as("tech", "Technician");
+    expect(await createVendorAction(vendorForm(`${RUN} Lewat Role`))).toMatchObject({ success: true });
+    as("owner", "Owner");
+    await updateAccessRoleAction(made.id, roleForm(`${RUN} Teknisi Vendor`, "Technician", []));
+    as("tech", "Technician");
+    expect(await createVendorAction(vendorForm(`${RUN} Dicabut`))).toMatchObject({ error: expect.stringContaining("akses") });
+    as("owner", "Owner");
+    // The base cannot move while someone holds the role, and the role cannot go.
+    expect(await updateAccessRoleAction(made.id, roleForm(`${RUN} Teknisi Vendor`, "Sales", []))).toMatchObject({ error: expect.stringContaining("Tipe dasar") });
+    expect(await deleteAccessRoleAction(made.id)).toMatchObject({ error: expect.stringContaining("masih dipakai") });
+    await db.user.update({ where: { id: ids.tech }, data: { access_role_id: null } });
+    expect(await deleteAccessRoleAction(made.id)).toEqual({ success: true });
   });
 });
 
@@ -197,9 +158,7 @@ describe("vendors", () => {
   });
 
   it("a technician gains the right when the owner grants it", async () => {
-    const changed = defaults();
-    changed.add("manage_vendors:technician");
-    await saveAccessRulesAction(matrix(changed));
+    await db.accessRule.create({ data: { capability: "manage_vendors", audience: "technician", allowed: true } });
     as("tech", "Technician");
     expect(await createVendorAction(vendorForm(`${RUN} Diberi Akses`))).toMatchObject({ success: true });
   });

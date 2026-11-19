@@ -26,6 +26,9 @@ import { StatCard, StatCardSkeleton } from "@/components/app/StatCard";
 import ChartSlider, { type Slide } from "@/components/toko/ChartSlider";
 import { LineChart, StackedColumns, type LineBucket } from "@/components/toko/Charts";
 import { AttentionRow, DeltaHint, HeldClaimsCard, StoreSection, TechnicianSection } from "@/components/dashboard/BusinessSections";
+import { redirect } from "next/navigation";
+import type { Role } from "@prisma/client";
+import { landingFor } from "@/lib/nav";
 
 export const metadata = { title: "Ringkasan Bisnis — HNS IT Center" };
 
@@ -43,11 +46,15 @@ const BUCKET_WORD: Record<Grain, string> = { day: "hari", week: "minggu", month:
  */
 export default async function AdminDashboard({ searchParams }: { searchParams: Promise<{ periode?: string }> }) {
   const session = await requireRole("Administrator");
+  const access = await accessFor(session.userId);
+  // Ringkasan Bisnis is a capability (2026-11-18): an Admin-based role without
+  // it lands on the first page of its own menu instead.
+  if (!access.can("page_business_dashboard")) redirect(landingFor(session.role as Role, access.can) ?? "/unauthorized");
   const params = await searchParams;
   const now = requestNow();
   const grain = parsePeriode(params.periode);
 
-  const [access, data] = await Promise.all([accessFor(session.userId), loadAdminDashboard(grain, now)]);
+  const data = await loadAdminDashboard(grain, now);
   const money = access.can("view_finance_report");
   const mayValueClaims = money && access.can("view_cost");
 

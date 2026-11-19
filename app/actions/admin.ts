@@ -21,20 +21,24 @@ import { notifyPartCodePending } from "@/lib/part-code-notify";
 import { logActivity } from "@/lib/activity";
 import { ticketStatusText } from "@/lib/activity-catalog";
 import { isAdminRole, mayManageAccount, OWNER_ONLY_ACCOUNT_MESSAGE } from "@/lib/admin-roles";
+import { requirePage } from "@/lib/page-access";
+import { resolveRoleChoice } from "@/lib/access-roles-server";
 
 // ─── Create User ───────────────────────────────────────────────────────────
 export async function createUserAction(formData: FormData) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_users");
 
   const data = {
     name: formData.get("name") as string,
     email: formData.get("email") as string,
     phone_number: formData.get("phone_number") as string,
     address: formData.get("address") as string,
-    role: formData.get("role") as string,
     password: formData.get("password") as string,
   };
-  if (!mayManageAccount(session.role, null, data.role)) return { error: OWNER_ONLY_ACCOUNT_MESSAGE };
+  // The Role select posts a made role's id, or Owner / Pending / Customer.
+  const choice = await resolveRoleChoice(String(formData.get("role") ?? ""));
+  if (!choice) return { error: "Pilih role yang ada di daftar." };
+  if (!mayManageAccount(session.role, null, choice.role)) return { error: OWNER_ONLY_ACCOUNT_MESSAGE };
 
   const existing = await db.user.findUnique({ where: { email: data.email } });
   if (existing) return { error: "Email already in use" };
@@ -51,12 +55,13 @@ export async function createUserAction(formData: FormData) {
   const user = await db.user.create({
     data: {
       ...data,
-      role: data.role as any,
+      role: choice.role,
+      access_role_id: choice.accessRoleId,
       password: hashedPassword,
     },
   });
 
-  if (data.role === "Technician") {
+  if (choice.role === "Technician") {
     await db.technicianPerformance.create({
       data: { technician_id: user.id },
     });
@@ -65,7 +70,7 @@ export async function createUserAction(formData: FormData) {
   await logActivity(
     session,
     "user.create",
-    `Menambah pengguna ${user.name} (${user.email}) sebagai ${data.role}${hashedPassword ? "" : ", login lewat SSO"}.`,
+    `Menambah pengguna ${user.name} (${user.email}) sebagai ${choice.label}${hashedPassword ? "" : ", login lewat SSO"}.`,
     { type: "user", id: user.id, label: user.name },
   );
   revalidatePath("/admin/users");
@@ -74,7 +79,7 @@ export async function createUserAction(formData: FormData) {
 
 // ─── Update User ───────────────────────────────────────────────────────────
 export async function updateUserAction(userId: string, formData: FormData) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_users");
 
   const shift = formData.get("shift") as string | null;
   const work_days = formData.get("work_days") as string | null;
@@ -82,14 +87,17 @@ export async function updateUserAction(userId: string, formData: FormData) {
   const is_team_leader = formData.get("is_team_leader") === "1";
   const is_head_technician = formData.get("is_head_technician") === "1";
 
-  const target = await db.user.findUnique({ where: { id: userId }, select: { role: true } });
+  const target = await db.user.findUnique({ where: { id: userId }, select: { role: true, access_role_id: true } });
   if (!target) return { error: "User not found" };
-  if (!mayManageAccount(session.role, target.role, String(formData.get("role") ?? ""))) {
+  const choice = await resolveRoleChoice(String(formData.get("role") ?? ""));
+  if (!choice) return { error: "Pilih role yang ada di daftar." };
+  if (!mayManageAccount(session.role, target.role, choice.role)) {
     return { error: OWNER_ONLY_ACCOUNT_MESSAGE };
   }
   // Nobody changes their own role here: an Owner demoting themselves could
-  // leave the shop with no one able to open Pengaturan Akses.
-  if (userId === session.userId && formData.get("role") !== target.role) {
+  // leave the shop with no one able to open Pengaturan Akses, and someone
+  // allowed to manage accounts could give themselves a wider role.
+  if (userId === session.userId && (choice.role !== target.role || choice.accessRoleId !== target.access_role_id)) {
     return { error: "Role akun sendiri tidak bisa diubah." };
   }
 
@@ -119,12 +127,13 @@ export async function updateUserAction(userId: string, formData: FormData) {
       email: formData.get("email") as string,
       phone_number: formData.get("phone_number") as string,
       address: formData.get("address") as string,
-      role: formData.get("role") as any,
+      role: choice.role,
+      access_role_id: choice.accessRoleId,
       shift: shift ? (shift as any) : null,
       work_days: work_days ? JSON.parse(work_days) : null,
       is_team_leader,
       // Only a technician can be one; the flag is dropped if the role changes.
-      is_head_technician: is_head_technician && formData.get("role") === "Technician",
+      is_head_technician: is_head_technician && choice.role === "Technician",
     },
   });
 
@@ -134,8 +143,8 @@ export async function updateUserAction(userId: string, formData: FormData) {
   await logActivity(
     session,
     "user.update",
-    `Mengubah data pengguna ${name} (role ${formData.get("role")}${is_team_leader ? ", koordinator" : ""}${
-      is_head_technician && formData.get("role") === "Technician" ? ", kepala teknisi" : ""
+    `Mengubah data pengguna ${name} (role ${choice.label}${is_team_leader ? ", koordinator" : ""}${
+      is_head_technician && choice.role === "Technician" ? ", kepala teknisi" : ""
     }).`,
     { type: "user", id: userId, label: name },
   );
@@ -149,7 +158,7 @@ export async function updateUserAction(userId: string, formData: FormData) {
 // Called before showing the delete modal to surface any active tickets that
 // need to be reassigned before the user can be deactivated.
 export async function checkUserDeletionAction(userId: string) {
-  await requireRole("Administrator");
+  await requirePage("manage_users");
 
   const activeTickets = await db.ticket.findMany({
     where: {
@@ -170,7 +179,7 @@ export async function deactivateUserAction(
   userId: string,
   reassignToTechnicianId?: string | null
 ) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_users");
 
   // Guard: admin cannot delete themselves
   if (userId === session.userId) {
@@ -508,7 +517,7 @@ export async function togglePublicChatAction(ticketId: string, enabled: boolean)
  * out loud instead of asking "are you sure?" over an unknown quantity.
  */
 export async function checkTicketDeletionAction(ticketId: string) {
-  await requireRole("Administrator");
+  await requirePage("delete_ticket");
 
   const ticket = await db.ticket.findUnique({
     where: { id: ticketId },
@@ -607,7 +616,7 @@ export async function deleteTicketAction(
   reason: string,
   confirmation: string
 ) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("delete_ticket");
 
   const ticket = await db.ticket.findUnique({
     where: { id: ticketId },

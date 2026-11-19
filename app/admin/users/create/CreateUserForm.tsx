@@ -12,17 +12,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { Textarea } from "@/components/ui/textarea";
-import { assignableRoles } from "@/lib/admin-roles";
-
-const ROLE_OPTIONS = ["Owner", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"] as const;
+import type { RoleOption } from "@/lib/access-roles";
 
 const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
-/** `viewerRole`: only the Owner is offered the Owner and Administrator roles. */
-export default function CreateUserForm({ viewerRole }: { viewerRole: string }) {
+/** `roles`: what the person filling it in may give (lib/access-roles roleSelectOptions). */
+export default function CreateUserForm({ roles }: { roles: RoleOption[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [role, setRole] = useState("Technician");
+  const [role, setRole] = useState(() => (roles.find((r) => r.value === "role_technician") ?? roles[0])?.value ?? "");
+  const base = roles.find((r) => r.value === role)?.base;
 
   const [workDays, setWorkDays] = useState<string[]>([]);
 
@@ -62,8 +61,8 @@ export default function CreateUserForm({ viewerRole }: { viewerRole: string }) {
             </FormField>
             <FormField label="Role" htmlFor="cu-role">
               <NativeSelect id="cu-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
-                {assignableRoles(viewerRole, ROLE_OPTIONS).map((r) => (
-                  <option key={r} value={r}>{r === "StoreSupervisor" ? "Kepala Toko" : r === "StockAdmin" ? "Admin Stok" : r}</option>
+                {roles.map((r) => (
+                  <option key={r.value} value={r.value}>{r.label}</option>
                 ))}
               </NativeSelect>
             </FormField>
@@ -85,7 +84,7 @@ export default function CreateUserForm({ viewerRole }: { viewerRole: string }) {
       </Card>
 
       {/* Technician-specific */}
-      {role === "Technician" && (
+      {base === "Technician" && (
         <Card className="bg-muted/50">
           <CardHeader>
             <CardTitle className="font-semibold">Technician Configuration</CardTitle>

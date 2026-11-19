@@ -1,4 +1,3 @@
-import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import { Plus, Store, Ticket, Users } from "lucide-react";
@@ -8,11 +7,12 @@ import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { deleteStoreAction } from "@/app/actions/stores";
 import { DeleteEntryButton } from "@/components/app/DeleteEntryButton";
+import { requirePage } from "@/lib/page-access";
 
 export const metadata = { title: "Store Locations — HNS IT Center" };
 
 export default async function StoresPage() {
-  await requireRole("Administrator");
+  await requirePage("manage_stores");
 
   const stores = await db.storeLocation.findMany({
     orderBy: { name: "asc" },

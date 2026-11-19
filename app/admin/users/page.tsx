@@ -1,4 +1,3 @@
-import { requireRole } from "@/lib/session";
 import { urlSort } from "@/lib/table-sort";
 import { db } from "@/lib/db";
 import Link from "next/link";
@@ -13,30 +12,37 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { UserPlus, Users } from "lucide-react";
 import { DeactivateUserButton } from "@/components/users/DeactivateUserButton";
 import { isOwnerRole, mayManageAccount } from "@/lib/admin-roles";
+import { roleOptions } from "@/lib/access-roles-server";
+import { requirePage } from "@/lib/page-access";
 
 export const metadata = { title: "Pengguna & Akses — HNS IT Center" };
 
-// "Pending" are accounts that signed in through HNS SSO and still need a role.
-const ROLES = ["all", "Pending", "Owner", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"] as const;
+// Roles that are not made roles. "Pending" are accounts that signed in through
+// HNS SSO and still need a role.
+const PLAIN = ["Pending", "Owner", "Customer"] as const;
+const PLAIN_LABELS: Record<(typeof PLAIN)[number], string> = { Pending: "Menunggu role", Owner: "Owner", Customer: "Customer" };
 
 export default async function AdminUsersPage({
   searchParams,
 }: {
   searchParams: Promise<{ role?: string; q?: string }>;
 }) {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("manage_users");
   const params = await searchParams;
   const roleFilter = params.role || "all";
   const query = params.q || "";
 
+  const madeRoles = await roleOptions();
+  const isPlain = (PLAIN as readonly string[]).includes(roleFilter);
   const users = await db.user.findMany({
     where: {
       is_active: true,
-      ...(roleFilter !== "all" ? { role: roleFilter as Role } : {}),
+      ...(roleFilter === "all" ? {} : isPlain ? { role: roleFilter as Role } : { access_role_id: roleFilter }),
       ...(query ? { OR: [{ name: { contains: query } }, { email: { contains: query } }] } : {}),
     },
     orderBy: { created_at: "desc" },
     include: {
+      access_role: { select: { name: true } },
       _count: { select: { tickets_technician: { where: { status: { in: ["waiting", "on_progress"] } } } } },
     },
   });
@@ -62,7 +68,7 @@ export default async function AdminUsersPage({
       ),
     },
     { key: "phone", sortValue: (u) => u.phone_number, header: "Phone", cell: (u) => u.phone_number, className: "text-sm text-muted-foreground" },
-    { key: "role", sortValue: (u) => u.role, header: "Role", cell: (u) => <RoleBadge role={u.role} />, mobile: "badge" },
+    { key: "role", sortValue: (u) => u.access_role?.name ?? u.role, header: "Role", cell: (u) => <RoleBadge role={u.role} label={u.access_role?.name} />, mobile: "badge" },
     {
       key: "active", sortValue: (u) => (u.role === "Technician" ? u._count.tickets_technician : null), sortFirst: "desc",
       header: "Active Tickets",
@@ -104,11 +110,11 @@ export default async function AdminUsersPage({
     },
   ];
 
-  const chips = ROLES.map((r) => ({
-    key: r,
-    label: r === "all" ? "All Roles" : r === "Pending" ? "Menunggu role" : r === "StoreSupervisor" ? "Kepala Toko" : r === "StockAdmin" ? "Admin Stok" : r,
-    href: r === "all" ? "/admin/users" : `/admin/users?role=${r}`,
-  }));
+  const chips = [
+    { key: "all", label: "All Roles", href: "/admin/users" },
+    ...madeRoles.map((r) => ({ key: r.id, label: r.name, href: `/admin/users?role=${encodeURIComponent(r.id)}` })),
+    ...PLAIN.map((r) => ({ key: r, label: PLAIN_LABELS[r], href: `/admin/users?role=${r}` })),
+  ];
 
   return (
     // Built from components/app and shadcn only, so the page opts into

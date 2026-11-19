@@ -1,8 +1,8 @@
-import { requireRole } from "@/lib/session";
 import { db } from "@/lib/db";
 import { notFound } from "next/navigation";
 import StoreEditForm from "./StoreEditForm";
 import SupervisorAssignments from "./SupervisorAssignments";
+import { requirePage } from "@/lib/page-access";
 
 export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -12,7 +12,7 @@ export async function generateMetadata({ params }: { params: Promise<{ id: strin
 
 export default async function StoreDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  await requireRole("Administrator");
+  await requirePage("manage_stores");
 
   const [store, allTechnicians, supervisors, allSupervisors] = await Promise.all([
     db.storeLocation.findUnique({

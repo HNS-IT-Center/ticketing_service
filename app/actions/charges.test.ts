@@ -44,7 +44,6 @@ const { db } = await import("@/lib/db");
 const { addChargeAction, updateChargeAction, removeChargeAction, receiveExternalAction } = await import("./charges");
 const { addReplacedPartAction, updateTicketStatusAction } = await import("./technician");
 const { adminUpdateTicketStatusAction } = await import("./admin");
-const { saveAccessRulesAction } = await import("./access");
 const { deleteVendorAction } = await import("./vendors");
 const { deleteServiceJobAction } = await import("./service-jobs");
 const { createServiceJobAction, updateServiceJobAction, setServiceJobAccurateItemAction, applyAccurateItemToUnmappedAction } =
@@ -93,19 +92,22 @@ function form(fields: Record<string, string>) {
 const add = (ticketId: string, fields: Record<string, string>) => addChargeAction(form({ ticket_id: ticketId, ...fields }));
 const lines = (ticketId: string) => db.ticketCharge.findMany({ where: { ticket_id: ticketId }, orderBy: { created_at: "asc" } });
 
-/** The access settings form as the page posts it: the defaults, plus and minus some boxes. */
+/**
+ * The old per-group settings: the defaults, plus and minus some boxes, as a
+ * fresh matrix each time. The accounts here hold no made role, so they read
+ * these (lib/access-server.ts accessFor), exactly as before roles existed.
+ */
 async function grant(plus: string[], minus: string[] = []) {
-  const checked = new Set(access.CAPABILITIES.flatMap((c) => access.CAPABILITY_INFO[c].defaults.map((a) => `${c}:${a}`)));
-  for (const k of plus) checked.add(k);
-  for (const k of minus) checked.delete(k);
-  const fd = new FormData();
-  for (const k of checked) fd.set(k, "on");
-  const before = { ...session };
-  // Pengaturan Akses is saved by the Owner (2026-11-18).
-  as("admin");
-  session.role = "Owner";
-  await saveAccessRulesAction(fd);
-  Object.assign(session, before);
+  const isDefault = (k: string) => {
+    const [c, a] = k.split(":");
+    return access.CAPABILITY_INFO[c as never as keyof typeof access.CAPABILITY_INFO].defaults.includes(a as never);
+  };
+  await db.accessRule.deleteMany({});
+  const rows = [
+    ...plus.filter((k) => !isDefault(k)).map((k) => ({ k, allowed: true })),
+    ...minus.filter(isDefault).map((k) => ({ k, allowed: false })),
+  ].map(({ k, allowed }) => ({ capability: k.split(":")[0], audience: k.split(":")[1], allowed }));
+  if (rows.length) await db.accessRule.createMany({ data: rows });
 }
 
 beforeAll(async () => {

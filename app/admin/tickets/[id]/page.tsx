@@ -43,6 +43,7 @@ import {
 } from "@/components/tickets/TicketSections";
 import { TONE_CLASSES } from "@/lib/status-display";
 import { isAdminRole } from "@/lib/admin-roles";
+import { accessFor } from "@/lib/access-server";
 
 export const metadata = { title: "Ticket Detail — Admin" };
 
@@ -200,6 +201,7 @@ export default async function AdminTicketDetailPage({
   const publicHref = ticket.public_share_token ? publicTicketPath(ticket.created_at, ticket.public_share_token, ticket.public_short_code) ?? "#" : null;
   const customerPhone = ticket.is_for_self ? ticket.user?.phone_number : ticket.customer_phone;
   const isAdmin = isAdminRole(session.role);
+  const adminAccess = isAdmin ? await accessFor(session.userId) : null;
 
   // The clock, read once for the request, for the RMA card's durations.
   const rmaNow = requestNow();
@@ -445,11 +447,11 @@ export default async function AdminTicketDetailPage({
             </div>
           )}
 
-          {isAdmin && <TicketPointsCard ticketId={ticket.id} />}
+          {isAdmin && <TicketPointsCard ticketId={ticket.id} canChange={adminAccess?.can("ticket_points") ?? false} />}
 
           {/* Permanent deletion — administrators only, and last on the page so
               it is never the first thing a hand lands on. */}
-          {isAdmin && (
+          {adminAccess?.can("delete_ticket") && (
             <DeleteTicketPanel ticketId={ticket.id} ticketCode={ticket.ticket_code} />
           )}
         </div>

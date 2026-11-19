@@ -12,7 +12,8 @@ const nf = new Intl.NumberFormat("id-ID");
  * What the ticket earns its technician, and the administrator's switch to take
  * that off. Loads its own figures so the ticket page's big query stays as it is.
  */
-export async function TicketPointsCard({ ticketId }: { ticketId: string }) {
+/** `canChange`: the viewer holds "Hapus / kembalikan poin tiket" (ticket_points). */
+export async function TicketPointsCard({ ticketId, canChange }: { ticketId: string; canChange: boolean }) {
   const [ticket, earned] = await Promise.all([
     db.ticket.findUnique({
       where: { id: ticketId },
@@ -68,9 +69,11 @@ export async function TicketPointsCard({ ticketId }: { ticketId: string }) {
             )}
           </p>
         )}
-        <div>
-          <TicketPointsControl ticketId={ticketId} ticketCode={ticket.ticket_code} excluded={excluded} size="sm" />
-        </div>
+        {canChange && (
+          <div>
+            <TicketPointsControl ticketId={ticketId} ticketCode={ticket.ticket_code} excluded={excluded} size="sm" />
+          </div>
+        )}
       </div>
     </DetailCard>
   );

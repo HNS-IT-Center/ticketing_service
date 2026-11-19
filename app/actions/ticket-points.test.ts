@@ -115,8 +115,9 @@ describe("excludeTicketPointsAction / restoreTicketPointsAction", () => {
     expect(await restoreTicketPointsAction(id)).toEqual({ success: true });
     expect(await restoreTicketPointsAction(id)).toHaveProperty("error");
 
-    session.role = "Technician";
-    await expect(excludeTicketPointsAction(id, "x")).rejects.toThrow("Unauthorized");
+    // A real non-administrator: the capability is read from the account (requirePage).
+    Object.assign(session, { userId: technicianId, role: "Technician" });
+    await expect(excludeTicketPointsAction(id, "x")).rejects.toThrow();
   });
 
   it("credits nothing when a ticket without points is finished again", async () => {

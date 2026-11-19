@@ -176,11 +176,10 @@ afterAll(async () => {
 
 describe("guards", () => {
   it("refuses anyone who is not an administrator", async () => {
-    session.role = "Technician";
+    // A real non-administrator: the capability is read from the account (requirePage).
+    Object.assign(session, { userId: technicianId, role: "Technician" });
     const ticket = await makeTicket();
-    await expect(deleteTicketAction(ticket.id, "coba", ticket.ticket_code)).rejects.toThrow(
-      "Unauthorized"
-    );
+    await expect(deleteTicketAction(ticket.id, "coba", ticket.ticket_code)).rejects.toThrow();
     expect(await db.ticket.findUnique({ where: { id: ticket.id } })).not.toBeNull();
   });
 
@@ -379,8 +378,9 @@ describe("checkTicketDeletionAction", () => {
   });
 
   it("refuses a non-administrator", async () => {
-    session.role = "Sales";
+    // A real non-administrator: the capability is read from the account (requirePage).
+    Object.assign(session, { userId: technicianId, role: "Technician" });
     const ticket = await makeTicket();
-    await expect(checkTicketDeletionAction(ticket.id)).rejects.toThrow("Unauthorized");
+    await expect(checkTicketDeletionAction(ticket.id)).rejects.toThrow();
   });
 });

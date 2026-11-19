@@ -8,9 +8,7 @@ import toast from "react-hot-toast";
 import { Loader2 } from "lucide-react";
 import { FormField } from "@/components/app/FormField";
 import { errorOf } from "@/lib/action-result";
-import { assignableRoles } from "@/lib/admin-roles";
-
-const ROLE_OPTIONS = ["Pending", "Owner", "Administrator", "Technician", "Sales", "RMA", "StoreSupervisor", "StockAdmin", "Finance", "Customer"] as const;
+import type { RoleOption } from "@/lib/access-roles";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -26,17 +24,20 @@ interface User {
   phone_number: string;
   address: string;
   role: string;
+  /** The Role select's value: the made role's id, or Owner / Pending / Customer. */
+  roleValue: string;
   shift: string | null;
   work_days: unknown;
   is_team_leader: boolean;
   is_head_technician: boolean;
 }
 
-/** `viewerRole`: only the Owner is offered the Owner and Administrator roles. */
-export default function EditUserForm({ user, viewerRole }: { user: User; viewerRole: string }) {
+/** `roles`: what the person filling it in may give (lib/access-roles roleSelectOptions). */
+export default function EditUserForm({ user, roles }: { user: User; roles: RoleOption[] }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [role, setRole] = useState(user.role);
+  const [role, setRole] = useState(user.roleValue);
+  const base = roles.find((r) => r.value === role)?.base ?? user.role;
   const [isTeamLeader, setIsTeamLeader] = useState(user.is_team_leader);
   const [isHeadTechnician, setIsHeadTechnician] = useState(user.is_head_technician);
   const [workDays, setWorkDays] = useState<string[]>(
@@ -100,8 +101,8 @@ export default function EditUserForm({ user, viewerRole }: { user: User; viewerR
               </FormField>
               <FormField label="Role" htmlFor="eu-role">
                 <NativeSelect id="eu-role" name="role" value={role} onChange={(e) => setRole(e.target.value)}>
-                  {assignableRoles(viewerRole, ROLE_OPTIONS).map((r) => (
-                    <option key={r} value={r}>{r === "StoreSupervisor" ? "Kepala Toko" : r === "StockAdmin" ? "Admin Stok" : r}</option>
+                  {roles.map((r) => (
+                    <option key={r.value} value={r.value}>{r.label}</option>
                   ))}
                 </NativeSelect>
               </FormField>
@@ -114,7 +115,7 @@ export default function EditUserForm({ user, viewerRole }: { user: User; viewerR
         </Card>
 
         {/* Technician-specific settings */}
-        {role === "Technician" && (
+        {base === "Technician" && (
           <Card className="bg-muted/50">
             <CardHeader>
               <CardTitle className="font-semibold">Technician Configuration</CardTitle>

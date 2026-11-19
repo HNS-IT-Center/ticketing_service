@@ -147,7 +147,7 @@ const GROUPS: Group[] = [
         rule: { cap: "page_leaderboard" },
       },
       { label: "Laporan Part", icon: "package", href: "/admin/reports/parts", rule: { cap: "page_parts_report" } },
-      { label: "Tiket Perlu Dicek", icon: "shield", href: "/admin/reports/audit", rule: { roles: ["Administrator"] } },
+      { label: "Tiket Perlu Dicek", icon: "shield", href: "/admin/reports/audit", rule: { cap: "page_ticket_audit" } },
     ],
   },
   {
@@ -169,7 +169,7 @@ const GROUPS: Group[] = [
     title: "Data Master",
     icon: "database",
     entries: [
-      { label: "Stores", icon: "store", href: "/admin/stores", rule: { roles: ["Administrator"] } },
+      { label: "Stores", icon: "store", href: "/admin/stores", rule: { cap: "manage_stores" } },
       {
         label: "Daftar Jasa",
         icon: "list",
@@ -189,7 +189,7 @@ const GROUPS: Group[] = [
     key: "settings",
     // Accounts and what each role may do: one page, two tabs (owner, 2026-11-12).
     entries: [
-      { label: "Pengguna & Akses", icon: "users", href: "/admin/users", also: ["/admin/settings/access"], rule: { roles: ["Administrator"] } },
+      { label: "Pengguna & Akses", icon: "users", href: "/admin/users", also: ["/admin/settings/access"], rule: { cap: "manage_users" } },
     ],
   },
 ];
@@ -217,12 +217,25 @@ function visible(rule: Rule, role: Role, can: (c: Capability) => boolean): boole
  * holding at least one page they may open. An entry that is the person's own
  * dashboard is left out of its group rather than shown twice.
  */
+/**
+ * Where a person lands: their dashboard, or — for an Admin-based role without
+ * Ringkasan Bisnis — the first page in their menu. Null when they may open
+ * nothing at all.
+ */
+export function landingFor(role: Role, can: (c: Capability) => boolean): string | null {
+  return navFor(role, can)[0]?.items[0]?.href ?? null;
+}
+
 export function navFor(role: Role, can: (c: Capability) => boolean): NavSection[] {
   const d = destinationForRole(role);
   if (!d.allowed) return [];
+  // The admin portal's dashboard is Ringkasan Bisnis, a page of its own since
+  // 2026-11-18: an Admin-based role without it has no "Dashboard" entry and
+  // lands on its first page instead (landingFor).
+  const hasHome = !(d.portal === "admin" && !can("page_business_dashboard"));
   const home = d.dashboard;
   const homeItem: NavItem = { href: home, label: "Dashboard", icon: "dashboard" };
-  const sections: NavSection[] = [{ key: "home", items: [homeItem] }];
+  const sections: NavSection[] = hasHome ? [{ key: "home", items: [homeItem] }] : [];
   for (const g of GROUPS) {
     const items: NavItem[] = [];
     for (const e of g.entries) {

@@ -2,10 +2,10 @@
 
 import { revalidatePath, revalidateTag } from "next/cache";
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
 import { EARNING_TRANSITION_FILTER } from "@/lib/kpi";
 import { JOB_POINT_CHARGES, ticketTotalPoints } from "@/lib/points";
 import { logActivity } from "@/lib/activity";
+import { requirePage } from "@/lib/page-access";
 
 type Result = { success: true } | { error: string };
 
@@ -31,7 +31,7 @@ function refresh(ticketId: string, technicianId: string | null) {
  * on the ticket so restoring gives back exactly that.
  */
 export async function excludeTicketPointsAction(ticketId: string, reason: string): Promise<Result> {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("ticket_points");
   const why = reason.trim();
   if (!why) return { error: "Tulis alasan kenapa poin tiket ini dihapus." };
 
@@ -95,7 +95,7 @@ export async function excludeTicketPointsAction(ticketId: string, reason: string
 
 /** Give back exactly what excludeTicketPointsAction took. Administrator only. */
 export async function restoreTicketPointsAction(ticketId: string): Promise<Result> {
-  const session = await requireRole("Administrator");
+  const session = await requirePage("ticket_points");
   const ticket = await db.ticket.findUnique({
     where: { id: ticketId },
     select: {

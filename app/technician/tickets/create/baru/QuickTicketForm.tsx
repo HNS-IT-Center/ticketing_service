@@ -305,6 +305,8 @@ export default function QuickTicketForm({
     if (isStoreStock && !stockOrigin.trim()) e.stockOrigin = "Asal stok wajib diisi.";
     if (isClaim && !deviceSn.trim()) e.deviceSn = "SN wajib untuk klaim garansi.";
     if (isClaim && !isStoreStock && !purchaseDate) e.purchaseDate = "Tanggal pembelian wajib untuk klaim garansi.";
+    // Every build comes from its quotation (owner, 2026-11-18); short, like the other lines of the summary.
+    if (isBuild && !quote) e.quote = "Muat quotation rakitan dulu (kode atau PDF).";
     if (isBuild && quote) {
       if (!quoteFullyChecked(quote, quoteChecked)) e.quote = "Centang setiap komponen yang sesuai dengan barang yang dibawa.";
       if (buildPhotoUrls.length === 0) e.buildPhotos = "Lampirkan foto komponen rakitan.";
@@ -562,7 +564,7 @@ export default function QuickTicketForm({
 
             {isBuild && (
               <div className="flex flex-col gap-4">
-                <Group label="Quotation" hint="(bila ada)" error={showErr("quote")}>
+                <Group label="Quotation" required error={showErr("quote")}>
                   <QuoteChecklist
                     quote={quote}
                     onQuoteChange={(q) => {
@@ -577,7 +579,8 @@ export default function QuickTicketForm({
                     apiEnabled={quoteApiEnabled}
                   />
                 </Group>
-                <Group label={quote ? "Komponen tambahan" : "Komponen PC"} hint="(opsional)">
+                {quote && (
+                <Group label="Komponen tambahan" hint="(opsional: barang yang dibawa tetapi tidak ada di quotation)">
                   <CatalogItemList
                     items={pcComponents}
                     onChange={setPcComponents}
@@ -589,11 +592,6 @@ export default function QuickTicketForm({
                     addAnotherLabel="Tambah komponen"
                   />
                 </Group>
-                {!quote && (
-                  <Group label="Foto / lampiran" hint="(opsional: referensi, daftar rakitan)">
-                    <FileUpload value={photos} onChange={onUpload(setPhotos, setPhotoUrls)} maxFiles={5} />
-                    {photos.length === 0 && photoUrls.length > 0 && <p className="text-xs text-muted-foreground">{photoUrls.length} file dari draf sudah terunggah.</p>}
-                  </Group>
                 )}
                 {quote && (
                   <Group label="Foto komponen yang dibawa" required hint={`(maks ${MAX_BUILD_PHOTOS})`} error={showErr("buildPhotos")}>
@@ -686,7 +684,7 @@ export default function QuickTicketForm({
                 label="Nama sales"
                 htmlFor={`${uid}-sales`}
                 required
-                help="Sales yang menjual rakitan ini. Terisi sendiri dari quotation bila ada."
+                help="Sales yang menjual rakitan ini. Terisi sendiri dari quotation."
                 error={showErr("sales")}
               >
                 <Input id={`${uid}-sales`} value={salesName} onChange={(e) => setSalesName(e.target.value)} placeholder="Nama sales" autoComplete="off" className="bg-card" />

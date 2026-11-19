@@ -26,6 +26,26 @@ vi.mock("@/lib/r2", () => ({
   getFileType: () => "image" as const,
 }));
 
+// A PC build must come from its quotation (owner, 2026-11-18). The component
+// tests below are about the extra components the form posts, so the stored
+// quotation is a stand-in with no lines and a fresh code on every read.
+const quotes = vi.hoisted(() => ({ n: 0 }));
+vi.mock("@/lib/pc-build-quote/read", () => ({
+  MAX_QUOTE_PDF_BYTES: 5 * 1024 * 1024,
+  readQuotePdf: vi.fn(),
+  readStoredQuote: vi.fn(async () => ({
+    ok: true,
+    quote: {
+      code: `HNSPC-20990201-${String(Date.now() % 1e6).padStart(6, "0")}${String(++quotes.n).padStart(2, "0")}`,
+      customer: null,
+      salesName: null,
+      date: null,
+      total: null,
+      lines: [],
+    },
+  })),
+}));
+
 vi.mock("@/lib/email", () => ({
   sendTicketStatusEmail: vi.fn(async () => undefined),
   EMAIL_MILESTONES: [],
@@ -477,7 +497,16 @@ describe("createTicketAction — PC build components and upgrade items from the 
       },
     });
   const build = (sn: string, extra: Record<string, string | null>) =>
-    claimForm({ ticket_type: "pc_build", device_type: "PC_Office", device_sn: sn, purchase_date: null, ...extra });
+    claimForm({
+      ticket_type: "pc_build",
+      device_type: "PC_Office",
+      device_sn: sn,
+      purchase_date: null,
+      quote_url: "https://r2.test/temp/u/quote-test.pdf",
+      quote_checked_count: "0",
+      build_photo_urls: "https://r2.test/temp/u/build.jpg",
+      ...extra,
+    });
   const upgrade = (sn: string, extra: Record<string, string | null>) =>
     claimForm({ ticket_type: "upgrade", device_sn: sn, purchase_date: null, ...extra });
   const byName = <T extends { component_name: string }>(rows: T[]) => [...rows].sort((a, b) => a.component_name.localeCompare(b.component_name));

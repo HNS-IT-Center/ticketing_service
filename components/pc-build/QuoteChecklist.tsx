@@ -266,6 +266,8 @@ export function QuoteChecklist({
           pdfDrop
         )}
         {errorBox}
+        {/* Nothing loaded yet: the form's own complaint, e.g. that a build needs its quotation. */}
+        {error && !loadError && <p role="alert" className="text-sm text-destructive">{error}</p>}
       </div>
     );
   }

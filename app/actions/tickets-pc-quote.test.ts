@@ -249,19 +249,13 @@ describe("createTicketAction — PC build from a quotation", () => {
     stored.missing = false;
   });
 
-  it("still opens a PC build without a quotation, as before", async () => {
+  it("refuses a PC build without a quotation, and creates nothing", async () => {
+    const before = await db.ticket.count({ where: { store_location_id: storeId } });
     const result = await createTicketAction(
       buildForm({ quote_url: null, quote_checked_count: null, build_photo_urls: null, technician_id: users.tech }),
     );
-    expect(result).toMatchObject({ success: true });
-    const t = await lastTicket();
-    expect(t?.pc_build_detail?.quote_code).toBeNull();
-    expect(t?.pc_components.map((c) => c.component_name)).toEqual(["Kabel HDMI milik customer"]);
-    // The assembly is still the technician's job.
-    expect(t?.charges).toEqual([
-      { kind: "service_fee", description: "Jasa Rakit PC", quantity: 1, unit_price: 150000, service_job_id: assemblyJobId },
-    ]);
-    await db.ticket.update({ where: { id: t!.id }, data: { status: "cancelled" } });
+    expect(result).toEqual({ error: expect.stringContaining("wajib dibuat dari quotation") });
+    expect(await db.ticket.count({ where: { store_location_id: storeId } })).toBe(before);
   });
 });
 

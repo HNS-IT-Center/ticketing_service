@@ -31,6 +31,7 @@ import { catalogBrand } from "@/lib/catalog/brand";
 import { parsePostedItems, parseUpgradeSelections, typedItems } from "@/lib/catalog/picked-items";
 import { resolvePostedItems, type ResolvedItem } from "@/lib/catalog/resolve-picked";
 import { getTicketPoints } from "@/lib/points";
+import { PC_BUILD_NEEDS_QUOTE } from "@/lib/pc-build-quote/required";
 import { isAdminRole } from "@/lib/admin-roles";
 
 const nanoid = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 8);
@@ -244,6 +245,13 @@ export async function createTicketAction(formData: FormData) {
     if (buildPhotoUrls.some((u) => !IMAGE_URL.test(u))) return { error: "Foto komponen rakitan harus berupa gambar." };
     // The quotation names its sales; a sales picked by hand on the form wins.
     if (!sales_id && quoteSales) sales_id = quoteSales.id;
+  }
+  // Every PC build is opened from its quotation (owner, 2026-11-18): a build
+  // started without one carries no checked list and no component photos, and
+  // the cashier's Dokumentasi Rakitan page cannot find it. Builds opened
+  // before this rule are linked afterwards with "Tautkan quotation".
+  if (ticket_type === "pc_build" && !quote) {
+    return { error: PC_BUILD_NEEDS_QUOTE };
   }
   // The sales of a PC build, typed by name while sales still work in the
   // e-commerce system and have no account here (owner, 2026-11-14). Kept on the

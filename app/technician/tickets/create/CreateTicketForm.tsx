@@ -12,6 +12,7 @@ import { QuoteChecklist } from "@/components/pc-build/QuoteChecklist";
 import { appendQuoteFields, quoteBuildIndexes, quoteFullyChecked } from "@/components/pc-build/quote-form";
 import type { UploadedQuote } from "@/lib/pc-build-quote/parse";
 import { normalizeName } from "@/lib/pc-build-quote/sales";
+import { PC_BUILD_NEEDS_QUOTE } from "@/lib/pc-build-quote/required";
 import UnitField, { type PickedUnit } from "@/components/catalog/UnitField";
 import CatalogItemList from "@/components/catalog/CatalogItemList";
 import { MAX_PC_COMPONENTS, restorePickedItems, toPosted, type PickedItem } from "@/lib/catalog/picked-items";
@@ -365,6 +366,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       }
       if (ticketType === "cleaning" && !cleaningPackage) errs.cleaningPackage = "Cleaning package is required.";
       if (ticketType === "upgrade" && selectedUpgrades.length === 0) errs.selectedUpgrades = "Please select at least one upgrade.";
+      if (ticketType === "pc_build" && !quote) errs.quote = PC_BUILD_NEEDS_QUOTE;
       if (ticketType === "pc_build" && quote) {
         if (!quoteFullyChecked(quote, quoteChecked)) {
           errs.quote = "Centang setiap komponen yang sesuai dengan barang yang dibawa. Bila ada yang tidak sesuai, tekan \u201cAda yang tidak sesuai?\u201d.";
@@ -941,11 +943,11 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                 <div className="flex flex-col gap-5">
                   <FieldGroup
                     label="Quotation Rakitan"
-                    hint={quote ? undefined : "(bila ada)"}
+                    required
                     help={
                       quote
                         ? "Centang setiap komponen yang memang dibawa dan sesuai. Tiket baru bisa dibuat bila semuanya sesuai."
-                        : "Untuk rakitan dari quotation web, unggah PDF-nya. Tanpa quotation, isi komponen di bawah secara manual."
+                        : "Wajib. Masukkan kode quotation dari web atau unggah PDF-nya, lalu centang setiap komponen yang dibawa."
                     }
                   >
                     <QuoteChecklist
@@ -993,7 +995,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     )}
                   </FieldGroup>
 
-                  <FieldGroup label={quote ? "Komponen Tambahan" : "Komponen PC"} hint="(opsional)">
+                  {quote && (
+                  <FieldGroup label="Komponen Tambahan" hint="(opsional)">
                     <CatalogItemList
                       items={pcComponents}
                       onChange={setPcComponents}
@@ -1005,11 +1008,10 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                       addAnotherLabel="Tambah komponen"
                     />
                     <p className="text-xs text-muted-foreground">
-                      {quote
-                        ? "Barang yang dibawa tetapi tidak ada di quotation, mis. komponen milik customer sendiri."
-                        : "Komponen yang dibeli customer atau disiapkan untuk rakitan ini."}
+                      Barang yang dibawa tetapi tidak ada di quotation, mis. komponen milik customer sendiri.
                     </p>
                   </FieldGroup>
+                  )}
 
                   <FormField label="Notes / Instructions" htmlFor={`${uid}-notes`}>
                     <Textarea
@@ -1022,7 +1024,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     />
                   </FormField>
 
-                  {quote ? (
+                  {quote && (
                     <FieldGroup
                       label="Foto Komponen Rakitan"
                       required
@@ -1045,17 +1047,6 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                         </p>
                       )}
                       {isUploadingBuildPhotos && <Uploading>Mengunggah foto…</Uploading>}
-                    </FieldGroup>
-                  ) : (
-                    <FieldGroup
-                      label="Ticket Attachment"
-                      required
-                      help="Upload any reference pictures or build lists."
-                      error={errors.ticketFiles}
-                    >
-                      <FileUpload value={files} onChange={handleFileUpload} maxFiles={5} />
-                      {restoredUploads}
-                      {isUploadingFiles && <Uploading>Uploading files…</Uploading>}
                     </FieldGroup>
                   )}
                 </div>

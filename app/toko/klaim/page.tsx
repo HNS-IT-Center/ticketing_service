@@ -2,7 +2,17 @@ import Link from "next/link";
 import { ShieldCheck } from "lucide-react";
 import { db } from "@/lib/db";
 import { pickStores, requireStoreViewer } from "@/lib/store-scope-server";
-import { CLAIM_SORT_KEYS, CLAIM_STATUS_FILTERS, DEFAULT_CLAIM_SORT, claimListOrderBy, claimListWhere, claimStatusLabel } from "@/lib/rma/claim-list";
+import {
+  CLAIM_OWNER_FILTERS,
+  CLAIM_OWNER_LABELS,
+  CLAIM_SORT_KEYS,
+  CLAIM_STATUS_FILTERS,
+  DEFAULT_CLAIM_SORT,
+  claimListOrderBy,
+  claimListWhere,
+  claimStatusLabel,
+  readClaimOwner,
+} from "@/lib/rma/claim-list";
 import { readSort, sortValue } from "@/lib/table-sort";
 import { analyzeClaims, claimOutcome } from "@/lib/rma/claim-analysis";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
@@ -24,12 +34,17 @@ import { NativeSelect } from "@/components/ui/native-select";
 export const metadata = { title: "Klaim Garansi Toko — HNS IT Center" };
 const PAGE_SIZE = 10;
 
-type Search = { status?: string; q?: string; page?: string; sort?: string; per?: string; store?: string };
+type Search = { status?: string; q?: string; page?: string; sort?: string; per?: string; store?: string; owner?: string };
 
 /**
  * The kepala toko's warranty claims: the same list the RMA desk keeps — claims
  * that reached the desk, plus those still with a technician — for their own
  * stores, each with its RMA stage. Read only; a row opens the ticket.
+ *
+ * A claim belongs to the store picked at intake — where the technician checked
+ * the unit — store stock included; "Asal Stok" is only a note (owner,
+ * 2026-11-19). "Milik unit" splits Klaim User from Klaim Toko by the RMA
+ * desk's own rule (lib/rma/claim-list.ts).
  */
 export default async function StoreClaimsPage({ searchParams }: { searchParams: Promise<Search> }) {
   const { stores } = await requireStoreViewer("page_toko_claims");
@@ -39,6 +54,7 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
 
   const status = params.status || "all";
   const query = params.q || "";
+  const owner = readClaimOwner(params.owner);
   const sortState = readSort(params.sort, CLAIM_SORT_KEYS, DEFAULT_CLAIM_SORT);
   const sort = sortValue(sortState);
   const page = Math.max(1, parseInt(params.page || "1") || 1);
@@ -46,8 +62,8 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
   const skip = (page - 1) * pageSize;
 
   const inStores = { store_location_id: { in: ids } };
-  const where = { AND: [inStores, claimListWhere(status, query)] };
-  const [claims, total, all] = await Promise.all([
+  const where = { AND: [inStores, claimListWhere(status, query, owner)] };
+  const [claims, total, all, ...ownerCounts] = await Promise.all([
     db.ticket.findMany({
       where,
       orderBy: claimListOrderBy(sort),
@@ -56,7 +72,8 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
       include: {
         user: { select: { name: true } },
         technician: { select: { name: true } },
-        rma_case: { select: { rma_code: true, status: true, decision: true, vendor_name: true } },
+        rma_case: { select: { rma_code: true, status: true, decision: true, vendor_name: true, unit_ownership: true } },
+        warranty_detail: { select: { unit_ownership: true } },
       },
     }),
     db.ticket.count({ where }),
@@ -65,6 +82,8 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
       where: { AND: [inStores, claimListWhere("all", "")] },
       select: { device_brand: true, device_catalog_category: true, device_sku: true, device_name: true, rma_case: { select: { status: true, decision: true } } },
     }),
+    // What each "Milik unit" option would show under the current stage and search.
+    ...CLAIM_OWNER_FILTERS.map((o) => db.ticket.count({ where: { AND: [inStores, claimListWhere(status, query, o)] } })),
   ]);
   const pages = Math.ceil(total / pageSize);
   const outcomes = all.map((c) => claimOutcome(c.rma_case));
@@ -75,6 +94,7 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
     const merged: Record<string, string | number | undefined> = {
       status: status !== "all" ? status : undefined,
       q: query || undefined,
+      owner: owner !== "all" ? owner : undefined,
       sort: sort !== "updated_desc" ? sort : undefined,
       per: pageSize !== PAGE_SIZE ? pageSize : undefined,
       store: chosen?.id,
@@ -109,7 +129,14 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
       sortKey: "customer",
       cell: (t) => (
         <span className="flex min-w-0 max-w-md flex-col">
-          <span className="font-medium">{ticketPartyName(t)}</span>
+          <span className="flex flex-wrap items-center gap-1.5">
+            <span className="font-medium">{ticketPartyName(t)}</span>
+            {(t.rma_case?.unit_ownership ?? t.warranty_detail?.unit_ownership) === "store_stock" && (
+              <span className="rounded-full border border-tone-violet-border bg-tone-violet-bg px-1.5 py-px text-[0.65rem] font-semibold whitespace-nowrap text-tone-violet-fg">
+                Stok toko
+              </span>
+            )}
+          </span>
           <span className="line-clamp-2 text-[0.7rem] text-muted-foreground">
             {t.device_brand ? `${t.device_brand} · ` : ""}
             {t.device_name?.trim() || t.device_type.replace(/_/g, " ")}
@@ -154,6 +181,8 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
 
       <div className="flex flex-col gap-3">
         <FilterBar action="/toko/klaim">
+          {sort !== "updated_desc" && <input type="hidden" name="sort" value={sort} />}
+          {pageSize !== PAGE_SIZE && <input type="hidden" name="per" value={pageSize} />}
           <FilterBarSearch label="Cari klaim" placeholder="Cari kode, RMA, customer, unit, SN, atau vendor…" defaultValue={query} />
           {stores.length > 1 && (
             <FilterBarField label="Toko" htmlFor="tk-store" className="md:w-44">
@@ -167,6 +196,15 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
               </NativeSelect>
             </FilterBarField>
           )}
+          <FilterBarField label="Milik unit" htmlFor="tk-owner" className="md:w-48">
+            <AutoSubmitSelect id="tk-owner" name="owner" defaultValue={owner === "all" ? "" : owner} key={`o-${owner}`}>
+              {CLAIM_OWNER_FILTERS.map((o, i) => (
+                <option key={o} value={o === "all" ? "" : o}>
+                  {CLAIM_OWNER_LABELS[o]} ({ownerCounts[i]})
+                </option>
+              ))}
+            </AutoSubmitSelect>
+          </FilterBarField>
           {/* The RMA stage, as the Tahap column shows it (lib/rma/claim-list.ts). */}
           <FilterBarField label="Tahap" htmlFor="tk-status" className="md:w-52">
             <AutoSubmitSelect id="tk-status" name="status" defaultValue={status === "all" ? "" : status} key={`s-${status}`}>

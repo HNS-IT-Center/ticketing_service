@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -68,11 +69,14 @@ describe("the roles that replace the old groups", () => {
     }
   });
 
-  it("is written into the migration exactly as the code generates it", () => {
+  it("keeps the migration that production ran exactly as it was", () => {
+    // Applied on the VPS on 2026-11-19 with this checksum. The generator moves
+    // on as capabilities are added (a new one is granted by its own
+    // migration), so the file is held to its checksum, not to the generator.
     const sql = readFileSync(join(process.cwd(), "prisma/migrations/20261119090000_access_roles/migration.sql"), "utf-8").replace(/\r\n/g, "\n");
-    const start = sql.indexOf(BACKFILL_BEGIN);
-    const end = sql.indexOf(BACKFILL_END) + BACKFILL_END.length;
-    expect(start).toBeGreaterThan(0);
-    expect(sql.slice(start, end)).toBe(accessRoleBackfillSql());
+    expect(createHash("sha256").update(sql).digest("hex")).toBe("49da4a05cf359332c81d4dfae844ebc9521590412ffa768abf500b3640eeedf7");
+    expect(sql).toContain(BACKFILL_BEGIN);
+    expect(sql).toContain(BACKFILL_END);
+    expect(accessRoleBackfillSql().startsWith(BACKFILL_BEGIN)).toBe(true);
   });
 });

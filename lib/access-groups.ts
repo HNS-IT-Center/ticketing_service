@@ -65,7 +65,7 @@ export function accessGroupsFor(audience: Audience): AccessGroup[] {
     }
   }
   // Pages first — they decide what the person sees at all — then the rest.
-  const rank = (g: AccessGroup) => (g.key.startsWith("pages:") ? 0 : ["admin", "pricing", "ticket", "stock"].indexOf(g.key) + 1);
+  const rank = (g: AccessGroup) => (g.key.startsWith("pages:") ? 0 : ["admin", "team", "pricing", "ticket", "stock"].indexOf(g.key) + 1);
   return [...groups.values()].sort((x, y) => rank(x) - rank(y));
 }
 

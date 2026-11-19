@@ -6,8 +6,9 @@
 import { wibDayKey } from "@/lib/store-dashboard";
 
 export type ScheduleCell =
-  | { kind: "shift"; shift: string | null }
-  | { kind: "off" }
+  | { kind: "shift"; shift: string | null; covers?: string[] }
+  /** `by`: the fixed replacement's name, null = none set, absent = not looked up. */
+  | { kind: "off"; by?: string | null }
   | { kind: "leave"; reason: string | null }
   | { kind: "covered"; by: string }
   | { kind: "covering"; for: string; shift: string | null }
@@ -22,6 +23,15 @@ export type ScheduleTechnician = {
 
 export type ScheduleOverride = { originalId: string; overrideId: string; day: string; shift: string | null };
 export type ScheduleLeave = { technicianId: string; day: string; reason: string | null };
+
+/**
+ * Libur tetap (lib/day-off.ts): who covers a technician on their days off,
+ * and whom a technician covers on a given day.
+ */
+export type ScheduleCover = {
+  replacementOf: (technicianId: string) => string | null;
+  coveringOn: (technicianId: string, day: string) => string[];
+};
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_NAMES = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
@@ -62,6 +72,7 @@ export function scheduleCell(
   leaves: readonly ScheduleLeave[],
   overrides: readonly ScheduleOverride[],
   nameOf: (id: string) => string,
+  dayOff?: ScheduleCover,
 ): ScheduleCell {
   const leave = leaves.find((l) => l.technicianId === tech.id && l.day === day);
   if (leave) return { kind: "leave", reason: leave.reason };
@@ -69,7 +80,11 @@ export function scheduleCell(
   if (away) return { kind: "covered", by: nameOf(away.overrideId) };
   const cover = overrides.find((o) => o.overrideId === tech.id && o.day === day);
   if (cover) return { kind: "covering", for: nameOf(cover.originalId), shift: cover.shift };
-  if (!tech.workDays || tech.workDays.length === 0) return { kind: "unset" };
+  // Covering a colleague's day off shows even when this technician's own
+  // pattern is not set yet: the cover is known, the rest of the week is not.
+  const covers = dayOff?.coveringOn(tech.id, day) ?? [];
+  if (!tech.workDays || tech.workDays.length === 0) return covers.length ? { kind: "shift", shift: tech.shift, covers } : { kind: "unset" };
   const weekday = WEEKDAYS[new Date(`${day}T00:00:00Z`).getUTCDay()];
-  return tech.workDays.includes(weekday) ? { kind: "shift", shift: tech.shift } : { kind: "off" };
+  if (!tech.workDays.includes(weekday)) return dayOff ? { kind: "off", by: dayOff.replacementOf(tech.id) } : { kind: "off" };
+  return covers.length ? { kind: "shift", shift: tech.shift, covers } : { kind: "shift", shift: tech.shift };
 }

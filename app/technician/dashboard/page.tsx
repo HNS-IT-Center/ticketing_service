@@ -13,6 +13,7 @@ import { buttonVariants } from "@/components/ui/button";
 import AvailableTickets from "./AvailableTickets";
 import RefreshButton from "./RefreshButton";
 import TargetCard from "./TargetCard";
+import DayOffCard from "./DayOffCard";
 import PartCodeAlertCard from "@/components/service/PartCodeAlertCard";
 import { Ticket, CheckCircle, Trophy, PlusCircle, ChevronDown } from "lucide-react";
 import { getUserTitles } from "@/lib/performance";
@@ -179,6 +180,7 @@ export default async function TechnicianDashboard({ searchParams }: { searchPara
           code). Coordinators and head technicians see the store-wide list on
           no dashboard; the admin dashboard has every ticket. */}
       <PartCodeAlertCard scope={{ technician_id: session.userId }} portal="technician" />
+      <DayOffCard userId={session.userId} />
 
       {/* What to work on now: the tickets already in hand come first. */}
       <section aria-labelledby="active-tickets" className="flex flex-col gap-3">

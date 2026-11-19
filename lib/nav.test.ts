@@ -17,9 +17,9 @@ describe("navFor — the defaults keep each role's menu", () => {
   it("gives an administrator every group, starting with their dashboard", () => {
     const m = menu({ role: "Administrator" });
     expect(m[0].items[0]).toMatchObject({ href: "/admin/dashboard", label: "Dashboard" });
-    expect(m.map((s) => s.key)).toEqual(["home", "tickets", "rma", "store", "finance", "performance", "log", "master", "settings"]);
+    expect(m.map((s) => s.key)).toEqual(["home", "tickets", "rma", "store", "finance", "performance", "team", "log", "master", "settings"]);
     expect(hrefs({ role: "Administrator" })).toEqual(
-      expect.arrayContaining(["/admin/tickets", "/admin/tickets/create", "/rma/dashboard", "/toko/dashboard", "/stok/rakitan", "/finance/klaim", "/logs", "/admin/users"]),
+      expect.arrayContaining(["/admin/tickets", "/admin/tickets/create", "/rma/dashboard", "/toko/dashboard", "/stok/rakitan", "/finance/klaim", "/logs", "/admin/users", "/toko/jadwal"]),
     );
   });
 
@@ -29,8 +29,13 @@ describe("navFor — the defaults keep each role's menu", () => {
       "/technician/tickets",
       "/technician/tickets/create",
       "/technician/leaderboard",
-      "/technician/schedule",
     ]);
+  });
+
+  it("gives the schedule page to whoever may set schedules — by default the store coordinator", () => {
+    expect(hrefs({ role: "Technician", is_team_leader: true })).toContain("/technician/schedule");
+    expect(hrefs({ role: "Technician", is_head_technician: true })).not.toContain("/technician/schedule");
+    expect(hrefs({ role: "Technician" }, [["manage_schedule", "technician", true]])).toContain("/technician/schedule");
   });
 
   it("gives a head technician Semua Tiket", () => {

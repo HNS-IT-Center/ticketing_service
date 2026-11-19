@@ -61,6 +61,20 @@ export function targetFor(rows: readonly TargetRow[], technicianId: string, mont
   return defaultTarget(rows, month);
 }
 
+/** A month's leave as it bears on the target (lib/day-off.ts `leaveFactor`). */
+export type LeaveShare = { scheduled: number; leave: number; factor: number };
+
+/**
+ * The target after leave (owner, 2026-11-19: "cuti mengurangi target"): each
+ * measure scaled by the share of scheduled days not on leave, rounded. No
+ * leave, or nothing to measure it against, leaves the target as it is.
+ */
+export function scaleTarget(target: MonthTarget, share: LeaveShare | undefined): MonthTarget & { leaveDays: number } {
+  if (!share || share.leave === 0 || share.factor >= 1) return { ...target, leaveDays: 0 };
+  const scale = (v: number | null) => (v === null ? null : Math.round(v * share.factor));
+  return { ...target, jobs: scale(target.jobs), revenue: scale(target.revenue), points: scale(target.points), leaveDays: share.leave };
+}
+
 export type Progress = { value: number; target: number; percent: number; met: boolean };
 
 /** How far a value is toward its target; null when there is no target on that measure. */

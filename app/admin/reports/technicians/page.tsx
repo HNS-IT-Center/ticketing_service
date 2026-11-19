@@ -7,7 +7,8 @@ import { summarizeTargets, type JobCount, type TechnicianTarget } from "@/lib/re
 import { loadTargetData } from "@/lib/reports/technicians-data";
 import { resolveReportMonth } from "@/lib/reports/parts-data";
 import { monthLabel } from "@/lib/reports/parts";
-import { DEFAULT_SCOPE, defaultTarget, progress, targetFor } from "@/lib/reports/targets";
+import { DEFAULT_SCOPE, defaultTarget, progress, scaleTarget, targetFor } from "@/lib/reports/targets";
+import { loadLeaveFactors } from "@/lib/day-off-server";
 import { loadTargetRows } from "@/lib/reports/targets-data";
 import ProgressBar from "@/components/targets/ProgressBar";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
@@ -43,6 +44,14 @@ export default async function TechnicianTargetPage({
   const summary = summarizeTargets(data?.technicians ?? [], data?.doneTickets ?? [], data?.lines ?? []);
   const { totals } = summary;
   const shopTarget = defaultTarget(targetRows, month);
+  // Progress is judged against the target less leave (lib/day-off.ts); the
+  // editor still edits the target as set.
+  const leave = await loadLeaveFactors(summary.rows.map((r) => r.technician.id), month);
+  const targetOf = (id: string) => scaleTarget(targetFor(targetRows, id, month), leave.get(id));
+  const leaveNote = (id: string) => {
+    const n = targetOf(id).leaveDays;
+    return n > 0 ? ` · −${n} hari cuti` : "";
+  };
   const monthText = monthLabel(month);
 
   const sourceLabel = (source: string) =>
@@ -76,6 +85,7 @@ export default async function TechnicianTargetPage({
       cell: (r) => (
         <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
           {sourceLabel(targetFor(targetRows, r.technician.id, month).source)}
+          {leaveNote(r.technician.id)}
         </span>
       ),
     },
@@ -89,7 +99,7 @@ export default async function TechnicianTargetPage({
             {r.jobs}
             {r.untyped > 0 && <span className="text-xs text-tone-amber-fg"> (+{r.untyped} diketik)</span>}
           </span>
-          <ProgressBar progress={progress(r.jobs, targetFor(targetRows, r.technician.id, month).jobs)} />
+          <ProgressBar progress={progress(r.jobs, targetOf(r.technician.id).jobs)} />
         </div>
       ),
     },
@@ -103,7 +113,7 @@ export default async function TechnicianTargetPage({
             {r.unpriced > 0 && <span className="text-xs whitespace-normal text-tone-amber-fg"> ({r.unpriced} tanpa harga)</span>}
           </span>
           <ProgressBar
-            progress={progress(r.revenue, targetFor(targetRows, r.technician.id, month).revenue)}
+            progress={progress(r.revenue, targetOf(r.technician.id).revenue)}
             format={formatRupiahCompact}
           />
         </div>
@@ -115,7 +125,7 @@ export default async function TechnicianTargetPage({
       cell: (r) => (
         <div className="flex flex-col gap-1">
           <strong>{r.points}</strong>
-          <ProgressBar progress={progress(r.points, targetFor(targetRows, r.technician.id, month).points)} />
+          <ProgressBar progress={progress(r.points, targetOf(r.technician.id).points)} />
         </div>
       ),
     },
@@ -144,7 +154,10 @@ export default async function TechnicianTargetPage({
       mobile: "hidden",
       cell: (r) => (
         <div className="flex flex-col items-start gap-1.5">
-          <span className="text-xs whitespace-nowrap text-muted-foreground">{sourceLabel(targetFor(targetRows, r.technician.id, month).source)}</span>
+          <span className="text-xs whitespace-nowrap text-muted-foreground">
+            {sourceLabel(targetFor(targetRows, r.technician.id, month).source)}
+            {leaveNote(r.technician.id)}
+          </span>
           {editor(r)}
         </div>
       ),

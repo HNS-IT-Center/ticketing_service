@@ -20,12 +20,13 @@ const POLL_MS = 30_000;
 interface Notification {
   id: string;
   type: string;
-  ticket_id: string;
+  /** Null for a notice about no ticket (type `schedule`). */
+  ticket_id: string | null;
   reference_id: string | null;
   is_read: boolean;
   created_at: string;
   message?: string | null;
-  ticket?: { ticket_code: string };
+  ticket?: { ticket_code: string } | null;
 }
 
 export default function NotificationBell({ role }: { role: string }) {
@@ -197,10 +198,16 @@ export default function NotificationBell({ role }: { role: string }) {
               </div>
             ) : (
               notifications.slice(0, 10).map((n) => {
-                const ticketLink = ticketHrefForPortal(role as Portal, n.ticket_id);
+                const ticketLink = n.ticket_id
+                  ? ticketHrefForPortal(role as Portal, n.ticket_id)
+                  : role === "technician"
+                    ? "/technician/dashboard"
+                    : "/";
 
                 const notifLabel =
-                  n.type === "message"
+                  n.type === "schedule"
+                    ? "🗓️ Jadwal libur"
+                    : n.type === "message"
                     ? "💬 New message on your ticket"
                     : n.type === "assigned"
                     ? "📋 You have been assigned a ticket"

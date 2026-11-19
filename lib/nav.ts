@@ -155,8 +155,8 @@ const GROUPS: Group[] = [
     title: "Tim",
     icon: "users",
     entries: [
-      { label: "Jadwal", icon: "calendar", href: "/technician/schedule", rule: { roles: ["Technician"] } },
-      { label: "Jadwal Teknisi", icon: "calendar", href: "/toko/jadwal", rule: { cap: "page_toko_schedule", roles: ["StoreSupervisor"] } },
+      { label: "Jadwal", icon: "calendar", href: "/technician/schedule", rule: { cap: "manage_schedule", roles: ["Technician"] } },
+      { label: "Jadwal Teknisi", icon: "calendar", href: "/toko/jadwal", rule: { cap: "page_toko_schedule", roles: ["StoreSupervisor", "Administrator"] } },
       { label: "Daftar User", icon: "contact", href: "/toko/tim", rule: { cap: "page_toko_team", roles: ["StoreSupervisor"] } },
     ],
   },

@@ -2,7 +2,8 @@ import "server-only";
 import { db } from "@/lib/db";
 import { EARNING_TRANSITION_FILTER } from "@/lib/kpi";
 import { currentMonth } from "@/lib/reports/parts";
-import { targetFor } from "@/lib/reports/targets";
+import { scaleTarget, targetFor } from "@/lib/reports/targets";
+import { loadLeaveFactors } from "@/lib/day-off-server";
 import { loadTargetRows } from "@/lib/reports/targets-data";
 import { summarizeTargets } from "@/lib/reports/technicians";
 import { loadTargetData } from "@/lib/reports/technicians-data";
@@ -141,7 +142,8 @@ export async function loadAdminDashboard(grain: Grain, now: number) {
   const summary = summarizeTargets(targetData?.technicians ?? [], targetData?.doneTickets ?? [], targetData?.lines ?? []);
   const rowsById = new Map(summary.rows.map((r) => [r.technician.id, r]));
   const targets = new Map<string, TargetProgress>();
-  for (const id of techs.keys()) targets.set(id, targetProgress(rowsById.get(id), targetFor(targetRows, id, month)));
+  const leave = await loadLeaveFactors([...techs.keys()], month);
+  for (const id of techs.keys()) targets.set(id, targetProgress(rowsById.get(id), scaleTarget(targetFor(targetRows, id, month), leave.get(id))));
 
   const att = attention(followups);
   const technicians = technicianSummaries([...techs.values()], finishes, range, targets);

@@ -12,6 +12,9 @@ import { NativeSelect } from "@/components/ui/native-select";
 import { Button } from "@/components/ui/button";
 import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { cn } from "@/lib/utils";
+import { coveringOn } from "@/lib/day-off";
+import { loadCoverRules, loadDayOffMembers, scheduleScopeFor } from "@/lib/day-off-server";
+import { DayOffBoard } from "@/components/schedule/DayOffBoard";
 
 export const metadata = { title: "Jadwal Teknisi — HNS IT Center" };
 
@@ -29,7 +32,7 @@ const CELL_STYLE: Record<ScheduleCell["kind"], string> = {
 function cellText(c: ScheduleCell): { main: string; sub?: string } {
   switch (c.kind) {
     case "shift":
-      return { main: shiftLabel(c.shift) };
+      return { main: shiftLabel(c.shift), sub: c.covers?.length ? `ganti ${c.covers.join(", ")}` : undefined };
     case "covering":
       return { main: `${shiftLabel(c.shift)}`, sub: `gantikan ${c.for}` };
     case "covered":
@@ -37,19 +40,20 @@ function cellText(c: ScheduleCell): { main: string; sub?: string } {
     case "leave":
       return { main: "Cuti", sub: c.reason ?? undefined };
     case "off":
-      return { main: "Libur" };
+      return { main: "Libur", sub: c.by ? `diganti ${c.by}` : c.by === null ? "tanpa pengganti" : undefined };
     case "unset":
       return { main: "—" };
   }
 }
 
 /**
- * The week of the kepala toko's technicians, read only: shift per day, leave,
- * and who covers whom. Leave and swaps are set by the store coordinator in the
- * technician portal; the weekly pattern on the admin's user form.
+ * The week of the kepala toko's technicians: shift per day, leave, and who
+ * covers whom. Above it, the libur tetap board — editable by whoever holds
+ * "Kelola jadwal teknisi" (lib/day-off-server.ts), read only otherwise. Leave
+ * and swaps are set by the store coordinator in the technician portal.
  */
 export default async function StoreSchedulePage({ searchParams }: { searchParams: Promise<Search> }) {
-  const { stores } = await requireStoreViewer("page_toko_schedule");
+  const { session, stores } = await requireStoreViewer("page_toko_schedule");
   if (stores.length === 0) return <NoStores title="Jadwal Teknisi" />;
   const params = await searchParams;
   const { chosen, shown, ids } = pickStores(stores, params.store);
@@ -65,7 +69,7 @@ export default async function StoreSchedulePage({ searchParams }: { searchParams
   });
   const techIds = technicians.map((t) => t.id);
   const range = { gte: new Date(`${days[0]}T00:00:00Z`), lte: new Date(`${days[6]}T00:00:00Z`) };
-  const [leaves, overrides] = await Promise.all([
+  const [leaves, overrides, members, coverRules, scope] = await Promise.all([
     db.technicianLeave.findMany({ where: { technician_id: { in: techIds }, date: range }, select: { technician_id: true, date: true, reason: true } }),
     db.shiftOverride.findMany({
       where: { date: range, OR: [{ original_tech_id: { in: techIds } }, { override_tech_id: { in: techIds } }] },
@@ -78,7 +82,15 @@ export default async function StoreSchedulePage({ searchParams }: { searchParams
         override_tech: { select: { name: true } },
       },
     }),
+    loadDayOffMembers(ids),
+    loadCoverRules(techIds),
+    scheduleScopeFor(session),
   ]);
+  const replacementName = new Map(members.map((m) => [m.id, m.replacement?.name ?? null]));
+  const cover = {
+    replacementOf: (id: string) => replacementName.get(id) ?? null,
+    coveringOn: (id: string, day: string) => coveringOn(id, day, coverRules).map((r) => r.technicianName),
+  };
   const names = new Map<string, string>();
   for (const t of technicians) names.set(t.id, t.name);
   for (const o of overrides) {
@@ -101,6 +113,7 @@ export default async function StoreSchedulePage({ searchParams }: { searchParams
         leaveRows,
         overrideRows,
         (id) => names.get(id) ?? "teknisi lain",
+        cover,
       ),
     ),
   }));
@@ -153,6 +166,8 @@ export default async function StoreSchedulePage({ searchParams }: { searchParams
         )}
       </div>
 
+      <DayOffBoard members={members} canEdit={scope !== null} />
+
       <Card>
         <CardContent className="overflow-x-auto">
           {rows.length === 0 ? (
@@ -192,7 +207,11 @@ export default async function StoreSchedulePage({ searchParams }: { searchParams
                         <td
                           key={days[i]}
                           title={t.sub ? `${t.main} — ${t.sub}` : t.main}
-                          className={cn("h-14 rounded-md border px-1.5 py-1 text-center align-middle", CELL_STYLE[c.kind], days[i] === today && "ring-2 ring-primary/40")}
+                          className={cn(
+                            "h-14 rounded-md border px-1.5 py-1 text-center align-middle",
+                            CELL_STYLE[c.kind === "shift" && c.covers?.length ? "covering" : c.kind],
+                            days[i] === today && "ring-2 ring-primary/40",
+                          )}
                         >
                           <span className="block text-xs font-semibold">{t.main}</span>
                           {t.sub && <span className="block truncate text-[0.6875rem]">{t.sub}</span>}

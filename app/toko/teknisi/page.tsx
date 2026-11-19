@@ -7,7 +7,8 @@ import { formatRupiah, formatRupiahCompact } from "@/lib/charges";
 import { summarizeTargets, type TechnicianTarget } from "@/lib/reports/technicians";
 import { loadTargetData } from "@/lib/reports/technicians-data";
 import { monthLabel } from "@/lib/reports/parts";
-import { progress, targetFor } from "@/lib/reports/targets";
+import { progress, scaleTarget, targetFor } from "@/lib/reports/targets";
+import { loadLeaveFactors } from "@/lib/day-off-server";
 import { loadTargetRows } from "@/lib/reports/targets-data";
 import ProgressBar from "@/components/targets/ProgressBar";
 import { CategorySection, NoStores, PeriodFilter, TechnicianSection } from "@/components/toko/Sections";
@@ -43,6 +44,9 @@ export default async function StoreTechniciansPage({ searchParams }: { searchPar
     targetStore ? loadTargetRows(month) : Promise.resolve([]),
   ]);
   const targets = targetData ? summarizeTargets(targetData.technicians, targetData.doneTickets, targetData.lines) : null;
+  // Against the target less leave, as the Target Teknisi report judges it.
+  const leave = await loadLeaveFactors(targets?.rows.map((r) => r.technician.id) ?? [], month);
+  const targetOf = (id: string) => scaleTarget(targetFor(targetRows, id, month), leave.get(id));
 
   const targetColumns: DataTableColumn<TechnicianTarget>[] = [
     { key: "name", sortValue: (r) => r.technician.name, header: "Teknisi", mobile: "title", cell: (r) => <span className="font-semibold">{r.technician.name}</span> },
@@ -53,7 +57,7 @@ export default async function StoreTechniciansPage({ searchParams }: { searchPar
       cell: (r) => (
         <div className="flex flex-col gap-1">
           <span>{r.jobs}</span>
-          <ProgressBar progress={progress(r.jobs, targetFor(targetRows, r.technician.id, month).jobs)} />
+          <ProgressBar progress={progress(r.jobs, targetOf(r.technician.id).jobs)} />
         </div>
       ),
     },
@@ -63,7 +67,7 @@ export default async function StoreTechniciansPage({ searchParams }: { searchPar
       cell: (r) => (
         <div className="flex flex-col gap-1">
           <span className="whitespace-nowrap">{formatRupiah(r.revenue)}</span>
-          <ProgressBar progress={progress(r.revenue, targetFor(targetRows, r.technician.id, month).revenue)} format={formatRupiahCompact} />
+          <ProgressBar progress={progress(r.revenue, targetOf(r.technician.id).revenue)} format={formatRupiahCompact} />
         </div>
       ),
     },
@@ -73,7 +77,7 @@ export default async function StoreTechniciansPage({ searchParams }: { searchPar
       cell: (r) => (
         <div className="flex flex-col gap-1">
           <strong>{r.points}</strong>
-          <ProgressBar progress={progress(r.points, targetFor(targetRows, r.technician.id, month).points)} />
+          <ProgressBar progress={progress(r.points, targetOf(r.technician.id).points)} />
         </div>
       ),
     },

@@ -117,6 +117,7 @@ enum NotificationType {
   completed   // Technician completed a ticket (includes points earned)
   rma_update  // RMA case moved to a new state
   needs_assignment // A new ticket has no technician yet; sent to the store's coordinators
+  schedule    // Libur tetap: days off saved, a fixed replacement named, today's cover (no ticket)
 }
 
 enum CleaningPackage {
@@ -279,6 +280,8 @@ model User {
   leaves             TechnicianLeave[]
   overridden_shifts  ShiftOverride[]       @relation("OriginalShift")
   overriding_shifts  ShiftOverride[]       @relation("OverrideShift")
+  day_off_rule       TechnicianDayOffRule? @relation("DayOffRuleOf")
+  covering_for       TechnicianDayOffRule[] @relation("DayOffReplacement")
   assignment_requests TicketAssignmentRequest[]
   titles             UserTitle[]
   rma_handovers      RmaCase[]             @relation("RmaHandedOverBy")
@@ -667,8 +670,9 @@ model Notification {
   id        String @id @default(cuid())
   user_id   String
   user      User   @relation(fields: [user_id], references: [id])
-  ticket_id String
-  ticket    Ticket @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
+  // Null for a notice about no ticket (type `schedule`, 2026-11-19).
+  ticket_id String?
+  ticket    Ticket? @relation(fields: [ticket_id], references: [id], onDelete: Cascade)
 
   type         NotificationType
   reference_id String? // e.g. message_id or status_log_id
@@ -706,6 +710,21 @@ model TechnicianLeave {
   created_at    DateTime @default(now())
 
   @@unique([technician_id, date])
+}
+
+/// Libur tetap (2026-11-19): who covers a technician on their weekly days off,
+/// and a note. The days off themselves are the complement of User.work_days,
+/// which every schedule figure already reads (lib/day-off.ts).
+model TechnicianDayOffRule {
+  technician_id   String   @id
+  technician      User     @relation("DayOffRuleOf", fields: [technician_id], references: [id], onDelete: Cascade)
+  replacement_id  String?
+  replacement     User?    @relation("DayOffReplacement", fields: [replacement_id], references: [id], onDelete: SetNull)
+  note            String?  @db.Text
+  updated_by_name String?
+  updated_at      DateTime @updatedAt
+
+  @@index([replacement_id])
 }
 
 model ShiftOverride {

@@ -86,6 +86,7 @@ export const ACTIVITY_ACTIONS = {
   "target.update": { area: "setting", label: "Ubah target" },
   "schedule.leave": { area: "setting", label: "Atur cuti" },
   "schedule.override": { area: "setting", label: "Tukar shift" },
+  "schedule.dayoff": { area: "setting", label: "Atur libur tetap" },
   "leaderboard.snapshot": { area: "setting", label: "Simpan leaderboard" },
 
   "export.tickets": { area: "export", label: "Export tiket" },

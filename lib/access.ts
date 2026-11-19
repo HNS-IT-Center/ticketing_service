@@ -115,6 +115,7 @@ export const CAPABILITIES = [
   "manage_users",
   "manage_stores",
   "edit_targets",
+  "manage_schedule",
   ...STOCK_CAPABILITIES,
   ...PAGE_CAPABILITIES,
 ] as const;
@@ -123,7 +124,7 @@ export type Capability = (typeof CAPABILITIES)[number];
 const SENIOR: Audience[] = ["administrator", "coordinator", "head_technician"];
 const ALL_STAFF: Audience[] = ["administrator", "coordinator", "head_technician", "technician", "sales", "rma", "store_supervisor", "stock_admin", "finance"];
 
-export type CapabilitySection = "pricing" | "ticket" | "admin" | "stock" | "pages";
+export type CapabilitySection = "pricing" | "ticket" | "admin" | "team" | "stock" | "pages";
 export const CAPABILITY_SECTIONS: Record<CapabilitySection, { title: string; hint: string }> = {
   pricing: { title: "Harga & Data Master", hint: "Siapa yang boleh melihat dan mengubah harga service." },
   ticket: {
@@ -133,6 +134,10 @@ export const CAPABILITY_SECTIONS: Record<CapabilitySection, { title: string; hin
   admin: {
     title: "Administrasi",
     hint: "Mengelola akun, toko, dan target. Hanya untuk role bertipe dasar Admin. Akun Admin dan Owner tetap hanya bisa diubah Owner.",
+  },
+  team: {
+    title: "Tim & Jadwal",
+    hint: "Mengatur jadwal teknisi. Koordinator dan Kepala Toko hanya untuk toko yang dipegangnya; Admin semua toko.",
   },
   pages: {
     title: "Halaman & Menu",
@@ -283,6 +288,13 @@ export const CAPABILITY_INFO: Record<
     defaults: ["administrator"],
     section: "admin",
     appliesTo: ["administrator"],
+  },
+  manage_schedule: {
+    label: "Kelola jadwal teknisi",
+    hint: "Mengatur libur tetap dan penggantinya, mencatat cuti, dan tukar shift untuk teknisi di toko yang dipegang.",
+    defaults: ["administrator", "coordinator"],
+    section: "team",
+    appliesTo: ["administrator", "technician", "coordinator", "head_technician", "store_supervisor"],
   },
   view_stock_utama: { label: "Lihat stok Gudang Utama", hint: "Ikut dihitung di stok total.", defaults: ALL_STAFF, section: "stock" },
   view_stock_nagoyahill: { label: "Lihat stok Nagoyahill", hint: "Stok toko NGH.", defaults: ALL_STAFF, section: "stock" },

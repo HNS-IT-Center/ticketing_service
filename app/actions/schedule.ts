@@ -1,25 +1,23 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireRole } from "@/lib/session";
+import { requireSession } from "@/lib/session";
+import { scheduleScopeFor, technicianInScope } from "@/lib/day-off-server";
 import { revalidatePath } from "next/cache";
 import { logActivity } from "@/lib/activity";
 
 export async function assignLeaveAction(formData: FormData) {
-  const session = await requireRole("Technician");
-  
-  // Coordinator check
-  const me = await db.user.findUnique({
-    where: { id: session.userId },
-    select: { is_team_leader: true }
-  });
-  if (!me?.is_team_leader) return { error: "Access Denied" };
+  const session = await requireSession();
+  // "Kelola jadwal teknisi" in Role & Izin, over the stores one holds.
+  const scope = await scheduleScopeFor(session);
+  if (!scope) return { error: "Access Denied" };
 
   const technician_id = formData.get("technician_id") as string;
   const dateStr = formData.get("date") as string;
   const reason = formData.get("reason") as string | null;
 
   if (!technician_id || !dateStr) return { error: "Missing required fields" };
+  if (!(await technicianInScope(scope, technician_id))) return { error: "Teknisi ini tidak ada di toko yang kamu pegang." };
 
   await db.technicianLeave.upsert({
     where: {
@@ -48,17 +46,15 @@ export async function assignLeaveAction(formData: FormData) {
   );
 
   revalidatePath("/technician/schedule");
+  revalidatePath("/toko/jadwal");
   return { success: true };
 }
 
 export async function overrideShiftAction(formData: FormData) {
-  const session = await requireRole("Technician");
-  
-  const me = await db.user.findUnique({
-    where: { id: session.userId },
-    select: { is_team_leader: true }
-  });
-  if (!me?.is_team_leader) return { error: "Access Denied" };
+  const session = await requireSession();
+  // "Kelola jadwal teknisi" in Role & Izin, over the stores one holds.
+  const scope = await scheduleScopeFor(session);
+  if (!scope) return { error: "Access Denied" };
 
   const original_tech_id = formData.get("original_tech_id") as string;
   const override_tech_id = formData.get("override_tech_id") as string;
@@ -67,6 +63,9 @@ export async function overrideShiftAction(formData: FormData) {
 
   if (!original_tech_id || !override_tech_id || !dateStr || !shift) {
     return { error: "Missing required fields" };
+  }
+  if (!(await technicianInScope(scope, original_tech_id)) || !(await technicianInScope(scope, override_tech_id))) {
+    return { error: "Teknisi ini tidak ada di toko yang kamu pegang." };
   }
 
   await db.shiftOverride.upsert({
@@ -99,5 +98,6 @@ export async function overrideShiftAction(formData: FormData) {
   );
 
   revalidatePath("/technician/schedule");
+  revalidatePath("/toko/jadwal");
   return { success: true };
 }

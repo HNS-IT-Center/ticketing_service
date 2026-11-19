@@ -4,7 +4,8 @@ import { summarizeTargets } from "@/lib/reports/technicians";
 import { loadTargetData } from "@/lib/reports/technicians-data";
 import { resolveReportMonth } from "@/lib/reports/parts-data";
 import { monthLabel } from "@/lib/reports/parts";
-import { progress, targetFor } from "@/lib/reports/targets";
+import { progress, scaleTarget, targetFor } from "@/lib/reports/targets";
+import { loadLeaveFactors } from "@/lib/day-off-server";
 import { loadTargetRows } from "@/lib/reports/targets-data";
 import ProgressBar from "@/components/targets/ProgressBar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -15,13 +16,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
  */
 export default async function TargetCard({ technicianId }: { technicianId: string }) {
   const month = resolveReportMonth(null);
-  const [data, rows] = await Promise.all([loadTargetData(month, null, technicianId), loadTargetRows(month)]);
+  const [data, rows, leave] = await Promise.all([
+    loadTargetData(month, null, technicianId),
+    loadTargetRows(month),
+    loadLeaveFactors([technicianId], month),
+  ]);
   const summary = summarizeTargets(data?.technicians ?? [], data?.doneTickets ?? [], data?.lines ?? []);
   const mine = summary.rows.find((r) => r.technician.id === technicianId);
   const jobs = mine?.jobs ?? 0;
   const revenue = mine?.revenue ?? 0;
   const points = mine?.points ?? 0;
-  const target = targetFor(rows, technicianId, month);
+  // Less the share of this month's working days on leave (lib/day-off.ts).
+  const target = scaleTarget(targetFor(rows, technicianId, month), leave.get(technicianId));
 
   const measures = [
     { label: "Jasa", value: String(jobs), p: progress(jobs, target.jobs), format: undefined },
@@ -38,6 +44,7 @@ export default async function TargetCard({ technicianId }: { technicianId: strin
         <CardDescription className="text-xs">
           Dari tiket service yang kamu selesaikan bulan ini dan jasa yang dicatat di Rincian Biaya.
           {target.source === "none" && " Belum ada target yang diatur untuk bulan ini."}
+          {target.leaveDays > 0 && ` Target sudah dikurangi ${target.leaveDays} hari cuti.`}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">

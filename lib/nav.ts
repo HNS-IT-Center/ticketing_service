@@ -88,6 +88,8 @@ const GROUPS: Group[] = [
       },
       { label: "Tiket Toko", icon: "ticket", href: "/toko/tickets", rule: { cap: "page_toko_tickets", roles: ["StoreSupervisor", "Administrator"] } },
       { label: "Tindak Lanjut", icon: "list", href: "/toko/tindak-lanjut", rule: { cap: "page_toko_followups", roles: ["StoreSupervisor", "Administrator"] } },
+      // Customers are the tickets that share a phone number (owner, 2026-11-19).
+      { label: "Data Customer", icon: "contact", href: "/admin/customers", rule: { anyCap: ["page_tickets_all", "page_toko_tickets"] } },
       {
         label: "Buat Tiket",
         icon: "plus",

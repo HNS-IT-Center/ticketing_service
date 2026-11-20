@@ -64,6 +64,12 @@ describe("navFor — the defaults keep each role's menu", () => {
     );
   });
 
+  it("gives Data Customer to whoever sees every ticket or the store's tickets, not to a plain technician", () => {
+    expect(hrefs({ role: "Administrator" })).toContain("/admin/customers");
+    expect(hrefs({ role: "StoreSupervisor" })).toContain("/admin/customers");
+    expect(hrefs({ role: "Technician" })).not.toContain("/admin/customers");
+  });
+
   it("gives nobody without a portal a menu", () => {
     expect(menu({ role: "Customer" })).toEqual([]);
     expect(menu({ role: "Pending" })).toEqual([]);

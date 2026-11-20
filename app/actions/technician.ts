@@ -14,7 +14,7 @@ import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
 import { closingTimeLogEvent } from "@/lib/working-time";
 import { isServicePart, MAX_PART_PHOTOS } from "@/lib/service-parts";
 import { readPartInput } from "@/lib/replaced-part-input";
-import { EXTERNAL_WORK_OUTSTANDING, partChargeDescription } from "@/lib/charges";
+import { EXTERNAL_WORK_OUTSTANDING, billHoldsExternalWork, partChargeDescription } from "@/lib/charges";
 import { hasExternalWorkOutstanding } from "@/lib/charges-server";
 import { notifyPartCodePending } from "@/lib/part-code-notify";
 import { logActivity } from "@/lib/activity";
@@ -245,9 +245,9 @@ export async function updateTicketStatusAction(formData: FormData) {
       };
     }
 
-    // ── Guard 4: a service is not finished while part of it is still at a
-    // vendor. Its result decides what the customer is told and billed.
-    if (newStatus === "done" && ticket.ticket_type === "service" && (await hasExternalWorkOutstanding(ticket.id))) {
+    // ── Guard 4: a ticket with a bill (service, cleaning, upgrade) is not
+    // finished while part of the work is still at a vendor. Its result decides what the customer is told and billed.
+    if (newStatus === "done" && billHoldsExternalWork(ticket.ticket_type) && (await hasExternalWorkOutstanding(ticket.id))) {
       return { error: EXTERNAL_WORK_OUTSTANDING };
     }
 

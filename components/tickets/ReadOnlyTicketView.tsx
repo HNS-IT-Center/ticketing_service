@@ -24,6 +24,7 @@ import {
   TicketHeader,
   type HistoryEvent,
 } from "@/components/tickets/TicketSections";
+import { billHoldsParts } from "@/lib/charges";
 
 /**
  * One ticket, read only: everything the technician's page shows, none of its
@@ -190,7 +191,8 @@ export async function ReadOnlyTicketView({
             <WorkingTimeDisplay timeLogs={serializedTimeLogs} isDone={isDone} serverNow={Date.now()} />
           )}
           <ProofAttachmentsCard attachments={proofAttachments} />
-          {ticket.ticket_type === "service" && (
+          {(ticket.ticket_type === "service" ||
+            (billHoldsParts(ticket.ticket_type) && ticket.replaced_parts.length > 0)) && (
             <ReplacedPartsPanel
               canEdit={false}
               parts={ticket.replaced_parts.map((p) => ({

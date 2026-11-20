@@ -1275,6 +1275,13 @@ Branch `feat/libur-tetap`, not pushed. Owner's brief: Data Accurate "Jadwal & Li
 
 Checks: `tsc` clean, lint clean on every touched file (the 2 `NotificationBell` errors are the old polling ones), 1545 tests (12 pure + 6 through the real action, against the local DB). Rendered on a dev server as coordinator Raffi, plain technician Mitchel, admin and Rianto with a temporary local rule (removed afterwards, `work_days` restored to JSON null).
 
+### SPRINT 2026-11-20 — Add-ons on cleaning and upgrade tickets
+Branch `feat/addon-cleaning-upgrade`. No migration.
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| AD1 | **Rincian Biaya on cleaning and upgrade tickets** | ✅ | Owner, 2026-11-20: a customer in for a cleaning who decides on a RAM upgrade gets it on the same ticket. `billKindsFor` gives `cleaning` / `upgrade` the service bill (Jasa service from Daftar Jasa, Part from the catalogue, Service eksternal, Lainnya), added on the ticket page like a service. The package chosen at intake is **not** put on the bill by itself — staff add the lines (owner: "seperti di service"). Follows from that, through `billHoldsParts` / `PART_BILL_TYPES` in `lib/charges.ts`: **Cetak faktur** (`/faktur` was service only), "Masukkan kode" on a part, the part-code alerts and bell, the "Part yang Diganti" list once a part was billed, and the `done` guard while work is at a vendor. Points: the add-on job's Daftar Jasa points add to the type's, as on a service (`ticketTotalPoints` already summed them). **Target Teknisi** counts a cleaning or upgrade ticket only when an add-on job was billed, so a plain cleaning moves no figure. Still held (2026-11-09 item 3): the package itself as a priced line — price source for upgrade items, and whether repaste paste is billed. 1556 tests; checked on a local cleaning ticket at 1440 and 390 px |
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.

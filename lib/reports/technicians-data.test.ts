@@ -20,7 +20,10 @@ const BEFORE = new Date("2031-02-20T05:00:00Z");
 const LAST_EVENING_WIB = new Date("2031-03-31T16:30:00Z");
 const NEXT_MONTH = new Date("2031-04-02T05:00:00Z");
 
-async function ticket(key: string, opts: { tech?: string; store?: string; type?: "service" | "cleaning" | "pc_build"; done: Date[] }) {
+async function ticket(
+  key: string,
+  opts: { tech?: string; store?: string; type?: "service" | "cleaning" | "upgrade" | "pc_build"; done: Date[]; noCharge?: boolean },
+) {
   const t = await db.ticket.create({
     data: {
       ticket_code: `${RUN}-${key}`,
@@ -38,6 +41,7 @@ async function ticket(key: string, opts: { tech?: string; store?: string; type?:
       data: { ticket_id: t.id, old_status: "on_progress", new_status: "done", changed_by: ids.budi, created_at: at },
     });
   }
+  if (opts.noCharge) return;
   await db.ticketCharge.create({
     data: {
       ticket_id: t.id,
@@ -71,7 +75,10 @@ beforeAll(async () => {
   await ticket("lastEvening", { done: [LAST_EVENING_WIB] });
   await ticket("doneTwice", { done: [BEFORE, IN_MONTH] }); // first finished in February
   await ticket("nextMonth", { done: [NEXT_MONTH] });
+  // A cleaning with an add-on job billed counts; a plain one does not (owner, 2026-11-20).
   await ticket("cleaning", { type: "cleaning", done: [IN_MONTH] });
+  await ticket("cleaningPlain", { type: "cleaning", done: [IN_MONTH], noCharge: true });
+  await ticket("upgradePlain", { type: "upgrade", done: [IN_MONTH], noCharge: true });
   await ticket("pcBuild", { type: "pc_build", done: [IN_MONTH] });
   await ticket("nobody", { tech: null as unknown as string, done: [IN_MONTH] });
   await ticket("byGone", { tech: ids.gone, done: [IN_MONTH] });
@@ -90,16 +97,16 @@ afterAll(async () => {
 const mine = (ticketIds: string[]) => ticketIds.filter((id) => Object.values(ids).includes(id));
 
 describe("loadTargetData", () => {
-  it("counts a service ticket or a PC build in the month it first reached done, by WIB", async () => {
+  it("counts a service ticket, a PC build, or a cleaning with an add-on job in the month it first reached done, by WIB", async () => {
     const data = (await loadTargetData(MONTH, null))!;
     const got = mine(data.doneTickets.map((t) => t.ticketId)).sort();
-    expect(got).toEqual([ids.plain, ids.lastEvening, ids.byGone, ids.atStoreB, ids.pcBuild].sort());
+    expect(got).toEqual([ids.plain, ids.lastEvening, ids.byGone, ids.atStoreB, ids.pcBuild, ids.cleaning].sort());
   });
 
-  it("leaves out the ticket finished again, the next month's, other types, and tickets with nobody on them", async () => {
+  it("leaves out the ticket finished again, the next month's, cleanings and upgrades without an add-on, and tickets with nobody on them", async () => {
     const data = (await loadTargetData(MONTH, null))!;
     const got = data.doneTickets.map((t) => t.ticketId);
-    for (const key of ["doneTwice", "nextMonth", "cleaning", "nobody"]) expect(got).not.toContain(ids[key]);
+    for (const key of ["doneTwice", "nextMonth", "cleaningPlain", "upgradePlain", "nobody"]) expect(got).not.toContain(ids[key]);
     expect(mine((await loadTargetData("2031-02", null))!.doneTickets.map((t) => t.ticketId))).toEqual([ids.doneTwice]);
   });
 

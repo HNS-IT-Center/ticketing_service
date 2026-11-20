@@ -4,7 +4,7 @@ import { requireSession } from "@/lib/session";
 import { accessFor } from "@/lib/access-server";
 import { db } from "@/lib/db";
 import { loadTicketCharges } from "@/lib/charges-server";
-import { formatRupiah } from "@/lib/charges";
+import { billHoldsParts, formatRupiah } from "@/lib/charges";
 import { ticketPartyName } from "@/lib/ticket-party";
 import { buildInvoice, invoiceDate, invoiceFormat, printedAt } from "@/lib/invoice";
 import { CHECK_FEE_JOB_NAME } from "@/lib/check-fee";
@@ -61,7 +61,7 @@ export default async function InvoicePage({
       store_location: { select: { name: true, address: true } },
     },
   });
-  if (!ticket || ticket.ticket_type !== "service") notFound();
+  if (!ticket || !billHoldsParts(ticket.ticket_type)) notFound();
 
   const [rows, firstDone] = await Promise.all([
     loadTicketCharges(ticket.id, false),

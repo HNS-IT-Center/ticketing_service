@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import type { ChargeKind, TicketStatus } from "@prisma/client";
 import {
+  billHoldsParts,
+  billKindsFor,
+  PART_BILL_TYPES,
   ADDABLE_CHARGE_KINDS,
   chargeKindLabel,
   externalState,
@@ -191,5 +194,22 @@ describe("labels and small rules", () => {
     }
     // The shop's own labour has no vendor.
     expect(vendorFitsCharge("service_fee", both)).toBe(false);
+  });
+});
+
+describe("billKindsFor — which tickets carry a bill", () => {
+  it("gives cleaning and upgrade tickets the service bill, for add-ons (owner, 2026-11-20)", () => {
+    expect(billKindsFor("cleaning")).toEqual(billKindsFor("service"));
+    expect(billKindsFor("upgrade")).toEqual(billKindsFor("service"));
+    expect(billKindsFor("pc_build")).toEqual(["service_fee"]);
+    expect(billKindsFor("warranty_claim")).toBeNull();
+  });
+
+  it("PART_BILL_TYPES is exactly the types whose bill holds parts", () => {
+    const all = ["service", "cleaning", "upgrade", "pc_build", "warranty_claim"] as const;
+    for (const t of all) {
+      expect(billHoldsParts(t), t).toBe(Boolean(billKindsFor(t)?.includes("part")));
+      expect(PART_BILL_TYPES.includes(t), t).toBe(billHoldsParts(t));
+    }
   });
 });

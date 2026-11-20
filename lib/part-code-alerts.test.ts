@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { TicketStatus } from "@prisma/client";
+import { PART_BILL_TYPES } from "@/lib/charges";
 import {
   AWAITING_CODE_PART_WHERE,
   isServiceReady,
@@ -47,9 +48,15 @@ describe("partsAwaitingCodeCount", () => {
     expect(partsAwaitingCodeCount({ ticket_type: "service", status: "on_progress", replaced_parts: parts })).toBe(0);
   });
 
+  it("counts add-on parts on cleaning and upgrade tickets too (owner, 2026-11-20)", () => {
+    expect(partsAwaitingCodeCount({ ticket_type: "cleaning", status: "completed", replaced_parts: parts })).toBe(2);
+    expect(partsAwaitingCodeCount({ ticket_type: "upgrade", status: "done", replaced_parts: parts })).toBe(2);
+  });
+
   it("stays quiet for cancelled tickets, other ticket types, and fully coded parts", () => {
     expect(partsAwaitingCodeCount({ ticket_type: "service", status: "cancelled", replaced_parts: parts })).toBe(0);
-    expect(partsAwaitingCodeCount({ ticket_type: "cleaning", status: "completed", replaced_parts: parts })).toBe(0);
+    expect(partsAwaitingCodeCount({ ticket_type: "pc_build", status: "completed", replaced_parts: parts })).toBe(0);
+    expect(partsAwaitingCodeCount({ ticket_type: "warranty_claim", status: "completed", replaced_parts: parts })).toBe(0);
     expect(
       partsAwaitingCodeCount({ ticket_type: "service", status: "completed", replaced_parts: [{ sku: "1" }] }),
     ).toBe(0);
@@ -69,7 +76,7 @@ describe("ticketsAwaitingPartCodeWhere", () => {
       AND: [
         scope,
         {
-          ticket_type: "service",
+          ticket_type: { in: [...PART_BILL_TYPES] },
           status: { in: [...SERVICE_READY_STATUSES] },
           replaced_parts: { some: AWAITING_CODE_PART_WHERE },
         },

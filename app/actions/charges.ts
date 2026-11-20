@@ -13,6 +13,7 @@ import { storageFailedMessage } from "@/lib/upload-limit";
 import { logActivity, type ActivityActor } from "@/lib/activity";
 import { isServicePart, MAX_PART_PHOTOS, requiresItemName } from "@/lib/service-parts";
 import {
+  billHoldsParts,
   billKindsFor,
   chargeKindLabel,
   formatRupiah,
@@ -68,7 +69,7 @@ async function guardTicket(
   const ticket = await db.ticket.findUnique({ where: { id: ticketId }, select: TICKET_SCOPE });
   if (!ticket) return { error: "Tiket tidak ditemukan." };
   const kinds = billKindsFor(ticket.ticket_type);
-  if (!kinds) return { error: "Rincian biaya hanya ada pada tiket service dan Build PC." };
+  if (!kinds) return { error: "Tiket klaim garansi tidak memakai rincian biaya." };
   const perms = await chargePermissions(session.userId, ticket);
   if (!perms.canEdit) return { error: "Anda tidak dapat mengubah rincian biaya tiket ini." };
   return { userId: session.userId, actor: session, perms, kinds };
@@ -537,7 +538,7 @@ export async function linkPartCatalogAction(chargeId: string, catalogItemId: num
   });
   const part = charge?.replaced_part;
   if (!charge || !part) return { error: "Part tidak ditemukan." };
-  if (charge.ticket.ticket_type !== "service") return { error: "Rincian biaya hanya ada pada tiket service." };
+  if (!billHoldsParts(charge.ticket.ticket_type)) return { error: "Tiket ini tidak memakai part di rincian biaya." };
   const perms = await chargePermissions(session.userId, charge.ticket);
   if (!perms.canLinkPartCode) return { error: "Anda tidak dapat mengubah part pada tiket ini." };
   if (part.sku) return { error: "Part ini sudah punya kode Accurate." };

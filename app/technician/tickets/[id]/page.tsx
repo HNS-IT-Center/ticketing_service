@@ -37,6 +37,7 @@ import {
   TicketHeader,
   type HistoryEvent,
 } from "@/components/tickets/TicketSections";
+import { billHoldsParts } from "@/lib/charges";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -334,9 +335,10 @@ export default async function TechnicianTicketDetailPage({
           {/* Proof Attachments — shown below working time */}
           <ProofAttachmentsCard attachments={proofAttachments} />
 
-          {/* Parts replaced — service tickets only; the other types have their
-              own detail tables and none of them means "a part was fitted". */}
-          {ticket.ticket_type === "service" && (
+          {/* Parts fitted — always on a service ticket; on a cleaning or upgrade
+              ticket only once an add-on part was billed (owner, 2026-11-20). */}
+          {(ticket.ticket_type === "service" ||
+            (billHoldsParts(ticket.ticket_type) && ticket.replaced_parts.length > 0)) && (
             <ReplacedPartsPanel
               canEdit={isAssigned}
               // A part is entered in Rincian Biaya, once, with its price.

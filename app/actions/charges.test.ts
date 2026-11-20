@@ -67,7 +67,7 @@ async function user(key: string, role: string, flags: { is_team_leader?: boolean
 }
 const as = (key: string) => Object.assign(session, { userId: ids[key], role: roles[key] });
 
-async function makeTicket(over: { type?: "service" | "cleaning"; status?: "on_progress" | "completed" | "done"; store?: string } = {}) {
+async function makeTicket(over: { type?: "service" | "cleaning" | "upgrade" | "warranty_claim"; status?: "on_progress" | "completed" | "done"; store?: string } = {}) {
   const t = await db.ticket.create({
     data: {
       ticket_code: `${RUN}-${Math.random().toString(36).slice(2, 9)}`,
@@ -244,10 +244,20 @@ describe("what reaches the browser", () => {
     expect((await loadChargesPanel(ids.tech, ticket))?.perms.canViewMargin).toBe(false);
   });
 
-  it("a ticket that is not a service has no bill", async () => {
-    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: await makeTicket({ type: "cleaning" }) } });
+  it("a warranty claim has no bill", async () => {
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: await makeTicket({ type: "warranty_claim" }) } });
     expect(await loadChargesPanel(ids.tech, ticket)).toBeNull();
-    expect(await add(ticket.id, { kind: "service_fee", service_job_id: ids.job })).toMatchObject({ error: expect.stringContaining("tiket service") });
+    expect(await add(ticket.id, { kind: "service_fee", service_job_id: ids.job })).toMatchObject({ error: expect.stringContaining("klaim garansi") });
+  });
+
+  it("cleaning and upgrade tickets take add-ons, like a service (owner, 2026-11-20)", async () => {
+    for (const type of ["cleaning", "upgrade"] as const) {
+      const ticket = await db.ticket.findUniqueOrThrow({ where: { id: await makeTicket({ type }) } });
+      const panel = await loadChargesPanel(ids.tech, ticket);
+      expect(panel?.kinds, type).toContain("part");
+      expect(await add(ticket.id, { kind: "service_fee", service_job_id: ids.job }), type).toEqual({ success: true });
+      expect(await db.ticketCharge.count({ where: { ticket_id: ticket.id, kind: "service_fee" } }), type).toBe(1);
+    }
   });
 });
 

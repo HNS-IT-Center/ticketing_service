@@ -35,22 +35,39 @@ const LABOUR_ONLY: readonly ChargeKind[] = ["service_fee"];
  * assembly fee is the technician's job and counts toward their target (owner,
  * 2026-11-16), while the components are sold through the e-commerce quotation
  * and billed there.
+ *
+ * Cleaning and upgrade tickets hold everything too, for add-ons (owner,
+ * 2026-11-20): a customer in for a cleaning who decides on a RAM upgrade gets
+ * the job and the RAM on the same ticket. The package chosen at intake is not
+ * put on the bill by itself — staff add the lines, as on a service ticket.
  */
 export function billKindsFor(ticketType: TicketType): readonly ChargeKind[] | null {
   switch (ticketType) {
     case "service":
+    case "cleaning":
+    case "upgrade":
       return SERVICE_BILL;
     case "pc_build":
       return LABOUR_ONLY;
     case "warranty_claim":
-    case "cleaning":
-    case "upgrade":
       return null;
     default: {
       const _exhaustive: never = ticketType;
       return _exhaustive;
     }
   }
+}
+
+/** Ticket types whose bill holds parts — the ones with an invoice and part codes to chase. */
+export const PART_BILL_TYPES: readonly TicketType[] = ["service", "cleaning", "upgrade"];
+
+export function billHoldsParts(ticketType: TicketType | string): boolean {
+  return (PART_BILL_TYPES as readonly string[]).includes(ticketType);
+}
+
+/** Ticket types whose bill may send work out to a vendor, so `done` waits for it to come back. */
+export function billHoldsExternalWork(ticketType: TicketType | string): boolean {
+  return billHoldsParts(ticketType);
 }
 
 export function chargeKindLabel(kind: ChargeKind): string {

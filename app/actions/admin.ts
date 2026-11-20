@@ -15,7 +15,7 @@ import {
 import { ticketTotalPoints, JOB_POINT_CHARGES } from "@/lib/points";
 import { closingTimeLogEvent } from "@/lib/working-time";
 import { deleteFromStorage } from "@/lib/r2";
-import { EXTERNAL_WORK_OUTSTANDING } from "@/lib/charges";
+import { EXTERNAL_WORK_OUTSTANDING, billHoldsExternalWork } from "@/lib/charges";
 import { hasExternalWorkOutstanding } from "@/lib/charges-server";
 import { notifyPartCodePending } from "@/lib/part-code-notify";
 import { logActivity } from "@/lib/activity";
@@ -396,7 +396,7 @@ export async function adminUpdateTicketStatusAction(
 
   // Mirrors guard 4 in updateTicketStatusAction: not finished while part of
   // the work is still at a vendor.
-  if (newStatus === "done" && ticket.ticket_type === "service" && (await hasExternalWorkOutstanding(ticket.id))) {
+  if (newStatus === "done" && billHoldsExternalWork(ticket.ticket_type) && (await hasExternalWorkOutstanding(ticket.id))) {
     return { error: EXTERNAL_WORK_OUTSTANDING };
   }
 

@@ -1,6 +1,7 @@
 import "server-only";
 import { db } from "@/lib/db";
 import { AWAITING_CODE_PART_WHERE, partCodeReminderMessage } from "@/lib/part-code-alerts";
+import { billHoldsParts } from "@/lib/charges";
 
 /**
  * Bell entry for the technician holding a service ticket that has just reached
@@ -21,7 +22,7 @@ export async function notifyPartCodePending(ticketId: string): Promise<void> {
         _count: { select: { replaced_parts: { where: AWAITING_CODE_PART_WHERE } } },
       },
     });
-    if (!ticket || ticket.ticket_type !== "service" || !ticket.technician_id) return;
+    if (!ticket || !billHoldsParts(ticket.ticket_type) || !ticket.technician_id) return;
     const count = ticket._count.replaced_parts;
     if (count === 0) return;
 

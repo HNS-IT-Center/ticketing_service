@@ -1,4 +1,5 @@
 import type { Prisma, TicketStatus } from "@prisma/client";
+import { billHoldsParts, PART_BILL_TYPES } from "@/lib/charges";
 
 /**
  * "This service is finished, but a part fitted on it still has no Accurate
@@ -47,7 +48,7 @@ export function partsAwaitingCodeCount(ticket: {
   status: TicketStatus;
   replaced_parts: readonly { sku: string | null }[];
 }): number {
-  if (ticket.ticket_type !== "service" || !isServiceReady(ticket.status)) return 0;
+  if (!billHoldsParts(ticket.ticket_type) || !isServiceReady(ticket.status)) return 0;
   return ticket.replaced_parts.filter(isAwaitingCode).length;
 }
 
@@ -60,7 +61,7 @@ export function ticketsAwaitingPartCodeWhere(scope: Prisma.TicketWhereInput = {}
     AND: [
       scope,
       {
-        ticket_type: "service",
+        ticket_type: { in: [...PART_BILL_TYPES] },
         status: { in: [...SERVICE_READY_STATUSES] },
         replaced_parts: { some: AWAITING_CODE_PART_WHERE },
       },

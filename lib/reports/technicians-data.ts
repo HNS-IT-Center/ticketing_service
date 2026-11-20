@@ -5,13 +5,16 @@ import type { TargetLine, TechnicianRef } from "./technicians";
 import type { TicketType } from "@prisma/client";
 
 const BILLED_TYPES: TicketType[] = ["service", "pc_build"];
+/** Their bill holds add-ons only (owner, 2026-11-20): counted when one was billed, so a plain cleaning moves no figure. */
+const ADD_ON_TYPES: TicketType[] = ["cleaning", "upgrade"];
 
 /**
  * A month of service work, ready for summarizeTargets.
  *
  * Service tickets and PC builds — the tickets that carry a bill
  * (`billKindsFor`); a PC build's bill is its assembly fee, the technician's
- * job (owner, 2026-11-16).
+ * job (owner, 2026-11-16). A cleaning or upgrade ticket counts only when an
+ * add-on job ("Jasa service") was billed on it.
  *
  * A ticket counts in the month it FIRST reached `done`, ever — a ticket
  * sent back to work and finished again (BL7) is not counted twice, and does
@@ -40,7 +43,17 @@ export async function loadTargetData(
 
   const firstDone = await db.ticketStatusLog.groupBy({
     by: ["ticket_id"],
-    where: { new_status: "done", created_at: { lt: range.end }, ticket: { ticket_type: { in: BILLED_TYPES }, ...ticketFilter } },
+    where: {
+      new_status: "done",
+      created_at: { lt: range.end },
+      ticket: {
+        OR: [
+          { ticket_type: { in: BILLED_TYPES } },
+          { ticket_type: { in: ADD_ON_TYPES }, charges: { some: { kind: "service_fee" } } },
+        ],
+        ...ticketFilter,
+      },
+    },
     _min: { created_at: true },
   });
   const ticketIds = firstDone

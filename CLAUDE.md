@@ -1289,6 +1289,15 @@ No migration.
 |---|------|--------|-------|
 | DC1 | **Data Customer** | ✅ | Owner, 2026-11-19: who brings units in, their number, and what they came for, on one page. `/admin/customers` (sidebar Tiket → Data Customer; door `requirePage("page_tickets_all", "page_toko_tickets")`, scoped by `storeScopeFor`, so a kepala toko sees their stores' customers and a plain technician is refused). Customers have no account — details are typed on every ticket — so `lib/customers.ts` builds them from tickets: **one customer = same name (case/spacing ignored) + same usable number**. Not the number alone: on the data one number stands for many people (`0800000000` under 18 names, a sales' own number, an office line). `usablePhone` drops placeholders (all zeros, one digit repeated, too short), so no WhatsApp button points at a fake number. Left out: store-stock claims, old claims named "Stok Toko…", "for myself" tickets booked by a staff account. Row: name + e-mail, number + WhatsApp, keperluan per ticket type with counts, tickets, last visit, store(s). Search name / number (0812… and +62… alike) / e-mail, filter keperluan, sort terakhir datang / tiket terbanyak / nama, 10/25/50. Grouped in memory (≈550 tickets). Harga and RMA internals never selected. 7 tests; checked on the local DB at 1366 and 390 px: admin 500 customers, kepala toko Gateway 352, technician refused. Data quality seen: test tickets in production show up as customers ("ZZ TEST", "developer hns"…) |
 
+### SPRINT 2026-11-21 — store-stock claims end at RMA, fewer RMA clicks
+No migration. Data fix for older tickets: `klaim-stok-completed.sql` (owner runs it on the VPS).
+
+| # | Task | Status | Notes |
+|---|------|--------|-------|
+| RS1 | **A store-stock claim ends at the RMA desk** | ✅ | Owner, 2026-11-21: after the case closed, the ticket went back to the technician at `done`, who then had to click "Ready for Pickup" and "Picked Up by Customer" with a photo of handing the unit to a customer who does not exist. `ticketStatusAfterRma` in `lib/rma/state-machine.ts`: when a case ends (`closed`, `cancelled`, `ineligible`), store stock goes straight to `completed`, customer units to `done` as before. `completed` earns nothing (`lib/kpi.ts`); the technician was paid at handover. Also clears these tickets from the kepala toko's "siap diambil" follow-up |
+| RS2 | **"Vendor Memproses" is optional** | ✅ | `submitted_to_vendor → vendor_decided` added. The desk rarely knows when the vendor took the unit in. A customer unit's Nomor Tiket User can now also be filled in with the decision, so skipping the step loses nothing |
+| RS3 | **"Unit Diterima & Tutup Case": one click** | ✅ | `vendor_decided → closed` replaces `vendor_decided → unit_received → closed`, which asked nothing in between. `unit_received_at` is still stamped (Finance measures time at the vendor up to it). `unit_received` stays in the enum, and cases already sitting there still close with "Tutup Case"; the dashboard hides that stage when it is empty |
+
 ## 📋 BACKLOG — what is likely to come next
 
 Ordered roughly by how much is already decided.

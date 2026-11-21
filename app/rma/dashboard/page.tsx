@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Dashboard RMA — HNS IT Center" };
 
-type Stage = { key: RmaStatus; title: string; hint: string };
+type Stage = { key: RmaStatus; title: string; hint: string; legacy?: true };
 
 /**
  * The queue by whose turn it is (BL28c, owner 2026-10-03): the desk, the
@@ -31,8 +31,10 @@ const LANES: { lane: RmaLane; title: string; hint: string; icon: typeof Inbox; s
       { key: "pending_verification", title: "Baru Masuk", hint: "Unit baru diserahkan teknisi. Periksa dokumen, SN, dan fisik." },
       { key: "on_hold", title: "Ditahan", hint: "Menunggu kelengkapan dari customer atau alasan lain. Selesaikan atau batalkan." },
       { key: "verified", title: "Siap Diajukan ke Vendor", hint: "Sudah diverifikasi. Pilih vendor dan ajukan." },
-      { key: "vendor_decided", title: "Keputusan Keluar", hint: "Vendor sudah memutus. Terima unitnya kembali." },
-      { key: "unit_received", title: "Unit Diterima", hint: "Tutup case agar tiket lanjut ke serah terima." },
+      { key: "vendor_decided", title: "Keputusan Keluar", hint: "Vendor sudah memutus. Begitu unit, pengganti, atau dananya kembali, klik Unit Diterima & Tutup Case." },
+      // No longer entered (one click closes from the decision since 2026-11-21);
+      // listed only while older cases still sit here.
+      { key: "unit_received", title: "Unit Diterima", hint: "Case lama yang sudah diterima. Tutup case-nya.", legacy: true },
     ],
   },
   {
@@ -152,7 +154,7 @@ export default async function RmaDashboardPage() {
           const count = laneRows.length + pre.length;
           const late = laneRows.filter((r) => r.severity === "overdue").length + pre.filter((t) => t.severity === "overdue").length;
           const active = stages.filter((s) => inStage(lane, s.key).length > 0);
-          const empty = stages.filter((s) => inStage(lane, s.key).length === 0);
+          const empty = stages.filter((s) => !s.legacy && inStage(lane, s.key).length === 0);
           return (
             <section key={lane} aria-labelledby={`lane-${lane}`} className="flex flex-col gap-3">
               <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border pb-2">

@@ -174,7 +174,11 @@ function optionalFieldsFor(
   if (to === "in_vendor_process") {
     return unitOwnership === "customer" ? ["shipping_tracking", "customer_ticket_number"] : ["shipping_tracking"];
   }
-  if (to === "vendor_decided") return ["decision_notes"];
+  // "Vendor Memproses" may be skipped (owner, 2026-11-21), so a customer
+  // unit's reference can still be filled in with the decision.
+  if (to === "vendor_decided") {
+    return unitOwnership === "customer" ? ["decision_notes", "customer_ticket_number"] : ["decision_notes"];
+  }
   return [];
 }
 

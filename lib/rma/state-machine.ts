@@ -144,6 +144,17 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
     description: "Unit sudah diterima vendor dan mulai diproses.",
   },
   {
+    // "Vendor Memproses" is optional (owner, 2026-11-21): the desk rarely
+    // learns when the vendor took the unit in, so a decision may be recorded
+    // straight from submission.
+    from: "submitted_to_vendor",
+    to: "vendor_decided",
+    label: "Catat Keputusan Vendor",
+    requires: ["decision"],
+    description:
+      "Langsung catat keputusan bila vendor sudah memutuskan. Serial number pengganti wajib jika unit diganti.",
+  },
+  {
     from: "submitted_to_vendor",
     to: "on_hold",
     label: "Tahan",
@@ -166,18 +177,24 @@ export const RMA_TRANSITIONS: readonly RmaTransition[] = [
     description: "Proses vendor tertahan. Wajib isi alasan.",
   },
   {
+    // One click where there were two, "Unit Diterima Kembali" then "Tutup
+    // Case" (owner, 2026-11-21): nothing was asked between them. The receipt
+    // date is still stamped, because Finance measures time at the vendor up to it.
     from: "vendor_decided",
-    to: "unit_received",
-    label: "Unit Diterima Kembali",
+    to: "closed",
+    label: "Unit Diterima & Tutup Case",
     requires: [],
-    description: "Unit sudah kembali dari vendor ke toko.",
+    description:
+      "Unit, penggantinya, atau dananya sudah kembali ke toko. Unit customer lanjut ke serah terima; unit stok toko langsung selesai.",
   },
   {
+    // Only for cases that reached "Unit Diterima" before the merge.
     from: "unit_received",
     to: "closed",
     label: "Tutup Case",
     requires: [],
-    description: "Case selesai. Tiket kembali ke alur serah terima ke customer.",
+    description:
+      "Case selesai. Unit customer lanjut ke serah terima; unit stok toko langsung selesai.",
   },
 ];
 
@@ -193,19 +210,30 @@ export function isTerminalRmaStatus(status: RmaStatus): boolean {
 }
 
 /**
- * Statuses that hand the parent ticket back to the normal workflow.
- * Both move the ticket from `rma_process` back to `done`.
+ * Statuses that hand the parent ticket back from `rma_process`: to `done` for
+ * a customer's unit, which still has to be handed back, and straight to
+ * `completed` for store stock (`ticketStatusAfterRma`).
  */
 export const RMA_STATUSES_RELEASING_TICKET: readonly RmaStatus[] = [
   "closed",
   "cancelled",
-  // The unit still has to go back to its owner, so the ticket returns to `done`
-  // and takes the ordinary handover chain, exactly as a closed case does.
+  // The unit still has to go back to its owner, so it leaves exactly as a
+  // closed case does: a customer's through the handover chain.
   "ineligible",
 ];
 
 export function releasesTicket(status: RmaStatus): boolean {
   return RMA_STATUSES_RELEASING_TICKET.includes(status);
+}
+
+/**
+ * Where the ticket goes when its case ends. A store-stock claim ends at the
+ * RMA desk (owner, 2026-11-21): the unit goes back to stock, so the pickup
+ * steps, and the photo of handing it to a customer, have nothing to record.
+ * `completed` earns nothing (`lib/kpi.ts`): the technician was paid at handover.
+ */
+export function ticketStatusAfterRma(unitOwnership: UnitOwnership): "done" | "completed" {
+  return unitOwnership === "store_stock" ? "completed" : "done";
 }
 
 // ── Lookups ─────────────────────────────────────────────────────────────────

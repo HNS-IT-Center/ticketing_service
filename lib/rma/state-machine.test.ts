@@ -8,6 +8,7 @@ import {
   getAllowedTransitions,
   isTerminalRmaStatus,
   releasesTicket,
+  ticketStatusAfterRma,
   offersStockInvoice,
   stockInvoiceFileError,
   validateRmaTransition,
@@ -39,10 +40,12 @@ const SPEC_TRANSITIONS: [RmaStatus, RmaStatus][] = [
   ["verified", "submitted_to_vendor"],
   ["verified", "ineligible"],
   ["submitted_to_vendor", "in_vendor_process"],
+  ["submitted_to_vendor", "vendor_decided"],
   ["submitted_to_vendor", "on_hold"],
   ["in_vendor_process", "vendor_decided"],
   ["in_vendor_process", "on_hold"],
-  ["vendor_decided", "unit_received"],
+  ["vendor_decided", "closed"],
+  // Only for cases that reached unit_received before the two steps merged.
   ["unit_received", "closed"],
 ];
 
@@ -112,6 +115,11 @@ describe("terminal states", () => {
     for (const s of ALL_STATUSES) {
       expect(releasesTicket(s), s).toBe(isTerminalRmaStatus(s));
     }
+  });
+
+  it("ends a store-stock claim at completed — there is no customer to hand it to", () => {
+    expect(ticketStatusAfterRma("store_stock")).toBe("completed");
+    expect(ticketStatusAfterRma("customer")).toBe("done");
   });
 });
 
@@ -372,7 +380,7 @@ describe("required fields", () => {
       ["on_hold", "pending_verification"],
       ["on_hold", "in_vendor_process"],
       ["submitted_to_vendor", "in_vendor_process"],
-      ["vendor_decided", "unit_received"],
+      ["vendor_decided", "closed"],
       ["unit_received", "closed"],
     ];
     for (const [from, to] of free) {
@@ -389,8 +397,7 @@ describe("happy path — replaced unit, end to end", () => {
       ["verified", "submitted_to_vendor", { vendor_name: "Asus", vendor_rma_number: "RMA-1" }],
       ["submitted_to_vendor", "in_vendor_process", {}],
       ["in_vendor_process", "vendor_decided", { decision: "replaced", replacement_sn: "SN-2" }],
-      ["vendor_decided", "unit_received", {}],
-      ["unit_received", "closed", {}],
+      ["vendor_decided", "closed", {}],
     ];
     for (const [from, to, input] of path) {
       const result = validateRmaTransition({ role: "RMA", from, to, input });
@@ -443,8 +450,12 @@ describe("getAllowedTransitions drives the UI", () => {
       }
     }
     for (const s of ALL_STATUSES) {
+      // unit_received is no longer entered: "Unit Diterima & Tutup Case"
+      // closes straight from the decision. Old cases sitting there still close.
+      if (s === "unit_received") continue;
       expect(seen.has(s), `${s} unreachable`).toBe(true);
     }
+    expect(seen.has("unit_received")).toBe(false);
   });
 });
 

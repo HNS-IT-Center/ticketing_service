@@ -16,6 +16,7 @@ import {
   canActOnRma,
   offersStockInvoice,
   releasesTicket,
+  ticketStatusAfterRma,
   stockInvoiceFileError,
   validateRmaTransition,
   type RmaTransitionInput,
@@ -706,8 +707,9 @@ export async function transitionRmaAction(formData: FormData) {
       data.shipping_tracking = input.shipping_tracking;
     }
     // A customer's unit is often given its reference only once the vendor has
-    // it; filled in here when it was not known at submission.
-    if (toStatus === "in_vendor_process" && input.customer_ticket_number) {
+    // it; filled in here, or with the decision when "Vendor Memproses" was
+    // skipped, when it was not known at submission.
+    if ((toStatus === "in_vendor_process" || toStatus === "vendor_decided") && input.customer_ticket_number) {
       data.customer_ticket_number = input.customer_ticket_number;
     }
     if (toStatus === "vendor_decided") {
@@ -716,7 +718,11 @@ export async function transitionRmaAction(formData: FormData) {
       data.replacement_sn = input.decision === "replaced" ? input.replacement_sn : null;
       data.decided_at = now;
     }
-    if (toStatus === "unit_received") data.unit_received_at = now;
+    // "Unit Diterima & Tutup Case" closes straight from the decision, so the
+    // receipt is stamped with it; a case already at unit_received has its own.
+    if (toStatus === "unit_received" || (toStatus === "closed" && fromStatus === "vendor_decided")) {
+      data.unit_received_at = now;
+    }
     if (toStatus === "ineligible") data.closed_at = now;
     if (toStatus === "closed") data.closed_at = now;
     if (toStatus === "cancelled") {
@@ -822,15 +828,18 @@ export async function transitionRmaAction(formData: FormData) {
       });
     }
 
-    // ── Closing or cancelling hands the ticket back to the normal workflow ──
+    // ── Closing or cancelling hands the ticket back ──
+    // A customer's unit returns to the handover chain at `done`; store stock
+    // ends here, at `completed` (ticketStatusAfterRma).
     if (releasesTicket(toStatus) && rmaCase.ticket.status === "rma_process") {
+      const ticketStatus = ticketStatusAfterRma(rmaCase.unit_ownership);
       await db.$transaction([
-        db.ticket.update({ where: { id: rmaCase.ticket_id }, data: { status: "done" } }),
+        db.ticket.update({ where: { id: rmaCase.ticket_id }, data: { status: ticketStatus } }),
         db.ticketStatusLog.create({
           data: {
             ticket_id: rmaCase.ticket_id,
             old_status: "rma_process",
-            new_status: "done",
+            new_status: ticketStatus,
             reason:
               toStatus === "closed"
                 ? `RMA case ${rmaCase.rma_code} closed`

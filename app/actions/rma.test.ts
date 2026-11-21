@@ -966,7 +966,7 @@ describe("KPI parity — both exits from a claim pay the same", () => {
         }
         expect(await transitionRmaAction(fd), to).toMatchObject({ success: true });
       }
-      for (const to of ["vendor_decided", "unit_received", "closed"] as const) {
+      for (const to of ["vendor_decided", "closed"] as const) {
         const fd = new FormData();
         fd.append("rmaCaseId", rmaCase!.id);
         fd.append("toStatus", to);
@@ -1219,7 +1219,7 @@ describe("transitionRmaAction — releasing the ticket", () => {
       ["submitted_to_vendor", { vendor_name: ASUS, vendor_rma_number: "V-9" }],
       ["in_vendor_process", {}],
       ["vendor_decided", { decision: "replaced", replacement_sn: "SN-NEW-9" }],
-      ["unit_received", {}],
+      // "Unit Diterima & Tutup Case": one click from the decision.
       ["closed", {}],
     ]);
 
@@ -1235,10 +1235,33 @@ describe("transitionRmaAction — releasing the ticket", () => {
 
     const closed = await db.rmaCase.findUniqueOrThrow({
       where: { id: rmaCase.id },
-      select: { status: true, decision: true, replacement_sn: true, closed_at: true },
+      select: { status: true, decision: true, replacement_sn: true, closed_at: true, unit_received_at: true },
     });
     expect(closed).toMatchObject({ status: "closed", decision: "replaced", replacement_sn: "SN-NEW-9" });
     expect(closed.closed_at).toBeInstanceOf(Date);
+    // Finance measures time at the vendor up to the receipt, so the merged
+    // step still stamps it.
+    expect(closed.unit_received_at).toBeInstanceOf(Date);
+  });
+
+  it("records the decision straight from submission — Vendor Memproses is optional", async () => {
+    const ticket = await makeTicket();
+    await handoverToRmaAction(validForm(ticket.id));
+    const rmaCase = await db.rmaCase.findUniqueOrThrow({ where: { ticket_id: ticket.id }, select: { id: true } });
+
+    await driveTo(rmaCase.id, [
+      ["verified", {}],
+      ["submitted_to_vendor", { vendor_name: ASUS, vendor_rma_number: "V-10" }],
+      ["vendor_decided", { decision: "repaired" }],
+      ["closed", {}],
+    ]);
+
+    const closed = await db.rmaCase.findUniqueOrThrow({
+      where: { id: rmaCase.id },
+      select: { status: true, decision: true, submitted_at: true },
+    });
+    expect(closed).toMatchObject({ status: "closed", decision: "repaired" });
+    expect(closed.submitted_at).toBeInstanceOf(Date);
   });
 
   it("hands the ticket back to `done` when the case is cancelled", async () => {
@@ -1253,6 +1276,59 @@ describe("transitionRmaAction — releasing the ticket", () => {
 
     const after = await db.ticket.findUnique({ where: { id: ticket.id }, select: { status: true } });
     expect(after?.status).toBe("done");
+  });
+});
+
+describe("transitionRmaAction — a store-stock claim ends at the RMA desk", () => {
+  /** Owner, 2026-11-21: the unit goes back to stock, there is no customer to hand it to. */
+  async function stockCase() {
+    const ticket = await makeTicket({ withInvoice: false });
+    const fd = validForm(ticket.id);
+    fd.set("unit_ownership", "store_stock");
+    fd.set("stock_origin", "Gudang Nagoya rak B3");
+    fd.delete("purchase_invoice_url");
+    expect(await handoverToRmaAction(fd)).toMatchObject({ success: true });
+    const rmaCase = await db.rmaCase.findUniqueOrThrow({ where: { ticket_id: ticket.id }, select: { id: true } });
+    return { ticketId: ticket.id, caseId: rmaCase.id };
+  }
+
+  async function ticketAfter(ticketId: string) {
+    const ticket = await db.ticket.findUniqueOrThrow({ where: { id: ticketId }, select: { status: true } });
+    const logs = await db.ticketStatusLog.findMany({
+      where: { ticket_id: ticketId, old_status: "rma_process" },
+      select: { new_status: true },
+    });
+    return { status: ticket.status, released: logs.map((l) => l.new_status) };
+  }
+
+  it("goes straight to completed when the case closes — no pickup steps", async () => {
+    const { ticketId, caseId } = await stockCase();
+    await driveTo(caseId, [
+      ["verified", { stock_transfer_number: "PM-21" }],
+      ["submitted_to_vendor", { vendor_name: ASUS, vendor_rma_number: "SUP-21" }],
+      ["vendor_decided", { decision: "replaced", replacement_sn: "SN-STOK-21" }],
+      ["closed", {}],
+    ]);
+    expect(await ticketAfter(ticketId)).toEqual({ status: "completed", released: ["completed"] });
+  });
+
+  it("goes straight to completed when the desk finds it ineligible", async () => {
+    const { ticketId, caseId } = await stockCase();
+    session.userId = rmaUserId;
+    session.role = "RMA";
+    const reject = new FormData();
+    reject.append("rmaCaseId", caseId);
+    reject.append("toStatus", "ineligible");
+    reject.append("ineligibility_reason", "Segel garansi rusak");
+    reject.append("damage_files", new File(["jpg"], "segel.jpg", { type: "image/jpeg" }));
+    expect(await transitionRmaAction(reject)).toMatchObject({ success: true });
+    expect(await ticketAfter(ticketId)).toEqual({ status: "completed", released: ["completed"] });
+  });
+
+  it("goes straight to completed when the claim is cancelled", async () => {
+    const { ticketId, caseId } = await stockCase();
+    await driveTo(caseId, [["cancelled", { hold_reason: "Batal diklaim, unit dijual apa adanya" }]]);
+    expect(await ticketAfter(ticketId)).toEqual({ status: "completed", released: ["completed"] });
   });
 });
 
@@ -1590,7 +1666,6 @@ describe("alur klaim lengkap — dari serah terima sampai case ditutup", () => {
       ["submitted_to_vendor", { vendor_name: `${ASUS} Service Center` }],
       ["in_vendor_process", {}],
       ["vendor_decided", { decision: "replaced", replacement_sn: "SN-PENGGANTI-1" }],
-      ["unit_received", {}],
       ["closed", {}],
     ]);
 

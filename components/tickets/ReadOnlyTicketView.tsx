@@ -13,6 +13,7 @@ import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
 import ReplacedPartsPanel from "@/app/technician/tickets/[id]/ReplacedPartsPanel";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
 import ChargesPanel from "@/components/service/ChargesPanel";
+import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
 import { PcComponentsCard, UpgradesCard } from "@/components/tickets/IntakeItems";
 import { proofKindOf } from "@/components/tickets/proof";
 import {
@@ -180,6 +181,19 @@ export async function ReadOnlyTicketView({
 
           <UpgradesCard details={ticket.upgrade_details} />
           <PcComponentsCard components={ticket.pc_components} detail={ticket.pc_build_detail} />
+          {/* The finished build and its revision, as the technician uploaded them. */}
+          {ticket.ticket_type === "pc_build" && (
+            <PcBuildHandover
+              readOnly
+              ticketId={ticket.id}
+              firstBuildUrl={ticket.pc_build_detail?.first_build_url ?? null}
+              revisionBuildUrl={ticket.pc_build_detail?.revision_build_url ?? null}
+              status={ticket.status}
+              userRole=""
+              isAssignedSales={false}
+              isAssignedTechnician={false}
+            />
+          )}
           {ticket.rma_case && <RmaStatusCard rmaCase={ticket.rma_case} now={rmaNow} claimOpenedAt={ticket.created_at} />}
           <AttachmentsCard attachments={regularAttachments} />
         </div>

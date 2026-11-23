@@ -20,6 +20,11 @@ interface PcBuildHandoverProps {
   userRole: string;
   isAssignedSales: boolean;
   isAssignedTechnician: boolean;
+  /**
+   * Photos only, no upload or replace — for the read-only ticket pages
+   * (kepala toko, Admin Stok), whoever is viewing, an administrator included.
+   */
+  readOnly?: boolean;
 }
 
 export default function PcBuildHandover({
@@ -29,6 +34,7 @@ export default function PcBuildHandover({
   userRole,
   isAssignedSales,
   isAssignedTechnician,
+  readOnly = false,
 }: PcBuildHandoverProps) {
   const [isPending, startTransition] = useTransition();
   const router = useRouter();
@@ -46,7 +52,7 @@ export default function PcBuildHandover({
   const [fbIsReplacing, setFbIsReplacing] = useState(false);
   const [fbIsPending, startFbTransition] = useTransition();
 
-  const canUpload = isAdminRole(userRole) || (userRole === "Sales" && isAssignedSales) || (userRole === "Technician" && isAssignedTechnician);
+  const canUpload = !readOnly && (isAdminRole(userRole) || (userRole === "Sales" && isAssignedSales) || (userRole === "Technician" && isAssignedTechnician));
 
   const isPdfUrl = (url: string | null) => url ? url.toLowerCase().includes(".pdf") : false;
 
@@ -332,7 +338,9 @@ export default function PcBuildHandover({
                     Camera,
                     "Upload first build layout",
                   )
-                : lockedView("Awaiting first build upload", "Technician or admin can upload the layout here")}
+                : readOnly
+                  ? lockedView("Belum ada foto rakitan jadi", "Teknisi belum meng-upload foto rakitannya")
+                  : lockedView("Awaiting first build upload", "Technician or admin can upload the layout here")}
         </section>
 
         {/* Revision Build Layout */}
@@ -365,7 +373,9 @@ export default function PcBuildHandover({
                     UploadCloud,
                     "Upload revision layout",
                   )
-                : lockedView("Access Restricted", "Only Administrators, assigned Sales, or Technician can upload")}
+                : readOnly
+                  ? lockedView("Belum ada revisi", "Belum ada foto revisi rakitan")
+                  : lockedView("Access Restricted", "Only Administrators, assigned Sales, or Technician can upload")}
         </section>
       </CardContent>
     </Card>

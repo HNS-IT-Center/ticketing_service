@@ -15,6 +15,7 @@ import AdminAssignPanel from "@/app/admin/tickets/[id]/AdminAssignPanel";
 import CustomerWhatsAppActions from "@/app/admin/tickets/[id]/CustomerWhatsAppActions";
 import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
 import PcBuildHandover from "@/app/admin/tickets/[id]/PcBuildHandover";
+import { BackButton } from "@/components/app/BackButton";
 import WorkingTimeDisplay from "@/app/admin/tickets/[id]/WorkingTimeDisplay";
 import ReplacedPartsPanel from "./ReplacedPartsPanel";
 import RmaStatusCard from "@/components/rma/RmaStatusCard";
@@ -196,6 +197,7 @@ export default async function TechnicianTicketDetailPage({
     // ReplacedPartsPanel and ChargesPanel still carry legacy markup, so the
     // root keeps no data-slot (the UI-1 rule); every section brings its own.
     <div className="flex flex-col gap-6">
+      <BackButton fallback="/technician/tickets" className="-mb-3" />
       <TicketHeader
         code={ticket.ticket_code}
         badge={<Badge variant={ticket.status} technicianId={ticket.technician_id} isPaused={isPaused} />}

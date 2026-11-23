@@ -9,7 +9,6 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { NativeSelect } from "@/components/ui/native-select";
-import { Button } from "@/components/ui/button";
 import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { cn } from "@/lib/utils";
 import { coveringOn } from "@/lib/day-off";
@@ -161,7 +160,6 @@ export default async function StoreSchedulePage({ searchParams }: { searchParams
                 ))}
               </NativeSelect>
             </FilterBarField>
-            <Button type="submit">Tampilkan</Button>
           </FilterBar>
         )}
       </div>

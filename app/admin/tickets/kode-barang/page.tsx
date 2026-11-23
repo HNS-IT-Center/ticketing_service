@@ -13,7 +13,6 @@ import { FilterChips } from "@/components/app/FilterChips";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
-import { Button } from "@/components/ui/button";
 import UnitCodeLinker from "@/components/tickets/UnitCodeLinker";
 
 export const metadata = { title: "Lengkapi Kode Barang — HNS IT Center" };
@@ -89,9 +88,6 @@ export default async function UnitCodePage({ searchParams }: { searchParams: Pro
         <FilterBar action="/admin/tickets/kode-barang">
           <input type="hidden" name="jenis" value={kind} />
           <FilterBarSearch label="Cari tiket" placeholder="Cari kode tiket, nama unit, SN, atau customer…" defaultValue={q} />
-          <Button type="submit" className="md:w-auto">
-            Cari
-          </Button>
         </FilterBar>
         <FilterChips
           label="Jenis tiket"

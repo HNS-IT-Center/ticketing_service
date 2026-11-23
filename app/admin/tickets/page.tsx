@@ -11,7 +11,7 @@ import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { parsePageSize } from "@/lib/pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import {
   DEFAULT_TICKET_SORT,
   DEFAULT_TICKET_SORT_STATE,
@@ -211,7 +211,6 @@ export default async function AdminTicketsPage({
           <FilterBarSearch label="Search tickets" placeholder="Cari kode, customer, atau nama barang…" defaultValue={query} />
           <ProgressSelect id="admin-progress" options={progressOptions} value={statusFilter} />
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
-            <Button type="submit">Search</Button>
             {query && (
               <Link
                 href={buildHref(1, sortParam).replace(`q=${encodeURIComponent(query)}`, "").replace("&&", "&").replace("?&", "?")}

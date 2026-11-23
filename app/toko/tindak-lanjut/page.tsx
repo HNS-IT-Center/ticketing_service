@@ -12,7 +12,6 @@ import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { FilterChips } from "@/components/app/FilterChips";
 import { PageHeader } from "@/components/app/PageHeader";
 import { buttonVariants } from "@/components/ui/button";
-import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 
@@ -123,7 +122,6 @@ export default async function StoreFollowupsPage({ searchParams }: { searchParam
                   ))}
                 </NativeSelect>
               </FilterBarField>
-              <Button type="submit">Tampilkan</Button>
             </FilterBar>
           )
         }

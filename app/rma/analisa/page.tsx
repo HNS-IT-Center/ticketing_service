@@ -15,7 +15,6 @@ import {
   type PieSlice,
   type StackedBucket,
 } from "@/components/toko/Charts";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { SERIES_COLORS } from "@/lib/chart-colors";
 import { currentMonth, monthLabel, monthRange } from "@/lib/reports/parts";
@@ -132,9 +131,6 @@ function Filters({ month, months, filter }: { month: string; months: string[]; f
           </AutoSubmitSelect>
         </FilterBarField>
       </div>
-      <Button type="submit">
-        Terapkan
-      </Button>
     </FilterBar>
   );
 }

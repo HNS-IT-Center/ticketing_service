@@ -1,5 +1,6 @@
 import { Search } from "lucide-react";
 import { LiveSearchInput } from "@/components/app/LiveSearchInput";
+import { AutoFilterForm } from "@/components/app/AutoFilterForm";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 
@@ -10,6 +11,9 @@ import { cn } from "@/lib/utils";
  * (`lib/ticket-list-filter.ts`), so a FilterBar is normally the form itself —
  * pass `action` and it renders `<form method="get" role="search">`, which keeps
  * the filters working without JavaScript and keeps them in a shareable link.
+ *
+ * Every control applies itself as soon as it changes (AutoFilterForm), so a
+ * filter bar carries no submit button.
  *
  * On a phone the search takes the full width and the filters wrap beneath it;
  * nothing scrolls sideways at 360px.
@@ -26,10 +30,11 @@ export function FilterBar({
 }) {
   const classes = cn("flex flex-col gap-2 md:flex-row md:flex-wrap md:items-end md:gap-3", className);
   if (action !== undefined) {
+    // Applies itself on every change: no "Cari" / "Terapkan" button needed.
     return (
-      <form data-slot="filter-bar" role="search" method="get" action={action} className={classes}>
+      <AutoFilterForm action={action} className={classes}>
         {children}
-      </form>
+      </AutoFilterForm>
     );
   }
   return (

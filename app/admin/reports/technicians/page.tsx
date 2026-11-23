@@ -16,7 +16,6 @@ import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StatCard } from "@/components/app/StatCard";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import TargetEditor from "./TargetEditor";
@@ -206,7 +205,6 @@ export default async function TechnicianTargetPage({
             </NativeSelect>
           </FilterBarField>
         </div>
-        <Button type="submit">Tampilkan</Button>
       </FilterBar>
 
       <section className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-start sm:justify-between md:p-5">

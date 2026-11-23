@@ -24,6 +24,7 @@ import { loadChargesPanel } from "@/lib/charges-server";
 import { PcComponentsCard, UpgradesCard } from "@/components/tickets/IntakeItems";
 import { AttachmentsCard, ProofAttachmentsCard } from "@/components/tickets/TicketSections";
 import { proofKindOf } from "@/components/tickets/proof";
+import { BackButton } from "@/components/app/BackButton";
 
 export const metadata = { title: "Ticket Detail — HNS IT Center" };
 
@@ -148,6 +149,7 @@ export default async function SalesTicketDetailPage({
   const rmaNow = requestNow();
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      <BackButton fallback="/sales/tickets" />
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>

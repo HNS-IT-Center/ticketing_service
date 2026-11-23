@@ -23,6 +23,7 @@ export function AutoSubmitSelect({
   return (
     <NativeSelect
       {...props}
+      data-auto-submit=""
       className={cn(pending && "opacity-70", className)}
       aria-busy={pending || undefined}
       onChange={(e) => {

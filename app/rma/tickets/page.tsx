@@ -11,7 +11,7 @@ import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { parsePageSize } from "@/lib/pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { ticketBadgeChoice } from "@/lib/rma/ticket-status-badge";
 import { FileSpreadsheet, Ticket, Plus } from "lucide-react";
@@ -310,7 +310,6 @@ export default async function RmaTicketsPage({
             </FilterBarField>
           </div>
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
-            <Button type="submit">Search</Button>
             {query && (
               <Link href={clearHref} className={buttonVariants({ variant: "ghost" })}>
                 Clear

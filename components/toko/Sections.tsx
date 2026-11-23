@@ -6,7 +6,6 @@ import { EmptyState } from "@/components/app/EmptyState";
 import { PageHeader } from "@/components/app/PageHeader";
 import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { FilterChips } from "@/components/app/FilterChips";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -90,7 +89,6 @@ export function PeriodFilter({
             </NativeSelect>
           </FilterBarField>
         )}
-        <Button type="submit">Terapkan</Button>
       </FilterBar>
     </div>
   );

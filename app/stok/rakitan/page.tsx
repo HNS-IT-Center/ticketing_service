@@ -17,7 +17,6 @@ import { StatusBadge } from "@/components/app/StatusBadge";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { parsePageSize } from "@/lib/pagination";
-import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 
 export const metadata = { title: "Rakitan PC — HNS IT Center" };
@@ -173,7 +172,6 @@ export default async function BuildListPage({ searchParams }: { searchParams: Pr
                 ))}
               </NativeSelect>
             </FilterBarField>
-            <Button type="submit">Tampilkan</Button>
           </FilterBar>
         }
       />

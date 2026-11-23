@@ -10,7 +10,7 @@ import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { parsePageSize } from "@/lib/pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AutoSubmitSelect } from "@/components/app/AutoSubmitSelect";
 import { TICKET_STATUSES, isTicketStatus } from "@/lib/ticket-list-filter";
@@ -184,7 +184,6 @@ export async function TicketLog({
           </FilterBarField>
         </div>
         <div className="flex gap-2 *:flex-1 md:*:flex-none">
-          <Button type="submit">Filter</Button>
           {(q || status || date) && (
             <Link href="/logs?jenis=tiket" className={buttonVariants({ variant: "ghost" })}>
               Clear

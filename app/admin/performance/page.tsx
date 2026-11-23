@@ -7,7 +7,7 @@ import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { PageHeader } from "@/components/app/PageHeader";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 import ExportToPDF from "./ExportToPDF";
@@ -449,7 +449,6 @@ export default async function AdminPerformancePage({
           </FilterBarField>
         </div>
         <div className="flex gap-2 *:flex-1 md:*:flex-none">
-          <Button type="submit">Apply</Button>
           {(filterMonth || filterYear || filterStore) && (
             <Link href="/admin/performance" className={buttonVariants({ variant: "ghost" })}>
               Clear

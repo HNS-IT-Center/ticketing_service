@@ -28,7 +28,7 @@ import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { StatCard } from "@/components/app/StatCard";
 import { StatusBadge } from "@/components/app/StatusBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 
 export const metadata = { title: "Klaim Garansi Toko — HNS IT Center" };
@@ -216,7 +216,6 @@ export default async function StoreClaimsPage({ searchParams }: { searchParams: 
             </AutoSubmitSelect>
           </FilterBarField>
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
-            <Button type="submit">Cari</Button>
             {query && (
               <Link href={href({ q: undefined, page: undefined })} className={buttonVariants({ variant: "ghost" })}>
                 Hapus

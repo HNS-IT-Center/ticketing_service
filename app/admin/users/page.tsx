@@ -8,7 +8,7 @@ import { FilterBar, FilterBarSearch } from "@/components/app/FilterBar";
 import { FilterChips } from "@/components/app/FilterChips";
 import { UsersAccessHeader } from "@/components/users/UsersAccessTabs";
 import { RoleBadge } from "@/components/app/RoleBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { UserPlus, Users } from "lucide-react";
 import { DeactivateUserButton } from "@/components/users/DeactivateUserButton";
 import { isOwnerRole, mayManageAccount } from "@/lib/admin-roles";
@@ -139,7 +139,6 @@ export default async function AdminUsersPage({
         <FilterBar action="/admin/users">
           {roleFilter !== "all" && <input type="hidden" name="role" value={roleFilter} />}
           <FilterBarSearch label="Search users" placeholder="Search by name or email..." defaultValue={query} />
-          <Button type="submit" className="md:w-auto">Search</Button>
         </FilterBar>
         <FilterChips label="Role" chips={chips} active={roleFilter} />
       </div>

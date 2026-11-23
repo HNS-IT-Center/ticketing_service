@@ -10,7 +10,6 @@ import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { PageHeader } from "@/components/app/PageHeader";
-import { Button } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 import { cn } from "@/lib/utils";
 
@@ -256,7 +255,6 @@ export default async function StoreTeamPage({ searchParams }: { searchParams: Pr
                   ))}
                 </NativeSelect>
               </FilterBarField>
-              <Button type="submit">Tampilkan</Button>
             </FilterBar>
           )
         }

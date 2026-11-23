@@ -16,7 +16,6 @@ import { EmptyState } from "@/components/app/EmptyState";
 import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StatCard } from "@/components/app/StatCard";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 
@@ -162,7 +161,6 @@ export default async function FinanceDashboardPage({ searchParams }: { searchPar
             ))}
           </NativeSelect>
         </FilterBarField>
-        <Button type="submit">Terapkan</Button>
       </FilterBar>
 
       <CostNotice cost={cost} withCode={claims.filter((c) => c.catalogItemId !== null).length} total={claims.length} />

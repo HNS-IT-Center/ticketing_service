@@ -10,7 +10,7 @@ import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StatCard } from "@/components/app/StatCard";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 import { servicePartLabel } from "@/lib/service-parts";
@@ -232,7 +232,6 @@ export default async function PartsReportPage({
             </NativeSelect>
           </FilterBarField>
         </div>
-        <Button type="submit">Tampilkan</Button>
       </FilterBar>
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">

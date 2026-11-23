@@ -21,7 +21,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { StatusBadge } from "@/components/app/StatusBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 
@@ -213,7 +213,6 @@ export default async function FinanceClaimsPage({ searchParams }: { searchParams
             </NativeSelect>
           </FilterBarField>
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
-            <Button type="submit">Terapkan</Button>
             {(p.q || p.vendorKey || p.storeId) && (
               <Link href={href({ q: undefined, vendor: undefined, store: undefined, page: undefined })} className={buttonVariants({ variant: "ghost" })}>
                 Hapus

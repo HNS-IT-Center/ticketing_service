@@ -10,7 +10,7 @@ import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { parsePageSize } from "@/lib/pagination";
 import { StatusBadge } from "@/components/app/StatusBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { Ticket, Plus } from "lucide-react";
 import { ticketPartyName } from "@/lib/ticket-party";
@@ -170,7 +170,6 @@ export default async function SalesTicketsPage({
           <FilterBarSearch label="Search tickets" placeholder="Cari kode, customer, atau nama barang…" defaultValue={query} />
           <ProgressSelect id="list-progress" options={progressOptions} value={statusFilter} />
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
-            <Button type="submit">Search</Button>
             {query && (
               <Link
                 href={buildHref(1, sortParam).replace(`q=${encodeURIComponent(query)}`, "").replace("&&", "&").replace("?&", "?")}

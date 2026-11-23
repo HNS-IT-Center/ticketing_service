@@ -1,8 +1,8 @@
-import Link from "next/link";
 import { requestNow } from "@/lib/clock";
 import { notFound } from "next/navigation";
 import type { ReactNode } from "react";
-import { ArrowLeft, Eye } from "lucide-react";
+import { Eye } from "lucide-react";
+import { BackButton } from "@/components/app/BackButton";
 import { db } from "@/lib/db";
 import { publicTicketPath } from "@/lib/routes";
 import { formatDateTime } from "@/lib/utils";
@@ -137,9 +137,7 @@ export async function ReadOnlyTicketView({
     // ReplacedPartsPanel and ChargesPanel carry legacy markup, so the root has
     // no data-slot (the UI-1 rule); every section brings its own.
     <div className="flex flex-col gap-6">
-      <Link href={back.href} className="inline-flex w-fit items-center gap-1.5 text-sm font-medium text-primary hover:underline">
-        <ArrowLeft aria-hidden className="size-4" /> {back.label}
-      </Link>
+      <BackButton fallback={back.href} className="-mb-3" />
       <TicketHeader
         code={ticket.ticket_code}
         badge={<Badge variant={ticket.status} technicianId={ticket.technician_id} isPaused={isPaused} />}

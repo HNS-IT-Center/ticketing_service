@@ -20,7 +20,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { StatusBadge } from "@/components/app/StatusBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { NativeSelect } from "@/components/ui/native-select";
 
 export const metadata = { title: "Tiket Toko — HNS IT Center" };
@@ -212,7 +212,6 @@ export default async function StoreTicketsPage({ searchParams }: { searchParams:
             </FilterBarField>
           )}
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
-            <Button type="submit">Cari</Button>
             {(query || tech || type) && (
               <Link href={href({ q: undefined, tech: undefined, type: undefined, page: undefined })} className={buttonVariants({ variant: "ghost" })}>
                 Hapus filter

@@ -14,7 +14,7 @@ import {
   type RmaLogFilters,
   type RmaLogView,
 } from "@/lib/rma/logs";
-import { History, Search, ArrowRight, ChevronDown, Clock } from "lucide-react";
+import { History, ArrowRight, ChevronDown, Clock } from "lucide-react";
 import type { Role } from "@prisma/client";
 import { DataTable, type DataTableColumn } from "@/components/app/DataTable";
 import { EmptyState } from "@/components/app/EmptyState";
@@ -22,7 +22,7 @@ import { FilterBar, FilterBarField } from "@/components/app/FilterBar";
 import { FilterChips } from "@/components/app/FilterChips";
 import { PageHeader } from "@/components/app/PageHeader";
 import { StatusBadge } from "@/components/app/StatusBadge";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { LiveSearchInput } from "@/components/app/LiveSearchInput";
 import { NativeSelect } from "@/components/ui/native-select";
@@ -240,9 +240,6 @@ export async function RmaLog({
             </FilterBarField>
           </div>
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
-            <Button type="submit">
-              <Search aria-hidden="true" /> Terapkan
-            </Button>
             {filtered && (
               <Link href={hrefWith({ page: 1 })} className={buttonVariants({ variant: "outline", className: "bg-card" })}>
                 Reset

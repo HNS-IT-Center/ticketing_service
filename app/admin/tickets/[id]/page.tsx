@@ -17,6 +17,7 @@ import PublicChatToggle from "./PublicChatToggle";
 import { MapPin } from "lucide-react";
 import { cn, formatDateTime, calculateWorkingTimeMs } from "@/lib/utils";
 import PcBuildHandover from "./PcBuildHandover";
+import { BackButton } from "@/components/app/BackButton";
 import CustomerWhatsAppActions from "./CustomerWhatsAppActions";
 import WorkingTimeDisplay from "./WorkingTimeDisplay";
 import PickupMethodSelector from "@/components/ui/PickupMethodSelector";
@@ -207,6 +208,7 @@ export default async function AdminTicketDetailPage({
   const rmaNow = requestNow();
   return (
     <div data-slot="admin-ticket-detail" className="flex flex-col gap-6">
+      <BackButton fallback="/admin/tickets" className="-mb-3" />
       <TicketHeader
         code={ticket.ticket_code}
         badge={<Badge variant={ticket.status} technicianId={ticket.technician_id} isPaused={isPaused} />}

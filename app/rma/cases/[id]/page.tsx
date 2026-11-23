@@ -3,7 +3,7 @@ import { requestNow } from "@/lib/clock";
 import { inScope, storeScopeFor } from "@/lib/store-scope-server";
 import EditTicketButton from "@/components/tickets/EditTicketButton";
 import { loadTicketEdit } from "@/lib/ticket-edit-server";
-import Link from "next/link";
+import { BackButton } from "@/components/app/BackButton";
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
@@ -16,7 +16,7 @@ import { GalleryTrigger, MediaGallery } from "@/components/app/MediaGallery";
 import { downloadHref } from "@/lib/download-name";
 import { attachmentKindLabel } from "@/lib/attachment-kind";
 import { vendorLocationText } from "@/lib/vendors";
-import { ArrowLeft, Download, FileText, Film } from "lucide-react";
+import { Download, FileText, Film } from "lucide-react";
 import { isAdminRole } from "@/lib/admin-roles";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
@@ -146,12 +146,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
     <div style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: "1rem" }}>
         <div>
-          <Link
-            href="/rma/dashboard"
-            style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem", fontSize: "0.8125rem", color: "var(--text-muted)", marginBottom: "0.5rem" }}
-          >
-            <ArrowLeft size={14} /> Kembali ke antrean
-          </Link>
+          <BackButton fallback="/rma/dashboard" />
           <div style={{ display: "flex", alignItems: "center", gap: "0.75rem", flexWrap: "wrap" }}>
             <h1 style={{ fontSize: "1.25rem", fontFamily: "ui-monospace, monospace" }}>{rmaCase.rma_code}</h1>
             <RmaStatusBadge status={rmaCase.status} />

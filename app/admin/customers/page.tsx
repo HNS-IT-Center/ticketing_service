@@ -14,7 +14,7 @@ import { AutoSubmitSelect } from "@/components/app/AutoSubmitSelect";
 import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 
 export const metadata = { title: "Data Customer — HNS IT Center" };
 const PAGE_SIZE = 25;
@@ -190,7 +190,6 @@ export default async function CustomersPage({ searchParams }: { searchParams: Pr
           )}
         </div>
         <div className="flex gap-2 *:flex-1 md:*:flex-none">
-          <Button type="submit">Cari</Button>
           {query && (
             <Link href={href({ q: undefined, page: undefined })} className={buttonVariants({ variant: "ghost" })}>
               Hapus

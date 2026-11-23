@@ -6,6 +6,8 @@ import { cn } from "@/lib/utils";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import StaleDeployNotice from "@/components/app/StaleDeployNotice";
+import { Suspense } from "react";
+import { NavTracker } from "@/components/app/NavTracker";
 import { currentBuildId } from "@/lib/build-id";
 import { ThemeProvider } from "@/components/theme/ThemeProvider";
 
@@ -42,6 +44,10 @@ export default function RootLayout({
       <body>
         <ThemeProvider>
         {children}
+        {/* Remembers the list (and its filters) each "Kembali" goes back to. */}
+        <Suspense fallback={null}>
+          <NavTracker />
+        </Suspense>
         {/* Explains, and offers a reload, when this page is older than the server. */}
         <StaleDeployNotice build={currentBuildId()} />
         <Toaster

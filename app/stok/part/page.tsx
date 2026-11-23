@@ -18,7 +18,7 @@ import { PageHeader } from "@/components/app/PageHeader";
 import { Pagination } from "@/components/app/Pagination";
 import { PageSizePicker } from "@/components/app/PageSizePicker";
 import { StatCard } from "@/components/app/StatCard";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { NativeSelect } from "@/components/ui/native-select";
 
@@ -166,7 +166,6 @@ export default async function OutgoingPartsPage({ searchParams }: { searchParams
             Tanpa kode saja
           </label>
           <div className="flex gap-2 *:flex-1 md:*:flex-none">
-            <Button type="submit">Terapkan</Button>
             {(p.q || p.uncoded || p.storeId) && (
               <Link href={href({ q: undefined, uncoded: undefined, store: undefined, page: undefined })} className={buttonVariants({ variant: "ghost" })}>
                 Hapus

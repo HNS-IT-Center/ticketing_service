@@ -2001,15 +2001,14 @@ describe("changeRmaOwnershipAction — Klaim User ⇄ Klaim Toko by the desk", (
     expect(back.note).toContain("nomor pemindahan PM-7");
   });
 
-  it("is the RMA desk's alone, needs a reason, and stops once the case has ended", async () => {
+  it("is RMA's and Admin's, needs a reason, and stops once the case has ended", async () => {
     const c = await customerCase();
-    for (const [userId, role] of [
-      [technicianId, "Technician"],
-      [adminId, "Administrator"],
-    ] as const) {
-      as(userId, role);
-      expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: "x" }))).toHaveProperty("error");
-    }
+    as(technicianId, "Technician");
+    expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: "x" }))).toHaveProperty("error");
+    // Admin may (owner, 2026-11-25): there and back.
+    as(adminId, "Administrator");
+    expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: "tukar" }))).toMatchObject({ success: true });
+    expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "customer", reason: "batal" }))).toMatchObject({ success: true });
     as(rmaUserId, "RMA");
     expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: " " }))).toHaveProperty("error");
     await driveTo(c.id, [["cancelled", { hold_reason: "Batal" }]]);

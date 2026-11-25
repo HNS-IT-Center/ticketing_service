@@ -1,5 +1,6 @@
 import type { Prisma, RmaStatus, UnitOwnership } from "@prisma/client";
 import { isTerminalRmaStatus } from "@/lib/rma/state-machine";
+import { isAdminRole } from "@/lib/admin-roles";
 
 /**
  * "Ubah kepemilikan" on an RMA case (owner, 2026-11-25): a customer's claim
@@ -8,8 +9,9 @@ import { isTerminalRmaStatus } from "@/lib/rma/state-machine";
  * it was entered wrong. Pure: the actions load and write.
  *
  * Who does what:
- *   RMA        changes the ownership, with a reason. Nothing waits on anyone;
- *              the store's kepala toko is told.
+ *   RMA        changes the ownership, with a reason — and Admin / Owner too
+ *              (owner, 2026-11-25). Nothing waits on anyone; the store's
+ *              kepala toko is told.
  *   Admin Stok fills the stock data of a case RMA switched to store stock —
  *              Asal stok and Nomor Pemindahan Stok. RMA does not wait for it:
  *              the transfer number the desk is normally asked on the way to
@@ -65,7 +67,9 @@ export type OwnershipChangeInput = {
 export type OwnershipChange = { ok: true; next: UnitOwnership; reason: string } | { ok: false; error: string };
 
 export function validateOwnershipChange(input: OwnershipChangeInput): OwnershipChange {
-  if (input.role !== "RMA") return { ok: false, error: "Hanya meja RMA yang dapat mengubah kepemilikan unit." };
+  if (input.role !== "RMA" && !isAdminRole(input.role)) {
+    return { ok: false, error: "Hanya RMA, Admin, dan Owner yang dapat mengubah kepemilikan unit." };
+  }
   if (isTerminalRmaStatus(input.status)) return { ok: false, error: "Case sudah selesai, kepemilikan tidak dapat diubah lagi." };
   if (input.next !== "customer" && input.next !== "store_stock") return { ok: false, error: "Pilih Klaim User atau Klaim Toko." };
   if (input.next === input.current) return { ok: false, error: `Case ini sudah ${OWNERSHIP_TEXT[input.current]}.` };

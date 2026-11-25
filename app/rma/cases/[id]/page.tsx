@@ -209,7 +209,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                     Menunggu Admin Stok mengisi asal stok dan nomor pemindahan stok
                   </p>
                 )}
-                {session.role === "RMA" && !isTerminalRmaStatus(rmaCase.status) && (
+                {(session.role === "RMA" || isAdminRole(session.role)) && !isTerminalRmaStatus(rmaCase.status) && (
                   <div style={{ marginTop: "0.5rem" }}>
                     <OwnershipButton rmaCaseId={rmaCase.id} rmaCode={rmaCase.rma_code} current={rmaCase.unit_ownership} />
                   </div>

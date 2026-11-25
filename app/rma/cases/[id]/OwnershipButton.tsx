@@ -18,7 +18,7 @@ import { OWNERSHIP_TEXT } from "@/lib/rma/ownership-change";
 /**
  * "Ubah kepemilikan": Klaim User ⇄ Klaim Toko, set by the RMA desk directly,
  * with a reason. The stock data of a switch to Klaim Toko is Admin Stok's.
- * Rendered for the RMA role only while the case is open; the action checks
+ * Rendered for RMA, Admin and Owner while the case is open; the action checks
  * the same.
  */
 export default function OwnershipButton({ rmaCaseId, rmaCode, current }: { rmaCaseId: string; rmaCode: string; current: UnitOwnership }) {

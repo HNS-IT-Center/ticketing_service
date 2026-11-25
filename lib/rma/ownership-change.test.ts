@@ -15,8 +15,10 @@ describe("validateOwnershipChange", () => {
   it("accepts the desk switching an open case, at any open stage, with a reason only", () => {
     expect(validateOwnershipChange(base)).toEqual({ ok: true, next: "store_stock", reason: "Ditukar stok" });
   });
-  it("refuses anyone but RMA, an ended case, no change, and a missing reason", () => {
-    expect(validateOwnershipChange({ ...base, role: "Administrator" }).ok).toBe(false);
+  it("accepts Admin and Owner too; refuses other roles, an ended case, no change, and a missing reason", () => {
+    expect(validateOwnershipChange({ ...base, role: "Administrator" }).ok).toBe(true);
+    expect(validateOwnershipChange({ ...base, role: "Owner" }).ok).toBe(true);
+    expect(validateOwnershipChange({ ...base, role: "Technician" }).ok).toBe(false);
     expect(validateOwnershipChange({ ...base, role: "StockAdmin" }).ok).toBe(false);
     expect(validateOwnershipChange({ ...base, status: "closed" }).ok).toBe(false);
     expect(validateOwnershipChange({ ...base, next: "customer" }).ok).toBe(false);

@@ -56,6 +56,8 @@ export const ACTIVITY_ACTIONS = {
   "rma.handover": { area: "rma", label: "Serahkan ke RMA" },
   "rma.transition": { area: "rma", label: "Ubah tahap RMA" },
   "rma.hold_evidence": { area: "rma", label: "Kirim bukti" },
+  "rma.ownership": { area: "rma", label: "Ubah kepemilikan unit" },
+  "rma.stock_data": { area: "rma", label: "Isi data stok klaim" },
 
   "vendor.create": { area: "master", label: "Tambah vendor" },
   "vendor.update": { area: "master", label: "Ubah vendor" },

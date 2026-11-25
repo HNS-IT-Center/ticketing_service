@@ -220,6 +220,7 @@ export default function RmaActionPanel({
   unitOwnership,
   claimVendors = [],
   recordedStockTransferNumber = null,
+  stockDataByStockAdmin = false,
   recordedInvoiceUrl = null,
   recorded = {},
 }: {
@@ -234,6 +235,8 @@ export default function RmaActionPanel({
   claimVendors?: ClaimVendorOption[];
   /** The stock transfer number already on the case; when set it is not asked again. */
   recordedStockTransferNumber?: string | null;
+  /** Switched to Klaim Toko by RMA: Admin Stok fills the transfer number, so it is not asked here. */
+  stockDataByStockAdmin?: boolean;
   /** The purchase invoice already on the case; a store-stock case without one
    *  asks the desk for it on the way to verified. */
   recordedInvoiceUrl?: string | null;
@@ -379,6 +382,7 @@ export default function RmaActionPanel({
           ? (["hold_reason"] as RmaTransitionField[])
           : []),
         ...(unitOwnership === "store_stock" &&
+        !stockDataByStockAdmin &&
         (active.to === "verified" || active.to === "in_vendor_process") &&
         !recordedStockTransferNumber?.trim()
           ? (["stock_transfer_number"] as RmaTransitionField[])

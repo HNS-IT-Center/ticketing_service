@@ -18,6 +18,9 @@ import { attachmentKindLabel } from "@/lib/attachment-kind";
 import { vendorLocationText } from "@/lib/vendors";
 import { Download, FileText, Film } from "lucide-react";
 import { isAdminRole } from "@/lib/admin-roles";
+import { isTerminalRmaStatus } from "@/lib/rma/state-machine";
+import { OWNERSHIP_TEXT, isSwitchedToStore, stockDataPending } from "@/lib/rma/ownership-change";
+import OwnershipButton from "./OwnershipButton";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
 
@@ -130,6 +133,8 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
 
   // A kepala toko reads only the stores they hold.
   if (!rmaCase || !inScope(await storeScopeFor(session), rmaCase.ticket.store_location_id)) notFound();
+  // Switched to Klaim Toko by RMA: its stock data is Admin Stok's (lib/rma/ownership-change.ts).
+  const switchedToStore = isSwitchedToStore(rmaCase.unit_ownership, rmaCase.events);
 
   const { ticket } = rmaCase;
   const ticketEdit = await loadTicketEdit(session.userId, ticket.id);
@@ -190,6 +195,26 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                   itself when the value is empty, so a customer's own unit shows
                   neither row. stock_origin was selected but never rendered
                   before this. */}
+              <div>
+                <p className="text-xs text-muted-foreground mb-1">Kepemilikan</p>
+                <p className="font-medium">
+                  {OWNERSHIP_TEXT[rmaCase.unit_ownership]}
+                  {switchedToStore && <span className="font-normal text-muted-foreground"> · diubah RMA</span>}
+                </p>
+                {switchedToStore && stockDataPending(rmaCase) && (
+                  <p
+                    className="rounded-md border border-tone-amber-border bg-tone-amber-bg text-xs font-medium text-tone-amber-fg"
+                    style={{ marginTop: "0.375rem", padding: "0.25rem 0.5rem", fontSize: "0.75rem", lineHeight: 1.4 }}
+                  >
+                    Menunggu Admin Stok mengisi asal stok dan nomor pemindahan stok
+                  </p>
+                )}
+                {session.role === "RMA" && !isTerminalRmaStatus(rmaCase.status) && (
+                  <div style={{ marginTop: "0.5rem" }}>
+                    <OwnershipButton rmaCaseId={rmaCase.id} rmaCode={rmaCase.rma_code} current={rmaCase.unit_ownership} />
+                  </div>
+                )}
+              </div>
               <Field label="Asal Stok" value={rmaCase.stock_origin} />
               <Field
                 label="Nomor Pemindahan Stok"
@@ -353,6 +378,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             unitOwnership={rmaCase.unit_ownership}
             claimVendors={claimVendors}
             recordedStockTransferNumber={rmaCase.stock_transfer_number}
+            stockDataByStockAdmin={switchedToStore}
             recordedInvoiceUrl={rmaCase.purchase_invoice_url}
             recorded={{
               vendor_id: rmaCase.vendor_id,

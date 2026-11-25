@@ -57,7 +57,7 @@ vi.mock("@/lib/session", () => ({
 }));
 
 const { db } = await import("@/lib/db");
-const { handoverToRmaAction, transitionRmaAction, submitHoldEvidenceAction } = await import("./rma");
+const { handoverToRmaAction, transitionRmaAction, submitHoldEvidenceAction, changeRmaOwnershipAction, fillClaimStockDataAction } = await import("./rma");
 const { updateTicketStatusAction } = await import("./technician");
 
 const RUN = `rmatest_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -1904,5 +1904,117 @@ describe("transitionRmaAction — a store-stock unit's purchase invoice, attache
     const fd = transitionForm(caseId, "verified", { stock_transfer_number: "PM-1" });
     fd.append("stock_invoice_files", new File([new Uint8Array([1])], "nota.mp4", { type: "video/mp4" }));
     expect(await transitionRmaAction(fd)).toMatchObject({ error: expect.stringContaining("foto atau PDF") });
+  });
+});
+
+describe("changeRmaOwnershipAction — Klaim User ⇄ Klaim Toko by the desk", () => {
+  async function customerCase() {
+    const ticket = await makeTicket();
+    expect(await handoverToRmaAction(validForm(ticket.id))).toMatchObject({ success: true });
+    return db.rmaCase.findUniqueOrThrow({ where: { ticket_id: ticket.id }, select: { id: true, ticket_id: true } });
+  }
+  const form = (caseId: string, extra: Record<string, string>) => {
+    const fd = new FormData();
+    fd.set("rma_case_id", caseId);
+    for (const [k, v] of Object.entries(extra)) fd.set(k, v);
+    return fd;
+  };
+  const as = (userId: string, role: string) => {
+    session.userId = userId;
+    session.role = role;
+  };
+  const mkUser = async (tag: string, role: "StoreSupervisor" | "StockAdmin") =>
+    (
+      await db.user.create({
+        data: { name: `${RUN} ${tag}`, email: `${RUN}.${tag}@test.local`, phone_number: "+628100000001", address: "Test", role, password: "x" },
+        select: { id: true },
+      })
+    ).id;
+
+  it("switches with a reason only, tells kepala toko and Admin Stok, and the desk does not wait for stock data", async () => {
+    const supervisorId = await mkUser("spv", "StoreSupervisor");
+    await db.storeSupervisorAssignment.create({ data: { user_id: supervisorId, store_id: storeId } });
+    const stockAdminId = await mkUser("stok", "StockAdmin");
+    const c = await customerCase();
+    as(rmaUserId, "RMA");
+
+    expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: "Ditukar stok, distri setuju" }))).toMatchObject({
+      success: true,
+    });
+    expect(
+      await db.rmaCase.findUniqueOrThrow({ where: { id: c.id }, select: { unit_ownership: true, stock_origin: true, status: true } }),
+    ).toEqual({ unit_ownership: "store_stock", stock_origin: null, status: "pending_verification" });
+    const event = await db.rmaEvent.findFirstOrThrow({ where: { rma_case_id: c.id, note: { startsWith: "Kepemilikan diubah" } } });
+    expect(event).toMatchObject({ from_status: "pending_verification", to_status: "pending_verification", actor_id: rmaUserId });
+    expect(await db.notification.count({ where: { user_id: supervisorId, ticket_id: c.ticket_id } })).toBe(1);
+    expect(await db.notification.count({ where: { user_id: stockAdminId, ticket_id: c.ticket_id } })).toBe(1);
+
+    // Store stock now, yet verifying asks no transfer number: that is Admin Stok's.
+    expect(await transitionRmaAction(transitionForm(c.id, "verified", {}))).toMatchObject({ success: true });
+  });
+
+  it("lets Admin Stok — and only Admin Stok — fill the stock data", async () => {
+    const stockAdminId = await mkUser("stok2", "StockAdmin");
+    const c = await customerCase();
+    as(rmaUserId, "RMA");
+    await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: "tukar" }));
+    const data = { rma_case_id: c.id, stock_origin: "Toko Nagoya Hill", stock_transfer_number: "PM-25" };
+
+    expect(await fillClaimStockDataAction(form(c.id, data))).toHaveProperty("error");
+    as(stockAdminId, "StockAdmin");
+    expect(await fillClaimStockDataAction(form(c.id, data))).toMatchObject({ success: true });
+    expect(
+      await db.rmaCase.findUniqueOrThrow({ where: { id: c.id }, select: { stock_origin: true, stock_transfer_number: true } }),
+    ).toEqual({ stock_origin: "Toko Nagoya Hill", stock_transfer_number: "PM-25" });
+    expect(await db.rmaEvent.count({ where: { rma_case_id: c.id, note: { startsWith: "Data stok diisi Admin Stok" } } })).toBe(1);
+  });
+
+  it("is not Admin Stok's on a claim opened as store stock", async () => {
+    const stockAdminId = await mkUser("stok3", "StockAdmin");
+    const ticket = await makeTicket({ withInvoice: false });
+    const fd = validForm(ticket.id);
+    fd.set("unit_ownership", "store_stock");
+    fd.set("stock_origin", "Gudang");
+    fd.delete("purchase_invoice_url");
+    expect(await handoverToRmaAction(fd)).toMatchObject({ success: true });
+    const c = await db.rmaCase.findUniqueOrThrow({ where: { ticket_id: ticket.id }, select: { id: true } });
+    as(stockAdminId, "StockAdmin");
+    expect(await fillClaimStockDataAction(form(c.id, { stock_origin: "X", stock_transfer_number: "Y" }))).toHaveProperty("error");
+    // …and the desk is still asked for the transfer number there.
+    as(rmaUserId, "RMA");
+    expect(await transitionRmaAction(transitionForm(c.id, "verified", {}))).toHaveProperty("error");
+  });
+
+  it("switching back clears the stock data and keeps it in the note", async () => {
+    const stockAdminId = await mkUser("stok4", "StockAdmin");
+    const c = await customerCase();
+    as(rmaUserId, "RMA");
+    await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: "tukar" }));
+    as(stockAdminId, "StockAdmin");
+    await fillClaimStockDataAction(form(c.id, { stock_origin: "Gudang", stock_transfer_number: "PM-7" }));
+    as(rmaUserId, "RMA");
+    expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "customer", reason: "Salah input" }))).toMatchObject({ success: true });
+    expect(
+      await db.rmaCase.findUniqueOrThrow({ where: { id: c.id }, select: { unit_ownership: true, stock_origin: true, stock_transfer_number: true } }),
+    ).toEqual({ unit_ownership: "customer", stock_origin: null, stock_transfer_number: null });
+    const back = await db.rmaEvent.findFirstOrThrow({ where: { rma_case_id: c.id, note: { contains: "Klaim Toko → Klaim User" } } });
+    expect(back.note).toContain("nomor pemindahan PM-7");
+  });
+
+  it("is the RMA desk's alone, needs a reason, and stops once the case has ended", async () => {
+    const c = await customerCase();
+    for (const [userId, role] of [
+      [technicianId, "Technician"],
+      [adminId, "Administrator"],
+    ] as const) {
+      as(userId, role);
+      expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: "x" }))).toHaveProperty("error");
+    }
+    as(rmaUserId, "RMA");
+    expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: " " }))).toHaveProperty("error");
+    await driveTo(c.id, [["cancelled", { hold_reason: "Batal" }]]);
+    as(rmaUserId, "RMA");
+    expect(await changeRmaOwnershipAction(form(c.id, { unit_ownership: "store_stock", reason: "tukar" }))).toHaveProperty("error");
+    expect((await db.rmaCase.findUniqueOrThrow({ where: { id: c.id }, select: { unit_ownership: true } })).unit_ownership).toBe("customer");
   });
 });

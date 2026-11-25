@@ -21,6 +21,7 @@ import { isAdminRole } from "@/lib/admin-roles";
 import { isTerminalRmaStatus } from "@/lib/rma/state-machine";
 import { OWNERSHIP_TEXT, isSwitchedToStore, stockDataPending } from "@/lib/rma/ownership-change";
 import OwnershipButton from "./OwnershipButton";
+import StockDataButton from "./StockDataButton";
 
 export const metadata = { title: "Detail Case RMA — HNS IT Center" };
 
@@ -133,7 +134,8 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
 
   // A kepala toko reads only the stores they hold.
   if (!rmaCase || !inScope(await storeScopeFor(session), rmaCase.ticket.store_location_id)) notFound();
-  // Switched to Klaim Toko by RMA: its stock data is Admin Stok's (lib/rma/ownership-change.ts).
+  // Switched to Klaim Toko by RMA: its stock data is filled here, later (lib/rma/ownership-change.ts).
+  const mayEditOwnership = session.role === "RMA" || isAdminRole(session.role);
   const switchedToStore = isSwitchedToStore(rmaCase.unit_ownership, rmaCase.events);
 
   const { ticket } = rmaCase;
@@ -206,12 +208,22 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
                     className="rounded-md border border-tone-amber-border bg-tone-amber-bg text-xs font-medium text-tone-amber-fg"
                     style={{ marginTop: "0.375rem", padding: "0.25rem 0.5rem", fontSize: "0.75rem", lineHeight: 1.4 }}
                   >
-                    Menunggu Admin Stok mengisi asal stok dan nomor pemindahan stok
+                    Asal stok dan nomor pemindahan stok belum diisi
                   </p>
                 )}
-                {(session.role === "RMA" || isAdminRole(session.role)) && !isTerminalRmaStatus(rmaCase.status) && (
-                  <div style={{ marginTop: "0.5rem" }}>
-                    <OwnershipButton rmaCaseId={rmaCase.id} rmaCode={rmaCase.rma_code} current={rmaCase.unit_ownership} />
+                {mayEditOwnership && (switchedToStore || !isTerminalRmaStatus(rmaCase.status)) && (
+                  <div style={{ marginTop: "0.5rem", display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
+                    {switchedToStore && (
+                      <StockDataButton
+                        rmaCaseId={rmaCase.id}
+                        rmaCode={rmaCase.rma_code}
+                        stockOrigin={rmaCase.stock_origin}
+                        transferNumber={rmaCase.stock_transfer_number}
+                      />
+                    )}
+                    {!isTerminalRmaStatus(rmaCase.status) && (
+                      <OwnershipButton rmaCaseId={rmaCase.id} rmaCode={rmaCase.rma_code} current={rmaCase.unit_ownership} />
+                    )}
                   </div>
                 )}
               </div>
@@ -378,7 +390,7 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
             unitOwnership={rmaCase.unit_ownership}
             claimVendors={claimVendors}
             recordedStockTransferNumber={rmaCase.stock_transfer_number}
-            stockDataByStockAdmin={switchedToStore}
+            stockDataFilledLater={switchedToStore}
             recordedInvoiceUrl={rmaCase.purchase_invoice_url}
             recorded={{
               vendor_id: rmaCase.vendor_id,

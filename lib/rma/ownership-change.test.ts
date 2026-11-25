@@ -45,13 +45,16 @@ describe("the switch note", () => {
   });
 });
 
-describe("validateStockData — Admin Stok", () => {
-  const ok = { role: "StockAdmin", switched: true, stockOrigin: "Toko NGH", transferNumber: "PM-9" };
-  it("takes both fields from Admin Stok on a switched case", () => {
+describe("validateStockData — RMA fills it from the case page", () => {
+  const ok = { role: "RMA", switched: true, stockOrigin: "Toko NGH", transferNumber: "PM-9" };
+  it("takes both fields from RMA, Admin or Owner on a switched case", () => {
+    expect(validateStockData({ ...ok, role: "Administrator" }).ok).toBe(true);
+    expect(validateStockData({ ...ok, role: "Owner" }).ok).toBe(true);
     expect(validateStockData(ok)).toEqual({ ok: true, stockOrigin: "Toko NGH", transferNumber: "PM-9" });
   });
   it("refuses other roles, a case not switched by RMA, and a missing field", () => {
-    expect(validateStockData({ ...ok, role: "RMA" }).ok).toBe(false);
+    expect(validateStockData({ ...ok, role: "StockAdmin" }).ok).toBe(false);
+    expect(validateStockData({ ...ok, role: "Technician" }).ok).toBe(false);
     expect(validateStockData({ ...ok, switched: false }).ok).toBe(false);
     expect(validateStockData({ ...ok, stockOrigin: " " }).ok).toBe(false);
     expect(validateStockData({ ...ok, transferNumber: null }).ok).toBe(false);

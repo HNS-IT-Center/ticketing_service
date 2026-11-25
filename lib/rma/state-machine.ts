@@ -330,13 +330,13 @@ export function validateRmaTransition(args: {
    */
   recordedStockTransferNumber?: string | null;
   /**
-   * A case RMA switched from a customer's unit to store stock: Admin Stok
-   * fills its transfer number, and the desk does not wait for it (owner,
-   * 2026-11-25). lib/rma/ownership-change.ts.
+   * A case RMA switched from a customer's unit to store stock: its transfer
+   * number is filled from the case page whenever it is in hand, and the desk
+   * does not wait for it (owner, 2026-11-25). lib/rma/ownership-change.ts.
    */
-  stockDataByStockAdmin?: boolean;
+  stockDataFilledLater?: boolean;
 }): RmaValidationResult {
-  const { role, from, to, input = {}, unitOwnership = null, recordedStockTransferNumber = null, stockDataByStockAdmin = false } = args;
+  const { role, from, to, input = {}, unitOwnership = null, recordedStockTransferNumber = null, stockDataFilledLater = false } = args;
 
   if (!canActOnRma(role)) {
     return {
@@ -382,7 +382,7 @@ export function validateRmaTransition(args: {
   // to `verified`), the later move does not ask for it again.
   if (
     unitOwnership === "store_stock" &&
-    !stockDataByStockAdmin &&
+    !stockDataFilledLater &&
     (to === "verified" || to === "in_vendor_process") &&
     isBlank(recordedStockTransferNumber)
   ) {

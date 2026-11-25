@@ -8,17 +8,15 @@ import { isAdminRole } from "@/lib/admin-roles";
  * one from stock because the distributor agreed to replace it — or back, when
  * it was entered wrong. Pure: the actions load and write.
  *
- * Who does what:
- *   RMA        changes the ownership, with a reason — and Admin / Owner too
- *              (owner, 2026-11-25). Nothing waits on anyone; the store's
- *              kepala toko is told.
- *   Admin Stok fills the stock data of a case RMA switched to store stock —
- *              Asal stok and Nomor Pemindahan Stok. RMA does not wait for it:
- *              the transfer number the desk is normally asked on the way to
- *              verified is not asked of such a case (owner's choice).
+ * RMA — and Admin / Owner (owner, 2026-11-25) — change the ownership with a
+ * reason; nothing waits on anyone and the store's kepala toko is told. The
+ * same people then fill the stock data of a case switched to store stock
+ * (Asal stok, Nomor Pemindahan Stok) from the case page, whenever they have
+ * it: the transfer number the desk is normally asked on the way to verified
+ * is not demanded of such a case.
  *
- * Only a case RMA switched is handed to Admin Stok; a claim opened as store
- * stock keeps the old rule (origin at intake, number asked by the desk).
+ * A claim opened as store stock keeps the old rule (origin at intake, number
+ * asked by the desk at verification).
  */
 
 export const OWNERSHIP_TEXT: Record<UnitOwnership, string> = { customer: "Klaim User", store_stock: "Klaim Toko" };
@@ -33,13 +31,13 @@ const MAX_CODE = 191;
  */
 export const SWITCHED_TO_STORE_NOTE = `Kepemilikan diubah: ${OWNERSHIP_TEXT.customer} → ${OWNERSHIP_TEXT.store_stock}`;
 
-/** A store-stock case RMA switched there: its stock data is Admin Stok's. */
+/** A store-stock case RMA switched there: its stock data is filled from the case page, later. */
 export const SWITCHED_TO_STORE_WHERE = {
   unit_ownership: "store_stock",
   events: { some: { note: { startsWith: SWITCHED_TO_STORE_NOTE } } },
 } satisfies Prisma.RmaCaseWhereInput;
 
-/** …and Admin Stok has not filled it in yet. */
+/** …and it has not been filled in yet. */
 export const STOCK_DATA_PENDING_WHERE = {
   ...SWITCHED_TO_STORE_WHERE,
   OR: [{ stock_origin: null }, { stock_origin: "" }, { stock_transfer_number: null }, { stock_transfer_number: "" }],
@@ -82,8 +80,8 @@ export function validateOwnershipChange(input: OwnershipChangeInput): OwnershipC
 
 /**
  * The line written to the RMA history and the activity log. A switch clears
- * the stock data (Admin Stok fills it for store stock; a customer's unit has
- * none), so what was cleared is kept here.
+ * the stock data (filled again afterwards for store stock; a customer's unit
+ * has none), so what was cleared is kept here.
  */
 export function ownershipChangeNote(
   from: UnitOwnership,
@@ -102,9 +100,11 @@ export function ownershipChangeNote(
 export type StockDataInput = { role: string; switched: boolean; stockOrigin: string | null; transferNumber: string | null };
 export type StockData = { ok: true; stockOrigin: string; transferNumber: string } | { ok: false; error: string };
 
-/** Admin Stok fills (or corrects) a switched case's stock data. Both fields, together. */
+/** RMA (or Admin / Owner) fills — or corrects — a switched case's stock data. Both fields, together. */
 export function validateStockData(input: StockDataInput): StockData {
-  if (input.role !== "StockAdmin") return { ok: false, error: "Hanya Admin Stok yang mengisi data stok klaim ini." };
+  if (input.role !== "RMA" && !isAdminRole(input.role)) {
+    return { ok: false, error: "Hanya RMA, Admin, dan Owner yang dapat mengisi data stok klaim ini." };
+  }
   if (!input.switched) return { ok: false, error: "Data stok di sini hanya untuk klaim yang diubah RMA menjadi Klaim Toko." };
   const origin = (input.stockOrigin ?? "").trim();
   const transfer = (input.transferNumber ?? "").trim();

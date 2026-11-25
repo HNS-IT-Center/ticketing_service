@@ -600,8 +600,8 @@ export async function transitionRmaAction(formData: FormData) {
         ticket: {
           select: { id: true, ticket_code: true, status: true, technician_id: true },
         },
-        // A case RMA switched to store stock: its transfer number is Admin
-        // Stok's to fill, and the desk does not wait for it.
+        // A case RMA switched to store stock: its transfer number is filled
+        // from the case page later, and the desk does not wait for it.
         _count: { select: { events: { where: { note: { startsWith: SWITCHED_TO_STORE_NOTE } } } } },
       },
     });
@@ -617,7 +617,7 @@ export async function transitionRmaAction(formData: FormData) {
       input,
       unitOwnership: rmaCase.unit_ownership,
       recordedStockTransferNumber: rmaCase.stock_transfer_number,
-      stockDataByStockAdmin: rmaCase.unit_ownership === "store_stock" && rmaCase._count.events > 0,
+      stockDataFilledLater: rmaCase.unit_ownership === "store_stock" && rmaCase._count.events > 0,
     });
     if (!check.ok) return { error: check.error };
 
@@ -1098,11 +1098,11 @@ export async function submitHoldEvidenceAction(formData: FormData) {
  * The RMA desk changes whose unit a claim is for, directly (owner,
  * 2026-11-25) — usually a customer's claim the shop takes over by swapping in
  * a unit from stock once the distributor agreed to replace it. No approval:
- * the store's kepala toko is told, and on a switch to store stock Admin Stok
- * is asked for the stock data. Rules in lib/rma/ownership-change.ts.
+ * the store's kepala toko is told. Rules in lib/rma/ownership-change.ts.
  *
- * A switch clears the stock data either way — Admin Stok fills it for store
- * stock, a customer's unit has none — and the note keeps what was cleared.
+ * A switch clears the stock data either way — it is filled again from the
+ * case page for store stock, a customer's unit has none — and the note keeps
+ * what was cleared.
  * Conditional on the ownership and status read, so two people changing it at
  * once record one change.
  */
@@ -1144,7 +1144,7 @@ export async function changeRmaOwnershipAction(formData: FormData) {
       });
       if (res.count === 0) return false;
       // The case keeps its stage; the event is the trail — and, for a switch to
-      // store stock, the record that its stock data is Admin Stok's.
+      // store stock, the record that its stock data is filled from the case page.
       await tx.rmaEvent.create({
         data: { rma_case_id: rmaCase.id, from_status: rmaCase.status, to_status: rmaCase.status, actor_id: session.userId, note },
       });
@@ -1154,25 +1154,14 @@ export async function changeRmaOwnershipAction(formData: FormData) {
 
     const label = `${rmaCase.rma_code} (#${rmaCase.ticket.ticket_code})`;
     const storeId = rmaCase.ticket.store_location_id;
-    const [supervisors, stockAdmins] = await Promise.all([
-      storeId
-        ? db.storeSupervisorAssignment.findMany({ where: { store_id: storeId, user: { is_active: true } }, select: { user_id: true } })
-        : Promise.resolve([]),
-      check.next === "store_stock"
-        ? db.user.findMany({ where: { role: "StockAdmin", is_active: true }, select: { id: true } })
-        : Promise.resolve([]),
-    ]);
-    const notices = [
-      // "Sepengetahuan kepala toko": told, nothing waits on them.
-      ...supervisors.map((s) => ({
-        user_id: s.user_id,
-        message: `🔁 ${label} diubah ke ${OWNERSHIP_TEXT[check.next]} oleh ${session.name}. Alasan: ${check.reason}`,
-      })),
-      ...stockAdmins.map((u) => ({
-        user_id: u.id,
-        message: `📦 ${label} jadi Klaim Toko. Isi asal stok dan nomor pemindahan stok di Dashboard Stok.`,
-      })),
-    ];
+    const supervisors = storeId
+      ? await db.storeSupervisorAssignment.findMany({ where: { store_id: storeId, user: { is_active: true } }, select: { user_id: true } })
+      : [];
+    // "Sepengetahuan kepala toko": told, nothing waits on them.
+    const notices = supervisors.map((s) => ({
+      user_id: s.user_id,
+      message: `🔁 ${label} diubah ke ${OWNERSHIP_TEXT[check.next]} oleh ${session.name}. Alasan: ${check.reason}`,
+    }));
     if (notices.length > 0) {
       await db.notification.createMany({
         data: notices.map((n) => ({ ...n, ticket_id: rmaCase.ticket_id, type: "rma_update" as const })),
@@ -1185,7 +1174,6 @@ export async function changeRmaOwnershipAction(formData: FormData) {
     revalidatePath("/rma/tickets");
     revalidatePath("/rma/dashboard");
     revalidatePath("/rma/analisa");
-    revalidatePath("/stok/dashboard");
     revalidatePath(`/admin/tickets/${rmaCase.ticket_id}`);
     revalidatePath(`/technician/tickets/${rmaCase.ticket_id}`);
 
@@ -1198,9 +1186,10 @@ export async function changeRmaOwnershipAction(formData: FormData) {
 }
 
 /**
- * Admin Stok fills — or corrects — the stock data of a claim RMA switched to
- * store stock: Asal stok and Nomor Pemindahan Stok (owner, 2026-11-25). Only
- * such a case; a claim opened as store stock keeps its own path.
+ * RMA — or Admin / Owner — fills or corrects the stock data of a claim
+ * switched to store stock: Asal stok and Nomor Pemindahan Stok (owner,
+ * 2026-11-25), from the case page. Only such a case; a claim opened as store
+ * stock keeps its own path.
  */
 export async function fillClaimStockDataAction(formData: FormData) {
   try {
@@ -1230,7 +1219,7 @@ export async function fillClaimStockDataAction(formData: FormData) {
     if (!check.ok) return { error: check.error };
 
     const corrected = !stockDataPending(rmaCase);
-    const note = `${corrected ? "Data stok dikoreksi" : "Data stok diisi"} Admin Stok: asal stok ${check.stockOrigin}, nomor pemindahan ${check.transferNumber}`;
+    const note = `${corrected ? "Data stok dikoreksi" : "Data stok diisi"}: asal stok ${check.stockOrigin}, nomor pemindahan ${check.transferNumber}`;
     const saved = await db.$transaction(async (tx) => {
       const res = await tx.rmaCase.updateMany({
         where: { id: rmaCase.id, unit_ownership: "store_stock" },
@@ -1247,7 +1236,6 @@ export async function fillClaimStockDataAction(formData: FormData) {
 
     await logActivity(session, "rma.stock_data", note, { type: "rma_case", id: rmaCase.id, label: rmaCase.rma_code });
 
-    revalidatePath("/stok/dashboard");
     revalidatePath(`/rma/cases/${rmaCase.id}`);
     return { success: true };
   } catch (err) {

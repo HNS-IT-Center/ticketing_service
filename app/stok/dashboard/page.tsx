@@ -15,7 +15,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import PartCodeAlertCard from "@/components/service/PartCodeAlertCard";
-import ClaimStockDataCard from "@/components/stok/ClaimStockDataCard";
 
 export const metadata = { title: "Dashboard Stok — HNS IT Center" };
 
@@ -60,9 +59,6 @@ export default async function StockDashboardPage() {
           hint="12 bulan terakhir"
         />
       </div>
-
-      {/* Claims RMA switched to Klaim Toko: Admin Stok fills their stock data (owner, 2026-11-25). */}
-      <ClaimStockDataCard storeIds={storeIds} canFill={session.role === "StockAdmin"} />
 
       {/* Moved here from the admin dashboard (owner, 2026-11-13): chasing the code is stock work. */}
       <PartCodeAlertCard scope={storeIds ? { store_location_id: { in: storeIds } } : {}} portal="stok" showTechnician />

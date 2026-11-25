@@ -17,7 +17,8 @@ import { OWNERSHIP_TEXT } from "@/lib/rma/ownership-change";
 
 /**
  * "Ubah kepemilikan": Klaim User ⇄ Klaim Toko, set by the RMA desk directly,
- * with a reason. The stock data of a switch to Klaim Toko is Admin Stok's.
+ * with a reason. The stock data of a switch to Klaim Toko is filled afterwards
+ * with "Isi data stok" beside this button.
  * Rendered for RMA, Admin and Owner while the case is open; the action checks
  * the same.
  */
@@ -82,7 +83,7 @@ export default function OwnershipButton({ rmaCaseId, rmaCode, current }: { rmaCa
           </FormField>
           <p className={cn("text-xs text-muted-foreground")}>
             {next === "store_stock"
-              ? "Asal stok dan nomor pemindahan stok diisi Admin Stok. Klaim tetap bisa dilanjutkan tanpa menunggu."
+              ? "Setelah disimpan, isi asal stok dan nomor pemindahan stok lewat tombol Isi data stok. Klaim tetap bisa dilanjutkan tanpa menunggu."
               : "Asal stok dan nomor pemindahan stok yang tercatat akan dihapus; nilai lamanya tetap ada di Riwayat RMA."}
           </p>
           {error && (

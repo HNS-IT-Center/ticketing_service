@@ -34,6 +34,11 @@ import {
   type MonthFigures,
   type Share,
 } from "@/lib/rma/claim-dashboard";
+import { accessFor } from "@/lib/access-server";
+import { storeScopeFor, storeWhere } from "@/lib/store-scope-server";
+import { claimListWhere, claimStatusOf } from "@/lib/rma/claim-list";
+import { matchesPositionFilter, type PositionUnit } from "@/lib/rma/unit-position";
+import { UnitPosition } from "./UnitPosition";
 
 export const metadata = { title: "Analisa Klaim — HNS IT Center" };
 
@@ -144,23 +149,67 @@ function Filters({ month, months, filter }: { month: string; months: string[]; f
  * lib/rma/claim-dashboard.ts.
  */
 export default async function ClaimAnalysisPage({ searchParams }: { searchParams: Promise<Search> }) {
-  await requirePage("page_rma_analysis");
+  const session = await requirePage("page_rma_analysis");
   const params = await searchParams;
   const filter = readCaseFilter(params);
   // eslint-disable-next-line react-hooks/purity -- server component, read once
   const now = Date.now();
   const thisMonth = currentMonth(now);
 
-  const rows = await db.rmaCase.findMany({
-    select: {
-      handed_over_at: true,
-      closed_at: true,
-      unit_ownership: true,
-      vendor_name: true,
-      vendor: { select: { name: true, location: true } },
-      ticket: { select: { device_brand: true } },
-    },
-  });
+  const [rows, claims, access] = await Promise.all([
+    db.rmaCase.findMany({
+      select: {
+        handed_over_at: true,
+        closed_at: true,
+        unit_ownership: true,
+        vendor_name: true,
+        vendor: { select: { name: true, location: true } },
+        ticket: { select: { device_brand: true } },
+      },
+    }),
+    // "Posisi Unit Sekarang": the claims the Klaim Garansi list holds, so its
+    // counts match that list's status dropdown for the same viewer.
+    storeScopeFor(session).then((s) =>
+      db.ticket.findMany({
+        where: { AND: [claimListWhere("all", ""), storeWhere(s)] },
+        select: {
+          ticket_code: true,
+          device_name: true,
+          created_at: true,
+          warranty_detail: { select: { unit_ownership: true } },
+          rma_case: {
+            select: {
+              id: true,
+              rma_code: true,
+              status: true,
+              unit_ownership: true,
+              handed_over_at: true,
+              vendor_name: true,
+              vendor: { select: { name: true, location: true } },
+              events: { orderBy: { created_at: "desc" }, take: 1, select: { created_at: true } },
+            },
+          },
+        },
+      }),
+    ),
+    accessFor(session.userId),
+  ]);
+  const units: PositionUnit[] = claims
+    .map((t): PositionUnit => {
+      const c = t.rma_case;
+      return {
+        stage: claimStatusOf(c?.status),
+        ownership: c?.unit_ownership ?? (t.warranty_detail?.unit_ownership === "store_stock" ? "store_stock" : "customer"),
+        vendor: c ? (c.vendor?.name ?? c.vendor_name ?? null) : null,
+        vendorLocation: c?.vendor?.location ?? null,
+        stageSince: c ? (c.events[0]?.created_at ?? c.handed_over_at) : t.created_at,
+        ticketCode: t.ticket_code,
+        rmaCode: c?.rma_code ?? null,
+        caseId: c?.id ?? null,
+        device: t.device_name,
+      };
+    })
+    .filter((u) => matchesPositionFilter(u, filter));
   const allCases: DashboardCase[] = rows.map((r) => ({
     handedOverAt: r.handed_over_at,
     closedAt: r.closed_at,
@@ -230,6 +279,14 @@ export default async function ClaimAnalysisPage({ searchParams }: { searchParams
               Semua angka dan grafik hanya menghitung case yang cocok dengan filter. Status dibaca dari keadaan case sekarang.
             </p>
           )}
+
+          <UnitPosition
+            units={units}
+            now={now}
+            owner={filter.ownership}
+            linkList={access.can("page_rma_claims")}
+            linkCases={access.can("page_rma_dashboard") || access.can("page_rma_claims")}
+          />
 
           <Row title="Volume tiket per bulan">
             <ChartCard title="Tiket Masuk" description="Jumlah tiket masuk per bulan">

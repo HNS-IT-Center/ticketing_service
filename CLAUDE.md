@@ -1310,6 +1310,51 @@ No migration. Data fix for older tickets: `klaim-stok-completed.sql` (owner runs
 
 Ordered roughly by how much is already decided.
 
+### Asked by the owner 2026-11-25 — urgent
+
+| # | Item | Where |
+|---|------|-------|
+| BL51 | ✅ **DONE 2026-11-25, not committed** — built as proposed: `lib/rma/unit-position.ts` (pure, 6 tests) + `app/rma/analisa/UnitPosition.tsx`. Claims loaded with `claimListWhere("all")` and the viewer's `storeWhere`, so the strip equals the Klaim Garansi dropdown for the same viewer (local: 22 = 22, Klaim Toko 6 = 6). Stage entered = newest `RmaEvent`, else handover, else ticket creation. Counts link to the list only with `page_rma_claims`; longest waits link to the case page. Strip scrolls sideways on a phone, no page overflow at 390 / 1440. Original note: **Analisa Klaim: where the units are now, by RMA stage.** The page only shows tickets in and finished per month; the owner wants how many claims sit at each stage right now — the same counts the Klaim Garansi status dropdown shows (e.g. Terverifikasi 5, Diajukan ke Vendor 31, Diproses Vendor 33, Selesai 27, Tidak Layak 1, Dibatalkan 3), as a slide. Owner asked for it, has not pictured the UI. Proposal given 2026-11-25: a "Posisi Unit Sekarang" block under the KPIs — a pipeline strip of open stages with counts (each linking to `/rma/tickets?status=…`), closed stages small beside it — then a `ChartSlider` with one slide per open stage that holds units: count, age buckets (< 7 / 7–14 / 14–30 / > 30 days in stage, from `lib/rma/stage-durations.ts`), per vendor, and the longest-waiting units. A snapshot of today: follows Lokasi / Kepemilikan, **not** the Bulan filter, and says so. Waiting on the owner's go-ahead on the layout | `app/rma/analisa/page.tsx`, `components/toko/ChartSlider.tsx` |
+
+### Review 2026-11-25 — what to add, what to cut (owner asked for an opinion; nothing decided yet)
+
+Recorded on the owner's word ("catat ini semua"). Proposals, not approvals: each needs the
+owner's go-ahead before code moves. Order inside "Tambah" is the recommended order.
+
+**Tambah**
+
+| # | Item | Why / where |
+|---|------|-------------|
+| BL40 | ⬜ **Protect the points: a ticket transition table** | Points now drive targets, leaderboard, audit and the boss's dashboard, yet any status may follow any status: `done → on_progress → done` credits twice, a double click writes two `done` logs, cancel works from anywhere. This is BL7 + batch 1 of BL35, re-prioritised to first. Fix BL6 (`delivery.ts` swallows the refusal) in the same change. Check production for existing duplicates first (`docs/qc-run-2026-10-14.md`) |
+| BL41 | ⬜ **A gate before deploy** | Push to `main` = deploy, there is no CI (no `.github`), and production went down twice from code arriving before its migration. Options: `prisma migrate deploy` at container start on Dokploy, or a CI job (`tsc` + tests + fail on pending migrations). Plus: scheduled MariaDB backup on the VPS **with a tested restore**, and error monitoring — production errors have so far been found from technicians' phone screenshots |
+| BL42 | ⬜ **Payment status on the ticket** | Not a cashier module (BL32): "Sudah dibayar" + the Accurate invoice number. Links the ticket to Accurate for the cashier and Finance, and gives a reason to close the "siap diambil" pile — 51 at Gateway on local data, probably collected units never moved to `completed` |
+| BL43 | ⬜ **WhatsApp notifications to customers** | Resend on the free tier only delivers to the developer's address, so customer e-mail most likely never arrives, and customers here use WA. Start with "siap diambil", sent automatically |
+| BL44 | ⬜ **Comeback rate per technician** | Same SN + same customer (Data Customer, `lib/customers.ts`) back within 30 days = servis ulang. Every current measure counts work; none measures quality. Also balances the pull toward points seen in AU1 |
+| BL45 | ⬜ **Scheduled jobs** | No cron exists. One endpoint called by a Dokploy cron would carry: daily stale-ticket reminders, pickup reminders, "hari ini kamu menggantikan X" (today computed on read, LB4) |
+
+**Pangkas — candidates; confirm against production usage first (BL47)**
+
+| # | Item | Why |
+|---|------|-----|
+| BL46a | `Leaderboard` table + `app/admin/performance/LeaderboardSnapshot.tsx` + `snapshotLeaderboardAction` | Leaderboard is live from `TicketStatusLog`; the snapshot is legacy |
+| BL46b | `TechnicianWorkload`, `Ticket.total_points`, `Ticket.extra_services`, `service_category` | Not read, or always empty. Needs a migration |
+| BL46c | `components/ui/TermsModal.tsx` | Imported nowhere |
+| BL46d | `app/customer/` | Orphaned, and guarded by nobody (BL29) — delete rather than leave a door open |
+| BL46e | Public chat on the customer page | No ticket has it on. Drop if BL43 goes ahead |
+| BL46f | The "lama" create wizard | One-page form is the default since 2026-11-15; retire the wizard once Sales and RMA move too |
+| BL46g | Resend e-mail | Verify the domain or remove it |
+| BL46h | Titles / achievements / Level | Check whether technicians use them; with points they helped push "tickets for myself" |
+| BL46i | Performance views overlap | Performance, Leaderboard, Target Teknisi, Kinerja Teknisi Toko and the teknisi block on Ringkasan Bisnis show similar figures by slightly different rules — fold into one or two pages |
+
+**Masukan umum**
+
+| # | Item |
+|---|------|
+| BL47 | ⬜ **Decide cuts from data**: count `ActivityLog` actions per feature over the last 30 days on production (read only). Zero use → candidate for BL46 |
+| BL48 | ⬜ **Slim this file.** Move sprint history to `docs/CHANGELOG.md`; keep only rules that still hold. Known stale parts: "Key constraint reminders → Point system" still says three tables disagree (unified in PT1/PT2); the env section is Supabase; the file tree is out of date |
+| BL49 | ⬜ **Clean test data out of production** ("ZZ TEST", "developer hns", …) — it shows in Data Customer and the reports |
+| BL50 | ⬜ **Decisions still open**: PC Build handover back to Sales only once Sales accounts exist (PB1); Owner vs Admin seeing money (BZ2); Indonesian status labels (UI1.7); field feedback on the one-page create form since 2026-11-15 |
+
 ### Asked by the owner 2026-10-26
 
 | # | Item | Where |

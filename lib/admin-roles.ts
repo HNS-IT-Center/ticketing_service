@@ -28,13 +28,19 @@ export function isOwnerRole(role: string | null | undefined): boolean {
 }
 
 /**
- * Roles only the Owner may give, and whose holders only the Owner may change
- * or deactivate. Otherwise an Administrator narrowed in Pengaturan Akses could
- * make themselves an Owner, or give a colleague back what was taken away.
+ * Roles whose holders only the Owner may change or deactivate. Otherwise an
+ * Administrator could demote the boss, or give a colleague back what the
+ * Owner took away in Pengaturan Akses.
+ *
+ * The Owner role itself an Administrator may give (owner, 2026-11-27), so the
+ * shop never depends on one person's login to name a new Owner. What keeps
+ * that safe: nobody changes their own role (updateUserAction,
+ * promoteToOwnerAction), and an existing Owner can be changed only by an
+ * Owner. The Administrator role stays the Owner's to give.
  */
 export const OWNER_GUARDED_ROLES: readonly string[] = ADMIN_ROLES;
 
-export const OWNER_ONLY_ACCOUNT_MESSAGE = "Hanya Owner yang dapat menambah, mengubah, atau menonaktifkan akun Admin dan Owner.";
+export const OWNER_ONLY_ACCOUNT_MESSAGE = "Hanya Owner yang dapat mengubah atau menonaktifkan akun Admin dan Owner, atau memberi role Admin.";
 
 /**
  * Whether `actorRole` may create or change an account.
@@ -47,8 +53,17 @@ export function mayManageAccount(actorRole: string, currentRole: string | null, 
   if (isOwnerRole(actorRole)) return true;
   if (actorRole !== "Administrator") return false;
   if (currentRole !== null && OWNER_GUARDED_ROLES.includes(currentRole)) return false;
-  if (newRole !== null && OWNER_GUARDED_ROLES.includes(newRole)) return false;
+  if (newRole === "Administrator") return false;
   return true;
+}
+
+/**
+ * Whether `actorRole` may make an existing account an Owner — the one change
+ * an Administrator may make to an Administrator account (owner, 2026-11-27).
+ * Never one's own account, never one already an Owner.
+ */
+export function mayPromoteToOwner(actorRole: string, targetRole: string, isSelf: boolean): boolean {
+  return !isSelf && isAdminRole(actorRole) && targetRole !== "Owner";
 }
 
 /** The roles a form may offer this person, in the given order. */

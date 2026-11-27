@@ -4,7 +4,8 @@ import { PageHeader } from "@/components/app/PageHeader";
 import EditUserForm from "./EditUserForm";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { ShieldAlert } from "lucide-react";
-import { mayManageAccount, OWNER_ONLY_ACCOUNT_MESSAGE } from "@/lib/admin-roles";
+import { mayManageAccount, mayPromoteToOwner, OWNER_ONLY_ACCOUNT_MESSAGE } from "@/lib/admin-roles";
+import PromoteOwnerButton from "@/components/users/PromoteOwnerButton";
 import { requirePage } from "@/lib/page-access";
 import { roleOptions } from "@/lib/access-roles-server";
 import { BASE_LABELS, isRoleBase, roleSelectOptions } from "@/lib/access-roles";
@@ -51,11 +52,16 @@ export default async function EditUserPage({ params }: { params: Promise<{ id: s
       {mayManageAccount(session.role, user.role, null) ? (
         <EditUserForm user={{ ...user, roleValue }} roles={roles} />
       ) : (
-        <Alert>
-          <ShieldAlert aria-hidden="true" />
-          <AlertTitle>Akun {user.role === "Owner" ? "Owner" : "Admin"}</AlertTitle>
-          <AlertDescription>{OWNER_ONLY_ACCOUNT_MESSAGE}</AlertDescription>
-        </Alert>
+        <div className="flex flex-col gap-4">
+          <Alert>
+            <ShieldAlert aria-hidden="true" />
+            <AlertTitle>Akun {user.role === "Owner" ? "Owner" : "Admin"}</AlertTitle>
+            <AlertDescription>{OWNER_ONLY_ACCOUNT_MESSAGE}</AlertDescription>
+          </Alert>
+          {mayPromoteToOwner(session.role, user.role, user.id === session.userId) && (
+            <PromoteOwnerButton userId={user.id} name={user.name} />
+          )}
+        </div>
       )}
     </div>
   );

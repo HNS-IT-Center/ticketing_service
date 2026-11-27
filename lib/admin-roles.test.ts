@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignableRoles, isAdminRole, mayManageAccount, roleMatches } from "./admin-roles";
+import { assignableRoles, isAdminRole, mayManageAccount, mayPromoteToOwner, roleMatches } from "./admin-roles";
 import { AUDIENCES, CAPABILITIES, CAPABILITY_INFO, audienceAllowed, audiencesOf, isAllowed, ruleKey } from "./access";
 import { destinationForRole } from "./routes";
 
@@ -59,10 +59,17 @@ describe("only the Owner manages Owner and Administrator accounts", () => {
     expect(mayManageAccount("Administrator", "Technician", null)).toBe(true);
   });
 
-  it("stops an Administrator from creating, promoting to, changing or deactivating an admin", () => {
+  it("lets an Administrator give the Owner role (owner, 2026-11-27)", () => {
+    expect(mayManageAccount("Administrator", null, "Owner")).toBe(true);
+    expect(mayManageAccount("Administrator", "Technician", "Owner")).toBe(true);
+    expect(mayPromoteToOwner("Administrator", "Administrator", false)).toBe(true);
+    expect(mayPromoteToOwner("Administrator", "Administrator", true)).toBe(false);
+    expect(mayPromoteToOwner("Administrator", "Owner", false)).toBe(false);
+    expect(mayPromoteToOwner("Technician", "Administrator", false)).toBe(false);
+  });
+
+  it("stops an Administrator from giving the Admin role, or changing or deactivating an admin", () => {
     expect(mayManageAccount("Administrator", null, "Administrator")).toBe(false);
-    expect(mayManageAccount("Administrator", null, "Owner")).toBe(false);
-    expect(mayManageAccount("Administrator", "Technician", "Owner")).toBe(false);
     expect(mayManageAccount("Administrator", "Administrator", "Administrator")).toBe(false);
     expect(mayManageAccount("Administrator", "Owner", null)).toBe(false);
     expect(mayManageAccount("Administrator", "Administrator", null)).toBe(false);
@@ -76,6 +83,6 @@ describe("only the Owner manages Owner and Administrator accounts", () => {
   it("offers each person only the roles they may give", () => {
     const all = ["Owner", "Administrator", "Technician", "Sales"] as const;
     expect(assignableRoles("Owner", all)).toEqual(all);
-    expect(assignableRoles("Administrator", all)).toEqual(["Technician", "Sales"]);
+    expect(assignableRoles("Administrator", all)).toEqual(["Owner", "Technician", "Sales"]);
   });
 });

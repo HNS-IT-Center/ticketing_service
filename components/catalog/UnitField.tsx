@@ -32,6 +32,7 @@ export default function UnitField({
   label,
   optional = true,
   placeholder = "Misal: ASUS ROG G15",
+  error,
 }: {
   catalogEnabled: boolean;
   unit: PickedUnit | null;
@@ -42,6 +43,8 @@ export default function UnitField({
   label: string;
   optional?: boolean;
   placeholder?: string;
+  /** The form's message when the name is required and missing. */
+  error?: string;
 }) {
   // Typing is chosen explicitly, or implied by a typed name already there
   // (a restored draft). Switching back to search clears the typed name, so a
@@ -49,6 +52,11 @@ export default function UnitField({
   const [typing, setTyping] = useState(false);
   const mode = unit ? "picked" : !catalogEnabled || typing || name.trim() ? "manual" : "search";
   const inputId = useId();
+  const errorEl = error ? (
+    <p role="alert" className="text-sm text-destructive">
+      {error}
+    </p>
+  ) : null;
 
   // A real <label> only when there is one box to point it at (typing); the
   // picker and the picked card are named by the same words as a heading.
@@ -105,6 +113,7 @@ export default function UnitField({
             onNameChange(item.name);
           }}
         />
+        {errorEl}
         <CatalogEntryToggle to="manual" question="Unit tidak ada di katalog?" label="Ketik manual" onClick={() => setTyping(true)} />
       </div>
     );
@@ -124,7 +133,9 @@ export default function UnitField({
           onNameChange(e.target.value);
         }}
         placeholder={placeholder}
+        aria-invalid={error ? true : undefined}
       />
+      {errorEl}
       {catalogEnabled && (
         <CatalogEntryToggle
           to="search"

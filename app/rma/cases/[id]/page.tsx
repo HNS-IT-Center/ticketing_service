@@ -176,7 +176,18 @@ export default async function RmaCasePage({ params }: { params: Promise<{ id: st
               <Field label="Status Tiket" value={ticket.status.replace(/_/g, " ")} />
               <Field label="Customer" value={ticket.customer_name} />
               <Field label="Telepon" value={ticket.customer_phone} />
-              <Field label="Perangkat" value={ticket.device_name} />
+              {/* Always shown: a claim opened before the name was required can
+                  carry none, and a hidden row read as "the catalogue lost it". */}
+              {ticket.device_name?.trim() ? (
+                <Field label="Perangkat" value={ticket.device_name} />
+              ) : (
+                <div>
+                  <p className="text-xs text-muted-foreground mb-1">Perangkat</p>
+                  <p className="font-medium text-tone-amber-fg">
+                    Belum diisi{ticketEdit ? " — isi lewat Ubah data tiket" : ""}
+                  </p>
+                </div>
+              )}
               <Field label="Brand" value={ticket.device_brand} />
               {ticket.device_sku && <Field label="SKU (katalog Accurate)" value={ticket.device_sku} mono />}
               <Suspense fallback={<ClaimStockShell value="Memuat…" muted />}>

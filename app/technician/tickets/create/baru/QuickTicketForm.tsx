@@ -303,6 +303,9 @@ export default function QuickTicketForm({
     if (ticketType === "cleaning" && !cleaningPackage) e.cleaningPackage = "Pilih paket cleaning.";
     if (ticketType === "upgrade" && selectedUpgrades.length === 0) e.upgrades = "Pilih minimal satu upgrade.";
     if (isStoreStock && !stockOrigin.trim()) e.stockOrigin = "Asal stok wajib diisi.";
+    // The RMA desk and the vendor work from this name; a claim without one
+    // reached the desk as a blank "Perangkat" (NGH-000265).
+    if (isClaim && !deviceCatalog && !deviceName.trim()) e.deviceName = "Nama unit wajib untuk klaim garansi.";
     if (isClaim && !deviceSn.trim()) e.deviceSn = "SN wajib untuk klaim garansi.";
     if (isClaim && !isStoreStock && !purchaseDate) e.purchaseDate = "Tanggal pembelian wajib untuk klaim garansi.";
     // Every build comes from its quotation (owner, 2026-11-18); short, like the other lines of the summary.
@@ -612,6 +615,8 @@ export default function QuickTicketForm({
                 name={deviceName}
                 onNameChange={setDeviceName}
                 label="Nama unit"
+                optional={!isClaim}
+                error={showErr("deviceName")}
               />
               <div className="grid items-start gap-4 sm:grid-cols-2">
                 <FormField label="Serial number" htmlFor={`${uid}-sn`} required={isClaim} hint={isClaim ? undefined : "(opsional)"} error={showErr("deviceSn")}>

@@ -30,7 +30,7 @@ export default async function ClaimStock({ catalogItemId, userId }: { catalogIte
   const visible = await stockVisibilityFor(userId);
   if (!visible.has("view_stock_klaim")) return null;
   if (catalogItemId === null) {
-    return <ClaimStockShell value="Unit diketik manual, tidak ada di katalog" muted />;
+    return <ClaimStockShell value="Unit tidak dipilih dari katalog Accurate" muted />;
   }
   if (!isCatalogConfigured()) return null;
   const { value, muted } = await lookup(catalogItemId, visible);

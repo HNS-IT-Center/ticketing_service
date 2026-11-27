@@ -94,6 +94,7 @@ function claimForm(overrides: Record<string, string | null> = {}) {
     phone: "+6287711587127",
     ticket_type: "warranty_claim",
     device_type: "Laptop_Office",
+    device_name: "Laptop uji klaim",
     device_sn: "SN-TEST-12345",
     purchase_date: "2026-01-15",
     notes: "Layar berkedip sejak seminggu lalu",
@@ -177,6 +178,14 @@ describe("createTicketAction — warranty claim", () => {
     const result = await createTicketAction(claimForm({ device_sn: null }));
 
     expect(result).toMatchObject({ error: expect.stringContaining("Serial number") });
+    expect(await db.ticket.count({ where: { store_location_id: storeId } })).toBe(before);
+  });
+
+  it("refuses a claim with no unit name, typed or picked", async () => {
+    const before = await db.ticket.count({ where: { store_location_id: storeId } });
+    const result = await createTicketAction(claimForm({ device_sn: "SN-NONAME", device_name: "  " }));
+
+    expect(result).toMatchObject({ error: expect.stringContaining("Nama perangkat") });
     expect(await db.ticket.count({ where: { store_location_id: storeId } })).toBe(before);
   });
 

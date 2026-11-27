@@ -360,6 +360,7 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
       if (ticketType === "service" && !notes.trim()) errs.notes = "Problem description is required.";
       if (ticketType === "warranty_claim") {
         // The RMA desk verifies the unit against both, so intake must capture them.
+        if (!deviceCatalog && !deviceName.trim()) errs.deviceName = "Nama perangkat wajib diisi untuk klaim garansi.";
         if (!deviceSn.trim()) errs.deviceSn = "SN wajib diisi untuk klaim garansi.";
         if (!purchaseDate && !isStoreStock) errs.purchaseDate = "Tanggal pembelian wajib diisi untuk klaim garansi.";
         if (!notes.trim()) errs.notes = "Deskripsi keluhan wajib diisi untuk klaim garansi.";
@@ -841,6 +842,8 @@ export default function CreateTicketForm({ storeLocations, technicians, sales, u
                     name={deviceName}
                     onNameChange={setDeviceName}
                     label="Nama Perangkat"
+                    optional={false}
+                    error={errors.deviceName}
                   />
 
                   {/* The two short fields side by side; stacked on a phone. */}

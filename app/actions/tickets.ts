@@ -102,6 +102,11 @@ export async function createTicketAction(formData: FormData) {
     if (!isStoreStock && (!customer_name?.trim() || !customer_phone?.trim())) {
       return { error: "Nama dan nomor HP customer wajib diisi untuk klaim unit milik customer." };
     }
+    // Picked from the catalogue or typed — the desk and the vendor need a name.
+    const pickedFromCatalog = ((formData.get("device_catalog_item_id") as string | null) || "").trim();
+    if (!pickedFromCatalog && !device_name?.trim()) {
+      return { error: "Nama perangkat wajib diisi untuk tiket klaim garansi." };
+    }
     if (!device_sn?.trim()) {
       return { error: "Serial number (SN) wajib diisi untuk tiket klaim garansi." };
     }

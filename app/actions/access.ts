@@ -40,7 +40,7 @@ const duplicate = (e: unknown) => e instanceof Prisma.PrismaClientKnownRequestEr
 const DUPLICATE = "Sudah ada role dengan nama itu.";
 
 export async function createAccessRoleAction(formData: FormData): Promise<Result> {
-  const session = await requireRole("Owner");
+  const session = await requireRole("Administrator");
   const { name, description, base, grants } = readForm(formData);
   const error = invalid(name, base);
   if (error || !isRoleBase(base)) return { error: error ?? "Pilih tipe dasar role." };
@@ -71,7 +71,7 @@ export async function createAccessRoleAction(formData: FormData): Promise<Result
 }
 
 export async function updateAccessRoleAction(roleId: string, formData: FormData): Promise<Result> {
-  const session = await requireRole("Owner");
+  const session = await requireRole("Administrator");
   const { name, description, base, grants } = readForm(formData);
   const error = invalid(name, base);
   if (error || !isRoleBase(base)) return { error: error ?? "Pilih tipe dasar role." };
@@ -115,7 +115,7 @@ export async function updateAccessRoleAction(roleId: string, formData: FormData)
 }
 
 export async function deleteAccessRoleAction(roleId: string): Promise<{ success: true } | { error: string }> {
-  const session = await requireRole("Owner");
+  const session = await requireRole("Administrator");
   const role = await db.accessRole.findUnique({ where: { id: roleId }, select: { name: true, _count: { select: { users: true } } } });
   if (!role) return { error: "Role tidak ditemukan. Mungkin sudah dihapus." };
   if (role._count.users > 0) {

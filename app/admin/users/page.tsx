@@ -11,7 +11,7 @@ import { RoleBadge } from "@/components/app/RoleBadge";
 import { buttonVariants } from "@/components/ui/button";
 import { UserPlus, Users } from "lucide-react";
 import { DeactivateUserButton } from "@/components/users/DeactivateUserButton";
-import { isOwnerRole, mayManageAccount } from "@/lib/admin-roles";
+import { mayManageAccount, mayRunOwnerTools } from "@/lib/admin-roles";
 import { roleOptions } from "@/lib/access-roles-server";
 import { requirePage } from "@/lib/page-access";
 
@@ -122,9 +122,9 @@ export default async function AdminUsersPage({
     <div data-slot="admin-users" className="flex flex-col gap-5">
       <UsersAccessHeader
         active="akun"
-        showRoles={isOwnerRole(session.role)}
+        showRoles={mayRunOwnerTools(session.role)}
         description={
-          isOwnerRole(session.role)
+          mayRunOwnerTools(session.role)
             ? `${users.length} akun. Role menentukan halaman yang bisa dibuka — diatur di tab Role & Izin.`
             : `${users.length} akun. Role menentukan halaman yang bisa dibuka — diatur oleh Owner.`
         }

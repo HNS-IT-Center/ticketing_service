@@ -107,10 +107,13 @@ describe("access rules (pure)", () => {
 });
 
 describe("Role & Izin — made roles", () => {
-  it("only the owner may make, change or remove a role", async () => {
+  it("Owner and Administrator may make, change or remove a role; nobody else (owner, 2026-11-27)", async () => {
     as("admin", "Administrator");
-    await expect(createAccessRoleAction(roleForm(`${RUN} Kasir`, "Sales", []))).rejects.toThrow();
+    const made = await createAccessRoleAction(roleForm(`${RUN} Admin Boleh`, "Sales", []));
+    expect(made).toMatchObject({ success: true });
+    expect(await deleteAccessRoleAction((made as { id: string }).id)).toEqual({ success: true });
     as("head", "Technician");
+    await expect(createAccessRoleAction(roleForm(`${RUN} Kasir`, "Sales", []))).rejects.toThrow();
     await expect(deleteAccessRoleAction("role_sales")).rejects.toThrow();
   });
 

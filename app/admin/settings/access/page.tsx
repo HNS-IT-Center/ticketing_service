@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/session";
-import { isOwnerRole } from "@/lib/admin-roles";
+import { mayRunOwnerTools } from "@/lib/admin-roles";
 import { cleanGrants, isRoleBase } from "@/lib/access-roles";
 import { UsersAccessHeader } from "@/components/users/UsersAccessTabs";
 import { RoleManager, type RoleRow } from "./RoleManager";
@@ -14,9 +14,9 @@ export const metadata = { title: "Role & Izin — HNS IT Center" };
  * keeps its behaviour, and what it may open — see lib/access-roles.ts.
  */
 export default async function AccessSettingsPage() {
-  // Owner only; an Administrator who types the address is told no.
+  // Owner and Administrator (owner, 2026-11-27); anyone else is told no.
   const session = await requireRole("Administrator");
-  if (!isOwnerRole(session.role)) redirect("/unauthorized");
+  if (!mayRunOwnerTools(session.role)) redirect("/unauthorized");
 
   const [roles, owners] = await Promise.all([
     db.accessRole.findMany({

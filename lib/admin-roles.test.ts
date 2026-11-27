@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { assignableRoles, isAdminRole, mayManageAccount, mayPromoteToOwner, roleMatches } from "./admin-roles";
+import { assignableRoles, isAdminRole, mayManageAccount, mayRunOwnerTools, roleMatches } from "./admin-roles";
 import { AUDIENCES, CAPABILITIES, CAPABILITY_INFO, audienceAllowed, audiencesOf, isAllowed, ruleKey } from "./access";
 import { destinationForRole } from "./routes";
 
@@ -46,43 +46,28 @@ describe("Pengaturan Akses: the Owner always may, an Administrator follows the s
   });
 });
 
-describe("only the Owner manages Owner and Administrator accounts", () => {
-  it("lets the Owner do anything", () => {
-    expect(mayManageAccount("Owner", null, "Owner")).toBe(true);
-    expect(mayManageAccount("Owner", "Administrator", "Technician")).toBe(true);
-    expect(mayManageAccount("Owner", "Owner", null)).toBe(true);
-  });
-
-  it("lets an Administrator manage everyone else", () => {
-    expect(mayManageAccount("Administrator", null, "Technician")).toBe(true);
-    expect(mayManageAccount("Administrator", "Pending", "Sales")).toBe(true);
-    expect(mayManageAccount("Administrator", "Technician", null)).toBe(true);
-  });
-
-  it("lets an Administrator give the Owner role (owner, 2026-11-27)", () => {
-    expect(mayManageAccount("Administrator", null, "Owner")).toBe(true);
-    expect(mayManageAccount("Administrator", "Technician", "Owner")).toBe(true);
-    expect(mayPromoteToOwner("Administrator", "Administrator", false)).toBe(true);
-    expect(mayPromoteToOwner("Administrator", "Administrator", true)).toBe(false);
-    expect(mayPromoteToOwner("Administrator", "Owner", false)).toBe(false);
-    expect(mayPromoteToOwner("Technician", "Administrator", false)).toBe(false);
-  });
-
-  it("stops an Administrator from giving the Admin role, or changing or deactivating an admin", () => {
-    expect(mayManageAccount("Administrator", null, "Administrator")).toBe(false);
-    expect(mayManageAccount("Administrator", "Administrator", "Administrator")).toBe(false);
-    expect(mayManageAccount("Administrator", "Owner", null)).toBe(false);
-    expect(mayManageAccount("Administrator", "Administrator", null)).toBe(false);
+describe("Owner and Administrator manage every account alike (owner, 2026-11-27)", () => {
+  it("lets either create, change or deactivate any account, Owner and Admin ones included", () => {
+    for (const actor of ["Owner", "Administrator"]) {
+      expect(mayManageAccount(actor, null, "Owner")).toBe(true);
+      expect(mayManageAccount(actor, null, "Administrator")).toBe(true);
+      expect(mayManageAccount(actor, "Owner", "Administrator")).toBe(true);
+      expect(mayManageAccount(actor, "Owner", null)).toBe(true);
+      expect(mayManageAccount(actor, "Technician", "Sales")).toBe(true);
+      expect(mayRunOwnerTools(actor)).toBe(true);
+    }
   });
 
   it("refuses everyone else", () => {
     expect(mayManageAccount("Technician", null, "Technician")).toBe(false);
     expect(mayManageAccount("StoreSupervisor", "Technician", null)).toBe(false);
+    expect(mayRunOwnerTools("RMA")).toBe(false);
   });
 
-  it("offers each person only the roles they may give", () => {
+  it("offers either of them every role", () => {
     const all = ["Owner", "Administrator", "Technician", "Sales"] as const;
     expect(assignableRoles("Owner", all)).toEqual(all);
-    expect(assignableRoles("Administrator", all)).toEqual(["Owner", "Technician", "Sales"]);
+    expect(assignableRoles("Administrator", all)).toEqual(all);
+    expect(assignableRoles("Technician", all)).toEqual([]);
   });
 });

@@ -20,7 +20,7 @@ import { hasExternalWorkOutstanding } from "@/lib/charges-server";
 import { notifyPartCodePending } from "@/lib/part-code-notify";
 import { logActivity } from "@/lib/activity";
 import { ticketStatusText } from "@/lib/activity-catalog";
-import { isAdminRole, mayManageAccount, mayPromoteToOwner, OWNER_ONLY_ACCOUNT_MESSAGE } from "@/lib/admin-roles";
+import { isAdminRole, mayManageAccount, OWNER_ONLY_ACCOUNT_MESSAGE } from "@/lib/admin-roles";
 import { requirePage } from "@/lib/page-access";
 import { resolveRoleChoice } from "@/lib/access-roles-server";
 
@@ -149,39 +149,6 @@ export async function updateUserAction(userId: string, formData: FormData) {
     { type: "user", id: userId, label: name },
   );
 
-  revalidatePath("/admin/users");
-  revalidatePath(`/admin/users/${userId}`);
-  return { success: true };
-}
-
-// ─── Make an account Owner ──────────────────────────────────────────────────
-/**
- * "Jadikan Owner" (owner, 2026-11-27): an Administrator — or an Owner — makes
- * another account an Owner, usually the boss's Administrator account. The
- * account form cannot do this for an Administrator account, which only an
- * Owner may edit, so it is its own action. Never one's own account. The
- * person promoted signs in again: their session was issued for the old role.
- */
-export async function promoteToOwnerAction(userId: string) {
-  const session = await requirePage("manage_users");
-  const target = await db.user.findUnique({ where: { id: userId }, select: { name: true, role: true, is_active: true } });
-  if (!target) return { error: "Akun tidak ditemukan." };
-  if (!mayPromoteToOwner(session.role, target.role, userId === session.userId)) {
-    return { error: userId === session.userId ? "Role akun sendiri tidak bisa diubah." : "Akun ini tidak bisa dijadikan Owner." };
-  }
-  if (!target.is_active) return { error: "Akun ini nonaktif. Aktifkan dulu sebelum dijadikan Owner." };
-
-  const res = await db.user.updateMany({
-    where: { id: userId, role: target.role },
-    data: { role: "Owner", access_role_id: null, is_team_leader: false, is_head_technician: false },
-  });
-  if (res.count === 0) return { error: "Akun ini baru saja diubah orang lain. Muat ulang halaman." };
-
-  await logActivity(session, "user.update", `Menjadikan ${target.name} Owner (sebelumnya ${target.role}).`, {
-    type: "user",
-    id: userId,
-    label: target.name,
-  });
   revalidatePath("/admin/users");
   revalidatePath(`/admin/users/${userId}`);
   return { success: true };
